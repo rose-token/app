@@ -42,3 +42,39 @@ npx hardhat run scripts/deploy.js --network sepolia
 ## License
 
 MIT
+
+## Frontend
+
+The Rose Token frontend is a React application that provides a user interface for interacting with the Rose Token marketplace on the Sepolia testnet.
+
+### Setup
+
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   ```
+
+3. Create a `.env` file with your contract addresses (see `.env.example`):
+   ```
+   REACT_APP_MARKETPLACE_ADDRESS=your_marketplace_address
+   REACT_APP_TOKEN_ADDRESS=your_token_address
+   ```
+
+4. Start the development server:
+   ```
+   npm start
+   ```
+
+### Features
+
+- Wallet connection with MetaMask
+- Task creation with ETH deposits
+- Task claiming, completion, and approval workflows
+- Dispute resolution
+- Token balance display
+- Socialist token distribution visualization

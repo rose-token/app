@@ -1,0 +1,41 @@
+import React from 'react';
+import TaskCard from './TaskCard';
+
+const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading, error }) => {
+  if (isLoading) {
+    return <div className="text-center py-8">Loading tasks...</div>;
+  }
+  
+  if (error) {
+    return (
+      <div className="bg-red-100 text-red-700 p-4 rounded-md mb-4">
+        {error}
+      </div>
+    );
+  }
+  
+  if (tasks.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        No tasks available. Create a new task to get started!
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      {tasks.map((task) => (
+        <TaskCard
+          key={task.id}
+          task={task}
+          onClaim={onClaim}
+          onComplete={onComplete}
+          onApprove={onApprove}
+          onDispute={onDispute}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default TaskList;
