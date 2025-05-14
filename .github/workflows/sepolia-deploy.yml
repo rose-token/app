@@ -10,6 +10,11 @@ on:
         required: true
         default: 'true'
 
+# Add permissions for updating repository secrets
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
@@ -56,3 +61,20 @@ jobs:
           # Verify contracts on Etherscan
           npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
           npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
+      
+      - name: Update GitHub Secrets
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        run: |
+          # Get contract addresses from deployment output
+          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
+          TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
+          
+          echo "Updating GitHub secrets with new contract addresses"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
+          echo "Token: $TOKEN_ADDRESS"
+          
+          # Update GitHub secrets using GitHub CLI
+          gh secret set REACT_APP_MARKETPLACE_ADDRESS -b "$MARKETPLACE_ADDRESS" --repo ${{ github.repository }}
+          gh secret set REACT_APP_TOKEN_ADDRESS -b "$TOKEN_ADDRESS" --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
