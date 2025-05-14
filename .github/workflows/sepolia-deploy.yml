@@ -52,7 +52,7 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: |
           # Wait for contract deployment to be confirmed
-          sleep 60
+          sleep 180
           
           # Get contract addresses from deployment output
           MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
