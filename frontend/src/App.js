@@ -3,6 +3,10 @@ import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
 import { EthereumProvider } from './hooks/useEthereum';
 
+/**
+ * Main App component for Rose Token marketplace
+ * Renders the main application layout with TasksPage
+ */
 function App() {
   return (
     <EthereumProvider>
