@@ -24,8 +24,6 @@ export const EthereumProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [web3Modal, setWeb3Modal] = useState(null);
 
-  const SEPOLIA_CHAIN_ID = '0xaa36a7';
-
   useEffect(() => {
     const initProvider = async () => {
       try {
