@@ -1,8 +1,8 @@
 import React from 'react';
 import TaskCard from './TaskCard';
 
-const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading, error }) => {
-  if (isLoading) {
+const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading, isRefreshing, error }) => {
+  if (isLoading && tasks.length === 0) {
     return <div className="text-center py-8">Loading tasks...</div>;
   }
   
@@ -24,6 +24,11 @@ const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading,
   
   return (
     <div>
+      {isRefreshing && (
+        <div className="bg-blue-50 text-blue-700 p-2 mb-4 rounded-md text-sm text-center">
+          Refreshing tasks...
+        </div>
+      )}
       {tasks.map((task) => (
         <TaskCard
           key={task.id}
