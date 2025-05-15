@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-const CommentSection = ({ taskId, roseMarketplace, task }) => {
+const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(0);
@@ -146,6 +146,14 @@ const CommentSection = ({ taskId, roseMarketplace, task }) => {
     );
   };
   
+  if (!isAuthorized) {
+    return (
+      <div className="mt-6 p-4 bg-gray-100 rounded-md text-center">
+        <p className="text-gray-600">Comments are only visible to stakeholders, customers, and workers assigned to this task.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6">
       <h3 className="text-lg font-semibold mb-4">Comments</h3>

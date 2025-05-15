@@ -122,23 +122,26 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         )}
       </div>
       
-      {/* Comments toggle button */}
-      <div className="mt-4 flex justify-end">
-        <button 
-          onClick={() => setShowComments(!showComments)} 
-          className="text-sm text-gray-600 hover:text-gray-900 flex items-center"
-        >
-          {showComments ? 'Hide Comments' : 'Show Comments'} 
-          <span className="ml-1">{showComments ? '▲' : '▼'}</span>
-        </button>
-      </div>
+      {/* Comments toggle button - only visible to stakeholders, customers, and workers */}
+      {(isCustomer || isWorker || isStakeholder) && (
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => setShowComments(!showComments)} 
+            className="text-sm text-gray-600 hover:text-gray-900 flex items-center"
+          >
+            {showComments ? 'Hide Comments' : 'Show Comments'} 
+            <span className="ml-1">{showComments ? '▲' : '▼'}</span>
+          </button>
+        </div>
+      )}
       
-      {/* Comments section */}
-      {showComments && (
+      {/* Comments section - only visible to stakeholders, customers, and workers */}
+      {showComments && (isCustomer || isWorker || isStakeholder) && (
         <CommentSection 
           taskId={task.id} 
           roseMarketplace={roseMarketplace} 
           task={task} 
+          isAuthorized={true}
         />
       )}
     </div>
