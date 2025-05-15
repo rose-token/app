@@ -14,28 +14,28 @@ const TasksPage = () => {
   const { account, isConnected } = useEthereum();
   const { roseMarketplace } = useContract();
   
-  const fetchTaskDetails = async (taskId) => {
-    const task = await roseMarketplace.tasks(taskId);
-    
-    return {
-      id: taskId,
-      customer: task.customer,
-      worker: task.worker,
-      stakeholder: task.stakeholder,
-      deposit: task.deposit.toString(),
-      description: task.description,
-      status: task.status,
-      customerApproval: task.customerApproval,
-      stakeholderApproval: task.stakeholderApproval
-    };
-  };
-
   const fetchTasks = useCallback(async () => {
     if (!roseMarketplace) return;
     
     try {
       setIsLoading(true);
       setError('');
+      
+      const fetchTaskDetails = async (taskId) => {
+        const task = await roseMarketplace.tasks(taskId);
+        
+        return {
+          id: taskId,
+          customer: task.customer,
+          worker: task.worker,
+          stakeholder: task.stakeholder,
+          deposit: task.deposit.toString(),
+          description: task.description,
+          status: task.status,
+          customerApproval: task.customerApproval,
+          stakeholderApproval: task.stakeholderApproval
+        };
+      };
       
       const taskCount = await roseMarketplace.taskCounter();
       const taskPromises = [];
@@ -52,7 +52,7 @@ const TasksPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [roseMarketplace, fetchTaskDetails]);
+  }, [roseMarketplace]);
   
   const handleClaimTask = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
