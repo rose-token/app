@@ -36,6 +36,42 @@ export const EthereumProvider = ({ children }) => {
     setWeb3Modal(newWeb3Modal);
   }, []);
   
+  const connectWallet = useCallback(async () => {
+    if (!web3Modal) return;
+
+    try {
+      console.log('Connecting wallet...');
+      setIsConnecting(true);
+      setError(null);
+      
+      const modalProvider = await web3Modal.connect();
+      console.log('Web3Modal provider connected:', modalProvider);
+      
+      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
+      const accounts = await ethersProvider.listAccounts();
+      const ethSigner = ethersProvider.getSigner();
+      const network = await ethersProvider.getNetwork();
+      const currentChainId = '0x' + network.chainId.toString(16);
+      
+      setProvider(ethersProvider);
+      setSigner(ethSigner);
+      setAccount(accounts[0]);
+      setChainId(currentChainId);
+      setIsConnected(true);
+      
+      setupProviderEvents(modalProvider);
+      
+      if (currentChainId !== SEPOLIA_CHAIN_ID) {
+        await switchToSepolia();
+      }
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      setError('Failed to connect wallet');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [web3Modal, setupProviderEvents, switchToSepolia]);
+
   useEffect(() => {
     if (web3Modal && web3Modal.cachedProvider && connectWallet) {
       connectWallet();
@@ -131,42 +167,6 @@ export const EthereumProvider = ({ children }) => {
       };
     }
   }, [handleAccountsChanged, handleChainChanged, web3Modal]);
-
-  const connectWallet = useCallback(async () => {
-    if (!web3Modal) return;
-
-    try {
-      console.log('Connecting wallet...');
-      setIsConnecting(true);
-      setError(null);
-      
-      const modalProvider = await web3Modal.connect();
-      console.log('Web3Modal provider connected:', modalProvider);
-      
-      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
-      const accounts = await ethersProvider.listAccounts();
-      const ethSigner = ethersProvider.getSigner();
-      const network = await ethersProvider.getNetwork();
-      const currentChainId = '0x' + network.chainId.toString(16);
-      
-      setProvider(ethersProvider);
-      setSigner(ethSigner);
-      setAccount(accounts[0]);
-      setChainId(currentChainId);
-      setIsConnected(true);
-      
-      setupProviderEvents(modalProvider);
-      
-      if (currentChainId !== SEPOLIA_CHAIN_ID) {
-        await switchToSepolia();
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      setError('Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [web3Modal, setupProviderEvents, switchToSepolia]);
 
   const disconnectWallet = useCallback(async () => {
     if (web3Modal) {
