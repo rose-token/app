@@ -79,7 +79,7 @@ jobs:
           
       - name: Upload Contract Addresses Artifact
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: contract-addresses
           path: contract-addresses.json
