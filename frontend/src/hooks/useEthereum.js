@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
-import Web3Modal from 'web3modal';
-import WalletConnectProvider from '@walletconnect/web3-provider';
+import { EthereumProvider as WalletConnectProvider } from '@walletconnect/ethereum-provider';
+import { WalletConnectModal } from '@walletconnect/modal';
 
 const EthereumContext = createContext();
 
@@ -18,22 +18,17 @@ export const EthereumProvider = ({ children }) => {
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
 
   useEffect(() => {
-    const providerOptions = {
-      walletconnect: {
-        package: WalletConnectProvider,
-        options: {
-          infuraId: "27e484dcd9e3efcfd25a83a78777cdf1" // Replace with your Infura ID
-        }
+    const wcModal = new WalletConnectModal({
+      projectId: "27e484dcd9e3efcfd25a83a78777cdf1", // Using the same ID as before, but ideally should get a proper WalletConnect projectId
+      themeMode: "light",
+      themeVariables: {
+        '--wcm-font-family': 'Roboto, sans-serif',
+        '--wcm-background-color': '#ffffff',
+        '--wcm-accent-color': '#e91e63'  // Rose color to match the theme
       }
-    };
-
-    const newWeb3Modal = new Web3Modal({
-      cacheProvider: true,
-      providerOptions,
-      theme: "light"
     });
 
-    setWeb3Modal(newWeb3Modal);
+    setWeb3Modal(wcModal);
   }, []);
   
   const handleAccountsChanged = useCallback(async (accounts) => {
@@ -138,22 +133,30 @@ export const EthereumProvider = ({ children }) => {
       setIsConnecting(true);
       setError(null);
       
-      const modalProvider = await web3Modal.connect();
-      console.log('Web3Modal provider connected:', modalProvider);
+      const wcProvider = await WalletConnectProvider.init({
+        projectId: "27e484dcd9e3efcfd25a83a78777cdf1", // Using the same ID as before
+        chains: [11155111], // Sepolia chain ID
+        showQrModal: true,
+        metadata: {
+          name: "Rose Token",
+          description: "A decentralized task marketplace with a socialist token distribution model",
+          url: window.location.origin,
+          icons: ["https://walletconnect.com/walletconnect-logo.png"] // Placeholder icon
+        }
+      });
       
-      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
+      await wcProvider.connect({
+        modal: web3Modal
+      });
       
-      let accounts;
-      if (isMobileDevice() && modalProvider.isMetaMask) {
-        console.log('Mobile device detected with MetaMask, explicitly requesting accounts...');
-        accounts = await modalProvider.request({ method: 'eth_requestAccounts' });
-      } else {
-        accounts = await ethersProvider.listAccounts();
-      }
+      console.log('WalletConnect provider connected:', wcProvider);
+      
+      const ethersProvider = new ethers.providers.Web3Provider(wcProvider);
+      
+      const accounts = await ethersProvider.listAccounts();
       
       if (!accounts || accounts.length === 0) {
-        console.log('No accounts found, explicitly requesting accounts...');
-        accounts = await modalProvider.request({ method: 'eth_requestAccounts' });
+        throw new Error('No accounts found after connection');
       }
       
       const ethSigner = ethersProvider.getSigner();
@@ -166,27 +169,31 @@ export const EthereumProvider = ({ children }) => {
       setChainId(currentChainId);
       setIsConnected(true);
       
-      setupProviderEvents(modalProvider);
+      setupProviderEvents(wcProvider);
       
       if (currentChainId !== SEPOLIA_CHAIN_ID) {
         await switchToSepolia();
       }
     } catch (error) {
       console.error('Error connecting wallet:', error);
-      setError('Failed to connect wallet');
+      setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
     } finally {
       setIsConnecting(false);
     }
   }, [web3Modal, setupProviderEvents, switchToSepolia]);
 
   const disconnectWallet = useCallback(async () => {
+    if (provider) {
+      await provider.disconnect();
+    }
     if (web3Modal) {
-      web3Modal.clearCachedProvider();
+      localStorage.removeItem('walletconnect');
     }
     setAccount(null);
     setSigner(null);
     setIsConnected(false);
-  }, [web3Modal]);
+    setProvider(null);
+  }, [web3Modal, provider]);
 
   useEffect(() => {
     if (web3Modal && web3Modal.cachedProvider && connectWallet) {
