@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
@@ -14,7 +14,23 @@ const TasksPage = () => {
   const { account, isConnected } = useEthereum();
   const { roseMarketplace } = useContract();
   
-  const fetchTasks = async () => {
+  const fetchTaskDetails = async (taskId) => {
+    const task = await roseMarketplace.tasks(taskId);
+    
+    return {
+      id: taskId,
+      customer: task.customer,
+      worker: task.worker,
+      stakeholder: task.stakeholder,
+      deposit: task.deposit.toString(),
+      description: task.description,
+      status: task.status,
+      customerApproval: task.customerApproval,
+      stakeholderApproval: task.stakeholderApproval
+    };
+  };
+
+  const fetchTasks = useCallback(async () => {
     if (!roseMarketplace) return;
     
     try {
@@ -36,23 +52,7 @@ const TasksPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-  
-  const fetchTaskDetails = async (taskId) => {
-    const task = await roseMarketplace.tasks(taskId);
-    
-    return {
-      id: taskId,
-      customer: task.customer,
-      worker: task.worker,
-      stakeholder: task.stakeholder,
-      deposit: task.deposit.toString(),
-      description: task.description,
-      status: task.status,
-      customerApproval: task.customerApproval,
-      stakeholderApproval: task.stakeholderApproval
-    };
-  };
+  }, [roseMarketplace, fetchTaskDetails]);
   
   const handleClaimTask = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
