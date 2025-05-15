@@ -1,0 +1,51 @@
+name: PR Build Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  # Build and test contracts
+  build-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npx hardhat test
+      
+      - name: Compile contracts
+        run: npx hardhat compile
+
+  # Build frontend
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package.json'
+      
+      - name: Install dependencies
+        run: cd frontend && npm install
+      
+      - name: Build
+        run: cd frontend && npm run build
+        env:
+          # Using placeholder values for build-only environment
+          REACT_APP_MARKETPLACE_ADDRESS: "0x0000000000000000000000000000000000000000"
+          REACT_APP_TOKEN_ADDRESS: "0x0000000000000000000000000000000000000000"
