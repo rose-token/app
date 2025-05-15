@@ -18,8 +18,10 @@ export const EthereumProvider = ({ children }) => {
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
 
   useEffect(() => {
+    const projectId = "3ec28d2f335f40ef7ec1309bfd6b5451";
+    
     const wcModal = new WalletConnectModal({
-      projectId: "27e484dcd9e3efcfd25a83a78777cdf1", // Using the same ID as before, but ideally should get a proper WalletConnect projectId
+      projectId: projectId,
       themeMode: "light",
       themeVariables: {
         '--wcm-font-family': 'Roboto, sans-serif',
@@ -131,7 +133,7 @@ export const EthereumProvider = ({ children }) => {
       setError(null);
       
       const wcProvider = await WalletConnectProvider.init({
-        projectId: "27e484dcd9e3efcfd25a83a78777cdf1", // Using the same ID as before
+        projectId: "3ec28d2f335f40ef7ec1309bfd6b5451", // Valid WalletConnect projectId
         chains: [11155111], // Sepolia chain ID
         showQrModal: true,
         metadata: {
