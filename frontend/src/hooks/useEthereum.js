@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { EthereumProvider as WalletConnectProvider } from '@walletconnect/ethereum-provider';
+import { useSDK } from '@metamask/sdk-react';
 
 const isMobileDevice = () => {
   return (
@@ -22,42 +22,54 @@ export const EthereumProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
-  const [web3Modal, setWeb3Modal] = useState(null);
+  
+  // Use the MetaMask SDK hook
+  const { sdk, connected, connecting, provider: metamaskProvider, chainId: sdkChainId } = useSDK();
 
+  // Set up provider and signer when MetaMask SDK connection changes
   useEffect(() => {
-    const initProvider = async () => {
-      try {
-        const projectId = "95be0fbf27f06934c74d670d57f44939";
-        
-        const provider = await WalletConnectProvider.init({
-          projectId: projectId,
-          chains: [11155111], // Sepolia chain ID
-          showQrModal: true,
-          metadata: {
-            name: "Rose Token",
-            description: "A decentralized task marketplace with a socialist token distribution model",
-            url: window.location.origin,
-            icons: ["https://walletconnect.com/walletconnect-logo.png"] // Placeholder icon
-          },
-          optionalMethods: ["eth_signTypedData", "eth_signTypedData_v4", "eth_sign"],
-          rpcMap: {
-            11155111: "https://sepolia.infura.io/v3/"
+    const setupProviderAndSigner = async () => {
+      if (metamaskProvider && connected) {
+        try {
+          const ethersProvider = new ethers.providers.Web3Provider(metamaskProvider);
+          const ethSigner = ethersProvider.getSigner();
+          const accounts = await ethersProvider.listAccounts();
+
+          setProvider(ethersProvider);
+          setSigner(ethSigner);
+          
+          if (accounts && accounts.length > 0) {
+            setAccount(accounts[0]);
           }
-        });
-        
-        setWeb3Modal(provider);
-      } catch (error) {
-        console.error("Failed to initialize WalletConnect provider:", error);
-        setError("Failed to initialize wallet connection");
+          
+          setChainId(sdkChainId || '0xaa36a7'); // Sepolia chain ID if not provided
+          setIsConnected(true);
+          setIsConnecting(false);
+        } catch (error) {
+          console.error('Error setting up provider and signer:', error);
+          setError('Failed to setup wallet connection: ' + (error.message || 'Unknown error'));
+          setIsConnecting(false);
+        }
+      } else if (!connected) {
+        // Clear state when disconnected
+        setProvider(null);
+        setSigner(null);
+        setAccount(null);
+        setIsConnected(false);
       }
     };
-    
-    initProvider();
-  }, []);
-  
+
+    setupProviderAndSigner();
+  }, [metamaskProvider, connected, sdkChainId]);
+
+  // Handle connection state
+  useEffect(() => {
+    setIsConnecting(connecting);
+  }, [connecting]);
+
   const handleAccountsChanged = useCallback(async (accounts) => {
     console.log('Accounts changed:', accounts);
-    if (accounts.length === 0) {
+    if (!accounts || accounts.length === 0) {
       setAccount(null);
       setSigner(null);
       setIsConnected(false);
@@ -81,146 +93,118 @@ export const EthereumProvider = ({ children }) => {
     window.location.reload();
   }, []);
 
-  const handleDisconnect = useCallback(() => {
-    console.log('Wallet disconnected');
-    setAccount(null);
-    setSigner(null);
-    setIsConnected(false);
-    if (web3Modal) {
-      web3Modal.clearCachedProvider();
-    }
-  }, [web3Modal]);
+  // Set up event listeners when provider changes
+  useEffect(() => {
+    if (!metamaskProvider || !connected) return;
 
-  const setupProviderEvents = useCallback((provider) => {
-    if (provider.on) {
-      provider.on('accountsChanged', handleAccountsChanged);
-      provider.on('chainChanged', handleChainChanged);
-      provider.on('disconnect', handleDisconnect);
+    const handleDisconnect = () => {
+      console.log('Wallet disconnected');
+      setAccount(null);
+      setSigner(null);
+      setIsConnected(false);
+    };
 
-      return () => {
-        if (provider.removeListener) {
-          provider.removeListener('accountsChanged', handleAccountsChanged);
-          provider.removeListener('chainChanged', handleChainChanged);
-          provider.removeListener('disconnect', handleDisconnect);
-        }
-      };
-    }
-  }, [handleAccountsChanged, handleChainChanged, handleDisconnect]);
+    // Add event listeners
+    metamaskProvider.on('accountsChanged', handleAccountsChanged);
+    metamaskProvider.on('chainChanged', handleChainChanged);
+    metamaskProvider.on('disconnect', handleDisconnect);
 
-
-
+    // Clean up event listeners
+    return () => {
+      if (metamaskProvider.removeListener) {
+        metamaskProvider.removeListener('accountsChanged', handleAccountsChanged);
+        metamaskProvider.removeListener('chainChanged', handleChainChanged);
+        metamaskProvider.removeListener('disconnect', handleDisconnect);
+      }
+    };
+  }, [metamaskProvider, connected, handleAccountsChanged, handleChainChanged]);
 
   const connectWallet = useCallback(async () => {
-    if (!web3Modal || isConnecting) return;
+    if (!sdk || isConnecting) return;
 
     try {
       console.log('Connecting wallet...');
       setIsConnecting(true);
       setError(null);
       
-      await web3Modal.connect();
-      
-      console.log('WalletConnect provider connected:', web3Modal);
-      
-      const ethersProvider = new ethers.providers.Web3Provider(web3Modal);
-      
-      let accounts;
       const isMobile = isMobileDevice();
+      console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
       
-      if (isMobile) {
-        console.log('Mobile device detected, using explicit account request');
-        try {
-          await ethersProvider.provider.request({ method: 'eth_requestAccounts' });
-          accounts = await ethersProvider.listAccounts();
-        } catch (requestError) {
-          console.error('Mobile account request failed:', requestError);
-          throw new Error('Failed to connect wallet on mobile: ' + (requestError.message || 'Unknown error'));
-        }
-      } else {
-        try {
-          try {
-            await ethersProvider.provider.request({ method: 'eth_requestAccounts' });
-          } catch (requestError) {
-            console.log('Direct request failed on desktop, falling back to listAccounts:', requestError);
-          }
-          accounts = await ethersProvider.listAccounts();
-        } catch (error) {
-          console.error('Desktop account request failed:', error);
-          throw new Error('Failed to get accounts: ' + (error.message || 'Unknown error'));
-        }
-      }
+      const accounts = await sdk.connect();
+      
+      console.log('MetaMask connected:', accounts);
       
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts found after connection');
       }
       
-      const ethSigner = ethersProvider.getSigner();
-      
-      const chainIdFromProvider = web3Modal.chains ? `0x${web3Modal.chains[0].toString(16)}` : '0xaa36a7';
-      
-      setProvider(ethersProvider);
-      setSigner(ethSigner);
       setAccount(accounts[0]);
-      setChainId(chainIdFromProvider);
       setIsConnected(true);
-      
-      setupProviderEvents(ethersProvider);
-      
     } catch (error) {
       console.error('Error connecting wallet:', error);
       setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
     } finally {
       setIsConnecting(false);
     }
-  }, [web3Modal, setupProviderEvents, isConnecting]);
+  }, [sdk, isConnecting]);
 
   const disconnectWallet = useCallback(async () => {
     try {
-      if (provider) {
-        await provider.disconnect();
+      if (sdk) {
+        await sdk.disconnect();
       }
-      if (web3Modal) {
-        web3Modal.clearCachedProvider();
-        localStorage.removeItem('walletconnect');
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('wc@2:')) {
-            localStorage.removeItem(key);
-          }
-        });
-      }
+      
+      // Clear local state
       setAccount(null);
       setSigner(null);
       setIsConnected(false);
       setProvider(null);
+      
+      // Clear any stored data
+      localStorage.removeItem('metamask-sdk:lastUsedChainId');
+      
     } catch (error) {
       console.error("Error disconnecting wallet:", error);
     }
-  }, [web3Modal, provider]);
+  }, [sdk]);
   
   const switchNetwork = useCallback(async (targetChainId) => {
     try {
       setError('');
-      if (window.ethereum) {
-        await window.ethereum.request({
+      if (metamaskProvider) {
+        await metamaskProvider.request({
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: targetChainId }],
         });
-      } else if (provider) {
+      } else {
         setChainId(targetChainId);
-        
         alert('Please switch to the selected network in your wallet app');
       }
     } catch (error) {
       console.error('Error switching network:', error);
       setError('Failed to switch network');
     }
-  }, [provider, setChainId, setError]);
+  }, [metamaskProvider, setChainId, setError]);
 
+  // Try to reconnect on startup if previously connected
   useEffect(() => {
-    if (web3Modal && web3Modal.cachedProvider && !isConnecting && !isConnected) {
-      connectWallet();
+    if (sdk && !isConnecting && !isConnected) {
+      // MetaMask SDK automatically attempts to reconnect if previously connected
+      const attemptReconnect = async () => {
+        try {
+          const accounts = await sdk.connectAndSign();
+          if (accounts && accounts.length > 0) {
+            console.log('Reconnected to MetaMask');
+          }
+        } catch (error) {
+          // Silent fail for auto-reconnect
+          console.log('Auto-reconnect failed, user can connect manually');
+        }
+      };
+      
+      attemptReconnect();
     }
-  }, [web3Modal, isConnecting, isConnected, connectWallet]);
+  }, [sdk, isConnecting, isConnected]);
 
   const value = {
     provider,
