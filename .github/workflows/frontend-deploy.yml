@@ -38,11 +38,32 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
       
+      - name: Download Contract Addresses Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: contract-addresses
+          path: ./
+
+      - name: Extract Contract Addresses
+        id: extract_addresses
+        run: |
+          # Read contract addresses from artifact
+          MARKETPLACE_ADDRESS=$(cat contract-addresses.json | jq -r '.marketplaceAddress')
+          TOKEN_ADDRESS=$(cat contract-addresses.json | jq -r '.tokenAddress')
+          
+          # Set outputs for use in next steps
+          echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
+          echo "TOKEN_ADDRESS=$TOKEN_ADDRESS" >> $GITHUB_ENV
+          
+          echo "Using contract addresses from artifact:"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
+          echo "Token: $TOKEN_ADDRESS"
+      
       - name: Build
         run: cd frontend && npm run build
         env:
-          REACT_APP_MARKETPLACE_ADDRESS: ${{ secrets.MARKETPLACE_ADDRESS }}
-          REACT_APP_TOKEN_ADDRESS: ${{ secrets.TOKEN_ADDRESS }}
+          REACT_APP_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
+          REACT_APP_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
       
       - name: Setup Pages
         uses: actions/configure-pages@v3
