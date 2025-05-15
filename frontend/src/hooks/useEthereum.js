@@ -34,11 +34,13 @@ export const EthereumProvider = ({ children }) => {
     });
 
     setWeb3Modal(newWeb3Modal);
-
-    if (newWeb3Modal.cachedProvider) {
+  }, []);
+  
+  useEffect(() => {
+    if (web3Modal && web3Modal.cachedProvider && connectWallet) {
       connectWallet();
     }
-  }, [connectWallet]);
+  }, [web3Modal, connectWallet]);
 
   const switchToSepolia = useCallback(async () => {
     try {
@@ -141,9 +143,9 @@ export const EthereumProvider = ({ children }) => {
       const modalProvider = await web3Modal.connect();
       console.log('Web3Modal provider connected:', modalProvider);
       
-      const ethersProvider = new ethers.BrowserProvider(modalProvider);
+      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
       const accounts = await ethersProvider.listAccounts();
-      const ethSigner = await ethersProvider.getSigner();
+      const ethSigner = ethersProvider.getSigner();
       const network = await ethersProvider.getNetwork();
       const currentChainId = '0x' + network.chainId.toString(16);
       
