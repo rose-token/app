@@ -162,12 +162,6 @@ export const EthereumProvider = ({ children }) => {
     }
   }, [web3Modal, setupProviderEvents, switchToSepolia]);
 
-  useEffect(() => {
-    if (web3Modal && web3Modal.cachedProvider && connectWallet) {
-      connectWallet();
-    }
-  }, [web3Modal, connectWallet]);
-
   const disconnectWallet = useCallback(async () => {
     if (web3Modal) {
       web3Modal.clearCachedProvider();
@@ -176,6 +170,12 @@ export const EthereumProvider = ({ children }) => {
     setSigner(null);
     setIsConnected(false);
   }, [web3Modal]);
+
+  useEffect(() => {
+    if (web3Modal && web3Modal.cachedProvider && connectWallet) {
+      connectWallet();
+    }
+  }, [web3Modal, connectWallet]);
 
   const value = {
     provider,
