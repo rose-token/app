@@ -9,15 +9,17 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute }) => {
     return parseFloat(wei) / 10**18;
   };
   
-  const isCustomer = account && task.customer === account;
-  const isWorker = account && task.worker === account;
-  const isStakeholder = account && task.stakeholder === account;
+  const isCustomer = account && task.customer.toLowerCase() === account.toLowerCase();
+  const isWorker = account && task.worker.toLowerCase() === account.toLowerCase();
+  const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
   
   const canClaim = !isCustomer && task.status === TaskStatus.Open && !isWorker;
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
   const canDispute = (isCustomer || isWorker) && (task.status === TaskStatus.InProgress || task.status === TaskStatus.Completed);
+  
+  console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-4 border border-gray-200">
@@ -91,9 +93,9 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute }) => {
         {canApproveAsStakeholder && (
           <button 
             onClick={() => onApprove(task.id, 'stakeholder')} 
-            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md border border-indigo-400"
           >
-            Approve as Stakeholder
+            ✓ Approve as Stakeholder
           </button>
         )}
         
