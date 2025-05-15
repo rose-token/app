@@ -1,7 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { EthereumProvider as WalletConnectProvider } from '@walletconnect/ethereum-provider';
-import { WalletConnectModal } from '@walletconnect/modal';
 
 const EthereumContext = createContext();
 
@@ -18,19 +17,30 @@ export const EthereumProvider = ({ children }) => {
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
 
   useEffect(() => {
-    const projectId = "3ec28d2f335f40ef7ec1309bfd6b5451";
-    
-    const wcModal = new WalletConnectModal({
-      projectId: projectId,
-      themeMode: "light",
-      themeVariables: {
-        '--wcm-font-family': 'Roboto, sans-serif',
-        '--wcm-background-color': '#ffffff',
-        '--wcm-accent-color': '#e91e63'  // Rose color to match the theme
+    const initProvider = async () => {
+      try {
+        const projectId = "3ec28d2f335f40ef7ec1309bfd6b5451";
+        
+        const provider = await WalletConnectProvider.init({
+          projectId: projectId,
+          chains: [11155111], // Sepolia chain ID
+          showQrModal: true,
+          metadata: {
+            name: "Rose Token",
+            description: "A decentralized task marketplace with a socialist token distribution model",
+            url: window.location.origin,
+            icons: ["https://walletconnect.com/walletconnect-logo.png"] // Placeholder icon
+          }
+        });
+        
+        setWeb3Modal(provider);
+      } catch (error) {
+        console.error("Failed to initialize WalletConnect provider:", error);
+        setError("Failed to initialize wallet connection");
       }
-    });
-
-    setWeb3Modal(wcModal);
+    };
+    
+    initProvider();
   }, []);
   
   const handleAccountsChanged = useCallback(async (accounts) => {
@@ -132,25 +142,11 @@ export const EthereumProvider = ({ children }) => {
       setIsConnecting(true);
       setError(null);
       
-      const wcProvider = await WalletConnectProvider.init({
-        projectId: "3ec28d2f335f40ef7ec1309bfd6b5451", // Valid WalletConnect projectId
-        chains: [11155111], // Sepolia chain ID
-        showQrModal: true,
-        metadata: {
-          name: "Rose Token",
-          description: "A decentralized task marketplace with a socialist token distribution model",
-          url: window.location.origin,
-          icons: ["https://walletconnect.com/walletconnect-logo.png"] // Placeholder icon
-        }
-      });
+      await web3Modal.connect();
       
-      await wcProvider.connect({
-        modal: web3Modal
-      });
+      console.log('WalletConnect provider connected:', web3Modal);
       
-      console.log('WalletConnect provider connected:', wcProvider);
-      
-      const ethersProvider = new ethers.providers.Web3Provider(wcProvider);
+      const ethersProvider = new ethers.providers.Web3Provider(web3Modal);
       
       const accounts = await ethersProvider.listAccounts();
       
@@ -168,7 +164,7 @@ export const EthereumProvider = ({ children }) => {
       setChainId(currentChainId);
       setIsConnected(true);
       
-      setupProviderEvents(wcProvider);
+      setupProviderEvents(web3Modal);
       
       if (currentChainId !== SEPOLIA_CHAIN_ID) {
         await switchToSepolia();
