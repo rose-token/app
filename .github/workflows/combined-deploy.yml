@@ -52,23 +52,21 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: npx hardhat run scripts/deploy.js --network sepolia
       
-      - name: Verify contracts on Etherscan
-        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-        env:
-          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-        run: |
-          # Wait for contract deployment to be confirmed
-          sleep 180
-          
-          # Get contract addresses from deployment output
-          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
-          TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
-          
-          # Verify contracts on Etherscan
-          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
-          npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
+      # Etherscan verification disabled as requested
+      # - name: Verify contracts on Etherscan
+      #   if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+      #   env:
+      #     SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+      #     PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      #     ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+      #   run: |
+      #     # Get contract addresses from deployment output
+      #     MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
+      #     TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
+      #     
+      #     # Verify contracts on Etherscan
+      #     npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
+      #     npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
       
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
