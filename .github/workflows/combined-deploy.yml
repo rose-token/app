@@ -113,7 +113,7 @@ jobs:
           cache-dependency-path: 'frontend/package.json'
       
       - name: Install dependencies
-        run: cd frontend && npm install
+        run: cd frontend && npm install --legacy-peer-deps
       
       - name: Download Contract Addresses Artifact
         uses: actions/download-artifact@v4
