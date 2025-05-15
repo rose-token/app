@@ -2,7 +2,7 @@ import React from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment }) => {
   const { account } = useEthereum();
   
   const formatEth = (wei) => {
