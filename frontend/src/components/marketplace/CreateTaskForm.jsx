@@ -26,7 +26,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
     
-    if (!ethers.isAddress(stakeholderAddress)) {
+    if (!ethers.utils.isAddress(stakeholderAddress)) {
       setError('Invalid stakeholder address');
       return;
     }
@@ -35,7 +35,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setIsCreating(true);
       setError('');
       
-      const depositWei = ethers.parseEther(deposit);
+      const depositWei = ethers.utils.parseEther(deposit);
       
       const tx = await roseMarketplace.createTask(
         description,
