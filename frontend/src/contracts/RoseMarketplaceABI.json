@@ -125,6 +125,31 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "worker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "TaskReadyForPayment",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "BASE_REWARD",
     "outputs": [
@@ -307,6 +332,19 @@
       }
     ],
     "name": "markTaskCompleted",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "acceptPayment",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
