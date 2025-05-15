@@ -1,0 +1,16 @@
+export const NETWORK_IDS = {
+  MAINNET: '0x1',
+  SEPOLIA: '0xaa36a7'
+};
+
+export const NETWORK_NAMES = {
+  [NETWORK_IDS.MAINNET]: 'Ethereum Mainnet',
+  [NETWORK_IDS.SEPOLIA]: 'Sepolia Testnet'
+};
+
+export const SUPPORTED_NETWORKS = [
+  { id: NETWORK_IDS.MAINNET, name: NETWORK_NAMES[NETWORK_IDS.MAINNET] },
+  { id: NETWORK_IDS.SEPOLIA, name: NETWORK_NAMES[NETWORK_IDS.SEPOLIA] }
+];
+
+export const DEFAULT_NETWORK = NETWORK_IDS.SEPOLIA;
