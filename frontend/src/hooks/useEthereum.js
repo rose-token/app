@@ -36,86 +36,6 @@ export const EthereumProvider = ({ children }) => {
     setWeb3Modal(newWeb3Modal);
   }, []);
   
-  const connectWallet = useCallback(async () => {
-    if (!web3Modal) return;
-
-    try {
-      console.log('Connecting wallet...');
-      setIsConnecting(true);
-      setError(null);
-      
-      const modalProvider = await web3Modal.connect();
-      console.log('Web3Modal provider connected:', modalProvider);
-      
-      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
-      const accounts = await ethersProvider.listAccounts();
-      const ethSigner = ethersProvider.getSigner();
-      const network = await ethersProvider.getNetwork();
-      const currentChainId = '0x' + network.chainId.toString(16);
-      
-      setProvider(ethersProvider);
-      setSigner(ethSigner);
-      setAccount(accounts[0]);
-      setChainId(currentChainId);
-      setIsConnected(true);
-      
-      setupProviderEvents(modalProvider);
-      
-      if (currentChainId !== SEPOLIA_CHAIN_ID) {
-        await switchToSepolia();
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      setError('Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [web3Modal, setupProviderEvents, switchToSepolia]);
-
-  useEffect(() => {
-    if (web3Modal && web3Modal.cachedProvider && connectWallet) {
-      connectWallet();
-    }
-  }, [web3Modal, connectWallet]);
-
-  const switchToSepolia = useCallback(async () => {
-    try {
-      if (!window.ethereum) return;
-      
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: SEPOLIA_CHAIN_ID }],
-      });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: SEPOLIA_CHAIN_ID,
-                chainName: 'Sepolia Testnet',
-                nativeCurrency: {
-                  name: 'Sepolia ETH',
-                  symbol: 'ETH',
-                  decimals: 18,
-                },
-                rpcUrls: ['https://sepolia.infura.io/v3/'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
-              },
-            ],
-          });
-        } catch (addError) {
-          console.error('Error adding Sepolia network:', addError);
-          setError('Failed to add Sepolia network');
-        }
-      } else {
-        console.error('Error switching to Sepolia:', switchError);
-        setError('Failed to switch to Sepolia network');
-      }
-    }
-  }, []);
-
   const handleAccountsChanged = useCallback(async (accounts) => {
     console.log('Accounts changed:', accounts);
     if (accounts.length === 0) {
@@ -167,6 +87,86 @@ export const EthereumProvider = ({ children }) => {
       };
     }
   }, [handleAccountsChanged, handleChainChanged, web3Modal]);
+
+  const switchToSepolia = useCallback(async () => {
+    try {
+      if (!window.ethereum) return;
+      
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: SEPOLIA_CHAIN_ID }],
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: SEPOLIA_CHAIN_ID,
+                chainName: 'Sepolia Testnet',
+                nativeCurrency: {
+                  name: 'Sepolia ETH',
+                  symbol: 'ETH',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://sepolia.infura.io/v3/'],
+                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+              },
+            ],
+          });
+        } catch (addError) {
+          console.error('Error adding Sepolia network:', addError);
+          setError('Failed to add Sepolia network');
+        }
+      } else {
+        console.error('Error switching to Sepolia:', switchError);
+        setError('Failed to switch to Sepolia network');
+      }
+    }
+  }, []);
+
+  const connectWallet = useCallback(async () => {
+    if (!web3Modal) return;
+
+    try {
+      console.log('Connecting wallet...');
+      setIsConnecting(true);
+      setError(null);
+      
+      const modalProvider = await web3Modal.connect();
+      console.log('Web3Modal provider connected:', modalProvider);
+      
+      const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
+      const accounts = await ethersProvider.listAccounts();
+      const ethSigner = ethersProvider.getSigner();
+      const network = await ethersProvider.getNetwork();
+      const currentChainId = '0x' + network.chainId.toString(16);
+      
+      setProvider(ethersProvider);
+      setSigner(ethSigner);
+      setAccount(accounts[0]);
+      setChainId(currentChainId);
+      setIsConnected(true);
+      
+      setupProviderEvents(modalProvider);
+      
+      if (currentChainId !== SEPOLIA_CHAIN_ID) {
+        await switchToSepolia();
+      }
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      setError('Failed to connect wallet');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [web3Modal, setupProviderEvents, switchToSepolia]);
+
+  useEffect(() => {
+    if (web3Modal && web3Modal.cachedProvider && connectWallet) {
+      connectWallet();
+    }
+  }, [web3Modal, connectWallet]);
 
   const disconnectWallet = useCallback(async () => {
     if (web3Modal) {
