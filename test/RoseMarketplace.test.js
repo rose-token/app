@@ -123,7 +123,7 @@ describe("RoseMarketplace", function () {
       expect(task.status).to.equal(2); // TaskStatus.Completed
     });
 
-    it("Should allow customer and stakeholder approvals and mark task ready for payment", async function () {
+    it("Should allow customer and stakeholder approvals and mark task ready for payment (customer first)", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
 
@@ -139,6 +139,26 @@ describe("RoseMarketplace", function () {
 
       task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
+    });
+    
+    it("Should allow stakeholder and customer approvals and mark task ready for payment (stakeholder first)", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1);
+
+      await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+      
+      let task = await roseMarketplace.tasks(1);
+      expect(task.stakeholderApproval).to.equal(true);
+      expect(task.status).to.equal(2); // Still Completed, not ready for payment yet
+
+      await expect(roseMarketplace.connect(customer).approveCompletionByCustomer(1))
+        .to.emit(roseMarketplace, "TaskReadyForPayment")
+        .withArgs(1, worker.address, taskDeposit);
+
+      task = await roseMarketplace.tasks(1);
+      expect(task.customerApproval).to.equal(true);
       expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
