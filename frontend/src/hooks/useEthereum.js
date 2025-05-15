@@ -121,9 +121,6 @@ export const EthereumProvider = ({ children }) => {
     }
   }, []);
 
-  const isMobileDevice = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
 
   const connectWallet = useCallback(async () => {
     if (!web3Modal) return;
