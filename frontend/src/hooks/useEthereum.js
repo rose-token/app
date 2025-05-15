@@ -40,6 +40,10 @@ export const EthereumProvider = ({ children }) => {
             description: "A decentralized task marketplace with a socialist token distribution model",
             url: window.location.origin,
             icons: ["https://walletconnect.com/walletconnect-logo.png"] // Placeholder icon
+          },
+          optionalMethods: ["eth_signTypedData", "eth_signTypedData_v4", "eth_sign"],
+          rpcMap: {
+            11155111: "https://sepolia.infura.io/v3/"
           }
         });
         
@@ -212,16 +216,26 @@ export const EthereumProvider = ({ children }) => {
   }, [web3Modal, setupProviderEvents, switchToSepolia, isConnecting]);
 
   const disconnectWallet = useCallback(async () => {
-    if (provider) {
-      await provider.disconnect();
+    try {
+      if (provider) {
+        await provider.disconnect();
+      }
+      if (web3Modal) {
+        web3Modal.clearCachedProvider();
+        localStorage.removeItem('walletconnect');
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('wc@2:')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+      setAccount(null);
+      setSigner(null);
+      setIsConnected(false);
+      setProvider(null);
+    } catch (error) {
+      console.error("Error disconnecting wallet:", error);
     }
-    if (web3Modal) {
-      localStorage.removeItem('walletconnect');
-    }
-    setAccount(null);
-    setSigner(null);
-    setIsConnected(false);
-    setProvider(null);
   }, [web3Modal, provider]);
 
   useEffect(() => {
