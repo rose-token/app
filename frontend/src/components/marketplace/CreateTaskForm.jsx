@@ -10,7 +10,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   
-  const { account, isConnected } = useEthereum();
+  const { isConnected } = useEthereum();
   const { roseMarketplace, isLoading } = useContract();
   
   const handleSubmit = async (e) => {

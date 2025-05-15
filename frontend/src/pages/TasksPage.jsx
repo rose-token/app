@@ -11,7 +11,7 @@ const TasksPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
-  const { account, isConnected, connectWallet } = useEthereum();
+  const { account, isConnected } = useEthereum();
   const { roseMarketplace } = useContract();
   
   const fetchTasks = async () => {
@@ -117,13 +117,13 @@ const TasksPage = () => {
     if (roseMarketplace) {
       fetchTasks();
     }
-  }, [roseMarketplace]);
+  }, [roseMarketplace, fetchTasks]);
   
   useEffect(() => {
     if (account && roseMarketplace) {
       fetchTasks();
     }
-  }, [account]);
+  }, [account, roseMarketplace, fetchTasks]);
   
   return (
     <div>
