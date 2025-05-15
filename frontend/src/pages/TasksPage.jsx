@@ -123,20 +123,31 @@ const TasksPage = () => {
   const handleApproveTask = async (taskId, role) => {
     if (!isConnected || !roseMarketplace) return;
     
+    setIsLoading(true);
     try {
       let tx;
       
       if (role === 'customer') {
+        console.log("Approving as customer for task:", taskId);
         tx = await roseMarketplace.approveCompletionByCustomer(taskId);
       } else if (role === 'stakeholder') {
-        tx = await roseMarketplace.approveCompletionByStakeholder(taskId);
+        console.log("Approving as stakeholder for task:", taskId);
+        tx = await roseMarketplace.approveCompletionByStakeholder(taskId, {
+          gasLimit: 500000 // Increase gas limit for stakeholder approval (which may trigger payment)
+        });
       }
       
+      console.log("Waiting for transaction:", tx.hash);
       await tx.wait();
-      debouncedFetchTasks(); // Use debounced version
+      console.log("Transaction confirmed");
+      
+      await fetchTasks(); // Refresh task list after approval
+      await fetchTaskDetails(taskId); // Refresh the specific task details
     } catch (err) {
       console.error('Error approving task:', err);
-      setError(`Failed to approve task as ${role}`);
+      setError(`Failed to approve task as ${role}: ${err.message || "Transaction failed"}`);
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -156,8 +167,27 @@ const TasksPage = () => {
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
+      
+      const paymentFilter = roseMarketplace.filters.PaymentReleased();
+      const paymentListener = (taskId, worker, amount) => {
+        console.log("Payment released event:", { taskId, worker, amount });
+        fetchTasks(); // Refresh tasks after payment
+      };
+      roseMarketplace.on(paymentFilter, paymentListener);
+      
+      const closedFilter = roseMarketplace.filters.TaskClosed();
+      const closedListener = (taskId) => {
+        console.log("Task closed event:", taskId);
+        fetchTasks(); // Refresh tasks after closing
+      };
+      roseMarketplace.on(closedFilter, closedListener);
+      
+      return () => {
+        roseMarketplace.off(paymentFilter, paymentListener);
+        roseMarketplace.off(closedFilter, closedListener);
+      };
     }
-  }, [roseMarketplace, account, debouncedFetchTasks]);
+  }, [roseMarketplace, account, debouncedFetchTasks, fetchTasks]);
   
   return (
     <div>
