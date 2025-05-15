@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
 
 const EthereumContext = createContext();
@@ -14,100 +14,10 @@ export const EthereumProvider = ({ children }) => {
 
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
 
-  useEffect(() => {
-    console.log('Checking for Ethereum provider...');
-    console.log('window.ethereum:', window.ethereum);
-    
-    if (typeof window.ethereum !== 'undefined') {
-      console.log('Ethereum provider found!');
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      setProvider(provider);
-
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      
-      window.ethereum.on('chainChanged', handleChainChanged);
-
-      checkConnection();
-    } else {
-      console.error('No Ethereum provider detected');
-      setError('Please install MetaMask to use this application');
-    }
-
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      }
-    };
-  }, []);
-
-  const checkConnection = async () => {
+  const switchToSepolia = useCallback(async () => {
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accounts.length > 0) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-        
-        setAccount(accounts[0]);
-        setSigner(signer);
-        setChainId(chainId);
-        setIsConnected(true);
-      }
-    } catch (error) {
-      console.error('Error checking connection:', error);
-    }
-  };
-
-  const handleAccountsChanged = async (accounts) => {
-    if (accounts.length === 0) {
-      setAccount(null);
-      setSigner(null);
-      setIsConnected(false);
-    } else {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      if (!window.ethereum) return;
       
-      setAccount(accounts[0]);
-      setSigner(signer);
-      setIsConnected(true);
-    }
-  };
-
-  const handleChainChanged = (chainId) => {
-    setChainId(chainId);
-    window.location.reload();
-  };
-
-  const connectWallet = async () => {
-    if (!provider) return;
-    
-    try {
-      setIsConnecting(true);
-      setError(null);
-      
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const signer = await provider.getSigner();
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      
-      setAccount(accounts[0]);
-      setSigner(signer);
-      setChainId(chainId);
-      setIsConnected(true);
-      
-      if (chainId !== SEPOLIA_CHAIN_ID) {
-        await switchToSepolia();
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      setError('Failed to connect wallet');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const switchToSepolia = async () => {
-    try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: SEPOLIA_CHAIN_ID }],
@@ -140,7 +50,116 @@ export const EthereumProvider = ({ children }) => {
         setError('Failed to switch to Sepolia network');
       }
     }
-  };
+  }, []);
+
+  const handleAccountsChanged = useCallback(async (accounts) => {
+    console.log('Accounts changed:', accounts);
+    if (accounts.length === 0) {
+      setAccount(null);
+      setSigner(null);
+      setIsConnected(false);
+    } else {
+      try {
+        const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+        const ethSigner = await ethersProvider.getSigner();
+        
+        setProvider(ethersProvider);
+        setSigner(ethSigner);
+        setAccount(accounts[0]);
+        setIsConnected(true);
+      } catch (error) {
+        console.error('Error handling account change:', error);
+      }
+    }
+  }, []);
+
+  const handleChainChanged = useCallback((chainId) => {
+    console.log('Chain changed:', chainId);
+    setChainId(chainId);
+    window.location.reload();
+  }, []);
+
+  const checkConnection = useCallback(async () => {
+    try {
+      console.log('Checking wallet connection...');
+      console.log('window.ethereum:', window.ethereum);
+      
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        console.log('Existing accounts:', accounts);
+        
+        if (accounts.length > 0) {
+          const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+          const ethSigner = await ethersProvider.getSigner();
+          const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+          
+          setProvider(ethersProvider);
+          setSigner(ethSigner);
+          setAccount(accounts[0]);
+          setChainId(currentChainId);
+          setIsConnected(true);
+          
+          console.log('Wallet already connected:', accounts[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking connection:', error);
+    }
+  }, []);
+
+  const connectWallet = useCallback(async () => {
+    try {
+      console.log('Connecting wallet...');
+      setIsConnecting(true);
+      setError(null);
+      
+      if (!window.ethereum) {
+        console.error('No Ethereum provider found');
+        setError('Please install MetaMask or another Ethereum wallet');
+        return;
+      }
+      
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      console.log('Connected accounts:', accounts);
+      
+      const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+      const ethSigner = await ethersProvider.getSigner();
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      
+      setProvider(ethersProvider);
+      setSigner(ethSigner);
+      setAccount(accounts[0]);
+      setChainId(currentChainId);
+      setIsConnected(true);
+      
+      if (currentChainId !== SEPOLIA_CHAIN_ID) {
+        await switchToSepolia();
+      }
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      setError('Failed to connect wallet');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [SEPOLIA_CHAIN_ID, switchToSepolia]);
+
+  useEffect(() => {
+    console.log('Setting up wallet event listeners...');
+    
+    if (window.ethereum) {
+      checkConnection();
+      
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+      
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
+    } else {
+      console.log('No Ethereum provider detected');
+    }
+  }, [checkConnection, handleAccountsChanged, handleChainChanged]);
 
   const value = {
     provider,
