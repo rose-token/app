@@ -19,7 +19,7 @@ export const EthereumProvider = ({ children }) => {
   useEffect(() => {
     const initProvider = async () => {
       try {
-        const projectId = "3ec28d2f335f40ef7ec1309bfd6b5451";
+        const projectId = "95be0fbf27f06934c74d670d57f44939";
         
         const provider = await WalletConnectProvider.init({
           projectId: projectId,
