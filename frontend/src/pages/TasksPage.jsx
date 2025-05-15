@@ -252,6 +252,7 @@ const TasksPage = () => {
               error={error}
               onErrorDismiss={() => setError('')}
               roseMarketplace={roseMarketplace}
+              onRefresh={fetchTasks}
             />
           </div>
         </>
