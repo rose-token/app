@@ -1,5 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
+import Web3Modal from 'web3modal';
+import WalletConnectProvider from '@walletconnect/web3-provider';
 
 const EthereumContext = createContext();
 
@@ -11,8 +13,32 @@ export const EthereumProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  const [web3Modal, setWeb3Modal] = useState(null);
 
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
+
+  useEffect(() => {
+    const providerOptions = {
+      walletconnect: {
+        package: WalletConnectProvider,
+        options: {
+          infuraId: "27e484dcd9e3efcfd25a83a78777cdf1" // Replace with your Infura ID
+        }
+      }
+    };
+
+    const newWeb3Modal = new Web3Modal({
+      cacheProvider: true,
+      providerOptions,
+      theme: "light"
+    });
+
+    setWeb3Modal(newWeb3Modal);
+
+    if (newWeb3Modal.cachedProvider) {
+      connectWallet();
+    }
+  }, [connectWallet]);
 
   const switchToSepolia = useCallback(async () => {
     try {
@@ -60,18 +86,17 @@ export const EthereumProvider = ({ children }) => {
       setIsConnected(false);
     } else {
       try {
-        const ethersProvider = new ethers.BrowserProvider(window.ethereum);
-        const ethSigner = await ethersProvider.getSigner();
-        
-        setProvider(ethersProvider);
-        setSigner(ethSigner);
-        setAccount(accounts[0]);
-        setIsConnected(true);
+        if (provider) {
+          const ethSigner = provider.getSigner();
+          setSigner(ethSigner);
+          setAccount(accounts[0]);
+          setIsConnected(true);
+        }
       } catch (error) {
         console.error('Error handling account change:', error);
       }
     }
-  }, []);
+  }, [provider]);
 
   const handleChainChanged = useCallback((chainId) => {
     console.log('Chain changed:', chainId);
@@ -79,58 +104,56 @@ export const EthereumProvider = ({ children }) => {
     window.location.reload();
   }, []);
 
-  const checkConnection = useCallback(async () => {
-    try {
-      console.log('Checking wallet connection...');
-      console.log('window.ethereum:', window.ethereum);
-      
-      if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        console.log('Existing accounts:', accounts);
-        
-        if (accounts.length > 0) {
-          const ethersProvider = new ethers.BrowserProvider(window.ethereum);
-          const ethSigner = await ethersProvider.getSigner();
-          const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-          
-          setProvider(ethersProvider);
-          setSigner(ethSigner);
-          setAccount(accounts[0]);
-          setChainId(currentChainId);
-          setIsConnected(true);
-          
-          console.log('Wallet already connected:', accounts[0]);
+  const setupProviderEvents = useCallback((provider) => {
+    if (provider.on) {
+      provider.on('accountsChanged', handleAccountsChanged);
+      provider.on('chainChanged', handleChainChanged);
+      provider.on('disconnect', () => {
+        console.log('Wallet disconnected');
+        setAccount(null);
+        setSigner(null);
+        setIsConnected(false);
+        if (web3Modal) {
+          web3Modal.clearCachedProvider();
         }
-      }
-    } catch (error) {
-      console.error('Error checking connection:', error);
+      });
+
+      return () => {
+        if (provider.removeListener) {
+          provider.removeListener('accountsChanged', handleAccountsChanged);
+          provider.removeListener('chainChanged', handleChainChanged);
+          provider.removeListener('disconnect', () => {
+            console.log('Wallet disconnected');
+          });
+        }
+      };
     }
-  }, []);
+  }, [handleAccountsChanged, handleChainChanged, web3Modal]);
 
   const connectWallet = useCallback(async () => {
+    if (!web3Modal) return;
+
     try {
       console.log('Connecting wallet...');
       setIsConnecting(true);
       setError(null);
       
-      if (!window.ethereum) {
-        console.error('No Ethereum provider found');
-        setError('Please install MetaMask or another Ethereum wallet');
-        return;
-      }
+      const modalProvider = await web3Modal.connect();
+      console.log('Web3Modal provider connected:', modalProvider);
       
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      console.log('Connected accounts:', accounts);
-      
-      const ethersProvider = new ethers.BrowserProvider(window.ethereum);
+      const ethersProvider = new ethers.BrowserProvider(modalProvider);
+      const accounts = await ethersProvider.listAccounts();
       const ethSigner = await ethersProvider.getSigner();
-      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+      const network = await ethersProvider.getNetwork();
+      const currentChainId = '0x' + network.chainId.toString(16);
       
       setProvider(ethersProvider);
       setSigner(ethSigner);
       setAccount(accounts[0]);
       setChainId(currentChainId);
       setIsConnected(true);
+      
+      setupProviderEvents(modalProvider);
       
       if (currentChainId !== SEPOLIA_CHAIN_ID) {
         await switchToSepolia();
@@ -141,25 +164,16 @@ export const EthereumProvider = ({ children }) => {
     } finally {
       setIsConnecting(false);
     }
-  }, [SEPOLIA_CHAIN_ID, switchToSepolia]);
+  }, [web3Modal, setupProviderEvents, switchToSepolia]);
 
-  useEffect(() => {
-    console.log('Setting up wallet event listeners...');
-    
-    if (window.ethereum) {
-      checkConnection();
-      
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-      
-      return () => {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-      };
-    } else {
-      console.log('No Ethereum provider detected');
+  const disconnectWallet = useCallback(async () => {
+    if (web3Modal) {
+      web3Modal.clearCachedProvider();
     }
-  }, [checkConnection, handleAccountsChanged, handleChainChanged]);
+    setAccount(null);
+    setSigner(null);
+    setIsConnected(false);
+  }, [web3Modal]);
 
   const value = {
     provider,
@@ -170,6 +184,7 @@ export const EthereumProvider = ({ children }) => {
     isConnecting,
     error,
     connectWallet,
+    disconnectWallet,
     switchToSepolia,
   };
 
