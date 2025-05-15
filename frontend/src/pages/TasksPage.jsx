@@ -164,6 +164,29 @@ const TasksPage = () => {
     }
   };
   
+  const handleAcceptPayment = async (taskId) => {
+    if (!isConnected || !roseMarketplace) return;
+    
+    setIsLoading(true);
+    try {
+      console.log("Accepting payment for task:", taskId);
+      const tx = await roseMarketplace.acceptPayment(taskId, {
+        gasLimit: 500000 // Increase gas limit for payment acceptance which includes ETH transfer and token minting
+      });
+      
+      console.log("Waiting for transaction:", tx.hash);
+      await tx.wait();
+      console.log("Transaction confirmed");
+      
+      await fetchTasks(); // Refresh task list after payment acceptance
+    } catch (err) {
+      console.error('Error accepting payment:', err);
+      setError(`Failed to accept payment: ${err.message || "Transaction failed"}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
@@ -182,9 +205,17 @@ const TasksPage = () => {
       };
       roseMarketplace.on(closedFilter, closedListener);
       
+      const readyForPaymentFilter = roseMarketplace.filters.TaskReadyForPayment();
+      const readyForPaymentListener = (taskId, worker, amount) => {
+        console.log("Task ready for payment event:", { taskId, worker, amount });
+        fetchTasks(); // Refresh tasks after task is ready for payment
+      };
+      roseMarketplace.on(readyForPaymentFilter, readyForPaymentListener);
+      
       return () => {
         roseMarketplace.off(paymentFilter, paymentListener);
         roseMarketplace.off(closedFilter, closedListener);
+        roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
       };
     }
   }, [roseMarketplace, account, debouncedFetchTasks, fetchTasks]);
@@ -215,6 +246,7 @@ const TasksPage = () => {
               onComplete={handleCompleteTask}
               onApprove={handleApproveTask}
               onDispute={handleDisputeTask}
+              onAcceptPayment={handleAcceptPayment}
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}

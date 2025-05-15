@@ -22,7 +22,7 @@ contract RoseMarketplace {
     address public daoTreasury;
 
     // A simple enum to track task status
-    enum TaskStatus { Open, InProgress, Completed, Disputed, Closed }
+    enum TaskStatus { Open, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment }
 
     // Basic structure to store details about each task
     struct Task {
@@ -49,6 +49,7 @@ contract RoseMarketplace {
     event TaskDisputed(uint256 taskId);
     event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount);
     event TaskClosed(uint256 taskId);
+    event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
 
     // Reward parameters for demonstration
     // On successful task completion, we mint a fixed base of 100 ROSE tokens
@@ -155,11 +156,27 @@ contract RoseMarketplace {
         console.log("Task", _taskId, "stakeholder approved");
         console.log("Customer approval status:", t.customerApproval);
         
-        // Once both approvals are in, we release funds and mint reward tokens
+        // Once both approvals are in, mark task as ready for worker to accept payment
         if (t.customerApproval) {
-            console.log("Both approvals received, finalizing task");
-            _finalizeTask(_taskId, true);
+            console.log("Both approvals received, marking task ready for payment acceptance");
+            t.status = TaskStatus.ApprovedPendingPayment;
+            emit TaskReadyForPayment(_taskId, t.worker, t.deposit);
         }
+    }
+
+    /**
+     * @dev Worker accepts payment for an approved task. 
+     * This allows workers to control when they incur gas fees.
+     * @param _taskId ID of the task to accept payment for
+     */
+    function acceptPayment(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(t.worker == msg.sender, "Only assigned worker can accept payment");
+        require(t.status == TaskStatus.ApprovedPendingPayment, "Task must be approved and pending payment");
+        require(t.customerApproval && t.stakeholderApproval, "Task must be approved by both customer and stakeholder");
+        
+        console.log("Worker accepting payment for task", _taskId);
+        _finalizeTask(_taskId, true);
     }
 
     /**

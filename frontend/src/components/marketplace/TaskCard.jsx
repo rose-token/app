@@ -18,6 +18,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute }) => {
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
   const canDispute = (isCustomer || isWorker) && (task.status === TaskStatus.InProgress || task.status === TaskStatus.Completed);
+  const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
   
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
   
@@ -105,6 +106,16 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute }) => {
             className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Dispute Task
+          </button>
+        )}
+        
+        {canAcceptPayment && (
+          <button 
+            onClick={() => onAcceptPayment(task.id)} 
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1"
+          >
+            <span>Accept Payment</span>
+            <span className="text-xs">(gas fees apply)</span>
           </button>
         )}
       </div>
