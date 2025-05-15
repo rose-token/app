@@ -15,7 +15,11 @@ export const EthereumProvider = ({ children }) => {
   const SEPOLIA_CHAIN_ID = '0xaa36a7';
 
   useEffect(() => {
+    console.log('Checking for Ethereum provider...');
+    console.log('window.ethereum:', window.ethereum);
+    
     if (typeof window.ethereum !== 'undefined') {
+      console.log('Ethereum provider found!');
       const provider = new ethers.BrowserProvider(window.ethereum);
       setProvider(provider);
 
@@ -25,6 +29,7 @@ export const EthereumProvider = ({ children }) => {
 
       checkConnection();
     } else {
+      console.error('No Ethereum provider detected');
       setError('Please install MetaMask to use this application');
     }
 
