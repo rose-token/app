@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useEthereum } from '../../hooks/useEthereum';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const CommentSection = ({ taskId, roseMarketplace, task }) => {
   const [comments, setComments] = useState([]);
@@ -7,14 +6,12 @@ const CommentSection = ({ taskId, roseMarketplace, task }) => {
   const [replyTo, setReplyTo] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { account } = useEthereum();
-  
   
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
   
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     if (!roseMarketplace || !taskId) return;
     
     try {
@@ -27,7 +24,7 @@ const CommentSection = ({ taskId, roseMarketplace, task }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [roseMarketplace, taskId, setIsLoading, setComments, setError]);
   
   const handleAddComment = async (e) => {
     e.preventDefault();
