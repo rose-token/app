@@ -123,7 +123,7 @@ describe("RoseMarketplace", function () {
       expect(task.status).to.equal(2); // TaskStatus.Completed
     });
 
-    it("Should allow customer and stakeholder approvals", async function () {
+    it("Should allow customer and stakeholder approvals and mark task ready for payment", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
 
@@ -134,22 +134,41 @@ describe("RoseMarketplace", function () {
       expect(task.status).to.equal(2); // Still Completed, not Closed yet
 
       await expect(roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1))
-        .to.emit(roseMarketplace, "TaskClosed")
-        .withArgs(1)
-        .and.to.emit(roseMarketplace, "PaymentReleased")
+        .to.emit(roseMarketplace, "TaskReadyForPayment")
         .withArgs(1, worker.address, taskDeposit);
 
       task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
-      expect(task.status).to.equal(4); // TaskStatus.Closed
-      expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
 
-    it("Should mint tokens upon task completion", async function () {
+    it("Should allow worker to accept payment after approvals", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+      
+      let task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      
+      await expect(roseMarketplace.connect(worker).acceptPayment(1))
+        .to.emit(roseMarketplace, "TaskClosed")
+        .withArgs(1)
+        .and.to.emit(roseMarketplace, "PaymentReleased")
+        .withArgs(1, worker.address, taskDeposit);
+        
+      task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(4); // TaskStatus.Closed
+      expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
+    });
+
+    it("Should mint tokens when worker accepts payment", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
+      await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+      await roseMarketplace.connect(worker).acceptPayment(1);
 
       const workerAmount = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const stakeholderAmount = (BASE_REWARD * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
