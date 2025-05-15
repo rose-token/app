@@ -126,6 +126,10 @@ export const EthereumProvider = ({ children }) => {
     }
   }, []);
 
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   const connectWallet = useCallback(async () => {
     if (!web3Modal) return;
 
@@ -138,7 +142,20 @@ export const EthereumProvider = ({ children }) => {
       console.log('Web3Modal provider connected:', modalProvider);
       
       const ethersProvider = new ethers.providers.Web3Provider(modalProvider);
-      const accounts = await ethersProvider.listAccounts();
+      
+      let accounts;
+      if (isMobileDevice() && modalProvider.isMetaMask) {
+        console.log('Mobile device detected with MetaMask, explicitly requesting accounts...');
+        accounts = await modalProvider.request({ method: 'eth_requestAccounts' });
+      } else {
+        accounts = await ethersProvider.listAccounts();
+      }
+      
+      if (!accounts || accounts.length === 0) {
+        console.log('No accounts found, explicitly requesting accounts...');
+        accounts = await modalProvider.request({ method: 'eth_requestAccounts' });
+      }
+      
       const ethSigner = ethersProvider.getSigner();
       const network = await ethersProvider.getNetwork();
       const currentChainId = '0x' + network.chainId.toString(16);
