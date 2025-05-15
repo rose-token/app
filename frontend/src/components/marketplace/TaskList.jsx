@@ -1,16 +1,15 @@
 import React from 'react';
 import TaskCard from './TaskCard';
+import ErrorMessage from '../ui/ErrorMessage';
 
-const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading, isRefreshing, error }) => {
+const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, isLoading, isRefreshing, error, onErrorDismiss }) => {
   if (isLoading && tasks.length === 0) {
     return <div className="text-center py-8">Loading tasks...</div>;
   }
   
   if (error) {
     return (
-      <div className="bg-red-100 text-red-700 p-4 rounded-md mb-4">
-        {error}
-      </div>
+      <ErrorMessage message={error} onDismiss={onErrorDismiss} />
     );
   }
   

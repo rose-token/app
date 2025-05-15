@@ -78,13 +78,32 @@ const TasksPage = () => {
   const handleClaimTask = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
     
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      setError('Task not found');
+      return;
+    }
+    
+    if (task.customer === account) {
+      setError('You cannot claim your own task');
+      return;
+    }
+    
+    if (task.worker !== '0x0000000000000000000000000000000000000000') {
+      setError('Task has already been claimed by another worker');
+      return;
+    }
+    
     try {
       const tx = await roseMarketplace.claimTask(taskId);
       await tx.wait();
       debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error claiming task:', err);
-      setError('Failed to claim task');
+      const errorMessage = err.message.includes('execution reverted') 
+        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to claim task'
+        : 'Failed to claim task';
+      setError(errorMessage);
     }
   };
   
@@ -169,6 +188,7 @@ const TasksPage = () => {
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}
+              onErrorDismiss={() => setError('')}
             />
           </div>
         </>
