@@ -4,8 +4,8 @@
   "private": true,
   "homepage": "https://emmadorably.github.io/rose-token/",
   "dependencies": {
-    "@tanstack/query-core": "^5.76.0",
-    "@tanstack/react-query": "^5.76.1",
+    "@tanstack/query-core": "^4.36.1",
+    "@tanstack/react-query": "^4.36.1",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "react-app-rewired": "^2.2.1",
+    "typescript": "^4.9.5",
     "webpack": "^5.99.8"
   }
 }
