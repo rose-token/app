@@ -127,6 +127,9 @@ export const EthereumProvider = ({ children }) => {
       setIsConnecting(true);
       setError(null);
       
+      const isMobile = isMobileDevice();
+      console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
+      
       const accounts = await sdk.connect();
       
       console.log('MetaMask connected:', accounts);
