@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ethers } from 'ethers';
 import { useEthereum } from '../../hooks/useEthereum';
 import { useContract } from '../../hooks/useContract';
+import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [description, setDescription] = useState('');
@@ -10,7 +11,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   
-  const { isConnected } = useEthereum();
+  const { isConnected, chainId } = useEthereum();
   const { roseMarketplace, isLoading } = useContract();
   
   const handleSubmit = async (e) => {
@@ -18,6 +19,11 @@ const CreateTaskForm = ({ onTaskCreated }) => {
     
     if (!isConnected) {
       setError('Please connect your wallet first');
+      return;
+    }
+    
+    if (chainId !== NETWORK_IDS.SEPOLIA) {
+      setError(`Please switch to ${NETWORK_NAMES[NETWORK_IDS.SEPOLIA]} to create tasks`);
       return;
     }
     
