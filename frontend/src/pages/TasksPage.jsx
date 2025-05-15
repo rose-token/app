@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
@@ -9,6 +9,7 @@ import WalletNotConnected from '../components/wallet/WalletNotConnected';
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false); // Add new state for refreshing vs initial load
   const [error, setError] = useState('');
   
   const { account, isConnected } = useEthereum();
@@ -36,7 +37,11 @@ const TasksPage = () => {
     if (!roseMarketplace) return;
     
     try {
-      setIsLoading(true);
+      if (tasks.length === 0) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError('');
       
       const taskCount = await roseMarketplace.taskCounter();
@@ -53,8 +58,22 @@ const TasksPage = () => {
       setError('Failed to load tasks');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [roseMarketplace, fetchTaskDetails]);
+  }, [roseMarketplace, fetchTaskDetails, tasks.length]);
+  
+  const debouncedFetchRef = useRef(null);
+
+  const debouncedFetchTasks = useCallback(() => {
+    if (debouncedFetchRef.current) {
+      clearTimeout(debouncedFetchRef.current);
+    }
+    
+    debouncedFetchRef.current = setTimeout(() => {
+      fetchTasks();
+      debouncedFetchRef.current = null;
+    }, 300); // 300ms debounce time
+  }, [fetchTasks]);
   
   const handleClaimTask = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
@@ -62,7 +81,7 @@ const TasksPage = () => {
     try {
       const tx = await roseMarketplace.claimTask(taskId);
       await tx.wait();
-      fetchTasks(); // Refresh tasks after claiming
+      debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error claiming task:', err);
       setError('Failed to claim task');
@@ -75,7 +94,7 @@ const TasksPage = () => {
     try {
       const tx = await roseMarketplace.markTaskCompleted(taskId);
       await tx.wait();
-      fetchTasks(); // Refresh tasks after completion
+      debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error completing task:', err);
       setError('Failed to mark task as completed');
@@ -95,7 +114,7 @@ const TasksPage = () => {
       }
       
       await tx.wait();
-      fetchTasks(); // Refresh tasks after approval
+      debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error approving task:', err);
       setError(`Failed to approve task as ${role}`);
@@ -108,7 +127,7 @@ const TasksPage = () => {
     try {
       const tx = await roseMarketplace.disputeTask(taskId);
       await tx.wait();
-      fetchTasks(); // Refresh tasks after dispute
+      debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error disputing task:', err);
       setError('Failed to dispute task');
@@ -117,15 +136,9 @@ const TasksPage = () => {
   
   useEffect(() => {
     if (roseMarketplace) {
-      fetchTasks();
+      debouncedFetchTasks();
     }
-  }, [roseMarketplace, fetchTasks]);
-  
-  useEffect(() => {
-    if (account && roseMarketplace) {
-      fetchTasks();
-    }
-  }, [account, roseMarketplace, fetchTasks]);
+  }, [roseMarketplace, account, debouncedFetchTasks]);
   
   return (
     <div>
@@ -142,7 +155,7 @@ const TasksPage = () => {
         <>
           <TokenDistributionChart />
           
-          <CreateTaskForm onTaskCreated={fetchTasks} />
+          <CreateTaskForm onTaskCreated={debouncedFetchTasks} />
           
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4">Available Tasks</h2>
@@ -154,6 +167,7 @@ const TasksPage = () => {
               onApprove={handleApproveTask}
               onDispute={handleDisputeTask}
               isLoading={isLoading}
+              isRefreshing={isRefreshing}
               error={error}
             />
           </div>
