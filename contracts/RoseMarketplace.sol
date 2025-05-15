@@ -130,8 +130,8 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Customer approves completed work. Doesn't release payment by itself; 
-     * we also need stakeholder approval or resolution logic.
+     * @dev Customer approves completed work. If the stakeholder also approved, 
+     * we mark the task as ready for payment acceptance.
      * @param _taskId ID of the task to approve
      */
     function approveCompletionByCustomer(uint256 _taskId) external {
@@ -139,6 +139,17 @@ contract RoseMarketplace {
         require(t.customer == msg.sender, "Only the customer can approve");
         require(t.status == TaskStatus.Completed, "Task must be completed first");
         t.customerApproval = true;
+        
+        // Add debug logging
+        console.log("Task", _taskId, "customer approved");
+        console.log("Stakeholder approval status:", t.stakeholderApproval);
+        
+        // Once both approvals are in, mark task as ready for worker to accept payment
+        if (t.stakeholderApproval) {
+            console.log("Both approvals received, marking task ready for payment acceptance");
+            t.status = TaskStatus.ApprovedPendingPayment;
+            emit TaskReadyForPayment(_taskId, t.worker, t.deposit);
+        }
     }
 
     /**
