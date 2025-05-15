@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
+import CommentSection from './CommentSection';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, roseMarketplace }) => {
   const { account } = useEthereum();
+  const [showComments, setShowComments] = useState(false);
   
   const formatEth = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -119,6 +121,26 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
           </button>
         )}
       </div>
+      
+      {/* Comments toggle button */}
+      <div className="mt-4 flex justify-end">
+        <button 
+          onClick={() => setShowComments(!showComments)} 
+          className="text-sm text-gray-600 hover:text-gray-900 flex items-center"
+        >
+          {showComments ? 'Hide Comments' : 'Show Comments'} 
+          <span className="ml-1">{showComments ? '▲' : '▼'}</span>
+        </button>
+      </div>
+      
+      {/* Comments section */}
+      {showComments && (
+        <CommentSection 
+          taskId={task.id} 
+          roseMarketplace={roseMarketplace} 
+          task={task} 
+        />
+      )}
     </div>
   );
 };

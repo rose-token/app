@@ -23,6 +23,15 @@ contract RoseMarketplace {
 
     // A simple enum to track task status
     enum TaskStatus { Open, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment }
+    
+    // Structure for task comments with threading support
+    struct Comment {
+        address author;           // Address that created the comment
+        uint256 timestamp;        // When comment was created
+        bytes32 contentHash;      // Hashed content (saves gas)
+        uint256 parentCommentId;  // For threaded replies (0 for top-level comments)
+        string content;           // Actual comment content
+    }
 
     // Basic structure to store details about each task
     struct Task {
@@ -41,6 +50,12 @@ contract RoseMarketplace {
 
     // Maps task ID => Task details
     mapping(uint256 => Task) public tasks;
+    
+    // Maps task ID => array of comments
+    mapping(uint256 => Comment[]) public taskComments;
+    
+    // Keep track of comment count per task
+    mapping(uint256 => uint256) public taskCommentCount;
 
     // Events for logging
     event TaskCreated(uint256 taskId, address indexed customer, address indexed stakeholder, uint256 deposit);
@@ -50,6 +65,7 @@ contract RoseMarketplace {
     event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount);
     event TaskClosed(uint256 taskId);
     event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
+    event CommentAdded(uint256 taskId, uint256 commentId, address indexed author, uint256 parentCommentId);
 
     // Reward parameters for demonstration
     // On successful task completion, we mint a fixed base of 100 ROSE tokens
@@ -287,6 +303,50 @@ contract RoseMarketplace {
         roseToken.mint(BURN_ADDRESS, burnAmount);
     }
 
+    /**
+     * @dev Add a comment to a task. Allows threaded replies if parentCommentId is provided.
+     * @param _taskId ID of the task to comment on
+     * @param _content Text content of the comment
+     * @param _parentCommentId ID of the parent comment (0 for top-level comments)
+     */
+    function addComment(uint256 _taskId, string calldata _content, uint256 _parentCommentId) external {
+        require(_taskId > 0 && _taskId <= taskCounter, "Task does not exist");
+        
+        // If parentCommentId is provided, ensure it exists
+        if (_parentCommentId > 0) {
+            require(_parentCommentId <= taskCommentCount[_taskId], "Parent comment does not exist");
+        }
+        
+        // Hash the content to save gas
+        bytes32 contentHash = keccak256(abi.encodePacked(_content));
+        
+        // Create and store the comment
+        taskCommentCount[_taskId]++;
+        uint256 commentId = taskCommentCount[_taskId];
+        
+        Comment memory newComment = Comment({
+            author: msg.sender,
+            timestamp: block.timestamp,
+            contentHash: contentHash,
+            parentCommentId: _parentCommentId,
+            content: _content
+        });
+        
+        taskComments[_taskId].push(newComment);
+        
+        // Emit event for frontend to listen for
+        emit CommentAdded(_taskId, commentId, msg.sender, _parentCommentId);
+    }
+    
+    /**
+     * @dev Get all comments for a task
+     * @param _taskId ID of the task
+     */
+    function getTaskComments(uint256 _taskId) external view returns (Comment[] memory) {
+        require(_taskId > 0 && _taskId <= taskCounter, "Task does not exist");
+        return taskComments[_taskId];
+    }
+    
     /**
      * @dev Fallback to accept raw ETH if ever needed (e.g., direct transfers).
      */

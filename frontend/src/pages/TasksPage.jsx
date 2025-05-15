@@ -251,6 +251,7 @@ const TasksPage = () => {
               isRefreshing={isRefreshing}
               error={error}
               onErrorDismiss={() => setError('')}
+              roseMarketplace={roseMarketplace}
             />
           </div>
         </>

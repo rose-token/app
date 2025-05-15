@@ -2,7 +2,7 @@ import React from 'react';
 import TaskCard from './TaskCard';
 import ErrorMessage from '../ui/ErrorMessage';
 
-const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, isLoading, isRefreshing, error, onErrorDismiss }) => {
+const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, isLoading, isRefreshing, error, onErrorDismiss, roseMarketplace }) => {
   if (isLoading && tasks.length === 0) {
     return <div className="text-center py-8">Loading tasks...</div>;
   }
@@ -37,6 +37,7 @@ const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, onAcceptPa
           onApprove={onApprove}
           onDispute={onDispute}
           onAcceptPayment={onAcceptPayment}
+          roseMarketplace={roseMarketplace}
         />
       ))}
     </div>
