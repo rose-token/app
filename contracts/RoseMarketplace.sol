@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
+import "hardhat/console.sol";
 
 /**
  * @title RoseMarketplace
@@ -149,9 +150,14 @@ contract RoseMarketplace {
         require(t.stakeholder == msg.sender, "Only the designated stakeholder can approve");
         require(t.status == TaskStatus.Completed, "Task must be completed first");
         t.stakeholderApproval = true;
-
+        
+        // Add debug logging
+        console.log("Task", _taskId, "stakeholder approved");
+        console.log("Customer approval status:", t.customerApproval);
+        
         // Once both approvals are in, we release funds and mint reward tokens
         if (t.customerApproval) {
+            console.log("Both approvals received, finalizing task");
             _finalizeTask(_taskId, true);
         }
     }
@@ -209,16 +215,19 @@ contract RoseMarketplace {
         Task storage t = tasks[_taskId];
         t.status = TaskStatus.Closed;
         emit TaskClosed(_taskId);
-
+        
         if (_payout) {
             uint256 amountToPay = t.deposit;
+            console.log("Paying out", amountToPay, "to worker", t.worker);
             t.deposit = 0;
             (bool success, ) = t.worker.call{value: amountToPay}("");
+            console.log("Payment transfer success:", success);
             require(success, "Transfer to worker failed");
-
+            
             emit PaymentReleased(_taskId, t.worker, amountToPay);
-
+            
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
+            console.log("Minting rewards");
             _mintReward(t.worker, t.stakeholder);
         }
     }
