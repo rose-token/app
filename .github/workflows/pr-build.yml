@@ -49,7 +49,7 @@ jobs:
           # Using placeholder values for build-only environment
           REACT_APP_MARKETPLACE_ADDRESS: "0x0000000000000000000000000000000000000000"
           REACT_APP_TOKEN_ADDRESS: "0x0000000000000000000000000000000000000000"
-          # Placeholder Pinata API keys for testing
-          REACT_APP_PINATA_API_KEY: "TEST_PINATA_API_KEY"
-          REACT_APP_PINATA_SECRET_API_KEY: "TEST_PINATA_SECRET_API_KEY"
-          REACT_APP_PINATA_JWT: "TEST_PINATA_JWT"
+          # Using real Pinata API keys from GitHub secrets
+          REACT_APP_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
+          REACT_APP_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
+          REACT_APP_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
