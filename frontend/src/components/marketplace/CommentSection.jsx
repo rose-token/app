@@ -46,7 +46,7 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       const contentMap = {};
       contents.forEach(result => {
         if (result.status === 'fulfilled' && result.value) {
-          contentMap[result.value.index] = result.value.content;
+          contentMap[result.value.index + 1] = result.value.content;
         }
       });
       
