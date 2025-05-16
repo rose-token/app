@@ -7,7 +7,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
   
-  const formatEth = (wei) => {
+  const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
   };
   
@@ -41,7 +41,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         </div>
         <div>
           <p className="text-sm text-gray-500">Deposit</p>
-          <p className="text-sm font-medium">{formatEth(task.deposit)} ETH</p>
+          <p className="text-sm font-medium">{formatTokens(task.deposit)} ROSE</p>
         </div>
         <div>
           <p className="text-sm text-gray-500">Worker</p>
@@ -51,6 +51,12 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
           <p className="text-sm text-gray-500">Stakeholder</p>
           <p className="text-sm font-medium truncate">{task.stakeholder}</p>
         </div>
+        {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
+          <div>
+            <p className="text-sm text-gray-500">Stakeholder Deposit</p>
+            <p className="text-sm font-medium">{formatTokens(task.stakeholderDeposit)} ROSE</p>
+          </div>
+        )}
       </div>
       
       {task.status === TaskStatus.Completed && (
