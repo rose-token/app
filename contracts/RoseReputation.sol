@@ -126,11 +126,7 @@ contract RoseReputation {
         uint256 stakeholderLevel = getLevel(_stakeholder, Role.Stakeholder);
         uint256 workerLevel = getLevel(_worker, Role.Worker);
         
-        // Calculate combined level bonus (5% per level, max 50% at combined level 10)
-        uint256 combinedLevel = customerLevel + stakeholderLevel + workerLevel;
-        if (combinedLevel > 10) combinedLevel = 10; // Cap at level 10
-        
-        // 5% bonus per level (5 * combinedLevel)
-        return 5 * combinedLevel;
+        // Sum all levels and return as percentage bonus
+        return customerLevel + stakeholderLevel + workerLevel;
     }
 }
