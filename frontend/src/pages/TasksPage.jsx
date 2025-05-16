@@ -199,7 +199,7 @@ const TasksPage = () => {
         return;
       }
       
-      const depositAmount = BigInt(task.deposit) / BigInt(10);
+      const depositAmount = window.BigInt(task.deposit) / window.BigInt(10);
       console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
       
       const tx = await roseMarketplace.stakeholderStake(taskId, {
