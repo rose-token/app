@@ -33,7 +33,8 @@ describe("RefundMechanism", function () {
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
     await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
     
-    await roseMarketplace.connect(worker).claimTask(1);
+    const storyPoints = 5; // Example story points value
+    await roseMarketplace.connect(worker).claimTask(1, storyPoints);
   });
 
   describe("Refund Request", function () {

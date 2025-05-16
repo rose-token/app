@@ -46,6 +46,7 @@ contract RoseMarketplace {
         bool stakeholderApproval;  
         bool workerApproval;       // Added for triple-approval refund mechanism
         bool refundRequested;      // Flag to track if refund was requested
+        uint256 storyPoints;       // Estimated effort in story points
     }
 
     // Keep a count to assign unique task IDs
@@ -63,7 +64,7 @@ contract RoseMarketplace {
     // Events for logging
     event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
     event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit);
-    event TaskClaimed(uint256 taskId, address indexed worker);
+    event TaskClaimed(uint256 taskId, address indexed worker, uint256 storyPoints);
     event TaskCompleted(uint256 taskId);
     event TaskDisputed(uint256 taskId);
     event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount);
@@ -155,19 +156,22 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Worker claims an open task
+     * @dev Worker claims an open task and provides story points estimation
      * @param _taskId ID of the task to be claimed
+     * @param _storyPoints Integer value representing the estimated effort in story points
      */
-    function claimTask(uint256 _taskId) external {
+    function claimTask(uint256 _taskId, uint256 _storyPoints) external {
         Task storage t = tasks[_taskId];
         require(t.status == TaskStatus.Open, "Task must be open to be claimed");
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
+        require(_storyPoints > 0, "Story points must be greater than zero");
 
         t.worker = msg.sender;
+        t.storyPoints = _storyPoints;
         t.status = TaskStatus.InProgress;
-        emit TaskClaimed(_taskId, msg.sender);
+        emit TaskClaimed(_taskId, msg.sender, _storyPoints);
     }
 
     /**
