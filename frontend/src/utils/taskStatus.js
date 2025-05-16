@@ -1,16 +1,19 @@
 export const TaskStatus = {
   Open: 0,
-  InProgress: 1,
-  Completed: 2,
-  Disputed: 3,
-  Closed: 4,
-  ApprovedPendingPayment: 5
+  StakeholderRequired: 1,
+  InProgress: 2,
+  Completed: 3,
+  Disputed: 4,
+  Closed: 5,
+  ApprovedPendingPayment: 6
 };
 
 export const getStatusText = (status) => {
   switch (parseInt(status)) {
     case TaskStatus.Open:
       return 'Open';
+    case TaskStatus.StakeholderRequired:
+      return 'Needs Stakeholder';
     case TaskStatus.InProgress:
       return 'In Progress';
     case TaskStatus.Completed:
@@ -30,6 +33,8 @@ export const getStatusColor = (status) => {
   switch (parseInt(status)) {
     case TaskStatus.Open:
       return 'bg-blue-100 text-blue-800';
+    case TaskStatus.StakeholderRequired:
+      return 'bg-orange-100 text-orange-800';
     case TaskStatus.InProgress:
       return 'bg-yellow-100 text-yellow-800';
     case TaskStatus.Completed:

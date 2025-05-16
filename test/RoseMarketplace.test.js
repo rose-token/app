@@ -50,40 +50,33 @@ describe("RoseMarketplace", function () {
 
     it("Should allow customers to create tasks", async function () {
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, stakeholder.address, {
+        roseMarketplace.connect(customer).createTask(taskDescription, {
           value: taskDeposit
         })
       )
         .to.emit(roseMarketplace, "TaskCreated")
-        .withArgs(1, customer.address, stakeholder.address, taskDeposit);
+        .withArgs(1, customer.address, taskDeposit);
 
       expect(await roseMarketplace.taskCounter()).to.equal(1);
 
       const task = await roseMarketplace.tasks(1);
       expect(task.customer).to.equal(customer.address);
-      expect(task.stakeholder).to.equal(stakeholder.address);
+      expect(task.stakeholder).to.equal(ethers.ZeroAddress);
       expect(task.deposit).to.equal(taskDeposit);
       expect(task.description).to.equal(taskDescription);
-      expect(task.status).to.equal(0); // TaskStatus.Open
+      expect(task.status).to.equal(1); // TaskStatus.StakeholderRequired
       expect(task.customerApproval).to.equal(false);
       expect(task.stakeholderApproval).to.equal(false);
     });
 
     it("Should revert if deposit is zero", async function () {
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, stakeholder.address, {
+        roseMarketplace.connect(customer).createTask(taskDescription, {
           value: 0
         })
       ).to.be.revertedWith("Must deposit some ETH as payment");
     });
 
-    it("Should revert if stakeholder is zero address", async function () {
-      await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, ethers.ZeroAddress, {
-          value: taskDeposit
-        })
-      ).to.be.revertedWith("Stakeholder cannot be zero address");
-    });
   });
 
   describe("Task Lifecycle", function () {
@@ -91,8 +84,12 @@ describe("RoseMarketplace", function () {
     const taskDeposit = ethers.parseEther("1");
 
     beforeEach(async function () {
-      await roseMarketplace.connect(customer).createTask(taskDescription, stakeholder.address, {
+      await roseMarketplace.connect(customer).createTask(taskDescription, {
         value: taskDeposit
+      });
+      
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, {
+        value: taskDeposit / 10n
       });
     });
 
@@ -103,7 +100,7 @@ describe("RoseMarketplace", function () {
 
       const task = await roseMarketplace.tasks(1);
       expect(task.worker).to.equal(worker.address);
-      expect(task.status).to.equal(1); // TaskStatus.InProgress
+      expect(task.status).to.equal(2); // TaskStatus.InProgress
     });
 
     it("Should not allow customers to claim their own tasks", async function () {
@@ -120,7 +117,7 @@ describe("RoseMarketplace", function () {
         .withArgs(1);
 
       const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(2); // TaskStatus.Completed
+      expect(task.status).to.equal(3); // TaskStatus.Completed
     });
 
     it("Should allow customer and stakeholder approvals and mark task ready for payment (customer first)", async function () {
@@ -131,7 +128,7 @@ describe("RoseMarketplace", function () {
       
       let task = await roseMarketplace.tasks(1);
       expect(task.customerApproval).to.equal(true);
-      expect(task.status).to.equal(2); // Still Completed, not Closed yet
+      expect(task.status).to.equal(3); // Still Completed, not Closed yet
 
       await expect(roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1))
         .to.emit(roseMarketplace, "TaskReadyForPayment")
@@ -139,7 +136,7 @@ describe("RoseMarketplace", function () {
 
       task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
-      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
     
@@ -151,7 +148,7 @@ describe("RoseMarketplace", function () {
       
       let task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
-      expect(task.status).to.equal(2); // Still Completed, not ready for payment yet
+      expect(task.status).to.equal(3); // Still Completed, not ready for payment yet
 
       await expect(roseMarketplace.connect(customer).approveCompletionByCustomer(1))
         .to.emit(roseMarketplace, "TaskReadyForPayment")
@@ -159,7 +156,7 @@ describe("RoseMarketplace", function () {
 
       task = await roseMarketplace.tasks(1);
       expect(task.customerApproval).to.equal(true);
-      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
 
@@ -170,7 +167,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       
       let task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
       
       await expect(roseMarketplace.connect(worker).acceptPayment(1))
         .to.emit(roseMarketplace, "TaskClosed")
@@ -179,7 +176,7 @@ describe("RoseMarketplace", function () {
         .withArgs(1, worker.address, taskDeposit);
         
       task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(4); // TaskStatus.Closed
+      expect(task.status).to.equal(5); // TaskStatus.Closed
       expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
     });
 
@@ -208,7 +205,7 @@ describe("RoseMarketplace", function () {
         .withArgs(1);
 
       const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(3); // TaskStatus.Disputed
+      expect(task.status).to.equal(4); // TaskStatus.Disputed
 
       await expect(roseMarketplace.connect(stakeholder).resolveDispute(1, false))
         .to.emit(roseMarketplace, "TaskClosed")

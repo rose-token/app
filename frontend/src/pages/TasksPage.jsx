@@ -26,6 +26,7 @@ const TasksPage = () => {
       worker: task.worker,
       stakeholder: task.stakeholder,
       deposit: task.deposit.toString(),
+      stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
       description: task.description,
       status: task.status,
       customerApproval: task.customerApproval,
@@ -187,6 +188,38 @@ const TasksPage = () => {
     }
   };
   
+  const handleStakeTask = async (taskId) => {
+    if (!isConnected || !roseMarketplace) return;
+    
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        setError('Task not found');
+        return;
+      }
+      
+      const depositAmount = window.BigInt(task.deposit) / window.BigInt(10);
+      console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
+      
+      const tx = await roseMarketplace.stakeholderStake(taskId, {
+        value: depositAmount.toString(),
+        gasLimit: 300000
+      });
+      
+      console.log("Waiting for transaction:", tx.hash);
+      await tx.wait();
+      console.log("Transaction confirmed");
+      
+      debouncedFetchTasks();
+    } catch (err) {
+      console.error('Error staking as stakeholder:', err);
+      const errorMessage = err.message.includes('execution reverted') 
+        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to stake as stakeholder'
+        : 'Failed to stake as stakeholder';
+      setError(errorMessage);
+    }
+  };
+  
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
@@ -212,10 +245,18 @@ const TasksPage = () => {
       };
       roseMarketplace.on(readyForPaymentFilter, readyForPaymentListener);
       
+      const stakeholderStakedFilter = roseMarketplace.filters.StakeholderStaked();
+      const stakeholderStakedListener = (taskId, stakeholder, stakeholderDeposit) => {
+        console.log("Stakeholder staked event:", { taskId, stakeholder, stakeholderDeposit });
+        fetchTasks(); // Refresh tasks after stakeholder staking
+      };
+      roseMarketplace.on(stakeholderStakedFilter, stakeholderStakedListener);
+      
       return () => {
         roseMarketplace.off(paymentFilter, paymentListener);
         roseMarketplace.off(closedFilter, closedListener);
         roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
+        roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
       };
     }
   }, [roseMarketplace, account, debouncedFetchTasks, fetchTasks]);
@@ -247,6 +288,7 @@ const TasksPage = () => {
               onApprove={handleApproveTask}
               onDispute={handleDisputeTask}
               onAcceptPayment={handleAcceptPayment}
+              onStake={handleStakeTask}
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}
