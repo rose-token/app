@@ -49,10 +49,12 @@ describe("RoseMarketplace", function () {
     const taskDeposit = ethers.parseEther("1");
 
     it("Should allow customers to create tasks", async function () {
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, {
-          value: taskDeposit
-        })
+        roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit)
       )
         .to.emit(roseMarketplace, "TaskCreated")
         .withArgs(1, customer.address, taskDeposit);
@@ -70,11 +72,13 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should revert if deposit is zero", async function () {
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, {
-          value: 0
-        })
-      ).to.be.revertedWith("Must deposit some ETH as payment");
+        roseMarketplace.connect(customer).createTask(taskDescription, 0)
+      ).to.be.revertedWith("Must deposit some ROSE tokens as payment");
     });
 
   });
@@ -84,13 +88,15 @@ describe("RoseMarketplace", function () {
     const taskDeposit = ethers.parseEther("1");
 
     beforeEach(async function () {
-      await roseMarketplace.connect(customer).createTask(taskDescription, {
-        value: taskDeposit
-      });
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
       
-      await roseMarketplace.connect(stakeholder).stakeholderStake(1, {
-        value: taskDeposit / 10n
-      });
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);
+      
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
     });
 
     it("Should allow workers to claim tasks", async function () {
@@ -169,6 +175,8 @@ describe("RoseMarketplace", function () {
       let task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
       
+      const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+      
       await expect(roseMarketplace.connect(worker).acceptPayment(1))
         .to.emit(roseMarketplace, "TaskClosed")
         .withArgs(1)
@@ -178,11 +186,21 @@ describe("RoseMarketplace", function () {
       task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(5); // TaskStatus.Closed
       expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
+      
+      const workerReward = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+      
+      const workerBalanceAfter = await roseToken.balanceOf(worker.address);
+      expect(workerBalanceAfter - workerBalanceBefore).to.equal(taskDeposit + workerReward);
     });
 
     it("Should mint tokens when worker accepts payment", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
+      
+      const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const treasuryBalanceBefore = await roseToken.balanceOf(daoTreasury.address);
+      
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       await roseMarketplace.connect(worker).acceptPayment(1);
@@ -191,9 +209,11 @@ describe("RoseMarketplace", function () {
       const stakeholderAmount = (BASE_REWARD * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const treasuryAmount = (BASE_REWARD * BigInt(TREASURY_SHARE)) / BigInt(SHARE_DENOMINATOR);
 
-      expect(await roseToken.balanceOf(worker.address)).to.equal(workerAmount);
-      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderAmount);
-      expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryAmount);
+      const stakeholderDepositRefund = taskDeposit / 10n;
+      
+      expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + taskDeposit + workerAmount);
+      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderBalanceBefore + stakeholderDepositRefund + stakeholderAmount);
+      expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + treasuryAmount);
     });
 
     it("Should handle disputes", async function () {
@@ -207,12 +227,16 @@ describe("RoseMarketplace", function () {
       const task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(4); // TaskStatus.Disputed
 
+      const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+      
       await expect(roseMarketplace.connect(stakeholder).resolveDispute(1, false))
         .to.emit(roseMarketplace, "TaskClosed")
         .withArgs(1);
 
-      const workerAmount = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      expect(await roseToken.balanceOf(worker.address)).to.equal(workerAmount);
+      const workerReward = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+      
+      const workerBalanceAfter = await roseToken.balanceOf(worker.address);
+      expect(workerBalanceAfter - workerBalanceBefore).to.equal(taskDeposit + workerReward);
     });
   });
 });
