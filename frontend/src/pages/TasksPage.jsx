@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ethers } from 'ethers';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
@@ -198,7 +199,7 @@ const TasksPage = () => {
         return;
       }
       
-      const depositAmount = BigInt(task.deposit) / BigInt(10);
+      const depositAmount = ethers.toBigInt(task.deposit) / ethers.toBigInt(10);
       console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
       
       const tx = await roseMarketplace.stakeholderStake(taskId, {
