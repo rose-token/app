@@ -110,18 +110,21 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
   
   const threadsMap = {};
   const rootComments = [];
+  const mutableComments = [];
   
   comments.forEach((comment, index) => {
-    comment.id = index + 1; // 1-based ID
-    comment.replies = [];
+    const mutableComment = { ...comment };
+    mutableComment.id = index + 1; // 1-based ID
+    mutableComment.replies = [];
+    mutableComments.push(mutableComment);
     
-    if (comment.parentCommentId.toNumber() === 0) {
-      rootComments.push(comment);
+    if (mutableComment.parentCommentId.toNumber() === 0) {
+      rootComments.push(mutableComment);
     } else {
-      if (!threadsMap[comment.parentCommentId.toNumber()]) {
-        threadsMap[comment.parentCommentId.toNumber()] = [];
+      if (!threadsMap[mutableComment.parentCommentId.toNumber()]) {
+        threadsMap[mutableComment.parentCommentId.toNumber()] = [];
       }
-      threadsMap[comment.parentCommentId.toNumber()].push(comment);
+      threadsMap[mutableComment.parentCommentId.toNumber()].push(mutableComment);
     }
   });
   
