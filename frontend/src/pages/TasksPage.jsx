@@ -3,14 +3,23 @@ import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import TaskList from '../components/marketplace/TaskList';
+import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
+import { TaskStatus } from '../utils/taskStatus';
 
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false); // Add new state for refreshing vs initial load
   const [error, setError] = useState('');
+  
+  const [filters, setFilters] = useState({
+    needStakeholder: true,
+    needWorker: true,
+    myTasks: true,
+    showClosed: false
+  });
   
   const { account, isConnected } = useEthereum();
   const { roseMarketplace, roseToken } = useContract();
@@ -61,7 +70,7 @@ const TasksPage = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [roseMarketplace, fetchTaskDetails, tasks.length]);
+  }, [roseMarketplace, fetchTaskDetails, tasks.length, setIsLoading, setIsRefreshing, setError, setTasks]);
   
   const debouncedFetchRef = useRef(null);
 
@@ -264,7 +273,38 @@ const TasksPage = () => {
         roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
       };
     }
-  }, [roseMarketplace, account, debouncedFetchTasks, fetchTasks]);
+  }, [roseMarketplace, debouncedFetchTasks, fetchTasks]);
+  
+  const filteredTasks = tasks.filter(task => {
+    if (task.status === TaskStatus.Closed && !filters.showClosed) {
+      return false;
+    }
+    
+    if (filters.needStakeholder && task.status === TaskStatus.StakeholderRequired) {
+      return true;
+    }
+    
+    if (filters.needWorker && task.status === TaskStatus.Open) {
+      return true;
+    }
+    
+    if (filters.myTasks && account) {
+      const isInvolved = 
+        task.customer.toLowerCase() === account.toLowerCase() ||
+        task.worker.toLowerCase() === account.toLowerCase() ||
+        task.stakeholder.toLowerCase() === account.toLowerCase();
+      
+      if (isInvolved) {
+        return true;
+      }
+    }
+    
+    if (!filters.needStakeholder && !filters.needWorker && !filters.myTasks) {
+      return true;
+    }
+    
+    return false;
+  });
   
   return (
     <div>
@@ -286,8 +326,10 @@ const TasksPage = () => {
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4">Available Tasks</h2>
             
+            <TaskFilters filters={filters} setFilters={setFilters} />
+            
             <TaskList
-              tasks={tasks}
+              tasks={filteredTasks}
               onClaim={handleClaimTask}
               onComplete={handleCompleteTask}
               onApprove={handleApproveTask}
