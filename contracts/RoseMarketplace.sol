@@ -22,7 +22,7 @@ contract RoseMarketplace {
     address public daoTreasury;
 
     // A simple enum to track task status
-    enum TaskStatus { Open, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment }
+    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment }
     
     // Structure for task comments with threading support
     struct Comment {
@@ -39,6 +39,7 @@ contract RoseMarketplace {
         address worker;
         address stakeholder;
         uint256 deposit;           // Payment in ETH the customer puts up
+        uint256 stakeholderDeposit; // 10% deposit from stakeholder
         string description;        // Basic metadata or instructions
         TaskStatus status;
         bool customerApproval;     
@@ -58,7 +59,8 @@ contract RoseMarketplace {
     mapping(uint256 => uint256) public taskCommentCount;
 
     // Events for logging
-    event TaskCreated(uint256 taskId, address indexed customer, address indexed stakeholder, uint256 deposit);
+    event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
+    event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit);
     event TaskClaimed(uint256 taskId, address indexed worker);
     event TaskCompleted(uint256 taskId);
     event TaskDisputed(uint256 taskId);
@@ -99,23 +101,41 @@ contract RoseMarketplace {
     /**
      * @dev Create a new task, depositing ETH that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
-     * @param _stakeholder The address that will validate or arbitrate the final output
      */
-    function createTask(string calldata _description, address _stakeholder) external payable {
+    function createTask(string calldata _description) external payable {
         require(msg.value > 0, "Must deposit some ETH as payment");
-        require(_stakeholder != address(0), "Stakeholder cannot be zero address");
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
         newTask.customer = msg.sender;
-        newTask.stakeholder = _stakeholder;
         newTask.deposit = msg.value;
         newTask.description = _description;
-        newTask.status = TaskStatus.Open;
+        newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
 
-        emit TaskCreated(taskCounter, msg.sender, _stakeholder, msg.value);
+        emit TaskCreated(taskCounter, msg.sender, msg.value);
+    }
+
+    /**
+     * @dev Stakeholder stakes 10% of the task deposit to become the stakeholder for a task
+     * @param _taskId ID of the task to stake on
+     */
+    function stakeholderStake(uint256 _taskId) external payable {
+        Task storage t = tasks[_taskId];
+        require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
+        require(t.stakeholder == address(0), "Task already has a stakeholder");
+        require(t.customer != msg.sender, "Customer cannot be stakeholder for their own task");
+        
+        // Calculate required 10% deposit
+        uint256 requiredDeposit = t.deposit / 10;
+        require(msg.value >= requiredDeposit, "Must deposit at least 10% of task value");
+        
+        t.stakeholder = msg.sender;
+        t.stakeholderDeposit = msg.value;
+        t.status = TaskStatus.Open;
+        
+        emit StakeholderStaked(_taskId, msg.sender, msg.value);
     }
 
     /**
@@ -127,6 +147,7 @@ contract RoseMarketplace {
         require(t.status == TaskStatus.Open, "Task must be open to be claimed");
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
+        require(t.stakeholder != address(0), "Task must have a stakeholder");
 
         t.worker = msg.sender;
         t.status = TaskStatus.InProgress;
@@ -237,6 +258,10 @@ contract RoseMarketplace {
 
         uint256 amountToPay = t.deposit;
         t.deposit = 0; // prevent re-entrancy double-withdraw
+        
+        // Always return stakeholder deposit regardless of dispute outcome
+        uint256 stakeholderRefund = t.stakeholderDeposit;
+        t.stakeholderDeposit = 0;
 
         if (_refundToCustomer) {
             (bool success, ) = t.customer.call{value: amountToPay}("");
@@ -249,6 +274,12 @@ contract RoseMarketplace {
 
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
             _mintReward(t.worker, t.stakeholder);
+        }
+        
+        // Return stakeholder deposit
+        if (stakeholderRefund > 0) {
+            (bool stakeholderSuccess, ) = t.stakeholder.call{value: stakeholderRefund}("");
+            require(stakeholderSuccess, "Return of stakeholder deposit failed");
         }
     }
 
@@ -269,6 +300,14 @@ contract RoseMarketplace {
             require(success, "Transfer to worker failed");
             
             emit PaymentReleased(_taskId, t.worker, amountToPay);
+            
+            // Return stakeholder deposit
+            if (t.stakeholderDeposit > 0) {
+                uint256 stakeholderRefund = t.stakeholderDeposit;
+                t.stakeholderDeposit = 0;
+                (bool stakeholderSuccess, ) = t.stakeholder.call{value: stakeholderRefund}("");
+                require(stakeholderSuccess, "Return of stakeholder deposit failed");
+            }
             
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
             console.log("Minting rewards");

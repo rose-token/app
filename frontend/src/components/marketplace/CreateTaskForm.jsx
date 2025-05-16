@@ -6,7 +6,6 @@ import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [description, setDescription] = useState('');
-  const [stakeholderAddress, setStakeholderAddress] = useState('');
   const [deposit, setDeposit] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
@@ -27,13 +26,8 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
     
-    if (!description || !stakeholderAddress || !deposit) {
+    if (!description || !deposit) {
       setError('Please fill in all fields');
-      return;
-    }
-    
-    if (!ethers.utils.isAddress(stakeholderAddress)) {
-      setError('Invalid stakeholder address');
       return;
     }
     
@@ -45,14 +39,12 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       
       const tx = await roseMarketplace.createTask(
         description,
-        stakeholderAddress,
         { value: depositWei }
       );
       
       await tx.wait();
       
       setDescription('');
-      setStakeholderAddress('');
       setDeposit('');
       
       if (onTaskCreated) {
@@ -90,23 +82,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           />
         </div>
         
-        <div className="mb-4">
-          <label htmlFor="stakeholder" className="block text-sm font-medium text-gray-700 mb-1">
-            Stakeholder Address
-          </label>
-          <input
-            id="stakeholder"
-            type="text"
-            value={stakeholderAddress}
-            onChange={(e) => setStakeholderAddress(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="0x..."
-            required
-          />
-          <p className="mt-1 text-sm text-gray-500">
-            The stakeholder will validate the completed work and help resolve disputes
-          </p>
-        </div>
+        {/* Stakeholder field removed - stakeholders will stake 10% after task creation */}
         
         <div className="mb-6">
           <label htmlFor="deposit" className="block text-sm font-medium text-gray-700 mb-1">

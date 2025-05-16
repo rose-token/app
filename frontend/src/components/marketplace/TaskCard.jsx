@@ -3,7 +3,7 @@ import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import CommentSection from './CommentSection';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, roseMarketplace }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, roseMarketplace }) => {
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
   
@@ -16,6 +16,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
   
   const canClaim = !isCustomer && task.status === TaskStatus.Open && !isWorker;
+  const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
@@ -66,6 +67,15 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
       )}
       
       <div className="flex flex-wrap gap-2 mt-4">
+        {canStake && (
+          <button 
+            onClick={() => onStake(task.id)} 
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            Stake as Stakeholder
+          </button>
+        )}
+        
         {canClaim && (
           <button 
             onClick={() => onClaim(task.id)} 
