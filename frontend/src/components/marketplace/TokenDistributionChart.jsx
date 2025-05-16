@@ -10,7 +10,7 @@ const TokenDistributionChart = () => {
     <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
       <h2 className="text-xl font-semibold mb-4">Token Distribution Model</h2>
       <p className="text-sm text-gray-600 mb-4">
-        When a task is successfully completed, 100 ROSE tokens are minted and distributed according to the socialist model:
+        When a task is successfully completed, 10% of the deposit amount is minted as bonus ROSE tokens and distributed according to the socialist model:
       </p>
       
       <div className="relative h-8 bg-gray-200 rounded-full overflow-hidden mb-4">
@@ -41,7 +41,7 @@ const TokenDistributionChart = () => {
           <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
           <div>
             <p className="text-sm font-medium">Worker</p>
-            <p className="text-xs text-gray-500">{workerShare}% ({workerShare} ROSE)</p>
+            <p className="text-xs text-gray-500">{workerShare}% of bonus tokens</p>
           </div>
         </div>
         
@@ -49,7 +49,7 @@ const TokenDistributionChart = () => {
           <div className="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
           <div>
             <p className="text-sm font-medium">Stakeholder</p>
-            <p className="text-xs text-gray-500">{stakeholderShare}% ({stakeholderShare} ROSE)</p>
+            <p className="text-xs text-gray-500">{stakeholderShare}% of bonus tokens</p>
           </div>
         </div>
         
@@ -57,7 +57,7 @@ const TokenDistributionChart = () => {
           <div className="w-4 h-4 bg-purple-500 rounded-full mr-2"></div>
           <div>
             <p className="text-sm font-medium">DAO Treasury</p>
-            <p className="text-xs text-gray-500">{treasuryShare}% ({treasuryShare} ROSE)</p>
+            <p className="text-xs text-gray-500">{treasuryShare}% of bonus tokens</p>
           </div>
         </div>
         
@@ -65,7 +65,7 @@ const TokenDistributionChart = () => {
           <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
           <div>
             <p className="text-sm font-medium">Burned</p>
-            <p className="text-xs text-gray-500">{burnShare}% ({burnShare} ROSE)</p>
+            <p className="text-xs text-gray-500">{burnShare}% of bonus tokens</p>
           </div>
         </div>
       </div>
