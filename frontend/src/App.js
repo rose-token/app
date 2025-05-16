@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
 import AnalyticsPage from './pages/AnalyticsPage'; // New import
+import BugsPage from './pages/BugsPage';
 import { MetaMaskProvider } from '@metamask/sdk-react';
 import { EthereumProvider } from './hooks/useEthereum';
 
@@ -32,6 +33,7 @@ function App() {
             <Routes>
               <Route path="/" element={<TasksPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/bugs" element={<BugsPage />} />
             </Routes>
           </Layout>
         </Router>
