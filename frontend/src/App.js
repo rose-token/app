@@ -27,7 +27,7 @@ function App() {
       }}
     >
       <EthereumProvider>
-        <Router>
+        <Router basename="/rose-token">
           <Layout>
             <Routes>
               <Route path="/" element={<TasksPage />} />
