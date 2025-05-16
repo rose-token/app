@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ethers } from 'ethers';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
