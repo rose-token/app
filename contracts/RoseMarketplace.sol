@@ -139,7 +139,7 @@ contract RoseMarketplace {
      * @param _tokenAmount Amount of ROSE tokens to deposit
      */
     function createTask(string calldata _description, uint256 _tokenAmount) external {
-        createTask(_description, _tokenAmount, ""); // Pass empty string as detailed description
+        this.createTask(_description, _tokenAmount, ""); // Pass empty string as detailed description
     }
 
     /**
