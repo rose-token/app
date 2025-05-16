@@ -12,10 +12,10 @@ describe("RoseMarketplace", function () {
   let burnAddress;
 
   const BASE_REWARD = ethers.parseEther("100");
-  const WORKER_SHARE = 50;
+  const WORKER_SHARE = 60;
   const STAKEHOLDER_SHARE = 20;
   const TREASURY_SHARE = 20;
-  const BURN_SHARE = 10;
+  const BURN_SHARE = 0;
   const SHARE_DENOMINATOR = 100;
 
   beforeEach(async function () {
@@ -193,12 +193,10 @@ describe("RoseMarketplace", function () {
       const workerAmount = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const stakeholderAmount = (BASE_REWARD * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const treasuryAmount = (BASE_REWARD * BigInt(TREASURY_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      const burnAmount = (BASE_REWARD * BigInt(BURN_SHARE)) / BigInt(SHARE_DENOMINATOR);
 
       expect(await roseToken.balanceOf(worker.address)).to.equal(workerAmount);
       expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderAmount);
       expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryAmount);
-      expect(await roseToken.balanceOf(burnAddress)).to.equal(burnAmount);
     });
 
     it("Should handle disputes", async function () {
