@@ -22,7 +22,7 @@ contract RoseMarketplace {
     address public daoTreasury;
 
     // A simple enum to track task status
-    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment }
+    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment, RefundRequested }
     
     // Structure for task comments with threading support
     struct Comment {
@@ -44,6 +44,8 @@ contract RoseMarketplace {
         TaskStatus status;
         bool customerApproval;     
         bool stakeholderApproval;  
+        bool workerApproval;       // Added for triple-approval refund mechanism
+        bool refundRequested;      // Flag to track if refund was requested
     }
 
     // Keep a count to assign unique task IDs
@@ -70,6 +72,8 @@ contract RoseMarketplace {
     event CommentAdded(uint256 taskId, uint256 commentId, address indexed author, uint256 parentCommentId);
     event TokensMinted(address indexed to, uint256 amount);
     event FaucetTokensClaimed(address indexed to, uint256 amount);
+    event RefundRequested(uint256 taskId, address requestedBy);
+    event RefundProcessed(uint256 taskId, uint256 customerRefund, uint256 stakeholderRefund);
 
     // Reward parameters for demonstration
     // On successful task completion, we mint a fixed base of 100 ROSE tokens
@@ -119,6 +123,8 @@ contract RoseMarketplace {
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
+        newTask.workerApproval = false;
+        newTask.refundRequested = false;
 
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
@@ -401,5 +407,105 @@ contract RoseMarketplace {
         roseToken.mint(msg.sender, _amount);
         
         emit FaucetTokensClaimed(msg.sender, _amount);
+    }
+
+    /**
+     * @dev Request a refund for a task. Can be called by customer, worker, or stakeholder.
+     * @param _taskId ID of the task to request refund for
+     */
+    function requestRefund(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(
+            msg.sender == t.customer || msg.sender == t.worker || msg.sender == t.stakeholder,
+            "Only customer, worker, or stakeholder can request refund"
+        );
+        require(
+            t.status == TaskStatus.InProgress || t.status == TaskStatus.Completed,
+            "Invalid status for refund request"
+        );
+        
+        t.status = TaskStatus.RefundRequested;
+        t.customerApproval = false;
+        t.workerApproval = false;
+        t.stakeholderApproval = false;
+        t.refundRequested = true;
+        
+        emit RefundRequested(_taskId, msg.sender);
+    }
+
+    /**
+     * @dev Customer approves a refund request
+     * @param _taskId ID of the task to approve refund for
+     */
+    function approveRefundByCustomer(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(t.customer == msg.sender, "Only the customer can approve");
+        require(t.status == TaskStatus.RefundRequested, "Refund must be requested first");
+        t.customerApproval = true;
+        
+        _checkRefundApprovals(_taskId);
+    }
+
+    /**
+     * @dev Worker approves a refund request
+     * @param _taskId ID of the task to approve refund for
+     */
+    function approveRefundByWorker(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(t.worker == msg.sender, "Only the worker can approve");
+        require(t.status == TaskStatus.RefundRequested, "Refund must be requested first");
+        t.workerApproval = true;
+        
+        _checkRefundApprovals(_taskId);
+    }
+
+    /**
+     * @dev Stakeholder approves a refund request
+     * @param _taskId ID of the task to approve refund for
+     */
+    function approveRefundByStakeholder(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(t.stakeholder == msg.sender, "Only the stakeholder can approve");
+        require(t.status == TaskStatus.RefundRequested, "Refund must be requested first");
+        t.stakeholderApproval = true;
+        
+        _checkRefundApprovals(_taskId);
+    }
+
+    /**
+     * @dev Check if all parties have approved the refund and process it if they have
+     * @param _taskId ID of the task to check approvals for
+     */
+    function _checkRefundApprovals(uint256 _taskId) internal {
+        Task storage t = tasks[_taskId];
+        
+        if (t.customerApproval && t.workerApproval && t.stakeholderApproval) {
+            _processRefund(_taskId);
+        }
+    }
+
+    /**
+     * @dev Process a refund after all parties have approved
+     * @param _taskId ID of the task to process refund for
+     */
+    function _processRefund(uint256 _taskId) internal {
+        Task storage t = tasks[_taskId];
+        t.status = TaskStatus.Closed;
+        
+        // Store the amounts to refund
+        uint256 customerRefund = t.deposit;
+        uint256 stakeholderRefund = t.stakeholderDeposit;
+        
+        // Reset the values to prevent reentrancy
+        t.deposit = 0;
+        t.stakeholderDeposit = 0;
+        
+        // Transfer tokens back to original owners
+        require(roseToken.transfer(t.customer, customerRefund), "Customer refund failed");
+        if (stakeholderRefund > 0) {
+            require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Stakeholder refund failed");
+        }
+        
+        emit RefundProcessed(_taskId, customerRefund, stakeholderRefund);
     }
 }
