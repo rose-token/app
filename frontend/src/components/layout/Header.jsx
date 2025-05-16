@@ -53,6 +53,14 @@ const Header = () => {
             >
               Bug Reports
             </NavLink>
+            <NavLink 
+              to="/help" 
+              className={({ isActive }) => 
+                isActive ? "font-medium text-white underline" : "text-white/80 hover:text-white"
+              }
+            >
+              Help
+            </NavLink>
             {isConnected && (
               <NavLink 
                 to="/profile" 
