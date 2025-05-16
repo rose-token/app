@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
+import "./RoseReputation.sol";
 import "hardhat/console.sol";
 
 /**
@@ -17,6 +18,9 @@ contract RoseMarketplace {
 
     // Reference to the RoseToken contract
     RoseToken public roseToken;
+    
+    // Reference to the RoseReputation contract
+    RoseReputation public roseReputation;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -94,7 +98,7 @@ contract RoseMarketplace {
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /**
-     * @dev Constructor sets up the RoseToken contract and DAO treasury address.
+     * @dev Constructor sets up the RoseToken contract, RoseReputation contract, and DAO treasury address.
      * In a production design, you'd likely manage these addresses with Ownable logic.
      * @param _daoTreasury The address where part of minted tokens go
      */
@@ -104,6 +108,9 @@ contract RoseMarketplace {
 
         // Deploy the RoseToken, designating this marketplace as its minter
         roseToken = new RoseToken(address(this));
+        
+        // Deploy the RoseReputation contract for tracking experience and levels
+        roseReputation = new RoseReputation();
     }
 
     /**
@@ -129,6 +136,9 @@ contract RoseMarketplace {
         newTask.stakeholderApproval = false;
         newTask.workerApproval = false;
         newTask.refundRequested = false;
+
+        // Award experience to customer for creating a task
+        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_CREATION_EXP());
 
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
@@ -157,6 +167,9 @@ contract RoseMarketplace {
         newTask.workerApproval = false;
         newTask.refundRequested = false;
 
+        // Award experience to customer for creating a task
+        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_CREATION_EXP());
+
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
 
@@ -182,6 +195,9 @@ contract RoseMarketplace {
         t.stakeholderDeposit = _tokenAmount;
         t.status = TaskStatus.Open;
         
+        // Award experience to stakeholder for staking on a task
+        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Stakeholder, roseReputation.STAKEHOLDER_STAKE_EXP());
+        
         emit StakeholderStaked(_taskId, msg.sender, _tokenAmount);
     }
 
@@ -201,6 +217,10 @@ contract RoseMarketplace {
         t.worker = msg.sender;
         t.storyPoints = _storyPoints;
         t.status = TaskStatus.InProgress;
+        
+        // Award experience to worker for claiming a task
+        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Worker, roseReputation.WORKER_CLAIM_EXP());
+        
         emit TaskClaimed(_taskId, msg.sender, _storyPoints);
     }
 
@@ -213,6 +233,10 @@ contract RoseMarketplace {
         require(t.worker == msg.sender, "Only assigned worker can mark completion");
         require(t.status == TaskStatus.InProgress, "Task must be in progress");
         t.status = TaskStatus.Completed;
+        
+        // Award experience to worker for completing a task
+        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Worker, roseReputation.WORKER_TASK_COMPLETION_EXP());
+        
         emit TaskCompleted(_taskId);
     }
 
@@ -322,7 +346,7 @@ contract RoseMarketplace {
             require(roseToken.transfer(t.worker, amountToPay), "Worker payment failed");
 
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
-            _mintReward(t.worker, t.stakeholder);
+            _mintReward(t.customer, t.worker, t.stakeholder);
         }
         
         // Return stakeholder deposit
@@ -357,9 +381,13 @@ contract RoseMarketplace {
                 require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Return of stakeholder deposit failed");
             }
             
+            // Award experience to customer and stakeholder for task completion
+            roseReputation.awardExperience(t.customer, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_COMPLETION_EXP());
+            roseReputation.awardExperience(t.stakeholder, RoseReputation.Role.Stakeholder, roseReputation.STAKEHOLDER_TASK_COMPLETION_EXP());
+            
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
             console.log("Minting rewards");
-            _mintReward(t.worker, t.stakeholder);
+            _mintReward(t.customer, t.worker, t.stakeholder);
         }
     }
 
@@ -367,15 +395,28 @@ contract RoseMarketplace {
      * @dev Mint the reward to the worker, stakeholder, and treasury according to splits. 
      * This is where you can customize the "socialist" logic: 
      * e.g., more to worker, some to stakeholder, some to treasury, etc.
+     * Applies reputation bonus based on combined levels of customer, worker, and stakeholder.
      */
-    function _mintReward(address _worker, address _stakeholder) internal {
-        // For demonstration, we just use a fixed BASE_REWARD
-        // Then we split it by the percentages defined above.
-        uint256 workerAmount = (BASE_REWARD * WORKER_SHARE) / SHARE_DENOMINATOR;
-        uint256 stakeholderAmount = (BASE_REWARD * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
-        uint256 treasuryAmount = (BASE_REWARD * TREASURY_SHARE) / SHARE_DENOMINATOR;
+    function _mintReward(address _customer, address _worker, address _stakeholder) internal {
+        // Calculate reputation bonus percentage (0-50%)
+        uint256 bonusPercentage = roseReputation.calculateMintingBonus(_customer, _stakeholder, _worker);
+        
+        // Calculate the total reward with bonus
+        uint256 totalReward = BASE_REWARD;
+        if (bonusPercentage > 0) {
+            // Apply bonus (e.g., 5% bonus = BASE_REWARD * 105 / 100)
+            totalReward = (BASE_REWARD * (100 + bonusPercentage)) / 100;
+        }
+        
+        // Split the total reward by the percentages defined above
+        uint256 workerAmount = (totalReward * WORKER_SHARE) / SHARE_DENOMINATOR;
+        uint256 stakeholderAmount = (totalReward * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
+        uint256 treasuryAmount = (totalReward * TREASURY_SHARE) / SHARE_DENOMINATOR;
         // No burn amount calculation needed since BURN_SHARE is 0
 
+        console.log("Minting with reputation bonus:", bonusPercentage, "%");
+        console.log("Total reward with bonus:", totalReward);
+        
         // Mint to worker
         roseToken.mint(_worker, workerAmount);
 
