@@ -72,12 +72,12 @@ contract RoseMarketplace {
     // then split them among the worker, stakeholder, treasury, and burn a fraction
     uint256 public constant BASE_REWARD = 100 ether; // if decimals = 18, "100 ether" means 100 tokens
 
-    // Example splits: 50% to worker, 20% to stakeholder, 20% to treasury, 10% burned
+    // Example splits: 60% to worker, 20% to stakeholder, 20% to treasury, 0% burned
     // (This is just an example ratio, tweak as desired.)
-    uint256 public constant WORKER_SHARE = 50;      // 50%
+    uint256 public constant WORKER_SHARE = 60;      // 60%
     uint256 public constant STAKEHOLDER_SHARE = 20; // 20%
     uint256 public constant TREASURY_SHARE = 20;    // 20%
-    uint256 public constant BURN_SHARE = 10;        // 10%
+    uint256 public constant BURN_SHARE = 0;         // 0%
     uint256 public constant SHARE_DENOMINATOR = 100;
 
     // Burn address (commonly the zero address or a dead address)
@@ -277,7 +277,7 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Mint the reward to the worker, stakeholder, treasury, and burn address according to splits. 
+     * @dev Mint the reward to the worker, stakeholder, and treasury according to splits. 
      * This is where you can customize the "socialist" logic: 
      * e.g., more to worker, some to stakeholder, some to treasury, etc.
      */
@@ -287,7 +287,7 @@ contract RoseMarketplace {
         uint256 workerAmount = (BASE_REWARD * WORKER_SHARE) / SHARE_DENOMINATOR;
         uint256 stakeholderAmount = (BASE_REWARD * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
         uint256 treasuryAmount = (BASE_REWARD * TREASURY_SHARE) / SHARE_DENOMINATOR;
-        uint256 burnAmount = (BASE_REWARD * BURN_SHARE) / SHARE_DENOMINATOR;
+        // No burn amount calculation needed since BURN_SHARE is 0
 
         // Mint to worker
         roseToken.mint(_worker, workerAmount);
@@ -297,10 +297,6 @@ contract RoseMarketplace {
 
         // Mint to the DAO treasury
         roseToken.mint(daoTreasury, treasuryAmount);
-
-        // Mint directly to a burn address to simulate deflation
-        // (Remember, "deflationary" is somewhat offset by the fact we keep minting new tokens.)
-        roseToken.mint(BURN_ADDRESS, burnAmount);
     }
 
     /**

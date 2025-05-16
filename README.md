@@ -10,10 +10,9 @@ This project implements a decentralized task marketplace with three core roles:
 - **Stakeholders**: Validate work and arbitrate disputes
 
 When tasks are completed successfully, new ROSE tokens are minted and distributed:
-- 50% to the worker who completed the task
+- 60% to the worker who completed the task
 - 20% to the stakeholder who validated the work
 - 20% to a DAO treasury for community governance
-- 10% burned to control inflation
 
 ## Contracts
 
