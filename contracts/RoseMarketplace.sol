@@ -139,7 +139,25 @@ contract RoseMarketplace {
      * @param _tokenAmount Amount of ROSE tokens to deposit
      */
     function createTask(string calldata _description, uint256 _tokenAmount) external {
-        this.createTask(_description, _tokenAmount, ""); // Pass empty string as detailed description
+        // Implement the same logic as the other createTask function but with empty detailedDescription
+        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
+        
+        // Transfer tokens from customer to the contract
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
+
+        taskCounter++;
+        Task storage newTask = tasks[taskCounter];
+        newTask.customer = msg.sender;
+        newTask.deposit = _tokenAmount;
+        newTask.description = _description;
+        newTask.detailedDescription = ""; // Empty detailed description
+        newTask.status = TaskStatus.StakeholderRequired;
+        newTask.customerApproval = false;
+        newTask.stakeholderApproval = false;
+        newTask.workerApproval = false;
+        newTask.refundRequested = false;
+
+        emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
 
     /**
