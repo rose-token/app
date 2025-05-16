@@ -85,7 +85,7 @@ const TasksPage = () => {
     }, 300); // 300ms debounce time
   }, [fetchTasks]);
   
-  const handleClaimTask = async (taskId) => {
+  const handleClaimTask = async (taskId, storyPoints) => {
     if (!isConnected || !roseMarketplace) return;
     
     const task = tasks.find(t => t.id === taskId);
@@ -104,8 +104,13 @@ const TasksPage = () => {
       return;
     }
     
+    if (!storyPoints || storyPoints <= 0) {
+      setError('Story points must be greater than zero');
+      return;
+    }
+    
     try {
-      const tx = await roseMarketplace.claimTask(taskId);
+      const tx = await roseMarketplace.claimTask(taskId, storyPoints);
       await tx.wait();
       debouncedFetchTasks(); // Use debounced version
     } catch (err) {

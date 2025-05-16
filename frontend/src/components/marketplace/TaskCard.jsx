@@ -6,6 +6,7 @@ import CommentSection from './CommentSection';
 const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, roseMarketplace }) => {
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
+  const [storyPoints, setStoryPoints] = useState(1);
   
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -83,12 +84,25 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         )}
         
         {canClaim && (
-          <button 
-            onClick={() => onClaim(task.id)} 
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
-          >
-            Claim Task
-          </button>
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center space-x-2">
+              <label htmlFor="storyPoints" className="text-sm font-medium">Story Points:</label>
+              <input
+                id="storyPoints"
+                type="number"
+                min="1"
+                value={storyPoints}
+                onChange={(e) => setStoryPoints(parseInt(e.target.value) || 1)}
+                className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1"
+              />
+            </div>
+            <button 
+              onClick={() => onClaim(task.id, storyPoints)} 
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Claim Task
+            </button>
+          </div>
         )}
         
         {canComplete && (
