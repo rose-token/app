@@ -45,6 +45,14 @@ const Header = () => {
             >
               Worker Analytics
             </NavLink>
+            <NavLink 
+              to="/bugs" 
+              className={({ isActive }) => 
+                isActive ? "font-medium text-white underline" : "text-white/80 hover:text-white"
+              }
+            >
+              Bug Reports
+            </NavLink>
           </nav>
         </div>
         
