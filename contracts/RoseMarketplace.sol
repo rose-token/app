@@ -28,9 +28,9 @@ contract RoseMarketplace {
     struct Comment {
         address author;           // Address that created the comment
         uint256 timestamp;        // When comment was created
-        bytes32 contentHash;      // Hashed content (saves gas)
+        bytes32 contentHash;      // Hashed content (for verification)
         uint256 parentCommentId;  // For threaded replies (0 for top-level comments)
-        string content;           // Actual comment content
+        string ipfsCid;           // IPFS CID for comment content
     }
 
     // Basic structure to store details about each task
@@ -349,10 +349,10 @@ contract RoseMarketplace {
     /**
      * @dev Add a comment to a task. Allows threaded replies if parentCommentId is provided.
      * @param _taskId ID of the task to comment on
-     * @param _content Text content of the comment
+     * @param _ipfsCid IPFS CID for the comment content
      * @param _parentCommentId ID of the parent comment (0 for top-level comments)
      */
-    function addComment(uint256 _taskId, string calldata _content, uint256 _parentCommentId) external {
+    function addComment(uint256 _taskId, string calldata _ipfsCid, uint256 _parentCommentId) external {
         require(_taskId > 0 && _taskId <= taskCounter, "Task does not exist");
         
         // If parentCommentId is provided, ensure it exists
@@ -360,8 +360,8 @@ contract RoseMarketplace {
             require(_parentCommentId <= taskCommentCount[_taskId], "Parent comment does not exist");
         }
         
-        // Hash the content to save gas
-        bytes32 contentHash = keccak256(abi.encodePacked(_content));
+        // Hash the CID to save gas and enable verification
+        bytes32 contentHash = keccak256(abi.encodePacked(_ipfsCid));
         
         // Create and store the comment
         taskCommentCount[_taskId]++;
@@ -372,7 +372,7 @@ contract RoseMarketplace {
             timestamp: block.timestamp,
             contentHash: contentHash,
             parentCommentId: _parentCommentId,
-            content: _content
+            ipfsCid: _ipfsCid
         });
         
         taskComments[_taskId].push(newComment);

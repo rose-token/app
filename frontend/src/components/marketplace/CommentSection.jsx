@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { uploadCommentToIPFS, fetchCommentFromIPFS, isCID } from '../../utils/ipfs/pinataService';
 
 const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false }) => {
   const [comments, setComments] = useState([]);
+  const [commentContents, setCommentContents] = useState({}); // Map of CIDs to content
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fetchErrors, setFetchErrors] = useState({}); // Track IPFS fetch errors
   
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp * 1000).toLocaleString();
@@ -18,13 +21,43 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       setIsLoading(true);
       const comments = await roseMarketplace.getTaskComments(taskId);
       setComments(comments);
+      
+      const contentPromises = comments.map(async (comment, index) => {
+        const cid = comment.ipfsCid || comment.content; // Support both new CID field and legacy content field
+        
+        if (!cid) return;
+        
+        if (isCID(cid)) {
+          try {
+            const content = await fetchCommentFromIPFS(cid);
+            return { index, cid, content };
+          } catch (err) {
+            console.error(`Error fetching comment ${index} from IPFS:`, err);
+            setFetchErrors(prev => ({ ...prev, [index]: true }));
+            return { index, cid, content: 'Content could not be loaded from IPFS' };
+          }
+        } else {
+          return { index, cid, content: cid }; // For legacy comments, cid actually contains the content
+        }
+      });
+      
+      const contents = await Promise.allSettled(contentPromises);
+      
+      const contentMap = {};
+      contents.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+          contentMap[result.value.index] = result.value.content;
+        }
+      });
+      
+      setCommentContents(contentMap);
     } catch (err) {
       console.error('Error fetching comments:', err);
       setError('Failed to load comments');
     } finally {
       setIsLoading(false);
     }
-  }, [roseMarketplace, taskId, setIsLoading, setComments, setError]);
+  }, [roseMarketplace, taskId, setIsLoading, setComments, setError, setFetchErrors, setCommentContents]);
   
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -34,7 +67,9 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       setIsLoading(true);
       setError('');
       
-      const tx = await roseMarketplace.addComment(taskId, newComment, replyTo);
+      const cid = await uploadCommentToIPFS(newComment);
+      
+      const tx = await roseMarketplace.addComment(taskId, cid, replyTo);
       await tx.wait();
       
       setNewComment('');
@@ -43,7 +78,11 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       await fetchComments();
     } catch (err) {
       console.error('Error adding comment:', err);
-      setError('Failed to add comment');
+      if (err.message.includes('Pinata')) {
+        setError('Failed to upload comment to IPFS. Please check Pinata API keys.');
+      } else {
+        setError('Failed to add comment');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -132,7 +171,27 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
             </button>
           </div>
           <div className="text-sm">
-            {comment.content}
+            {commentContents[comment.id] || fetchErrors[comment.id] ? 
+              (fetchErrors[comment.id] ? 
+                <div className="text-red-500">
+                  Content could not be loaded from IPFS. 
+                  <button 
+                    onClick={() => fetchCommentFromIPFS(comment.ipfsCid || comment.content)
+                      .then(content => {
+                        setCommentContents(prev => ({ ...prev, [comment.id]: content }));
+                        setFetchErrors(prev => ({ ...prev, [comment.id]: false }));
+                      })
+                      .catch(() => {/* Already handled */})
+                    } 
+                    className="ml-2 text-blue-500 underline"
+                  >
+                    Retry
+                  </button>
+                </div> : 
+                commentContents[comment.id]
+              ) : 
+              'Loading content...'
+            }
           </div>
         </div>
         
