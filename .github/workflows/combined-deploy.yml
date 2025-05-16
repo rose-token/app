@@ -141,8 +141,9 @@ jobs:
         env:
           REACT_APP_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
           REACT_APP_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
-          REACT_APP_PINATA_API_KEY: ${{ secrets.PINATA_API_KEY }}
-          REACT_APP_PINATA_SECRET_API_KEY: ${{ secrets.PINATA_SECRET_API_KEY }}
+          REACT_APP_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
+          REACT_APP_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
+          REACT_APP_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
       
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -52,3 +52,4 @@ jobs:
           # Placeholder Pinata API keys for testing
           REACT_APP_PINATA_API_KEY: "TEST_PINATA_API_KEY"
           REACT_APP_PINATA_SECRET_API_KEY: "TEST_PINATA_SECRET_API_KEY"
+          REACT_APP_PINATA_JWT: "TEST_PINATA_JWT"
