@@ -136,11 +136,15 @@ jobs:
           echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Token: $TOKEN_ADDRESS"
       
+      - name: Set Build Version
+        run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+      
       - name: Build
         run: cd frontend && npm run build
         env:
           REACT_APP_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
           REACT_APP_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
+          REACT_APP_BUILD_VERSION: ${{ env.BUILD_VERSION }}
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
