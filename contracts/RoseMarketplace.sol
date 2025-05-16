@@ -213,6 +213,7 @@ contract RoseMarketplace {
         require(t.customer != msg.sender, "Customer cannot claim their own task");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
         require(_storyPoints > 0, "Story points must be greater than zero");
+        require(msg.sender != address(0), "Worker cannot be zero address");
 
         t.worker = msg.sender;
         t.storyPoints = _storyPoints;
@@ -327,15 +328,15 @@ contract RoseMarketplace {
         require(t.stakeholder == msg.sender, "Only stakeholder can resolve disputes");
         require(t.status == TaskStatus.Disputed, "Task not in dispute");
 
+        // Fix ordering to follow checks-effects-interactions pattern
         t.status = TaskStatus.Closed;
-        emit TaskClosed(_taskId);
-
         uint256 amountToPay = t.deposit;
         t.deposit = 0; // prevent re-entrancy double-withdraw
         
         // Always return stakeholder deposit regardless of dispute outcome
         uint256 stakeholderRefund = t.stakeholderDeposit;
         t.stakeholderDeposit = 0;
+        emit TaskClosed(_taskId);
 
         if (_refundToCustomer) {
             // Transfer ROSE tokens back to customer
