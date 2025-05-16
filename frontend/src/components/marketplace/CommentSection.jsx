@@ -92,10 +92,12 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
     if (roseMarketplace && taskId) {
       fetchComments();
       
-      const commentFilter = roseMarketplace.filters.CommentAdded(taskId);
-      const commentListener = (taskId, commentId, author, parentCommentId) => {
-        console.log('Comment added:', { taskId, commentId, author, parentCommentId });
-        fetchComments();
+      const commentFilter = roseMarketplace.filters.CommentAdded();
+      const commentListener = (eventTaskId, commentId, author, parentCommentId) => {
+        if (eventTaskId.toNumber() === Number(taskId)) {
+          console.log('Comment added:', { taskId: eventTaskId.toNumber(), commentId, author, parentCommentId });
+          fetchComments();
+        }
       };
       
       roseMarketplace.on(commentFilter, commentListener);
