@@ -38,8 +38,8 @@ contract RoseMarketplace {
         address customer;
         address worker;
         address stakeholder;
-        uint256 deposit;           // Payment in ETH the customer puts up
-        uint256 stakeholderDeposit; // 10% deposit from stakeholder
+        uint256 deposit;           // Payment in ROSE tokens the customer puts up
+        uint256 stakeholderDeposit; // 10% deposit from stakeholder in ROSE tokens
         string description;        // Basic metadata or instructions
         TaskStatus status;
         bool customerApproval;     
@@ -68,6 +68,8 @@ contract RoseMarketplace {
     event TaskClosed(uint256 taskId);
     event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
     event CommentAdded(uint256 taskId, uint256 commentId, address indexed author, uint256 parentCommentId);
+    event TokensMinted(address indexed to, uint256 amount);
+    event FaucetTokensClaimed(address indexed to, uint256 amount);
 
     // Reward parameters for demonstration
     // On successful task completion, we mint a fixed base of 100 ROSE tokens
@@ -99,29 +101,34 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Create a new task, depositing ETH that will be paid to the worker upon successful completion.
+     * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
+     * @param _tokenAmount Amount of ROSE tokens to deposit
      */
-    function createTask(string calldata _description) external payable {
-        require(msg.value > 0, "Must deposit some ETH as payment");
+    function createTask(string calldata _description, uint256 _tokenAmount) external {
+        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
+        
+        // Transfer tokens from customer to the contract
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
         newTask.customer = msg.sender;
-        newTask.deposit = msg.value;
+        newTask.deposit = _tokenAmount;
         newTask.description = _description;
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
 
-        emit TaskCreated(taskCounter, msg.sender, msg.value);
+        emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
 
     /**
-     * @dev Stakeholder stakes 10% of the task deposit to become the stakeholder for a task
+     * @dev Stakeholder stakes 10% of the task deposit in ROSE tokens to become the stakeholder for a task
      * @param _taskId ID of the task to stake on
+     * @param _tokenAmount Amount of ROSE tokens to stake (must be exactly 10% of task deposit)
      */
-    function stakeholderStake(uint256 _taskId) external payable {
+    function stakeholderStake(uint256 _taskId, uint256 _tokenAmount) external {
         Task storage t = tasks[_taskId];
         require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
         require(t.stakeholder == address(0), "Task already has a stakeholder");
@@ -129,13 +136,16 @@ contract RoseMarketplace {
         
         // Calculate required 10% deposit
         uint256 requiredDeposit = t.deposit / 10;
-        require(msg.value >= requiredDeposit, "Must deposit at least 10% of task value");
+        require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
+        
+        // Transfer tokens from stakeholder to the contract
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
         
         t.stakeholder = msg.sender;
-        t.stakeholderDeposit = msg.value;
+        t.stakeholderDeposit = _tokenAmount;
         t.status = TaskStatus.Open;
         
-        emit StakeholderStaked(_taskId, msg.sender, msg.value);
+        emit StakeholderStaked(_taskId, msg.sender, _tokenAmount);
     }
 
     /**
@@ -264,13 +274,12 @@ contract RoseMarketplace {
         t.stakeholderDeposit = 0;
 
         if (_refundToCustomer) {
-            (bool success, ) = t.customer.call{value: amountToPay}("");
-            require(success, "Refund failed");
+            // Transfer ROSE tokens back to customer
+            require(roseToken.transfer(t.customer, amountToPay), "Refund failed");
         } else {
             // If the worker wins, pay them the deposit 
             // and also treat it as 'completion' for token minting
-            (bool success, ) = t.worker.call{value: amountToPay}("");
-            require(success, "Worker payment failed");
+            require(roseToken.transfer(t.worker, amountToPay), "Worker payment failed");
 
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
             _mintReward(t.worker, t.stakeholder);
@@ -278,8 +287,7 @@ contract RoseMarketplace {
         
         // Return stakeholder deposit
         if (stakeholderRefund > 0) {
-            (bool stakeholderSuccess, ) = t.stakeholder.call{value: stakeholderRefund}("");
-            require(stakeholderSuccess, "Return of stakeholder deposit failed");
+            require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Return of stakeholder deposit failed");
         }
     }
 
@@ -293,11 +301,12 @@ contract RoseMarketplace {
         
         if (_payout) {
             uint256 amountToPay = t.deposit;
-            console.log("Paying out", amountToPay, "to worker", t.worker);
+            console.log("Paying out", amountToPay, "ROSE tokens to worker", t.worker);
             t.deposit = 0;
-            (bool success, ) = t.worker.call{value: amountToPay}("");
-            console.log("Payment transfer success:", success);
-            require(success, "Transfer to worker failed");
+            
+            // Transfer ROSE tokens to worker
+            require(roseToken.transfer(t.worker, amountToPay), "Transfer to worker failed");
+            console.log("Payment transfer success:", true);
             
             emit PaymentReleased(_taskId, t.worker, amountToPay);
             
@@ -305,8 +314,7 @@ contract RoseMarketplace {
             if (t.stakeholderDeposit > 0) {
                 uint256 stakeholderRefund = t.stakeholderDeposit;
                 t.stakeholderDeposit = 0;
-                (bool stakeholderSuccess, ) = t.stakeholder.call{value: stakeholderRefund}("");
-                require(stakeholderSuccess, "Return of stakeholder deposit failed");
+                require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Return of stakeholder deposit failed");
             }
             
             // Mint tokens to the worker, stakeholder, treasury, and burn portion
@@ -383,7 +391,15 @@ contract RoseMarketplace {
     }
     
     /**
-     * @dev Fallback to accept raw ETH if ever needed (e.g., direct transfers).
+     * @dev Faucet function to mint test ROSE tokens for users
+     * @param _amount Amount of ROSE tokens to mint (limited to prevent abuse)
      */
-    receive() external payable {}
+    function claimFaucetTokens(uint256 _amount) external {
+        require(_amount <= 100 ether, "Cannot claim more than 100 ROSE tokens at once");
+        
+        // Mint tokens to the caller
+        roseToken.mint(msg.sender, _amount);
+        
+        emit FaucetTokensClaimed(msg.sender, _amount);
+    }
 }

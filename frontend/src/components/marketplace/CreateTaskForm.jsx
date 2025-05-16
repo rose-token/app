@@ -8,10 +8,11 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [description, setDescription] = useState('');
   const [deposit, setDeposit] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState('');
   
   const { isConnected, chainId } = useEthereum();
-  const { roseMarketplace, isLoading } = useContract();
+  const { roseMarketplace, roseToken, isLoading } = useContract();
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,14 +33,19 @@ const CreateTaskForm = ({ onTaskCreated }) => {
     }
     
     try {
-      setIsCreating(true);
       setError('');
       
-      const depositWei = ethers.utils.parseEther(deposit);
+      const tokenAmount = ethers.utils.parseEther(deposit);
       
+      setIsApproving(true);
+      const approveTx = await roseToken.approve(roseMarketplace.address, tokenAmount);
+      await approveTx.wait();
+      setIsApproving(false);
+      
+      setIsCreating(true);
       const tx = await roseMarketplace.createTask(
         description,
-        { value: depositWei }
+        tokenAmount
       );
       
       await tx.wait();
@@ -54,6 +60,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       console.error('Error creating task:', err);
       setError(err.message || 'Failed to create task');
     } finally {
+      setIsApproving(false);
       setIsCreating(false);
     }
   };
@@ -86,7 +93,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         
         <div className="mb-6">
           <label htmlFor="deposit" className="block text-sm font-medium text-gray-700 mb-1">
-            ETH Deposit
+            ROSE Token Deposit
           </label>
           <div className="relative">
             <input
@@ -101,11 +108,11 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               required
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <span className="text-gray-500">ETH</span>
+              <span className="text-gray-500">ROSE</span>
             </div>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            This amount will be paid to the worker upon successful completion
+            This amount in ROSE tokens will be paid to the worker upon successful completion
           </p>
         </div>
         
@@ -117,15 +124,35 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         
         <button
           type="submit"
-          disabled={isCreating || !isConnected}
+          disabled={isCreating || isApproving || !isConnected}
           className={`w-full py-2 px-4 rounded-md font-medium text-white ${
-            isCreating || !isConnected
+            isCreating || isApproving || !isConnected
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-primary hover:bg-primary/90'
           }`}
         >
-          {isCreating ? 'Creating...' : 'Create Task'}
+          {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}
         </button>
+        
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const amount = ethers.utils.parseEther("100");
+                const tx = await roseMarketplace.claimFaucetTokens(amount);
+                await tx.wait();
+                alert("Successfully claimed 100 ROSE tokens!");
+              } catch (err) {
+                console.error("Error claiming tokens:", err);
+                setError(err.message || "Failed to claim tokens");
+              }
+            }}
+            className="w-full py-2 px-4 rounded-md font-medium text-white bg-green-600 hover:bg-green-700"
+          >
+            Claim 100 ROSE Tokens (Test Faucet)
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -13,7 +13,7 @@ const TasksPage = () => {
   const [error, setError] = useState('');
   
   const { account, isConnected } = useEthereum();
-  const { roseMarketplace } = useContract();
+  const { roseMarketplace, roseToken } = useContract();
   
   const fetchTaskDetails = useCallback(async (taskId) => {
     if (!roseMarketplace) return null;
@@ -172,7 +172,7 @@ const TasksPage = () => {
     try {
       console.log("Accepting payment for task:", taskId);
       const tx = await roseMarketplace.acceptPayment(taskId, {
-        gasLimit: 500000 // Increase gas limit for payment acceptance which includes ETH transfer and token minting
+        gasLimit: 500000 // Increase gas limit for payment acceptance which includes token transfer and token minting
       });
       
       console.log("Waiting for transaction:", tx.hash);
@@ -189,7 +189,7 @@ const TasksPage = () => {
   };
   
   const handleStakeTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
+    if (!isConnected || !roseMarketplace || !roseToken) return;
     
     try {
       const task = tasks.find(t => t.id === taskId);
@@ -201,8 +201,13 @@ const TasksPage = () => {
       const depositAmount = window.BigInt(task.deposit) / window.BigInt(10);
       console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
       
-      const tx = await roseMarketplace.stakeholderStake(taskId, {
-        value: depositAmount.toString(),
+      console.log("Approving token transfer...");
+      const approveTx = await roseToken.approve(roseMarketplace.address, depositAmount.toString());
+      await approveTx.wait();
+      console.log("Token approval confirmed");
+      
+      console.log("Staking tokens...");
+      const tx = await roseMarketplace.stakeholderStake(taskId, depositAmount.toString(), {
         gasLimit: 300000
       });
       
