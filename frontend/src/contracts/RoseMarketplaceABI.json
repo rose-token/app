@@ -14,7 +14,57 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "commentId",
+        "type": "uint256"
+      },
+      {
         "indexed": true,
+        "internalType": "address",
+        "name": "author",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "parentCommentId",
+        "type": "uint256"
+      }
+    ],
+    "name": "CommentAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "FaucetTokensClaimed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
@@ -39,16 +89,10 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "customer",
-        "type": "address"
       },
       {
         "indexed": true,
@@ -59,31 +103,18 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "deposit",
+        "name": "stakeholderDeposit",
         "type": "uint256"
       }
     ],
-    "name": "TaskCreated",
+    "name": "StakeholderStaked",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "TaskClosed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
@@ -102,7 +133,20 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "TaskClosed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
@@ -115,7 +159,32 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
         "indexed": true,
+        "internalType": "address",
+        "name": "customer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "deposit",
+        "type": "uint256"
+      }
+    ],
+    "name": "TaskCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
@@ -128,7 +197,7 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
@@ -147,6 +216,25 @@
       }
     ],
     "name": "TaskReadyForPayment",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "TokensMinted",
     "type": "event"
   },
   {
@@ -248,6 +336,42 @@
         "type": "uint256"
       }
     ],
+    "name": "acceptPayment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_ipfsCid",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_parentCommentId",
+        "type": "uint256"
+      }
+    ],
+    "name": "addComment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
     "name": "approveCompletionByCustomer",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -262,6 +386,19 @@
       }
     ],
     "name": "approveCompletionByStakeholder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "claimFaucetTokens",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -287,14 +424,14 @@
         "type": "string"
       },
       {
-        "internalType": "address",
-        "name": "_stakeholder",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_tokenAmount",
+        "type": "uint256"
       }
     ],
     "name": "createTask",
     "outputs": [],
-    "stateMutability": "payable",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -331,9 +468,42 @@
         "type": "uint256"
       }
     ],
-    "name": "markTaskCompleted",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "name": "getTaskComments",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "author",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "contentHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "parentCommentId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCid",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct RoseMarketplace.Comment[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -344,7 +514,7 @@
         "type": "uint256"
       }
     ],
-    "name": "acceptPayment",
+    "name": "markTaskCompleted",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -375,6 +545,87 @@
         "internalType": "contract RoseToken",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_tokenAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "stakeholderStake",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "taskCommentCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "taskComments",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "author",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "contentHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "parentCommentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "ipfsCid",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -424,6 +675,11 @@
         "type": "uint256"
       },
       {
+        "internalType": "uint256",
+        "name": "stakeholderDeposit",
+        "type": "uint256"
+      },
+      {
         "internalType": "string",
         "name": "description",
         "type": "string"
@@ -446,9 +702,5 @@
     ],
     "stateMutability": "view",
     "type": "function"
-  },
-  {
-    "stateMutability": "payable",
-    "type": "receive"
   }
 ]
