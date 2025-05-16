@@ -6,6 +6,7 @@ import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [description, setDescription] = useState('');
+  const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -45,13 +46,15 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setIsCreating(true);
       const tx = await roseMarketplace.createTask(
         description,
-        tokenAmount
+        tokenAmount,
+        detailedDescription // Add the detailed description parameter
       );
       
       await tx.wait();
       
       setDescription('');
       setDeposit('');
+      setDetailedDescription(''); // Reset the detailed description
       
       if (onTaskCreated) {
         onTaskCreated();
@@ -87,6 +90,23 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             placeholder="Describe the task in detail..."
             required
           />
+        </div>
+        
+        <div className="mb-4">
+          <label htmlFor="detailedDescription" className="block text-sm font-medium text-gray-700 mb-1">
+            Detailed Description (Optional)
+          </label>
+          <textarea
+            id="detailedDescription"
+            value={detailedDescription}
+            onChange={(e) => setDetailedDescription(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            rows="5"
+            placeholder="Provide more in-depth information about the task (optional)..."
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Use this field to provide additional details, requirements, or context for the task
+          </p>
         </div>
         
         {/* Stakeholder field removed - stakeholders will stake 10% after task creation */}

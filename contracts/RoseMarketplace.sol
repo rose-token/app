@@ -41,6 +41,7 @@ contract RoseMarketplace {
         uint256 deposit;           // Payment in ROSE tokens the customer puts up
         uint256 stakeholderDeposit; // 10% deposit from stakeholder in ROSE tokens
         string description;        // Basic metadata or instructions
+        string detailedDescription; // Optional detailed information about the task
         TaskStatus status;
         bool customerApproval;     
         bool stakeholderApproval;  
@@ -109,8 +110,9 @@ contract RoseMarketplace {
      * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
      * @param _tokenAmount Amount of ROSE tokens to deposit
+     * @param _detailedDescription Optional detailed information about the task
      */
-    function createTask(string calldata _description, uint256 _tokenAmount) external {
+    function createTask(string calldata _description, uint256 _tokenAmount, string calldata _detailedDescription) external {
         require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
         
         // Transfer tokens from customer to the contract
@@ -121,6 +123,34 @@ contract RoseMarketplace {
         newTask.customer = msg.sender;
         newTask.deposit = _tokenAmount;
         newTask.description = _description;
+        newTask.detailedDescription = _detailedDescription; // Store the detailed description
+        newTask.status = TaskStatus.StakeholderRequired;
+        newTask.customerApproval = false;
+        newTask.stakeholderApproval = false;
+        newTask.workerApproval = false;
+        newTask.refundRequested = false;
+
+        emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
+    }
+    
+    /**
+     * @dev Overloaded function for backward compatibility
+     * @param _description A brief description of the task
+     * @param _tokenAmount Amount of ROSE tokens to deposit
+     */
+    function createTask(string calldata _description, uint256 _tokenAmount) external {
+        // Implement the same logic as the other createTask function but with empty detailedDescription
+        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
+        
+        // Transfer tokens from customer to the contract
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
+
+        taskCounter++;
+        Task storage newTask = tasks[taskCounter];
+        newTask.customer = msg.sender;
+        newTask.deposit = _tokenAmount;
+        newTask.description = _description;
+        newTask.detailedDescription = ""; // Empty detailed description
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
