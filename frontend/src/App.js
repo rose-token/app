@@ -1,14 +1,17 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
+import AnalyticsPage from './pages/AnalyticsPage'; // New import
 import { MetaMaskProvider } from '@metamask/sdk-react';
 import { EthereumProvider } from './hooks/useEthereum';
 
 /**
  * Main App component for Rose Token marketplace
- * Renders the main application layout with TasksPage
+ * Renders the main application layout with TasksPage and AnalyticsPage
  * Connects to Ethereum network via EthereumProvider
  * MetaMask SDK is initialized here
+ * Uses React Router for navigation between pages
  */
 function App() {
   return (
@@ -24,9 +27,14 @@ function App() {
       }}
     >
       <EthereumProvider>
-        <Layout>
-          <TasksPage />
-        </Layout>
+        <Router>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<TasksPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+            </Routes>
+          </Layout>
+        </Router>
       </EthereumProvider>
     </MetaMaskProvider>
   );
