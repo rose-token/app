@@ -31,7 +31,7 @@ const Header = () => {
             onClick={connectWallet} 
             className="bg-white text-primary hover:bg-opacity-90 px-4 py-2 rounded-md font-medium"
           >
-            {isConnected ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
+            {isConnected && account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
           </button>
         </div>
       </div>
