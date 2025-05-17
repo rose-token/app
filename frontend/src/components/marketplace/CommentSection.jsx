@@ -141,6 +141,19 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
     }
   };
   
+  // Listen for changes to localStorage privateKey
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedPrivateKey = localStorage.getItem('userPrivateKey');
+      if (storedPrivateKey !== privateKey) {
+        setPrivateKey(storedPrivateKey);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [privateKey]);
+  
   useEffect(() => {
     if (roseMarketplace && task) {
       checkParticipantKeys().then(result => {
