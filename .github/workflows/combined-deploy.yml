@@ -52,6 +52,11 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: npx hardhat run scripts/deploy.js --network sepolia
       
+      # Add a delay to ensure contracts are propagated before verification
+      - name: Wait for contract propagation
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        run: sleep 60
+      
       # Etherscan verification
       - name: Verify contracts on Etherscan
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -65,9 +70,10 @@ jobs:
           TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
           REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
           GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
+          DAO_TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.daoTreasuryAddress')
           
           # Verify contracts on Etherscan
-          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
+          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS $DAO_TREASURY_ADDRESS
           npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
           npx hardhat verify --network sepolia $REPUTATION_ADDRESS
           npx hardhat verify --network sepolia $GOVERNANCE_ADDRESS $TOKEN_ADDRESS $REPUTATION_ADDRESS $MARKETPLACE_ADDRESS "10000000000000000000"
