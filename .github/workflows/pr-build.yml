@@ -25,6 +25,9 @@ jobs:
       
       - name: Compile contracts
         run: npx hardhat compile
+        
+      - name: Update ABIs
+        run: node scripts/update-abi.js
 
   # Build frontend
   build-frontend:
@@ -42,6 +45,12 @@ jobs:
       
       - name: Install dependencies
         run: cd frontend && npm install
+      
+      - name: Install root dependencies for ABI generation
+        run: npm ci
+        
+      - name: Compile contracts and update ABIs
+        run: npm run update-abi
       
       - name: Build
         run: cd frontend && npm run build

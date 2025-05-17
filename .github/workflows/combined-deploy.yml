@@ -44,6 +44,9 @@ jobs:
       - name: Compile contracts
         run: npx hardhat compile
       
+      - name: Update ABIs
+        run: node scripts/update-abi.js
+      
       - name: Deploy to Sepolia
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
@@ -166,6 +169,12 @@ jobs:
       
       - name: Set Build Version
         run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+      
+      - name: Install root dependencies for ABI generation
+        run: npm ci
+        
+      - name: Compile contracts and update ABIs
+        run: npm run update-abi
       
       - name: Build
         run: cd frontend && npm run build

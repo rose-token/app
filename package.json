@@ -5,6 +5,7 @@
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",
+    "update-abi": "hardhat compile && node scripts/update-abi.js",
     "deploy:sepolia": "hardhat run scripts/update-deploy.js --network sepolia"
   },
   "keywords": [],
