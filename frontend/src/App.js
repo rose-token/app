@@ -6,6 +6,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import BugsPage from './pages/BugsPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
+import GovernancePage from './pages/GovernancePage';
 import { MetaMaskProvider } from '@metamask/sdk-react';
 import { EthereumProvider } from './hooks/useEthereum';
 import { ProfileProvider } from './hooks/useProfile';
@@ -40,6 +41,7 @@ function App() {
                 <Route path="/bugs" element={<BugsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/help" element={<HelpPage />} />
+                <Route path="/governance" element={<GovernancePage />} />
               </Routes>
             </Layout>
           </Router>

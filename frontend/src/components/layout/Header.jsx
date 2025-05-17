@@ -61,6 +61,14 @@ const Header = () => {
             >
               Help
             </NavLink>
+            <NavLink 
+              to="/governance" 
+              className={({ isActive }) => 
+                isActive ? "font-medium text-white underline" : "text-white/80 hover:text-white"
+              }
+            >
+              Governance
+            </NavLink>
             {isConnected && (
               <NavLink 
                 to="/profile" 
