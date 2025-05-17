@@ -13,10 +13,10 @@ export const useContract = () => {
   const [roseToken, setRoseToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [contractAddresses, setContractAddresses] = useState({
+  const contractAddresses = useState({
     marketplaceAddress: process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS,
     tokenAddress: process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS
-  });
+  })[0];
 
   useEffect(() => {
     const initContracts = async () => {
