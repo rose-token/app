@@ -188,9 +188,7 @@ export const useContract = () => {
           }
         }
         
-        let methodsValid = false;
         if (marketplaceContract && typeof marketplaceContract.createTask === 'function') {
-          methodsValid = true;
           setContractMethods({ initialized: true, valid: true });
           console.log('Contract methods validated successfully');
         } else {
