@@ -54,7 +54,7 @@ describe("RoseMarketplace", function () {
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit)
+        roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "")
       )
         .to.emit(roseMarketplace, "TaskCreated")
         .withArgs(1, customer.address, taskDeposit);
@@ -77,7 +77,7 @@ describe("RoseMarketplace", function () {
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, 0)
+        roseMarketplace.connect(customer).createTask(taskDescription, 0, "")
       ).to.be.revertedWith("Must deposit some ROSE tokens as payment");
     });
 
@@ -92,7 +92,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
       
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
       
       const stakeholderDeposit = taskDeposit / 10n;
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);

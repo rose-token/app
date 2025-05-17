@@ -27,7 +27,7 @@ describe("RefundMechanism", function () {
     await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
     
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
     
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);

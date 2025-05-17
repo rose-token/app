@@ -145,7 +145,7 @@ contract RoseMarketplace {
      * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
      * @param _tokenAmount Amount of ROSE tokens to deposit
-     * @param _detailedDescription Optional detailed information about the task
+     * @param _detailedDescription Optional detailed information about the task (can be empty string)
      */
     function createTask(string calldata _description, uint256 _tokenAmount, string calldata _detailedDescription) external {
         require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
@@ -158,7 +158,7 @@ contract RoseMarketplace {
         newTask.customer = msg.sender;
         newTask.deposit = _tokenAmount;
         newTask.description = _description;
-        newTask.detailedDescription = _detailedDescription; // Store the detailed description
+        newTask.detailedDescription = _detailedDescription; // Store the detailed description (can be empty)
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
@@ -171,36 +171,7 @@ contract RoseMarketplace {
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
     
-    /**
-     * @dev Overloaded function for backward compatibility
-     * @param _description A brief description of the task
-     * @param _tokenAmount Amount of ROSE tokens to deposit
-     */
-    function createTask(string calldata _description, uint256 _tokenAmount) external {
-        // Implement the same logic as the other createTask function but with empty detailedDescription
-        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
-        
-        // Transfer tokens from customer to the contract
-        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
 
-        taskCounter++;
-        Task storage newTask = tasks[taskCounter];
-        newTask.customer = msg.sender;
-        newTask.deposit = _tokenAmount;
-        newTask.description = _description;
-        newTask.detailedDescription = ""; // Empty detailed description
-        newTask.status = TaskStatus.StakeholderRequired;
-        newTask.customerApproval = false;
-        newTask.stakeholderApproval = false;
-        newTask.workerApproval = false;
-        newTask.refundRequested = false;
-
-        // Award experience to customer for creating a task
-        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_CREATION_EXP());
-
-        emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
-    }
-    
     /**
      * @dev Create a task from the governance contract using treasury funds
      * @param _description A brief description of the task

@@ -32,13 +32,13 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
       
     await expect(  
-      roseMarketplace.connect(customer).createTask(taskDescription, 0)  
+      roseMarketplace.connect(customer).createTask(taskDescription, 0, "")  
     ).to.be.revertedWith("Must deposit some ROSE tokens as payment");  
   });  
   
   it("Should not allow stakeholder to stake without sufficient approval", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const stakeholderDeposit = taskDeposit / 10n;  
       
@@ -57,7 +57,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow customer to claim their own task", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const stakeholderDeposit = taskDeposit / 10n;  
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
@@ -70,7 +70,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow stakeholder to be the customer", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const stakeholderDeposit = taskDeposit / 10n;  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
@@ -82,7 +82,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow wrong deposit amount for stakeholder", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const wrongDeposit = taskDeposit / 5n; // Should be taskDeposit / 10n  
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), wrongDeposit);  
@@ -94,7 +94,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow non-worker to mark task as completed", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const stakeholderDeposit = taskDeposit / 10n;  
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
@@ -109,7 +109,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow tasks in invalid state to be disputed", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     await expect(  
       roseMarketplace.connect(customer).disputeTask(1)  
@@ -118,7 +118,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow claiming a task with zero story points", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
       
     const stakeholderDeposit = taskDeposit / 10n;  
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
