@@ -14,9 +14,21 @@ export const useContract = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allAddresses, setAllAddresses] = useState(null);
+  
+  const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
+  const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
+  
+  console.log('🌹 Contract Addresses:');
+  console.log('Marketplace:', marketplaceAddress);
+  console.log('Token:', tokenAddress);
+  
+  console.log('DAO Treasury:', process.env.REACT_APP_DAO_TREASURY_ADDRESS || 'Not configured');
+  console.log('Governance:', process.env.REACT_APP_GOVERNANCE_ADDRESS || 'Not configured');
+  console.log('Reputation:', process.env.REACT_APP_REPUTATION_ADDRESS || 'Not configured');
+  
   const contractAddresses = useState({
-    marketplaceAddress: process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS,
-    tokenAddress: process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS,
+    marketplaceAddress: marketplaceAddress,
+    tokenAddress: tokenAddress,
     reputationAddress: DEFAULT_ADDRESS,
     governanceAddress: DEFAULT_ADDRESS,
     daoTreasuryAddress: DEFAULT_ADDRESS
@@ -66,6 +78,10 @@ export const useContract = () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        console.log('Initializing contracts with addresses:');
+        console.log('Marketplace:', contractAddresses.marketplaceAddress);
+        console.log('Token:', contractAddresses.tokenAddress);
 
         const marketplaceContract = new ethers.Contract(
           contractAddresses.marketplaceAddress,
