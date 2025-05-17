@@ -130,7 +130,29 @@ export const EthereumProvider = ({ children }) => {
       const isMobile = isMobileDevice();
       console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
       
-      const accounts = await sdk.connect();
+      console.log('Displaying QR code for wallet connection. Please scan with your wallet app.');
+      
+      let accounts;
+      if (isMobile && metamaskProvider) {
+        accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
+        console.log('Mobile connection requested with explicit method');
+      } else {
+        accounts = await sdk.connect();
+        console.log('Connection requested through SDK');
+      }
+      
+      console.log('Waiting for wallet connection...');
+      
+      if (!accounts || accounts.length === 0) {
+        console.log('No accounts found initially, waiting for connection...');
+        
+        // Try to get accounts again if initial attempt returned empty
+        if (metamaskProvider) {
+          accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
+        } else {
+          accounts = await sdk.connectAndSign();
+        }
+      }
       
       console.log('MetaMask connected:', accounts);
       
@@ -140,13 +162,14 @@ export const EthereumProvider = ({ children }) => {
       
       setAccount(accounts[0]);
       setIsConnected(true);
+      console.log('Wallet connection complete');
     } catch (error) {
       console.error('Error connecting wallet:', error);
       setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
     } finally {
       setIsConnecting(false);
     }
-  }, [sdk, isConnecting]);
+  }, [sdk, isConnecting, metamaskProvider]);
 
   const disconnectWallet = useCallback(async () => {
     try {
