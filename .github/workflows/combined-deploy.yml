@@ -65,9 +65,10 @@ jobs:
           TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
           REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
           GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
+          DAO_TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.daoTreasuryAddress')
           
           # Verify contracts on Etherscan
-          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
+          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS $DAO_TREASURY_ADDRESS
           npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
           npx hardhat verify --network sepolia $REPUTATION_ADDRESS
           npx hardhat verify --network sepolia $GOVERNANCE_ADDRESS $TOKEN_ADDRESS $REPUTATION_ADDRESS $MARKETPLACE_ADDRESS "10000000000000000000"
