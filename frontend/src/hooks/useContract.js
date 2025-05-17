@@ -173,6 +173,7 @@ export const useContract = () => {
     };
 
     initReadOnlyContracts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, contractAddresses]);
   
   useEffect(() => {
@@ -290,6 +291,7 @@ export const useContract = () => {
     };
 
     initReadWriteContracts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, signer, isConnected, account, retryCount]);
 
   return {
