@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { uploadCommentToIPFS, fetchCommentFromIPFS, isCID } from '../../utils/ipfs/pinataService';
+import { uploadCommentToIPFS, uploadEncryptedCommentToIPFS, fetchCommentFromIPFS, isCID } from '../../utils/ipfs/pinataService';
+import { decryptContent } from '../../utils/encryption/pgpService';
+import KeyManagement from './KeyManagement';
 
 const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false }) => {
   const [comments, setComments] = useState([]);
@@ -9,6 +11,23 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [fetchErrors, setFetchErrors] = useState({}); // Track IPFS fetch errors
+  const [privateKey, setPrivateKey] = useState(localStorage.getItem('userPrivateKey'));
+  const [allKeysSetup, setAllKeysSetup] = useState(false);
+  
+  const checkParticipantKeys = useCallback(async () => {
+    if (!roseMarketplace || !task) return false;
+    
+    try {
+      const customerPublicKey = await roseMarketplace.userPublicKeys(task.customer);
+      const workerPublicKey = await roseMarketplace.userPublicKeys(task.worker);
+      const stakeholderPublicKey = await roseMarketplace.userPublicKeys(task.stakeholder);
+      
+      return !!customerPublicKey && !!workerPublicKey && !!stakeholderPublicKey;
+    } catch (err) {
+      console.error('Error checking participant keys:', err);
+      return false;
+    }
+  }, [roseMarketplace, task]);
   
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp * 1000).toLocaleString();
@@ -29,8 +48,26 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
         
         if (isCID(cid)) {
           try {
-            const content = await fetchCommentFromIPFS(cid);
-            return { index, cid, content };
+            const data = await fetchCommentFromIPFS(cid);
+            
+            if (data.isEncrypted && privateKey) {
+              try {
+                const decryptedContent = await decryptContent(
+                  data.encryptedContent,
+                  privateKey
+                );
+                return { index, cid, content: decryptedContent };
+              } catch (decryptErr) {
+                console.error(`Error decrypting comment ${index}:`, decryptErr);
+                return { 
+                  index, 
+                  cid, 
+                  content: 'Unable to decrypt comment. You may not have permission to view it.' 
+                };
+              }
+            } else {
+              return { index, cid, content: data.content || data };
+            }
           } catch (err) {
             console.error(`Error fetching comment ${index} from IPFS:`, err);
             setFetchErrors(prev => ({ ...prev, [index]: true }));
@@ -57,7 +94,7 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
     } finally {
       setIsLoading(false);
     }
-  }, [roseMarketplace, taskId, setIsLoading, setComments, setError, setFetchErrors, setCommentContents]);
+  }, [roseMarketplace, taskId, privateKey, setIsLoading, setComments, setError, setFetchErrors, setCommentContents]);
   
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -67,7 +104,21 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       setIsLoading(true);
       setError('');
       
-      const cid = await uploadCommentToIPFS(newComment);
+      let cid;
+      
+      if (allKeysSetup && privateKey) {
+        const customerPublicKey = await roseMarketplace.userPublicKeys(task.customer);
+        const workerPublicKey = await roseMarketplace.userPublicKeys(task.worker);
+        const stakeholderPublicKey = await roseMarketplace.userPublicKeys(task.stakeholder);
+        
+        cid = await uploadEncryptedCommentToIPFS(newComment, [
+          customerPublicKey,   
+          workerPublicKey,   
+          stakeholderPublicKey  
+        ]);
+      } else {
+        cid = await uploadCommentToIPFS(newComment);
+      }
       
       const tx = await roseMarketplace.addComment(taskId, cid, replyTo);
       await tx.wait();
@@ -80,14 +131,37 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
       console.error('Error adding comment:', err);
       if (err.message.includes('Pinata')) {
         setError('Failed to upload comment to IPFS. Please check Pinata API keys.');
+      } else if (err.message.includes('PGP keys')) {
+        setError('Not all participants have set up their PGP keys. Please make sure all participants have generated keys.');
       } else {
-        setError('Failed to add comment');
+        setError('Failed to add comment: ' + err.message);
       }
     } finally {
       setIsLoading(false);
     }
   };
   
+  // Listen for changes to localStorage privateKey
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedPrivateKey = localStorage.getItem('userPrivateKey');
+      if (storedPrivateKey !== privateKey) {
+        setPrivateKey(storedPrivateKey);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [privateKey]);
+  
+  useEffect(() => {
+    if (roseMarketplace && task) {
+      checkParticipantKeys().then(result => {
+        setAllKeysSetup(result);
+      });
+    }
+  }, [roseMarketplace, task, checkParticipantKeys]);
+
   useEffect(() => {
     if (roseMarketplace && taskId) {
       fetchComments();
@@ -218,9 +292,37 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
     );
   }
 
+  if (isAuthorized && !privateKey) {
+    return (
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold mb-4">Comments</h3>
+        <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded-md">
+          <p className="font-medium">PGP Key Setup Required</p>
+          <p className="text-sm mt-1">
+            To view and send encrypted comments, you need to set up your PGP keys first.
+          </p>
+        </div>
+        <KeyManagement account={task.customer} roseMarketplace={roseMarketplace} />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6">
       <h3 className="text-lg font-semibold mb-4">Comments</h3>
+      
+      {/* Key Management Component */}
+      <KeyManagement account={task.customer} roseMarketplace={roseMarketplace} />
+      
+      {/* Warning when not all participants have keys */}
+      {!allKeysSetup && (
+        <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded-md">
+          <p className="font-medium">Not all participants have set up their PGP keys.</p>
+          <p className="text-sm mt-1">
+            Comments will be stored unencrypted until all participants (customer, worker, and stakeholder) have generated their PGP keys.
+          </p>
+        </div>
+      )}
       
       {/* Comment form */}
       <form onSubmit={handleAddComment} className="mb-6">
