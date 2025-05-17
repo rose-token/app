@@ -17,21 +17,23 @@ export const useContract = () => {
   
   const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
   const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
+  const reputationAddress = process.env.REACT_APP_REPUTATION_ADDRESS || DEFAULT_ADDRESS;
+  const governanceAddress = process.env.REACT_APP_GOVERNANCE_ADDRESS || DEFAULT_ADDRESS;
+  const daoTreasuryAddress = process.env.REACT_APP_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
   
   console.log('🌹 Contract Addresses:');
   console.log('Marketplace:', marketplaceAddress);
   console.log('Token:', tokenAddress);
-  
-  console.log('DAO Treasury:', process.env.REACT_APP_DAO_TREASURY_ADDRESS || 'Not configured');
-  console.log('Governance:', process.env.REACT_APP_GOVERNANCE_ADDRESS || 'Not configured');
-  console.log('Reputation:', process.env.REACT_APP_REPUTATION_ADDRESS || 'Not configured');
+  console.log('DAO Treasury:', daoTreasuryAddress);
+  console.log('Governance:', governanceAddress);
+  console.log('Reputation:', reputationAddress);
   
   const contractAddresses = useState({
     marketplaceAddress: marketplaceAddress,
     tokenAddress: tokenAddress,
-    reputationAddress: DEFAULT_ADDRESS,
-    governanceAddress: DEFAULT_ADDRESS,
-    daoTreasuryAddress: DEFAULT_ADDRESS
+    reputationAddress: reputationAddress,
+    governanceAddress: governanceAddress,
+    daoTreasuryAddress: daoTreasuryAddress
   })[0];
 
   const fetchAllAddresses = useCallback(async () => {
