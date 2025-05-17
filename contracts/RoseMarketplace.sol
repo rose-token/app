@@ -65,6 +65,9 @@ contract RoseMarketplace {
     
     // Keep track of comment count per task
     mapping(uint256 => uint256) public taskCommentCount;
+    
+    // Maps user address to their public PGP key
+    mapping(address => string) public userPublicKeys;
 
     // Events for logging
     event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
@@ -583,5 +586,13 @@ contract RoseMarketplace {
         }
         
         emit RefundProcessed(_taskId, customerRefund, stakeholderRefund);
+    }
+
+    /**
+     * @dev Set the user's public PGP key
+     * @param _publicKey The user's PGP public key in armored format
+     */
+    function setPublicKey(string calldata _publicKey) external {
+        userPublicKeys[msg.sender] = _publicKey;
     }
 }
