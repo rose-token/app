@@ -38,6 +38,8 @@ export const useContract = () => {
 
   const fetchAllAddresses = useCallback(async () => {
     if (!roseMarketplace || !isConnected) return null;
+    
+    if (allAddresses) return allAddresses;
       
     try {
       const addresses = { ...contractAddresses };
@@ -66,9 +68,10 @@ export const useContract = () => {
       return addresses;
     } catch (err) {
       console.error('Error fetching contract addresses:', err);
+      setError('Failed to fetch contract addresses');
       return null;
     }
-  }, [roseMarketplace, isConnected, contractAddresses, account]);
+  }, [roseMarketplace, isConnected, contractAddresses, account, allAddresses]);
 
   useEffect(() => {
     const initContracts = async () => {
@@ -107,7 +110,14 @@ export const useContract = () => {
           setRoseMarketplace(marketplaceWithSigner);
           setRoseToken(tokenWithSigner);
           
-          await fetchAllAddresses();
+          if (!allAddresses) {
+            try {
+              await fetchAllAddresses();
+            } catch (error) {
+              console.error('Failed to fetch addresses, will not retry:', error);
+              setError('Failed to fetch contract addresses');
+            }
+          }
         }
       } catch (err) {
         console.error('Error initializing contracts:', err);
@@ -118,7 +128,8 @@ export const useContract = () => {
     };
 
     initContracts();
-  }, [provider, signer, isConnected, contractAddresses, fetchAllAddresses]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, signer, isConnected, contractAddresses]);
 
   return {
     roseMarketplace,
