@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useEthereum } from '../../hooks/useEthereum';
 import { useContract } from '../../hooks/useContract';
@@ -11,9 +11,26 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState('');
+  const [contractsReady, setContractsReady] = useState(false);
   
   const { isConnected, chainId } = useEthereum();
-  const { roseMarketplace, roseToken, isLoading } = useContract();
+  const { roseMarketplace, roseToken, isLoading, error: contractError, contractMethods } = useContract();
+  
+  useEffect(() => {
+    if (!isLoading && roseMarketplace && roseToken) {
+      if (contractMethods.initialized && contractMethods.valid) {
+        setContractsReady(true);
+        setError('');
+      } else if (contractMethods.initialized && !contractMethods.valid) {
+        console.error('Contract methods validation failed');
+        setContractsReady(false);
+        setError('Contract initialization error: createTask function not available');
+      }
+    } else if (contractError) {
+      setContractsReady(false);
+      setError(`Contract error: ${contractError}`);
+    }
+  }, [roseMarketplace, roseToken, isLoading, contractError, contractMethods]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,10 +50,26 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
     
+    if (!contractsReady) {
+      setError('Contracts not properly initialized. Please refresh the page or reconnect your wallet.');
+      console.error('Contract state:', { 
+        marketplaceExists: !!roseMarketplace,
+        tokenExists: !!roseToken,
+        isLoading,
+        contractsReady
+      });
+      return;
+    }
+    
     try {
       setError('');
       
       const tokenAmount = ethers.utils.parseEther(deposit);
+      
+      console.log('Using contracts:', {
+        marketplaceAddress: roseMarketplace.address,
+        tokenAddress: roseToken.address
+      });
       
       setIsApproving(true);
       const approveTx = await roseToken.approve(roseMarketplace.address, tokenAmount);
@@ -61,7 +94,26 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       }
     } catch (err) {
       console.error('Error creating task:', err);
-      setError(err.message || 'Failed to create task');
+      
+      if (err.code === 'INVALID_ARGUMENT') {
+        setError('Invalid argument to createTask function. Check parameter types.');
+      } else if (err.message && err.message.includes('not a function')) {
+        setError('Contract method not found. Please refresh the page or reconnect your wallet.');
+        
+        console.error('Contract state when error occurred:', { 
+          marketplaceExists: !!roseMarketplace,
+          tokenExists: !!roseToken,
+          isLoading,
+          contractsReady,
+          contractMethods: contractMethods || 'N/A'
+        });
+      } else if (err.message && err.message.includes('user rejected')) {
+        setError('Transaction rejected. Please try again.');
+      } else if (err.message && err.message.includes('insufficient funds')) {
+        setError('Insufficient funds for transaction. Please check your balance.');
+      } else {
+        setError(err.message || 'Failed to create task');
+      }
     } finally {
       setIsApproving(false);
       setIsCreating(false);

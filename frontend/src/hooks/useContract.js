@@ -43,6 +43,9 @@ export const useContract = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allAddresses, setAllAddresses] = useState(null);
+  const [contractMethods, setContractMethods] = useState({ initialized: false, valid: false });
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRY_COUNT = 3;
   
   const contractAddresses = useMemo(() => initialAddresses, []);
 
@@ -94,7 +97,14 @@ export const useContract = () => {
   const contractsInitialized = useMemo(() => ({ value: false }), []);
   
   useEffect(() => {
-    if (contractsInitialized.value && roseMarketplace && roseToken) {
+    if (contractsInitialized.value && roseMarketplace && roseToken && contractMethods.valid) {
+      return;
+    }
+    
+    if (retryCount > MAX_RETRY_COUNT) {
+      console.error('Max retry count reached for contract initialization');
+      setError('Failed to initialize contracts after multiple attempts. Please refresh the page.');
+      setIsLoading(false);
       return;
     }
     
@@ -107,6 +117,22 @@ export const useContract = () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        const validateAddress = (address) => {
+          return address && address !== DEFAULT_ADDRESS && ethers.utils.isAddress(address);
+        };
+        
+        if (!validateAddress(contractAddresses.marketplaceAddress)) {
+          setError('Invalid marketplace contract address');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (!validateAddress(contractAddresses.tokenAddress)) {
+          setError('Invalid token contract address');
+          setIsLoading(false);
+          return;
+        }
         
         console.log('Initializing contracts with addresses:');
         console.log('Marketplace:', contractAddresses.marketplaceAddress);
@@ -162,10 +188,26 @@ export const useContract = () => {
           }
         }
         
+        if (marketplaceContract && typeof marketplaceContract.createTask === 'function') {
+          setContractMethods({ initialized: true, valid: true });
+          console.log('Contract methods validated successfully');
+        } else {
+          console.error('Contract methods validation failed: createTask not found');
+          setContractMethods({ initialized: true, valid: false });
+          setError('Contract methods validation failed: createTask function not available');
+        }
+        
         contractsInitialized.value = true;
       } catch (err) {
         console.error('Error initializing contracts:', err);
         setError('Failed to initialize contracts');
+        
+        if (retryCount < MAX_RETRY_COUNT) {
+          console.log(`Retrying contract initialization (attempt ${retryCount + 1} of ${MAX_RETRY_COUNT})...`);
+          setTimeout(() => {
+            setRetryCount(prev => prev + 1);
+          }, 1500); // 1.5 second delay between retries
+        }
       } finally {
         setIsLoading(false);
       }
@@ -174,7 +216,7 @@ export const useContract = () => {
     initContracts();
     
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, signer, isConnected]);
+  }, [provider, signer, isConnected, retryCount]);
 
   return {
     roseMarketplace,
@@ -184,6 +226,7 @@ export const useContract = () => {
     isLoading,
     error,
     allAddresses,
-    fetchAllAddresses
+    fetchAllAddresses,
+    contractMethods
   };
 };
