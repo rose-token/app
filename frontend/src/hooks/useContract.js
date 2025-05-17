@@ -5,18 +5,9 @@ import { useEthereum } from './useEthereum';
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 
-let MARKETPLACE_ADDRESS = '0x0000000000000000000000000000000000000000';
-let TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000';
+const MARKETPLACE_ADDRESS = process.env.REACT_APP_MARKETPLACE_ADDRESS || '0x0000000000000000000000000000000000000000';
+const TOKEN_ADDRESS = process.env.REACT_APP_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000';
 
-try {
-  const contractAddresses = require('../contracts/addresses.json');
-  MARKETPLACE_ADDRESS = contractAddresses.marketplaceAddress || process.env.REACT_APP_MARKETPLACE_ADDRESS || MARKETPLACE_ADDRESS;
-  TOKEN_ADDRESS = contractAddresses.tokenAddress || process.env.REACT_APP_TOKEN_ADDRESS || TOKEN_ADDRESS;
-} catch (error) {
-  MARKETPLACE_ADDRESS = process.env.REACT_APP_MARKETPLACE_ADDRESS || MARKETPLACE_ADDRESS;
-  TOKEN_ADDRESS = process.env.REACT_APP_TOKEN_ADDRESS || TOKEN_ADDRESS;
-  console.log('Using environment variables for contract addresses');
-}
 
 export const useContract = () => {
   const { provider, signer, isConnected } = useEthereum();
