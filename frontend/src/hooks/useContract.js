@@ -14,12 +14,26 @@ export const useContract = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allAddresses, setAllAddresses] = useState(null);
+  
+  const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
+  const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
+  const reputationAddress = process.env.REACT_APP_REPUTATION_ADDRESS || DEFAULT_ADDRESS;
+  const governanceAddress = process.env.REACT_APP_GOVERNANCE_ADDRESS || DEFAULT_ADDRESS;
+  const daoTreasuryAddress = process.env.REACT_APP_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
+  
+  console.log('🌹 Contract Addresses:');
+  console.log('Marketplace:', marketplaceAddress);
+  console.log('Token:', tokenAddress);
+  console.log('DAO Treasury:', daoTreasuryAddress);
+  console.log('Governance:', governanceAddress);
+  console.log('Reputation:', reputationAddress);
+  
   const contractAddresses = useState({
-    marketplaceAddress: process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS,
-    tokenAddress: process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS,
-    reputationAddress: DEFAULT_ADDRESS,
-    governanceAddress: DEFAULT_ADDRESS,
-    daoTreasuryAddress: DEFAULT_ADDRESS
+    marketplaceAddress: marketplaceAddress,
+    tokenAddress: tokenAddress,
+    reputationAddress: reputationAddress,
+    governanceAddress: governanceAddress,
+    daoTreasuryAddress: daoTreasuryAddress
   })[0];
 
   const fetchAllAddresses = useCallback(async () => {
@@ -66,6 +80,10 @@ export const useContract = () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        console.log('Initializing contracts with addresses:');
+        console.log('Marketplace:', contractAddresses.marketplaceAddress);
+        console.log('Token:', contractAddresses.tokenAddress);
 
         const marketplaceContract = new ethers.Contract(
           contractAddresses.marketplaceAddress,
