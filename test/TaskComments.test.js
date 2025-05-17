@@ -27,7 +27,7 @@ describe("Task Comments", function () {
 
     await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
   });
 
   describe("Adding comments", function() {

@@ -39,13 +39,13 @@ describe("Task Detailed Description", function () {
     expect(task.deposit).to.equal(taskDeposit);  
   });  
   
-  it("Should create a task with an empty detailed description when using the simpler function", async function() {  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit);  
-  
-    const task = await roseMarketplace.tasks(1);  
-    expect(task.description).to.equal(taskDescription);  
-    expect(task.detailedDescription).to.equal("");  
-    expect(task.deposit).to.equal(taskDeposit);  
+  it("Should create a task with an empty detailed description when using the simpler function", async function() {
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+    const task = await roseMarketplace.tasks(1);
+    expect(task.description).to.equal(taskDescription);
+    expect(task.detailedDescription).to.equal("");
+    expect(task.deposit).to.equal(taskDeposit);
   });  
   
   it("Should handle empty strings for detailed description", async function() {  
