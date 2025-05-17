@@ -11,26 +11,41 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState('');
-  const [contractsReady, setContractsReady] = useState(false);
+  const [localContractsReady, setLocalContractsReady] = useState(false);
   
   const { isConnected, chainId } = useEthereum();
-  const { roseMarketplace, roseToken, isLoading, error: contractError, contractMethods } = useContract();
+  const { 
+    roseMarketplace, 
+    roseToken, 
+    isLoading, 
+    error: contractError, 
+    contractMethods,
+    contractsReady 
+  } = useContract();
   
   useEffect(() => {
+    if (!isConnected) {
+      setLocalContractsReady(false);
+      return;
+    }
+    
     if (!isLoading && roseMarketplace && roseToken) {
-      if (contractMethods.initialized && contractMethods.valid) {
-        setContractsReady(true);
+      if (contractMethods.initialized && contractMethods.valid && contractsReady.readWrite) {
+        setLocalContractsReady(true);
         setError('');
       } else if (contractMethods.initialized && !contractMethods.valid) {
         console.error('Contract methods validation failed');
-        setContractsReady(false);
+        setLocalContractsReady(false);
         setError('Contract initialization error: createTask function not available');
+      } else if (contractsReady.readOnly && !contractsReady.readWrite) {
+        setLocalContractsReady(false);
+        setError('Please connect your wallet to create tasks');
       }
     } else if (contractError) {
-      setContractsReady(false);
+      setLocalContractsReady(false);
       setError(`Contract error: ${contractError}`);
     }
-  }, [roseMarketplace, roseToken, isLoading, contractError, contractMethods]);
+  }, [roseMarketplace, roseToken, isLoading, contractError, contractMethods, contractsReady, isConnected]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,12 +65,19 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
     
-    if (!contractsReady) {
-      setError('Contracts not properly initialized. Please refresh the page or reconnect your wallet.');
+    if (!localContractsReady) {
+      if (!isConnected) {
+        setError('Please connect your wallet to create tasks');
+      } else if (contractsReady.readOnly && !contractsReady.readWrite) {
+        setError('Wallet connected but contracts not initialized for write operations. Please wait a moment.');
+      } else {
+        setError('Contracts not properly initialized. Please refresh the page or reconnect your wallet.');
+      }
       console.error('Contract state:', { 
         marketplaceExists: !!roseMarketplace,
         tokenExists: !!roseToken,
         isLoading,
+        localContractsReady,
         contractsReady
       });
       return;
@@ -122,6 +144,28 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   
   if (isLoading) {
     return <div className="text-center py-4">Loading contracts...</div>;
+  }
+  
+  if (!isConnected) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+        <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
+        <div className="text-center py-4 text-amber-600">
+          Please connect your wallet to create tasks
+        </div>
+      </div>
+    );
+  }
+  
+  if (contractsReady && contractsReady.readOnly && !contractsReady.readWrite) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+        <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
+        <div className="text-center py-4 text-amber-600">
+          Wallet connected but waiting for contract initialization. Please wait a moment...
+        </div>
+      </div>
+    );
   }
   
   return (

@@ -45,6 +45,7 @@ export const useContract = () => {
   const [allAddresses, setAllAddresses] = useState(null);
   const [contractMethods, setContractMethods] = useState({ initialized: false, valid: false });
   const [retryCount, setRetryCount] = useState(0);
+  const [contractsReady, setContractsReady] = useState({ readOnly: false, readWrite: false });
   const MAX_RETRY_COUNT = 3;
   
   const contractAddresses = useMemo(() => initialAddresses, []);
@@ -94,26 +95,19 @@ export const useContract = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roseMarketplace, isConnected, contractAddresses, account]);
 
-  const contractsInitialized = useMemo(() => ({ value: false }), []);
+  const contractsInitialized = useMemo(() => ({ readOnly: false, readWrite: false }), []);
   
   useEffect(() => {
-    if (contractsInitialized.value && roseMarketplace && roseToken && contractMethods.valid) {
+    if (!provider) {
+      console.log('Provider not available for read-only contract initialization');
       return;
     }
     
-    if (retryCount > MAX_RETRY_COUNT) {
-      console.error('Max retry count reached for contract initialization');
-      setError('Failed to initialize contracts after multiple attempts. Please refresh the page.');
-      setIsLoading(false);
+    if (contractsInitialized.readOnly && roseMarketplace && roseToken) {
       return;
     }
     
-    const initContracts = async () => {
-      if (!provider) {
-        setIsLoading(false);
-        return;
-      }
-
+    const initReadOnlyContracts = async () => {
       try {
         setIsLoading(true);
         setError(null);
@@ -134,7 +128,7 @@ export const useContract = () => {
           return;
         }
         
-        console.log('Initializing contracts with addresses:');
+        console.log('Initializing read-only contracts with provider:');
         console.log('Marketplace:', contractAddresses.marketplaceAddress);
         console.log('Token:', contractAddresses.tokenAddress);
 
@@ -166,44 +160,127 @@ export const useContract = () => {
         setRoseToken(tokenContract);
         setRoseReputation(reputationContract);
         setRoseGovernance(governanceContract);
+        
+        contractsInitialized.readOnly = true;
+        setContractsReady(prev => ({ ...prev, readOnly: true }));
+        console.log('Read-only contracts initialized successfully');
+      } catch (err) {
+        console.error('Error initializing read-only contracts:', err);
+        setError('Failed to initialize read-only contracts: ' + (err.message || 'Unknown error'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-        if (signer && isConnected) {
-          const marketplaceWithSigner = marketplaceContract.connect(signer);
-          const tokenWithSigner = tokenContract.connect(signer);
-          const reputationWithSigner = reputationContract.connect(signer);
-          const governanceWithSigner = governanceContract.connect(signer);
-          
-          setRoseMarketplace(marketplaceWithSigner);
-          setRoseToken(tokenWithSigner);
-          setRoseReputation(reputationWithSigner);
-          setRoseGovernance(governanceWithSigner);
-          
-          if (!allAddresses && !fetchAttempted.value) {
-            try {
-              await fetchAllAddresses();
-            } catch (error) {
-              console.error('Failed to fetch addresses, will not retry:', error);
-              setError('Failed to fetch contract addresses');
-            }
+    initReadOnlyContracts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, contractAddresses]);
+  
+  useEffect(() => {
+    if (!provider || !signer || !isConnected) {
+      if (!isConnected) {
+        console.log('Waiting for wallet connection before initializing read-write contracts...');
+      }
+      return;
+    }
+    
+    if (contractsInitialized.readWrite && roseMarketplace && roseToken && contractMethods.valid) {
+      return;
+    }
+    
+    if (retryCount > MAX_RETRY_COUNT) {
+      console.error('Max retry count reached for read-write contract initialization');
+      setError('Failed to initialize contracts after multiple attempts. Please refresh the page.');
+      return;
+    }
+    
+    const initReadWriteContracts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const validateAddress = (address) => {
+          return address && address !== DEFAULT_ADDRESS && ethers.utils.isAddress(address);
+        };
+        
+        if (!validateAddress(contractAddresses.marketplaceAddress)) {
+          setError('Invalid marketplace contract address');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (!validateAddress(contractAddresses.tokenAddress)) {
+          setError('Invalid token contract address');
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log('Initializing read-write contracts with signer:');
+        console.log('Marketplace:', contractAddresses.marketplaceAddress);
+        console.log('Token:', contractAddresses.tokenAddress);
+        console.log('Account:', account);
+
+        const marketplaceContract = new ethers.Contract(
+          contractAddresses.marketplaceAddress,
+          RoseMarketplaceABI,
+          signer
+        );
+        
+        const tokenContract = new ethers.Contract(
+          contractAddresses.tokenAddress,
+          RoseTokenABI,
+          signer
+        );
+
+        const reputationContract = new ethers.Contract(
+          contractAddresses.reputationAddress,
+          RoseReputationABI,
+          signer
+        );
+
+        const governanceContract = new ethers.Contract(
+          contractAddresses.governanceAddress,
+          RoseGovernanceABI,
+          signer
+        );
+
+        setRoseMarketplace(marketplaceContract);
+        setRoseToken(tokenContract);
+        setRoseReputation(reputationContract);
+        setRoseGovernance(governanceContract);
+        
+        if (!allAddresses && !fetchAttempted.value) {
+          try {
+            await fetchAllAddresses();
+          } catch (error) {
+            console.error('Failed to fetch addresses, will not retry:', error);
+            setError('Failed to fetch contract addresses');
           }
         }
         
         if (marketplaceContract && typeof marketplaceContract.createTask === 'function') {
           setContractMethods({ initialized: true, valid: true });
-          console.log('Contract methods validated successfully');
+          console.log('Contract methods validated successfully with signer');
+          contractsInitialized.readWrite = true;
+          setContractsReady(prev => ({ ...prev, readWrite: true }));
         } else {
           console.error('Contract methods validation failed: createTask not found');
           setContractMethods({ initialized: true, valid: false });
           setError('Contract methods validation failed: createTask function not available');
+          
+          console.error('Contract details:', {
+            address: marketplaceContract?.address,
+            functions: Object.keys(marketplaceContract || {}).filter(key => typeof marketplaceContract[key] === 'function'),
+            hasCreateTask: marketplaceContract && 'createTask' in marketplaceContract,
+            typeofCreateTask: marketplaceContract && typeof marketplaceContract.createTask
+          });
         }
-        
-        contractsInitialized.value = true;
       } catch (err) {
-        console.error('Error initializing contracts:', err);
-        setError('Failed to initialize contracts');
+        console.error('Error initializing read-write contracts:', err);
+        setError('Failed to initialize read-write contracts: ' + (err.message || 'Unknown error'));
         
         if (retryCount < MAX_RETRY_COUNT) {
-          console.log(`Retrying contract initialization (attempt ${retryCount + 1} of ${MAX_RETRY_COUNT})...`);
+          console.log(`Retrying read-write contract initialization (attempt ${retryCount + 1} of ${MAX_RETRY_COUNT})...`);
           setTimeout(() => {
             setRetryCount(prev => prev + 1);
           }, 1500); // 1.5 second delay between retries
@@ -213,10 +290,9 @@ export const useContract = () => {
       }
     };
 
-    initContracts();
-    
+    initReadWriteContracts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, signer, isConnected, retryCount]);
+  }, [provider, signer, isConnected, account, retryCount]);
 
   return {
     roseMarketplace,
@@ -227,6 +303,7 @@ export const useContract = () => {
     error,
     allAddresses,
     fetchAllAddresses,
-    contractMethods
+    contractMethods,
+    contractsReady
   };
 };
