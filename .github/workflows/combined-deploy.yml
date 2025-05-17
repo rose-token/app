@@ -52,21 +52,25 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: npx hardhat run scripts/deploy.js --network sepolia
       
-      # Etherscan verification disabled as requested
-      # - name: Verify contracts on Etherscan
-      #   if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-      #   env:
-      #     SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
-      #     PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-      #     ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-      #   run: |
-      #     # Get contract addresses from deployment output
-      #     MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
-      #     TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
-      #     
-      #     # Verify contracts on Etherscan
-      #     npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
-      #     npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
+      # Etherscan verification
+      - name: Verify contracts on Etherscan
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        env:
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+        run: |
+          # Get contract addresses from deployment output
+          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
+          TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
+          REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
+          GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
+          
+          # Verify contracts on Etherscan
+          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS ${{ secrets.DAO_TREASURY_ADDRESS }}
+          npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS
+          npx hardhat verify --network sepolia $REPUTATION_ADDRESS
+          npx hardhat verify --network sepolia $GOVERNANCE_ADDRESS $TOKEN_ADDRESS $REPUTATION_ADDRESS $MARKETPLACE_ADDRESS "10000000000000000000"
       
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
