@@ -17,16 +17,39 @@ async function main() {
 
   const roseTokenAddress = await roseMarketplace.roseToken();
   console.log("RoseToken deployed to:", roseTokenAddress);
+  
+  const roseReputationAddress = await roseMarketplace.roseReputation();
+  console.log("RoseReputation deployed to:", roseReputationAddress);
+  
+  const minimumTokensToPropose = hre.ethers.parseEther("10"); // 10 ROSE tokens
+  const RoseGovernance = await hre.ethers.getContractFactory("RoseGovernance");
+  const roseGovernance = await RoseGovernance.deploy(
+    roseTokenAddress,
+    roseReputationAddress,
+    marketplaceAddress,
+    minimumTokensToPropose
+  );
+  await roseGovernance.waitForDeployment();
+  
+  const governanceAddress = await roseGovernance.getAddress();
+  console.log("RoseGovernance deployed to:", governanceAddress);
+  
+  await roseMarketplace.setGovernanceContract(governanceAddress);
+  console.log("Governance contract set in marketplace");
 
   console.log("\nContract Details:");
   console.log("----------------");
   console.log("RoseMarketplace:", marketplaceAddress);
   console.log("RoseToken:", roseTokenAddress);
+  console.log("RoseReputation:", roseReputationAddress);
+  console.log("RoseGovernance:", governanceAddress);
   console.log("DAO Treasury:", daoTreasury);
   
   const deploymentOutput = {
     marketplaceAddress: marketplaceAddress,
     tokenAddress: roseTokenAddress,
+    reputationAddress: roseReputationAddress,
+    governanceAddress: governanceAddress,
     daoTreasuryAddress: daoTreasury
   };
   
