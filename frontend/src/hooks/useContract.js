@@ -4,6 +4,8 @@ import { useEthereum } from './useEthereum';
 
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
+import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 
 const DEFAULT_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -36,6 +38,8 @@ export const useContract = () => {
   const { provider, signer, isConnected, account } = useEthereum();
   const [roseMarketplace, setRoseMarketplace] = useState(null);
   const [roseToken, setRoseToken] = useState(null);
+  const [roseReputation, setRoseReputation] = useState(null);
+  const [roseGovernance, setRoseGovernance] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allAddresses, setAllAddresses] = useState(null);
@@ -120,15 +124,33 @@ export const useContract = () => {
           provider
         );
 
+        const reputationContract = new ethers.Contract(
+          contractAddresses.reputationAddress,
+          RoseReputationABI,
+          provider
+        );
+
+        const governanceContract = new ethers.Contract(
+          contractAddresses.governanceAddress,
+          RoseGovernanceABI,
+          provider
+        );
+
         setRoseMarketplace(marketplaceContract);
         setRoseToken(tokenContract);
+        setRoseReputation(reputationContract);
+        setRoseGovernance(governanceContract);
 
         if (signer && isConnected) {
           const marketplaceWithSigner = marketplaceContract.connect(signer);
           const tokenWithSigner = tokenContract.connect(signer);
+          const reputationWithSigner = reputationContract.connect(signer);
+          const governanceWithSigner = governanceContract.connect(signer);
           
           setRoseMarketplace(marketplaceWithSigner);
           setRoseToken(tokenWithSigner);
+          setRoseReputation(reputationWithSigner);
+          setRoseGovernance(governanceWithSigner);
           
           if (!allAddresses && !fetchAttempted.value) {
             try {
@@ -157,6 +179,8 @@ export const useContract = () => {
   return {
     roseMarketplace,
     roseToken,
+    roseReputation,
+    roseGovernance,
     isLoading,
     error,
     allAddresses,
