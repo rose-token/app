@@ -95,6 +95,50 @@
         "type": "uint256"
       },
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "customerRefund",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "stakeholderRefund",
+        "type": "uint256"
+      }
+    ],
+    "name": "RefundProcessed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "requestedBy",
+        "type": "address"
+      }
+    ],
+    "name": "RefundRequested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
         "indexed": true,
         "internalType": "address",
         "name": "stakeholder",
@@ -124,6 +168,12 @@
         "internalType": "address",
         "name": "worker",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "storyPoints",
+        "type": "uint256"
       }
     ],
     "name": "TaskClaimed",
@@ -394,6 +444,45 @@
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "approveRefundByCustomer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "approveRefundByStakeholder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "approveRefundByWorker",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "_amount",
         "type": "uint256"
       }
@@ -409,9 +498,32 @@
         "internalType": "uint256",
         "name": "_taskId",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_storyPoints",
+        "type": "uint256"
       }
     ],
     "name": "claimTask",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_description",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_tokenAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "createTask",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -450,10 +562,21 @@
         "internalType": "uint256",
         "name": "_tokenAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_detailedDescription",
+        "type": "string"
       }
     ],
-    "name": "createTask",
-    "outputs": [],
+    "name": "createTaskFromGovernance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -530,6 +653,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "governanceContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -538,6 +674,19 @@
       }
     ],
     "name": "markTaskCompleted",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "requestRefund",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -562,6 +711,19 @@
   },
   {
     "inputs": [],
+    "name": "roseReputation",
+    "outputs": [
+      {
+        "internalType": "contract RoseReputation",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "roseToken",
     "outputs": [
       {
@@ -571,6 +733,32 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_governanceContract",
+        "type": "address"
+      }
+    ],
+    "name": "setGovernanceContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_publicKey",
+        "type": "string"
+      }
+    ],
+    "name": "setPublicKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -708,6 +896,11 @@
         "type": "string"
       },
       {
+        "internalType": "string",
+        "name": "detailedDescription",
+        "type": "string"
+      },
+      {
         "internalType": "enum RoseMarketplace.TaskStatus",
         "name": "status",
         "type": "uint8"
@@ -721,6 +914,40 @@
         "internalType": "bool",
         "name": "stakeholderApproval",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "workerApproval",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "refundRequested",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "storyPoints",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "userPublicKeys",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
