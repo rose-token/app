@@ -83,7 +83,7 @@ jobs:
           echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
           echo "TOKEN_ADDRESS=$TOKEN_ADDRESS" >> $GITHUB_ENV
           
-          # Create a JSON file with contract addresses
+          # Create a JSON file with contract addresses for artifact passing
           echo "{\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"tokenAddress\":\"$TOKEN_ADDRESS\"}" > contract-addresses.json
       
       - name: Upload Contract Addresses Artifact
@@ -135,10 +135,6 @@ jobs:
           echo "Using contract addresses from artifact:"
           echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Token: $TOKEN_ADDRESS"
-          
-          # Copy contract addresses to frontend directory
-          mkdir -p frontend/src/contracts
-          cp contract-addresses.json frontend/src/contracts/addresses.json
       
       - name: Set Build Version
         run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
