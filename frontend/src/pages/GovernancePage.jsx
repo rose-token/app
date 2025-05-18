@@ -439,7 +439,6 @@ const GovernancePage = () => {
                           <Button  
                             key={score}  
                             onClick={() => handleVote(proposal.id, score)}  
-                            variant="outline"
                             className="bg-gray-200 hover:bg-gray-300"  
                           >  
                             {score}  
