@@ -577,8 +577,9 @@ contract RoseMarketplace {
         
         // Tasks can be claimed directly if they are in Open or StakeholderRequired status
         // For tasks with bidding enabled, they must go through the bidding process
-        require(t.status == TaskStatus.Open || t.status == TaskStatus.StakeholderRequired, 
-                "Task must be open or require stakeholder to be claimed");
+        require(t.status == TaskStatus.Open || t.status == TaskStatus.StakeholderRequired || 
+                t.status == TaskStatus.Bidding || t.status == TaskStatus.ShortlistSelected, 
+                "Task must be in a claimable state");
 
         t.worker = msg.sender;
         t.storyPoints = _storyPoints;

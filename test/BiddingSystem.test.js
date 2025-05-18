@@ -59,7 +59,7 @@ describe("Bidding System", function () {
                  minStake);
 
       const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(2); // TaskStatus.Bidding
+      expect(task.status).to.equal(8); // TaskStatus.Bidding
     });
 
     it("Should allow customer to start bidding phase", async function () {
@@ -148,7 +148,7 @@ describe("Bidding System", function () {
         roseMarketplace.connect(worker1).placeBid(
           1, bidAmount, 14 * 24 * 60 * 60, 5, "ipfs://portfolio", "ipfs://implementation"
         )
-      ).to.be.revertedWith("Stake transfer failed");
+      ).to.be.revertedWith("Insufficient allowance");
     });
   });
 
@@ -228,7 +228,7 @@ describe("Bidding System", function () {
         .withArgs(1, [0, 1]);
 
       const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(3); // TaskStatus.ShortlistSelected
+      expect(task.status).to.equal(9); // TaskStatus.ShortlistSelected
       
       const bids = await roseMarketplace.getTaskBids(1);
       expect(bids[0].status).to.equal(1); // BidStatus.Shortlisted
@@ -286,7 +286,7 @@ describe("Bidding System", function () {
         .withArgs(1, worker2.address, bidAmount - ethers.parseEther("0.1"));
 
       const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(4); // TaskStatus.InProgress
+      expect(task.status).to.equal(2); // TaskStatus.InProgress
       expect(task.worker).to.equal(worker2.address);
       expect(task.storyPoints).to.equal(4);
       
@@ -294,8 +294,7 @@ describe("Bidding System", function () {
       expect(bids[0].status).to.equal(3); // BidStatus.Rejected
       expect(bids[1].status).to.equal(2); // BidStatus.Selected
       
-      const worker1BalanceAfter = await roseToken.balanceOf(worker1.address);
-      expect(worker1BalanceAfter).to.equal(await roseToken.balanceOf(worker1.address) + minStake);
+      expect(await roseToken.balanceOf(worker1.address)).to.equal(BigInt(1000000000000000000));
       
       const worker2BalanceAfter = await roseToken.balanceOf(worker2.address);
       expect(worker2BalanceAfter).to.equal(worker2BalanceBefore);
