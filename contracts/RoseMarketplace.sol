@@ -29,7 +29,7 @@ contract RoseMarketplace {
     address public governanceContract;
 
     // A simple enum to track task status
-    enum TaskStatus { Open, StakeholderRequired, Bidding, ShortlistSelected, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment, RefundRequested }
+    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Disputed, Closed, ApprovedPendingPayment, RefundRequested, Bidding, ShortlistSelected }
     
     // Structure for task comments with threading support
     struct Comment {
