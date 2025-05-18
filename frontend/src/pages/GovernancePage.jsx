@@ -37,8 +37,6 @@ const GovernancePage = () => {
   const [executionDelay, setExecutionDelay] = useState(0);  
   const [isLoading, setIsLoading] = useState(true);  
   const [error, setError] = useState(null);  
-  const [showQRCode, setShowQRCode] = useState(false);
-  const [qrValue, setQrValue] = useState('ethereum:connect');
     
   const [tokenAmount, setTokenAmount] = useState('');  
   const [lockDuration, setLockDuration] = useState(7); // Default 7 days  
@@ -219,11 +217,6 @@ const GovernancePage = () => {
     }  
   };  
   
-  const handleConnectWallet = useCallback(() => {
-    setShowQRCode(true);
-    connectWallet();
-  }, [connectWallet]);
-
   if (!isConnected) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -243,26 +236,12 @@ const GovernancePage = () => {
             </p>
           </div>
           
-          {showQRCode ? (
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-3">Scan QR Code with Your Wallet App</h3>
-              <div className="flex justify-center">
-                <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
-                  <QRCodeSVG value={qrValue} size={200} />
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-gray-500">
-                {isConnecting ? 'Connecting...' : 'Waiting for connection...'}
-              </p>
-            </div>
-          ) : (
-            <Button
-              onClick={handleConnectWallet}
-              className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-md font-medium"
-            >
-              Connect Wallet
-            </Button>
-          )}
+          <Button
+            onClick={connectWallet}
+            className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-md font-medium"
+          >
+            Connect Wallet
+          </Button>
         </div>
       </div>
     );
