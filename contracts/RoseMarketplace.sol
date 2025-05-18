@@ -568,9 +568,10 @@ contract RoseMarketplace {
      */
     function claimTask(uint256 _taskId, uint256 _storyPoints) external {
         Task storage t = tasks[_taskId];
-        // Tasks can only be claimed directly if they are in Open status
-        // Otherwise, they must go through the bidding process
-        require(t.status == TaskStatus.Open, "Task must be open to be claimed");
+        // Tasks can be claimed directly if they are in Open or StakeholderRequired status
+        // For tasks with bidding enabled, they must go through the bidding process
+        require(t.status == TaskStatus.Open || t.status == TaskStatus.StakeholderRequired, 
+                "Task must be open or require stakeholder to be claimed");
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
