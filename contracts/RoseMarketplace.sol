@@ -354,7 +354,7 @@ contract RoseMarketplace {
      * @param _worker Address of the worker
      * @return Score based on reputation and past performance
      */
-    function calculateBidReputationScore(address _worker) internal view returns (uint256) {
+    function calculateBidReputationScore(address _worker) public view returns (uint256) {
         // Get worker level from reputation contract
         uint256 workerLevel = roseReputation.getLevel(_worker, RoseReputation.Role.Worker);
         
