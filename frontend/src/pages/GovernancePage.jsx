@@ -87,7 +87,7 @@ const GovernancePage = () => {
             ? new Date(proposal.executionTime.toNumber() * 1000)   
             : null,  
           status: getStatusText(proposal.status),  
-          totalScoreSum: proposal.totalScoreSum.toNumber(),  
+          totalScoreSum: proposal.totalScoreSum, // Keep as BigNumber to avoid numeric overflow  
           finalWinner: proposal.finalWinner  
         });  
       }  
