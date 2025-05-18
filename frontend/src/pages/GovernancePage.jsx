@@ -238,7 +238,7 @@ const GovernancePage = () => {
           
           <Button
             onClick={connectWallet}
-            className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-md font-medium"
+            className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-md font-medium"
           >
             Connect Wallet
           </Button>
