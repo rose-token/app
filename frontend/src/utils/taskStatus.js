@@ -5,7 +5,8 @@ export const TaskStatus = {
   Completed: 3,
   Disputed: 4,
   Closed: 5,
-  ApprovedPendingPayment: 6
+  ApprovedPendingPayment: 6,
+  RefundRequested: 7
 };
 
 export const getStatusText = (status) => {
@@ -24,6 +25,8 @@ export const getStatusText = (status) => {
       return 'Closed';
     case TaskStatus.ApprovedPendingPayment:
       return 'Ready for Payment';
+    case TaskStatus.RefundRequested:
+      return 'Refund Requested';
     default:
       return 'Unknown';
   }
@@ -45,6 +48,8 @@ export const getStatusColor = (status) => {
       return 'bg-gray-100 text-gray-800';
     case TaskStatus.ApprovedPendingPayment:
       return 'bg-purple-100 text-purple-800';
+    case TaskStatus.RefundRequested:
+      return 'bg-pink-100 text-pink-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }
