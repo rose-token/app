@@ -4,8 +4,7 @@ import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';  
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import WalletNotConnected from '../components/wallet/WalletNotConnected';
-  
+
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
     
@@ -22,7 +21,7 @@ const CollapsibleSection = ({ id, title, children }) => {
       {isOpen && <div className="p-4">{children}</div>}  
     </div>  
   );  
-};  
+};
   
 const GovernancePage = () => {  
   const { isConnected, account, connectWallet } = useEthereum();  
