@@ -4,7 +4,6 @@ import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';  
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { QRCodeSVG } from 'qrcode.react';
 
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
@@ -25,7 +24,7 @@ const CollapsibleSection = ({ id, title, children }) => {
 };
   
 const GovernancePage = () => {  
-  const { isConnected, account, connectWallet, isConnecting } = useEthereum();  
+  const { isConnected, account, connectWallet } = useEthereum();  
   const { roseGovernance, roseToken, isLoading: contractsLoading, contractsReady } = useContract();  
     
   const [proposalCounter, setProposalCounter] = useState(0);  
