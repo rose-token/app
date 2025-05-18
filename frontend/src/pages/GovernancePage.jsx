@@ -227,7 +227,7 @@ const GovernancePage = () => {
           The governance model ensures that all token holders have a voice in the project's future.
         </p>
         
-        <WalletNotConnected message="Connect your wallet to participate in Rose Token governance. Once connected, you'll be able to view active proposals and cast votes." />
+        <WalletNotConnected />
       </div>
     );
   }
