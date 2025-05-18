@@ -4,8 +4,7 @@ import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';  
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { TokenBalance } from '../components/wallet/TokenBalance';
-import { WalletNotConnected } from '../components/wallet/WalletNotConnected';
+import WalletNotConnected from '../components/wallet/WalletNotConnected';
   
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
