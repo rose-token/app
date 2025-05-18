@@ -25,7 +25,7 @@ const CollapsibleSection = ({ id, title, children }) => {
 };  
   
 const GovernancePage = () => {  
-  const { isConnected, account } = useEthereum();  
+  const { isConnected, account, connectWallet } = useEthereum();  
   const { roseGovernance, roseToken, isLoading: contractsLoading, contractsReady } = useContract();  
     
   const [proposalCounter, setProposalCounter] = useState(0);  
@@ -227,7 +227,21 @@ const GovernancePage = () => {
           The governance model ensures that all token holders have a voice in the project's future.
         </p>
         
-        <WalletNotConnected />
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200 text-center">
+          <h2 className="text-xl font-semibold mb-4">Connect Your Wallet</h2>
+          <div className="mb-6 text-gray-600">
+            <p className="mb-4">
+              Connect your wallet to participate in Rose Token governance. Once connected,
+              you'll be able to view active proposals and cast votes.
+            </p>
+          </div>
+          <button
+            onClick={() => connectWallet()}
+            className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-md font-medium"
+          >
+            Connect Wallet
+          </button>
+        </div>
       </div>
     );
   }
