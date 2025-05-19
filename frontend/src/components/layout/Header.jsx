@@ -1,5 +1,4 @@
 import React from 'react';
-import TokenBalance from '../wallet/TokenBalance';
 import NetworkSelector from '../wallet/NetworkSelector';
 import { useEthereum } from '../../hooks/useEthereum';
 
@@ -22,7 +21,6 @@ const Header = ({ toggleSidebar }) => {
         </div>
           
         <div className="flex items-center space-x-4">
-          {isConnected && <TokenBalance />}
           {isConnected && <NetworkSelector />}
           <button 
             onClick={connectWallet} 

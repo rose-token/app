@@ -1,6 +1,7 @@
 import React from 'react';  
 import { NavLink } from 'react-router-dom';  
 import { useEthereum } from '../../hooks/useEthereum';  
+import TokenBalance from '../wallet/TokenBalance';
   
 const Sidebar = ({ isOpen, toggleSidebar }) => {  
   const { isConnected } = useEthereum();
@@ -118,6 +119,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               Profile  
             </NavLink>  
           )}  
+          {/* TokenBalance at the bottom of navigation */}
+          {isConnected && (
+            <div className="mt-4">
+              <TokenBalance />
+            </div>
+          )}
         </nav>  
       </div>  
     </>  
