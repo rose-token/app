@@ -119,3 +119,9 @@ export const fetchCommentFromIPFS = async (cid) => {
 export const isCID = (str) => {
   return typeof str === 'string' && str.startsWith('Qm') && str.length >= 46;
 };
+
+export const isValidUrl = (url) => {
+  if (!url) return false;
+  const urlPattern = /^(data:image\/|https:\/\/)/;
+  return urlPattern.test(url);
+};

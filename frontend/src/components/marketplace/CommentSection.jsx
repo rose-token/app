@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { uploadCommentToIPFS, uploadEncryptedCommentToIPFS, fetchCommentFromIPFS, isCID } from '../../utils/ipfs/pinataService';
+import { uploadCommentToIPFS, uploadEncryptedCommentToIPFS, fetchCommentFromIPFS, isCID, isValidUrl } from '../../utils/ipfs/pinataService';
 import { decryptContent } from '../../utils/encryption/pgpService';
 import KeyManagement from './KeyManagement';
+import DOMPurify from 'dompurify';
 
 const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false }) => {
   const [comments, setComments] = useState([]);
@@ -11,7 +12,7 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [fetchErrors, setFetchErrors] = useState({}); // Track IPFS fetch errors
-  const [privateKey, setPrivateKey] = useState(localStorage.getItem('userPrivateKey'));
+  const [privateKey, setPrivateKey] = useState(sessionStorage.getItem('userPrivateKey'));
   const [allKeysSetup, setAllKeysSetup] = useState(false);
   
   const checkParticipantKeys = useCallback(async () => {
@@ -56,7 +57,7 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
                   data.encryptedContent,
                   privateKey
                 );
-                return { index, cid, content: decryptedContent };
+                return { index, cid, content: DOMPurify.sanitize(decryptedContent, { USE_PROFILES: { html: false } }) };
               } catch (decryptErr) {
                 console.error(`Error decrypting comment ${index}:`, decryptErr);
                 return { 
@@ -66,7 +67,7 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
                 };
               }
             } else {
-              return { index, cid, content: data.content || data };
+              return { index, cid, content: DOMPurify.sanitize(data.content || data, { USE_PROFILES: { html: false } }) };
             }
           } catch (err) {
             console.error(`Error fetching comment ${index} from IPFS:`, err);
@@ -74,7 +75,10 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
             return { index, cid, content: 'Content could not be loaded from IPFS' };
           }
         } else {
-          return { index, cid, content: cid }; // For legacy comments, cid actually contains the content
+          // For legacy comments, cid actually contains the content
+          // Sanitize and validate any URLs in the content
+          const sanitizedContent = DOMPurify.sanitize(cid, { USE_PROFILES: { html: false } });
+          return { index, cid, content: sanitizedContent };
         }
       });
       
@@ -141,10 +145,10 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
     }
   };
   
-  // Listen for changes to localStorage privateKey
+  // Listen for changes to sessionStorage privateKey
   useEffect(() => {
     const handleStorageChange = () => {
-      const storedPrivateKey = localStorage.getItem('userPrivateKey');
+      const storedPrivateKey = sessionStorage.getItem('userPrivateKey');
       if (storedPrivateKey !== privateKey) {
         setPrivateKey(storedPrivateKey);
       }
@@ -255,19 +259,23 @@ const CommentSection = ({ taskId, roseMarketplace, task, isAuthorized = false })
                 <div className="text-red-500">
                   Content could not be loaded from IPFS. 
                   <button 
-                    onClick={() => fetchCommentFromIPFS(comment.ipfsCid || comment.content)
-                      .then(content => {
-                        setCommentContents(prev => ({ ...prev, [comment.id]: content }));
-                        setFetchErrors(prev => ({ ...prev, [comment.id]: false }));
-                      })
-                      .catch(() => {/* Already handled */})
-                    } 
+                    onClick={() => {
+                      const cid = comment.ipfsCid || comment.content;
+                      if (isCID(cid)) {
+                        fetchCommentFromIPFS(cid)
+                          .then(content => {
+                            setCommentContents(prev => ({ ...prev, [comment.id]: content }));
+                            setFetchErrors(prev => ({ ...prev, [comment.id]: false }));
+                          })
+                          .catch(() => {/* Already handled */});
+                      }
+                    }} 
                     className="ml-2 text-blue-500 underline"
                   >
                     Retry
                   </button>
                 </div> : 
-                commentContents[comment.id]
+                DOMPurify.sanitize(commentContents[comment.id], { USE_PROFILES: { html: false } })
               ) : 
               'Loading content...'
             }
