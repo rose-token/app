@@ -65,6 +65,7 @@ const TaskList = ({ tasks, onClaim, onComplete, onApprove, onDispute, onAcceptPa
           onDispute={onDispute}
           onAcceptPayment={onAcceptPayment}
           onStake={onStake}
+          onBid={onBid}
           roseMarketplace={roseMarketplace}
         />
       ))}
