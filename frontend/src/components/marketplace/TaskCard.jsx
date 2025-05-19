@@ -1,9 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import CommentSection from './CommentSection';
+import { ethers } from 'ethers';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, onBid, roseMarketplace }) => {
+const getBidStatusText = (status) => {
+  const statusMap = {
+    0: 'Active',
+    1: 'Shortlisted',
+    2: 'Selected',
+    3: 'Rejected',
+    4: 'Withdrawn'
+  };
+  return statusMap[status] || 'Unknown';
+};
+
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, onBid, onShortlistBids, onFinalizeWorkerSelection, roseMarketplace }) => {
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
   const [storyPoints, setStoryPoints] = useState(1);
@@ -11,6 +23,32 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const [estimatedDuration, setEstimatedDuration] = useState(7);
   const [portfolioLink, setPortfolioLink] = useState('');
   const [implementationPlan, setImplementationPlan] = useState('');
+  const [minimumStake, setMinimumStake] = useState('0');
+  const [bids, setBids] = useState([]);
+  const [isLoadingBids, setIsLoadingBids] = useState(false);
+  const [selectedBids, setSelectedBids] = useState([]);
+  const [finalBidIndex, setFinalBidIndex] = useState(null);
+  
+  useEffect(() => {
+    const fetchBidInfo = async () => {
+      if (task.status === TaskStatus.Bidding && roseMarketplace) {
+        try {
+          setIsLoadingBids(true);
+          const minStake = await roseMarketplace.getMinimumBidStake(task.id);
+          setMinimumStake(ethers.utils.formatEther(minStake));
+          
+          const bidsData = await roseMarketplace.getTaskBids(task.id);
+          setBids(bidsData);
+        } catch (err) {
+          console.error('Error fetching bid info:', err);
+        } finally {
+          setIsLoadingBids(false);
+        }
+      }
+    };
+    
+    fetchBidInfo();
+  }, [task.id, task.status, roseMarketplace]);
   
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -159,6 +197,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         {canBid && (
           <div className="flex flex-col space-y-3 border-t pt-3 mt-2">
             <h4 className="text-sm font-semibold">Place a Bid</h4>
+            <p className="text-xs text-gray-600">Minimum stake required: {minimumStake} ROSE</p>
             
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -250,6 +289,82 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
           </div>
         )}
       </div>
+      
+      {/* Display existing bids for customers and stakeholders */}
+      {(isCustomer || isStakeholder) && task.status === TaskStatus.Bidding && bids.length > 0 && (
+        <div className="mt-4 border-t pt-3">
+          <h4 className="text-sm font-semibold mb-2">Current Bids ({bids.length})</h4>
+          <div className="max-h-60 overflow-y-auto">
+            {bids.map((bid, index) => (
+              <div key={index} className="p-2 bg-gray-50 rounded-md mb-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium truncate">{bid.worker}</span>
+                  <span className="text-purple-600 font-medium">
+                    {ethers.utils.formatEther(bid.bidAmount)} ROSE
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 mt-1 text-xs text-gray-600">
+                  <span>Story Points: {bid.storyPoints.toString()}</span>
+                  <span>Duration: {bid.estimatedDuration.toString() / 86400} days</span>
+                  <span>Reputation: {bid.reputationScore.toString()}</span>
+                  <span>Status: {getBidStatusText(bid.status)}</span>
+                </div>
+                {isCustomer && task.status === TaskStatus.Bidding && bid.status === 0 && (
+                  <div className="mt-1">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 text-indigo-600"
+                        checked={selectedBids.includes(index)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedBids([...selectedBids, index]);
+                          } else {
+                            setSelectedBids(selectedBids.filter(i => i !== index));
+                          }
+                        }}
+                      />
+                      <span className="ml-2 text-xs">Select for shortlist</span>
+                    </label>
+                  </div>
+                )}
+                {isStakeholder && task.status === TaskStatus.ShortlistSelected && bid.status === 1 && (
+                  <div className="mt-1">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        className="form-radio h-4 w-4 text-indigo-600"
+                        name={`finalSelection-${task.id}`}
+                        checked={finalBidIndex === index}
+                        onChange={() => setFinalBidIndex(index)}
+                      />
+                      <span className="ml-2 text-xs">Select as final worker</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          {isCustomer && task.status === TaskStatus.Bidding && selectedBids.length > 0 && (
+            <button
+              onClick={() => onShortlistBids(task.id, selectedBids)}
+              className="mt-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Shortlist Selected Bids
+            </button>
+          )}
+          
+          {isStakeholder && task.status === TaskStatus.ShortlistSelected && finalBidIndex !== null && (
+            <button
+              onClick={() => onFinalizeWorkerSelection(task.id, finalBidIndex)}
+              className="mt-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Select Final Worker
+            </button>
+          )}
+        </div>
+      )}
       
       {/* Comments toggle button - only visible to stakeholders, customers, and workers */}
       {(isCustomer || isWorker || isStakeholder) && (

@@ -958,4 +958,19 @@ contract RoseMarketplace {
     function setPublicKey(string calldata _publicKey) external {
         userPublicKeys[msg.sender] = _publicKey;
     }
+    
+    /**
+     * @dev Get the minimum stake required to place a bid on a task
+     * @param _taskId ID of the task
+     * @return The minimum amount of ROSE tokens required to place a bid
+     */
+    function getMinimumBidStake(uint256 _taskId) external view returns (uint256) {
+        require(_taskId > 0 && _taskId <= taskCounter, "Task does not exist");
+        require(tasks[_taskId].status == TaskStatus.Bidding, "Task not in bidding phase");
+        
+        BiddingPhase storage bidding = taskBidding[_taskId];
+        require(bidding.startTime > 0, "Bidding has not started for this task");
+        
+        return bidding.minStake;
+    }
 }
