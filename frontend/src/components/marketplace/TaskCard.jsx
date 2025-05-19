@@ -3,10 +3,14 @@ import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import CommentSection from './CommentSection';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, roseMarketplace }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, onBid, roseMarketplace }) => {
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
   const [storyPoints, setStoryPoints] = useState(1);
+  const [bidAmount, setBidAmount] = useState('');
+  const [estimatedDuration, setEstimatedDuration] = useState(7);
+  const [portfolioLink, setPortfolioLink] = useState('');
+  const [implementationPlan, setImplementationPlan] = useState('');
   
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -23,6 +27,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
   const canDispute = (isCustomer || isWorker) && (task.status === TaskStatus.InProgress || task.status === TaskStatus.Completed);
   const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
+  const canBid = !isCustomer && !isStakeholder && task.status === TaskStatus.Bidding && task.worker === '0x0000000000000000000000000000000000000000';
   
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
   
@@ -149,6 +154,100 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
             <span>Accept Payment</span>
             <span className="text-xs">(gas fees apply)</span>
           </button>
+        )}
+        
+        {canBid && (
+          <div className="flex flex-col space-y-3 border-t pt-3 mt-2">
+            <h4 className="text-sm font-semibold">Place a Bid</h4>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="bidAmount" className="block text-xs font-medium text-gray-700 mb-1">
+                  Bid Amount (ROSE)
+                </label>
+                <input
+                  id="bidAmount"
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                  placeholder="0.1"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="estimatedDuration" className="block text-xs font-medium text-gray-700 mb-1">
+                  Estimated Days
+                </label>
+                <input
+                  id="estimatedDuration"
+                  type="number"
+                  min="1"
+                  value={estimatedDuration}
+                  onChange={(e) => setEstimatedDuration(parseInt(e.target.value) || 1)}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="storyPoints" className="block text-xs font-medium text-gray-700 mb-1">
+                  Story Points
+                </label>
+                <input
+                  id="storyPoints"
+                  type="number"
+                  min="1"
+                  value={storyPoints}
+                  onChange={(e) => setStoryPoints(parseInt(e.target.value) || 1)}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="portfolioLink" className="block text-xs font-medium text-gray-700 mb-1">
+                  Portfolio/Experience
+                </label>
+                <textarea
+                  id="portfolioLink"
+                  value={portfolioLink}
+                  onChange={(e) => setPortfolioLink(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                  rows="2"
+                  placeholder="Brief description of your experience"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="implementationPlan" className="block text-xs font-medium text-gray-700 mb-1">
+                  Implementation Approach
+                </label>
+                <textarea
+                  id="implementationPlan"
+                  value={implementationPlan}
+                  onChange={(e) => setImplementationPlan(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                  rows="3"
+                  placeholder="Describe how you plan to implement this task"
+                  required
+                />
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => onBid(task.id, bidAmount, estimatedDuration, storyPoints, portfolioLink, implementationPlan)} 
+              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Submit Bid
+            </button>
+          </div>
         )}
       </div>
       
