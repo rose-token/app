@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
+import { ethers } from 'ethers';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
@@ -239,6 +240,66 @@ const TasksPage = () => {
     }
   };
   
+  const handleBidTask = async (taskId, bidAmount, estimatedDuration, storyPoints, portfolioLink, implementationPlan) => {
+    if (!isConnected || !roseMarketplace || !roseToken) return;
+    
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        setError('Task not found');
+        return;
+      }
+      
+      if (task.customer === account) {
+        setError('You cannot bid on your own task');
+        return;
+      }
+      
+      if (task.stakeholder === account) {
+        setError('Stakeholders cannot bid on tasks');
+        return;
+      }
+      
+      if (task.status !== TaskStatus.Bidding) {
+        setError('This task is not in the bidding phase');
+        return;
+      }
+      
+      const bidAmountWei = ethers.utils.parseEther(bidAmount.toString());
+      
+      const minStake = await roseMarketplace.getMinimumBidStake(taskId);
+      console.log("Minimum bid stake required:", minStake.toString());
+      
+      console.log("Approving token transfer for bid stake...");
+      const approveTx = await roseToken.approve(roseMarketplace.address, minStake.toString());
+      await approveTx.wait();
+      console.log("Token approval confirmed");
+      
+      console.log("Placing bid...");
+      const tx = await roseMarketplace.placeBid(
+        taskId,
+        bidAmountWei,
+        estimatedDuration * 86400, // Convert days to seconds
+        storyPoints,
+        portfolioLink, // Using direct text instead of IPFS hash
+        implementationPlan, // Using direct text instead of IPFS hash
+        { gasLimit: 500000 }
+      );
+      
+      console.log("Waiting for transaction:", tx.hash);
+      await tx.wait();
+      console.log("Bid placed successfully");
+      
+      debouncedFetchTasks();
+    } catch (err) {
+      console.error('Error placing bid:', err);
+      const errorMessage = err.message.includes('execution reverted') 
+        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to place bid'
+        : 'Failed to place bid';
+      setError(errorMessage);
+    }
+  };
+  
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
@@ -271,11 +332,19 @@ const TasksPage = () => {
       };
       roseMarketplace.on(stakeholderStakedFilter, stakeholderStakedListener);
       
+      const bidPlacedFilter = roseMarketplace.filters.BidPlaced();
+      const bidPlacedListener = (taskId, worker, bidAmount, storyPoints, reputationScore) => {
+        console.log("Bid placed event:", { taskId, worker, bidAmount, storyPoints, reputationScore });
+        fetchTasks(); // Refresh tasks after bid is placed
+      };
+      roseMarketplace.on(bidPlacedFilter, bidPlacedListener);
+      
       return () => {
         roseMarketplace.off(paymentFilter, paymentListener);
         roseMarketplace.off(closedFilter, closedListener);
         roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
         roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
+        roseMarketplace.off(bidPlacedFilter, bidPlacedListener);
       };
     }
   }, [roseMarketplace, debouncedFetchTasks, fetchTasks]);
@@ -289,7 +358,7 @@ const TasksPage = () => {
       return true;
     }
     
-    if (filters.needWorker && task.status === TaskStatus.Open) {
+    if (filters.needWorker && (task.status === TaskStatus.Open || task.status === TaskStatus.Bidding)) {
       return true;
     }
     
@@ -341,6 +410,7 @@ const TasksPage = () => {
               onDispute={handleDisputeTask}
               onAcceptPayment={handleAcceptPayment}
               onStake={handleStakeTask}
+              onBid={handleBidTask}
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}
