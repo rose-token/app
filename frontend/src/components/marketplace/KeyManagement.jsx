@@ -8,8 +8,8 @@ const KeyManagement = ({ account, roseMarketplace }) => {
   const [error, setError] = useState('');
     
   useEffect(() => {
-    const storedPublicKey = localStorage.getItem('userPublicKey');
-    const storedPrivateKey = localStorage.getItem('userPrivateKey');
+    const storedPublicKey = sessionStorage.getItem('userPublicKey');
+    const storedPrivateKey = sessionStorage.getItem('userPrivateKey');
       
     if (storedPublicKey) setPublicKey(storedPublicKey);
     if (storedPrivateKey) setPrivateKey(storedPrivateKey);
@@ -26,8 +26,8 @@ const KeyManagement = ({ account, roseMarketplace }) => {
       setPublicKey(newPublicKey);
       setPrivateKey(newPrivateKey);
         
-      localStorage.setItem('userPublicKey', newPublicKey);
-      localStorage.setItem('userPrivateKey', newPrivateKey);
+      sessionStorage.setItem('userPublicKey', newPublicKey);
+      sessionStorage.setItem('userPrivateKey', newPrivateKey);
         
       const tx = await roseMarketplace.setPublicKey(newPublicKey);
       await tx.wait();
