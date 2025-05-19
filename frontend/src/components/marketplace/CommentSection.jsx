@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { uploadCommentToIPFS, uploadEncryptedCommentToIPFS, fetchCommentFromIPFS, isCID, isValidUrl } from '../../utils/ipfs/pinataService';
+import { uploadCommentToIPFS, uploadEncryptedCommentToIPFS, fetchCommentFromIPFS, isCID } from '../../utils/ipfs/pinataService';
 import { decryptContent } from '../../utils/encryption/pgpService';
 import KeyManagement from './KeyManagement';
 import DOMPurify from 'dompurify';
