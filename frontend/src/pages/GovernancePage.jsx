@@ -25,7 +25,7 @@ const CollapsibleSection = ({ id, title, children }) => {
   
 const GovernancePage = () => {  
   const { isConnected, account, connectWallet } = useEthereum();  
-  const { roseGovernance, roseToken, isLoading: contractsLoading, contractsReady } = useContract();  
+  const { roseGovernance, roseToken, contractsReady } = useContract();  
     
   const [proposalCounter, setProposalCounter] = useState(0);  
   const [proposals, setProposals] = useState([]);  
@@ -34,7 +34,6 @@ const GovernancePage = () => {
   const [minimumTokensToPropose, setMinimumTokensToPropose] = useState(0);  
   const [proposalDuration, setProposalDuration] = useState(0);  
   const [executionDelay, setExecutionDelay] = useState(0);  
-  const [isLoading, setIsLoading] = useState(true);  
   const [error, setError] = useState(null);  
     
   const [tokenAmount, setTokenAmount] = useState('');  
