@@ -15,7 +15,7 @@ const getBidStatusText = (status) => {
   return statusMap[status] || 'Unknown';
 };
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, onBid, onShortlistBids, onFinalizeWorkerSelection, roseMarketplace }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPayment, onStake, onBid, onShortlistBids, onFinalizeWorkerSelection, onStartBidding, roseMarketplace }) => {
   const { account } = useEthereum();
   const [showComments, setShowComments] = useState(false);
   const [storyPoints, setStoryPoints] = useState(1);
@@ -28,6 +28,9 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const [isLoadingBids, setIsLoadingBids] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
   const [finalBidIndex, setFinalBidIndex] = useState(null);
+  const [biddingDuration, setBiddingDuration] = useState(7); // Default 7 days
+  const [biddingMinStake, setBiddingMinStake] = useState('1'); // Default 1 ROSE
+  const [showStartBiddingForm, setShowStartBiddingForm] = useState(false);
   
   useEffect(() => {
     const fetchBidInfo = async () => {
@@ -66,6 +69,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const canDispute = (isCustomer || isWorker) && (task.status === TaskStatus.InProgress || task.status === TaskStatus.Completed);
   const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
   const canBid = !isCustomer && !isStakeholder && task.status === TaskStatus.Bidding && task.worker === '0x0000000000000000000000000000000000000000';
+  const canStartBidding = (isCustomer || isStakeholder) && task.status === TaskStatus.Bidding && minimumStake === '0';
   
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
   
@@ -192,6 +196,72 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
             <span>Accept Payment</span>
             <span className="text-xs">(gas fees apply)</span>
           </button>
+        )}
+        
+        {canStartBidding && (
+          <div className="flex flex-col space-y-3 border-t pt-3 mt-2">
+            {!showStartBiddingForm ? (
+              <button 
+                onClick={() => setShowStartBiddingForm(true)}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                Start Bidding Phase
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold">Initialize Bidding Phase</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="biddingDuration" className="block text-xs font-medium text-gray-700 mb-1">
+                      Bidding Duration (days)
+                    </label>
+                    <input
+                      id="biddingDuration"
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={biddingDuration}
+                      onChange={(e) => setBiddingDuration(parseInt(e.target.value) || 1)}
+                      className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="biddingMinStake" className="block text-xs font-medium text-gray-700 mb-1">
+                      Minimum Stake (ROSE)
+                    </label>
+                    <input
+                      id="biddingMinStake"
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={biddingMinStake}
+                      onChange={(e) => setBiddingMinStake(e.target.value)}
+                      className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => {
+                      onStartBidding(task.id, biddingDuration, biddingMinStake);
+                      setShowStartBiddingForm(false);
+                    }}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  >
+                    Initialize Bidding
+                  </button>
+                  <button 
+                    onClick={() => setShowStartBiddingForm(false)}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
         
         {canBid && (
