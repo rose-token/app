@@ -52,7 +52,6 @@ const GovernancePage = () => {
     if (!roseGovernance || !isConnected || !contractsReady.readOnly) return;
       
     try {  
-      setIsLoading(true);  
         
       const counter = await roseGovernance.proposalCounter();  
       const minTokens = await roseGovernance.minimumTokensToPropose();  
@@ -102,7 +101,6 @@ const GovernancePage = () => {
       console.error('Error fetching governance data:', err);  
       setError('Failed to load governance data. Please try again later.');  
     } finally {  
-      setIsLoading(false);  
     }  
   }, [roseGovernance, roseToken, isConnected, account, contractsReady.readOnly]);  
     
