@@ -224,6 +224,21 @@
         "internalType": "uint256",
         "name": "_tokenAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "enum RoseGovernance.ProposalType",
+        "name": "_proposalType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum RoseGovernance.FundingSource",
+        "name": "_fundingSource",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "_ipfsDataHash",
+        "type": "string"
       }
     ],
     "name": "createTaskProposal",
@@ -420,6 +435,21 @@
         "internalType": "enum RoseGovernance.ProposalStatus",
         "name": "status",
         "type": "uint8"
+      },
+      {
+        "internalType": "enum RoseGovernance.ProposalType",
+        "name": "proposalType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum RoseGovernance.FundingSource",
+        "name": "fundingSource",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "ipfsDataHash",
+        "type": "string"
       },
       {
         "internalType": "uint256",

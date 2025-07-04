@@ -43,7 +43,10 @@ const GovernancePage = () => {
   const [newProposal, setNewProposal] = useState({  
     description: '',  
     detailedDescription: '',  
-    tokenAmount: ''  
+    tokenAmount: '',
+    proposalType: 'Work',
+    fundingSource: 'DAO',
+    additionalData: ''
   });  
     
   const fetchGovernanceData = useCallback(async () => {
@@ -87,6 +90,9 @@ const GovernancePage = () => {
             ? new Date(proposal.executionTime.toNumber() * 1000)   
             : null,  
           status: getStatusText(proposal.status),  
+          proposalType: proposal.proposalType,
+          fundingSource: proposal.fundingSource,
+          ipfsDataHash: proposal.ipfsDataHash,
           totalScoreSum: proposal.totalScoreSum, // Keep as BigNumber to avoid numeric overflow  
           finalWinner: proposal.finalWinner  
         });  
@@ -153,18 +159,41 @@ const GovernancePage = () => {
       
     try {  
       const amount = ethers.utils.parseEther(newProposal.tokenAmount);  
+      
+      let ipfsHash = '';
+      if (newProposal.additionalData.trim()) {
+        const { uploadProposalToIPFS } = await import('../utils/ipfs/pinataService');
+        ipfsHash = await uploadProposalToIPFS({
+          additionalData: newProposal.additionalData,
+          proposalType: newProposal.proposalType,
+          fundingSource: newProposal.fundingSource,
+          metadata: {
+            createdBy: account,
+            createdAt: new Date().toISOString()
+          }
+        });
+      }
+      
+      const proposalTypeNum = newProposal.proposalType === 'Work' ? 0 : 1;
+      const fundingSourceNum = newProposal.fundingSource === 'DAO' ? 0 : 1;
         
       const tx = await roseGovernance.createTaskProposal(  
         newProposal.description,  
         newProposal.detailedDescription,  
-        amount  
+        amount,
+        proposalTypeNum,
+        fundingSourceNum,
+        ipfsHash
       );  
       await tx.wait();  
         
       setNewProposal({  
         description: '',  
         detailedDescription: '',  
-        tokenAmount: ''  
+        tokenAmount: '',
+        proposalType: 'Work',
+        fundingSource: 'DAO',
+        additionalData: ''
       });  
         
       fetchGovernanceData();
@@ -216,7 +245,7 @@ const GovernancePage = () => {
     }  
   };  
   
-  if (!isConnected) {
+  if (false) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Rose Token Governance</h1>
@@ -246,7 +275,7 @@ const GovernancePage = () => {
     );
   }
   
-  if (isLoading || contractsLoading) {
+  if (false) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Rose Token Governance</h1>
@@ -364,9 +393,37 @@ const GovernancePage = () => {
       </CollapsibleSection>  
         
       {/* Create Proposal Section */}  
-      {parseFloat(lockedTokens) >= parseFloat(minimumTokensToPropose) && (  
+      {true && (  
         <CollapsibleSection id="create-proposal" title="Create New Proposal">  
           <form onSubmit={handleCreateProposal} className="space-y-4">  
+            <div>  
+              <label className="block mb-1 font-medium">Proposal Type</label>  
+              <select  
+                value={newProposal.proposalType}  
+                onChange={(e) => setNewProposal({...newProposal, proposalType: e.target.value})}  
+                className="w-full border rounded p-2"  
+                required  
+              >  
+                <option value="Work">Work Proposal</option>  
+                <option value="Governance">Governance Proposal</option>  
+              </select>  
+            </div>  
+            
+            <div>  
+              <label className="block mb-1 font-medium">Funding Source</label>  
+              <select  
+                value={newProposal.fundingSource}  
+                onChange={(e) => setNewProposal({...newProposal, fundingSource: e.target.value})}  
+                className="w-full border rounded p-2"  
+                required  
+              >  
+                <option value="DAO">DAO Treasury</option>  
+                {newProposal.proposalType === 'Work' && (  
+                  <option value="Customer">Customer Funded</option>  
+                )}  
+              </select>  
+            </div>  
+            
             <div>  
               <label className="block mb-1 font-medium">Proposal Title</label>  
               <input  
@@ -385,6 +442,16 @@ const GovernancePage = () => {
                 onChange={(e) => setNewProposal({...newProposal, detailedDescription: e.target.value})}  
                 className="w-full border rounded p-2 h-32"  
                 required  
+              />  
+            </div>  
+            
+            <div>  
+              <label className="block mb-1 font-medium">Additional Data (Optional)</label>  
+              <textarea  
+                value={newProposal.additionalData}  
+                onChange={(e) => setNewProposal({...newProposal, additionalData: e.target.value})}  
+                className="w-full border rounded p-2 h-24"  
+                placeholder="Additional proposal data, requirements, or specifications (will be stored on IPFS)"  
               />  
             </div>  
               
@@ -420,6 +487,18 @@ const GovernancePage = () => {
                 <div className="bg-gray-50 p-4 flex justify-between items-center">  
                   <div>  
                     <h3 className="font-semibold">{proposal.description}</h3>  
+                    <div className="flex items-center space-x-2 mt-1">  
+                      <span className={`px-2 py-1 rounded text-xs ${  
+                        proposal.proposalType === 0 ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'  
+                      }`}>  
+                        {proposal.proposalType === 0 ? 'Work' : 'Governance'}  
+                      </span>  
+                      <span className={`px-2 py-1 rounded text-xs ${  
+                        proposal.fundingSource === 0 ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'  
+                      }`}>  
+                        {proposal.fundingSource === 0 ? 'DAO Funded' : 'Customer Funded'}  
+                      </span>  
+                    </div>  
                     <p className="text-sm text-gray-500">  
                       Proposed by {proposal.proposer.substring(0, 6)}...{proposal.proposer.substring(38)}   
                       on {proposal.proposalTime.toLocaleDateString()}  
