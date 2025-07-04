@@ -95,7 +95,10 @@ describe("RoseGovernance", function() {
         roseGovernance.connect(user1).createTaskProposal(
           taskDescription,
           detailedDescription,
-          taskDeposit
+          taskDeposit,
+          0, // ProposalType.Work
+          0, // FundingSource.DAO
+          "" // empty IPFS hash
         )
       )
         .to.emit(roseGovernance, "ProposalCreated")
@@ -110,7 +113,10 @@ describe("RoseGovernance", function() {
         roseGovernance.connect(user1).createTaskProposal(
           taskDescription,
           detailedDescription,
-          taskDeposit
+          taskDeposit,
+          0, // ProposalType.Work
+          0, // FundingSource.DAO
+          "" // empty IPFS hash
         )
       ).to.be.revertedWith("Insufficient tokens locked to propose");
     });
@@ -126,7 +132,10 @@ describe("RoseGovernance", function() {
       await roseGovernance.connect(user1).createTaskProposal(
         taskDescription,
         detailedDescription,
-        taskDeposit
+        taskDeposit,
+        0, // ProposalType.Work
+        0, // FundingSource.DAO
+        "" // empty IPFS hash
       );
     });
     
@@ -169,7 +178,10 @@ describe("RoseGovernance", function() {
       await roseGovernance.connect(user1).createTaskProposal(
         taskDescription,
         detailedDescription,
-        taskDeposit
+        taskDeposit,
+        0, // ProposalType.Work
+        0, // FundingSource.DAO
+        "" // empty IPFS hash
       );
       
       await roseGovernance.connect(user1).vote(1, 5); // Proposer votes max
@@ -204,7 +216,10 @@ describe("RoseGovernance", function() {
       await roseGovernance.connect(user1).createTaskProposal(
         taskDescription,
         detailedDescription,
-        taskDeposit
+        taskDeposit,
+        0, // ProposalType.Work
+        0, // FundingSource.DAO
+        "" // empty IPFS hash
       );
       
       await roseGovernance.connect(user1).vote(1, 5);

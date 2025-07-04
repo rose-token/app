@@ -25,6 +25,9 @@ contract RoseGovernance {
     // STAR voting parameters
     uint8 public constant MAX_SCORE = 5;
     
+    enum ProposalType { Work, Governance }
+    enum FundingSource { DAO, Customer }
+    
     enum ProposalStatus { Active, Approved, Rejected, Executed, Expired }
     
     struct TaskProposal {
@@ -36,6 +39,9 @@ contract RoseGovernance {
         uint256 proposalTime;
         uint256 executionTime;
         ProposalStatus status;
+        ProposalType proposalType; // Work or Governance
+        FundingSource fundingSource; // DAO or Customer
+        string ipfsDataHash; // IPFS CID for detailed proposal data
         mapping(address => uint8) scores; // Voter => Score (0-5)
         address[] voters;
         uint256 totalScoreSum; // Sum of all scores
@@ -122,10 +128,20 @@ contract RoseGovernance {
     function createTaskProposal(
         string calldata _description,
         string calldata _detailedDescription,
-        uint256 _tokenAmount
+        uint256 _tokenAmount,
+        ProposalType _proposalType,
+        FundingSource _fundingSource,
+        string calldata _ipfsDataHash
     ) external returns (uint256) {
         // Ensure proposer has enough tokens locked
         require(lockedTokens[msg.sender] >= minimumTokensToPropose, "Insufficient tokens locked to propose");
+        
+        // Validate proposal type and funding source combination
+        if (_proposalType == ProposalType.Work) {
+            require(_fundingSource == FundingSource.DAO || _fundingSource == FundingSource.Customer, "Invalid funding source for work proposal");
+        } else {
+            require(_fundingSource == FundingSource.DAO, "Governance proposals must be DAO funded");
+        }
         
         proposalCounter++;
         TaskProposal storage proposal = proposals[proposalCounter];
@@ -136,6 +152,9 @@ contract RoseGovernance {
         proposal.tokenAmount = _tokenAmount;
         proposal.proposalTime = block.timestamp;
         proposal.status = ProposalStatus.Active;
+        proposal.proposalType = _proposalType;
+        proposal.fundingSource = _fundingSource;
+        proposal.ipfsDataHash = _ipfsDataHash;
         
         emit ProposalCreated(proposalCounter, msg.sender, _description, _tokenAmount);
         return proposalCounter;
