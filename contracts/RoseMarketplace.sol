@@ -425,27 +425,14 @@ contract RoseMarketplace {
         return (levelScore * levelWeight + completionScore * completionWeight) / 100;
     }
     
-    /**
-     * @dev Get the number of completed tasks for a worker
-     * @return Number of tasks completed
-     */
     function getWorkerCompletedTasks(address /* _worker */) internal pure returns (uint256) {
         return 0;
     }
     
-    /**
-     * @dev Get the number of cancelled tasks for a worker
-     * @return Number of tasks cancelled
-     */
     function getWorkerCancelledTasks(address /* _worker */) internal pure returns (uint256) {
         return 0;
     }
     
-    /**
-     * @dev Customer selects a short list of top bids for stakeholder review
-     * @param _taskId ID of the task
-     * @param _selectedBidIndices Array of indices of selected bids
-     */
     function selectShortlist(uint256 _taskId, uint256[] calldata _selectedBidIndices) external {
         Task storage t = tasks[_taskId];
         BiddingPhase storage bidding = taskBidding[_taskId];
