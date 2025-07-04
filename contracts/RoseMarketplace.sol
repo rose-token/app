@@ -760,7 +760,7 @@ contract RoseMarketplace {
 
     /**
      * @dev Mint the reward to the worker, stakeholder, and treasury according to splits. 
-     * This is where you can customize the "socialist" logic: 
+     * This is where you can customize the "worker-focused" logic: 
      * e.g., more to worker, some to stakeholder, some to treasury, etc.
      * Applies reputation bonus based on combined levels of customer, worker, and stakeholder.
      */

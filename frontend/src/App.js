@@ -24,7 +24,7 @@ function App() {
       sdkOptions={{
         dappMetadata: {
           name: "Rose Token",
-          description: "A decentralized task marketplace with a socialist token distribution model",
+          description: "A decentralized task marketplace with a worker token distribution model",
           url: window.location.origin,
         },
         checkInstallationImmediately: false,

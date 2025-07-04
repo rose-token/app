@@ -9,7 +9,7 @@ const TokenDistributionChart = () => {
     <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
       <h2 className="text-xl font-semibold mb-4">Token Distribution Model</h2>
       <p className="text-sm text-gray-600 mb-4">
-        When a task is successfully completed, 10% of the deposit amount is minted as bonus ROSE tokens and distributed according to the socialist model:
+        When a task is successfully completed, 10% of the deposit amount is minted as bonus ROSE tokens and distributed according to the worker distribution model:
       </p>
       
       <div className="relative h-8 bg-gray-200 rounded-full overflow-hidden mb-4">
@@ -59,7 +59,7 @@ const TokenDistributionChart = () => {
       </div>
       
       <div className="mt-4 text-sm text-gray-600">
-        <p>The socialist token model ensures that rewards from completed work benefit:</p>
+        <p>The worker token model ensures that rewards from completed work benefit:</p>
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li>The individual worker who completed the task</li>
           <li>The stakeholder who validated the work</li>
