@@ -48,7 +48,7 @@ const HelpPage = () => {
         <div className="space-y-4">
           <h3 className="text-xl font-semibold">What is Rose Token?</h3>
           <p>
-            Rose Token is a decentralized marketplace with a socialist token distribution model,
+            Rose Token is a decentralized marketplace with a worker token distribution model,
             built on Ethereum using Solidity. Our platform reimagines how value is distributed in 
             digital economies, ensuring fair compensation for all contributors.
           </p>
@@ -220,11 +220,11 @@ const HelpPage = () => {
         </div>
       </CollapsibleSection>
         
-      <CollapsibleSection id="whitepaper" title="White Paper: The Socialist Token Model">
+      <CollapsibleSection id="whitepaper" title="White Paper: The Worker Token Model">
         <div className="space-y-6">
           <h3 className="text-xl font-semibold">Executive Summary</h3>
           <p>
-            The Rose Token implements a new paradigm in cryptocurrency: a socialist token distribution model that prioritizes 
+            The Rose Token implements a new paradigm in cryptocurrency: a worker token distribution model that prioritizes 
             labor value over capital ownership. This white paper outlines our economic philosophy, technical implementation, 
             and vision for creating a more equitable digital economy.
           </p>
@@ -276,17 +276,17 @@ const HelpPage = () => {
           </p>
           <ul className="list-disc pl-5 mt-2 space-y-2">
             <li>A full DAO governance system where all token holders can participate in decision-making</li>
-            <li>Integration with other DeFi protocols while maintaining socialist distribution principles</li>
+            <li>Integration with other DeFi protocols while maintaining worker-focused distribution principles</li>
             <li>Development of specialized marketplaces for different types of work</li>
             <li>Implementation of reputation systems that reward consistent quality work</li>
-            <li>Creation of educational resources to promote understanding of socialist economic principles</li>
+            <li>Creation of educational resources to promote understanding of worker-focused economic principles</li>
           </ul>
             
           <h3 className="text-xl font-semibold">Conclusion</h3>
           <p>
             The Rose Token represents a fundamentally different approach to cryptocurrency economies - one that values 
             human contribution over capital, cooperation over competition, and equitable distribution over concentration 
-            of wealth. By aligning economic incentives with socialist principles, we aim to demonstrate that blockchain 
+            of wealth. By aligning economic incentives with worker-focused principles, we aim to demonstrate that blockchain 
             technology can be used to create more just and equitable economic systems.
           </p>
         </div>
@@ -321,7 +321,7 @@ const HelpPage = () => {
             },
             {
               q: "What fees are associated with using the platform?",
-              a: "The platform itself doesn't charge fees beyond standard Ethereum gas fees for transactions. All value transfers in the system are transparent and follow our socialist distribution model."
+              a: "The platform itself doesn't charge fees beyond standard Ethereum gas fees for transactions. All value transfers in the system are transparent and follow our worker distribution model."
             }
           ].map((item, index) => (
             <div key={index} className="border-b pb-4">
@@ -421,7 +421,7 @@ const HelpPage = () => {
           {[
             {
               term: "ROSE Token",
-              definition: "The native ERC20 token of the platform, distributed according to socialist principles when tasks are completed."
+              definition: "The native ERC20 token of the platform, distributed according to worker-focused principles when tasks are completed."
             },
             {
               term: "Customer",
@@ -456,7 +456,7 @@ const HelpPage = () => {
               definition: "The process of creating new ROSE tokens, which occurs only when tasks are successfully completed and validated."
             },
             {
-              term: "Socialist Distribution Model",
+              term: "Worker Distribution Model",
               definition: "The economic system whereby value is distributed primarily to workers (60%) rather than capital owners."
             },
             {

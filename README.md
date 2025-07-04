@@ -1,6 +1,6 @@
-# Socialist Crypto Token Model
+# Worker-Focused Crypto Token Model
 
-A decentralized marketplace with a socialist token distribution model, built on Ethereum using Solidity.
+A decentralized marketplace with a worker token distribution model, built on Ethereum using Solidity.
 
 ## Overview
 
@@ -76,4 +76,4 @@ The Rose Token frontend is a React application that provides a user interface fo
 - Task claiming, completion, and approval workflows
 - Dispute resolution
 - Token balance display
-- Socialist token distribution visualization
+- Worker token distribution visualization

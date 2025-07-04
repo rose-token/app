@@ -19,7 +19,7 @@ const Layout = ({ children }) => {
           {children}
         </main>
         <footer className="py-6 text-center text-sm text-muted-foreground">
-          <p>Rose Token - A Socialist Crypto Token Model</p>
+          <p>Rose Token - A Worker-Focused Crypto Token Model</p>
         </footer>
       </div>
     </div>

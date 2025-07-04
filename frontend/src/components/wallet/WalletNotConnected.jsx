@@ -18,7 +18,7 @@ const WalletNotConnected = () => {
         <div className="mt-6 text-left">
           <h3 className="text-lg font-medium mb-3 text-primary">What is Rose Token?</h3>
           <p className="mb-3">
-            ROSE is a decentralized ERC20 token with a <strong>socialist distribution model</strong> that rewards participation in our task marketplace ecosystem.
+            ROSE is a decentralized ERC20 token with a <strong>worker distribution model</strong> that rewards participation in our task marketplace ecosystem.
           </p>
             
           {!showDetails ? (
@@ -41,7 +41,7 @@ const WalletNotConnected = () => {
                   </ul>  
                 </li>  
                 <li>  
-                  <strong>Socialist Token Distribution:</strong> When tasks are completed successfully, new ROSE tokens are minted and distributed:  
+                  <strong>Worker Token Distribution:</strong> When tasks are completed successfully, new ROSE tokens are minted and distributed:  
                   <ul className="list-circle pl-5 mt-1">  
                     <li>60% to the worker who completed the task</li>  
                     <li>20% to the stakeholder who validated the work</li>  
