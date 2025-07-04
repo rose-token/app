@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 import "./RoseToken.sol";
 import "./RoseReputation.sol";
 import "./StakeholderRegistry.sol";
+import "./TokenStaking.sol";
 import "hardhat/console.sol";
 
 /**
@@ -25,6 +26,9 @@ contract RoseMarketplace {
     
     // Reference to the StakeholderRegistry contract
     StakeholderRegistry public stakeholderRegistry;
+    
+    // Reference to the TokenStaking contract
+    TokenStaking public tokenStaking;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -99,6 +103,12 @@ contract RoseMarketplace {
     // Maps task ID => Task details
     mapping(uint256 => Task) public tasks;
     
+    // Maps task ID => stakeholder address => approval status
+    mapping(uint256 => mapping(address => bool)) public stakeholderApprovals;
+    
+    // Maps task ID => array of stakeholders who can approve
+    mapping(uint256 => address[]) public taskStakeholders;
+    
     // Maps task ID => array of comments
     mapping(uint256 => Comment[]) public taskComments;
     
@@ -142,6 +152,9 @@ contract RoseMarketplace {
     uint256 public constant TREASURY_SHARE = 20;    // 20%
     uint256 public constant BURN_SHARE = 0;         // 0%
     uint256 public constant SHARE_DENOMINATOR = 100;
+    
+    // 66% approval threshold for final payouts
+    uint256 public constant STAKEHOLDER_APPROVAL_THRESHOLD = 66;
 
     // Burn address (commonly the zero address or a dead address)
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
@@ -186,6 +199,14 @@ contract RoseMarketplace {
         // In reality, you would restrict this to owner or multisig
         require(_stakeholderRegistry != address(0), "StakeholderRegistry cannot be zero address");
         stakeholderRegistry = StakeholderRegistry(_stakeholderRegistry);
+    }
+    
+    /**
+     * @dev Set the token staking contract address
+     */
+    function setTokenStaking(TokenStaking _tokenStaking) external {
+        require(msg.sender == address(roseToken) || msg.sender == governanceContract, "Only token or governance can set staking");
+        tokenStaking = _tokenStaking;
     }
     
     /**
@@ -658,23 +679,26 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Stakeholder approves the work. If the customer also approved, we finalize the task, pay the worker, 
-     * and mint tokens to the worker, stakeholder, and treasury. 
+     * @dev Stakeholder approves the work. If the customer also approved and 66% stakeholder threshold is met,
+     * we finalize the task, pay the worker, and mint tokens to the worker, stakeholder, and treasury. 
      * @param _taskId ID of the task to approve
      */
     function approveCompletionByStakeholder(uint256 _taskId) external {
         Task storage t = tasks[_taskId];
         require(t.stakeholder == msg.sender, "Only the designated stakeholder can approve");
         require(t.status == TaskStatus.Completed, "Task must be completed first");
+        
+        // Record stakeholder approval
+        stakeholderApprovals[_taskId][msg.sender] = true;
         t.stakeholderApproval = true;
         
         // Add debug logging
         console.log("Task", _taskId, "stakeholder approved");
         console.log("Customer approval status:", t.customerApproval);
         
-        // Once both approvals are in, mark task as ready for worker to accept payment
-        if (t.customerApproval) {
-            console.log("Both approvals received, marking task ready for payment acceptance");
+        // Check if we have enough stakeholder approvals (66% threshold)
+        if (t.customerApproval && _hasRequiredStakeholderApprovals(_taskId)) {
+            console.log("Both customer approval and 66% stakeholder threshold met, marking task ready for payment acceptance");
             t.status = TaskStatus.ApprovedPendingPayment;
             emit TaskReadyForPayment(_taskId, t.worker, t.deposit);
         }
@@ -689,7 +713,8 @@ contract RoseMarketplace {
         Task storage t = tasks[_taskId];
         require(t.worker == msg.sender, "Only assigned worker can accept payment");
         require(t.status == TaskStatus.ApprovedPendingPayment, "Task must be approved and pending payment");
-        require(t.customerApproval && t.stakeholderApproval, "Task must be approved by both customer and stakeholder");
+        require(t.customerApproval && t.stakeholderApproval, "Task must be approved by customer and stakeholder");
+        require(_hasRequiredStakeholderApprovals(_taskId), "Must meet 66% stakeholder approval threshold");
         
         console.log("Worker accepting payment for task", _taskId);
         _finalizeTask(_taskId, true);
@@ -999,5 +1024,95 @@ contract RoseMarketplace {
         require(bidding.startTime > 0, "Bidding has not started for this task");
         
         return bidding.minStake;
+    }
+    
+    /**
+     * @dev Check if task has required stakeholder approvals (66% threshold)
+     * @param _taskId ID of the task to check
+     * @return True if 66% of eligible stakeholders have approved
+     */
+    function _hasRequiredStakeholderApprovals(uint256 _taskId) internal view returns (bool) {
+        if (address(tokenStaking) == address(0)) {
+            // Fallback to single stakeholder approval if no token staking
+            return tasks[_taskId].stakeholderApproval;
+        }
+        
+        // Count eligible stakeholders and approvals
+        uint256 eligibleStakeholders = 0;
+        uint256 approvals = 0;
+        
+        address[] memory stakeholders = taskStakeholders[_taskId];
+        if (stakeholders.length == 0) {
+            // If no specific stakeholders assigned, use the task's designated stakeholder
+            return tasks[_taskId].stakeholderApproval;
+        }
+        
+        for (uint i = 0; i < stakeholders.length; i++) {
+            if (tokenStaking.isValidStakeholder(stakeholders[i])) {
+                eligibleStakeholders++;
+                if (stakeholderApprovals[_taskId][stakeholders[i]]) {
+                    approvals++;
+                }
+            }
+        }
+        
+        if (eligibleStakeholders == 0) {
+            return false;
+        }
+        
+        // Check if approvals meet 66% threshold
+        return (approvals * 100) >= (eligibleStakeholders * STAKEHOLDER_APPROVAL_THRESHOLD);
+    }
+    
+    /**
+     * @dev Add stakeholders who can approve a task
+     * @param _taskId ID of the task
+     * @param _stakeholders Array of stakeholder addresses
+     */
+    function addTaskStakeholders(uint256 _taskId, address[] calldata _stakeholders) external {
+        require(_taskId > 0 && _taskId <= taskCounter, "Task does not exist");
+        Task storage t = tasks[_taskId];
+        require(msg.sender == t.customer || msg.sender == governanceContract, "Only customer or governance can add stakeholders");
+        
+        for (uint i = 0; i < _stakeholders.length; i++) {
+            if (address(tokenStaking) != address(0)) {
+                require(tokenStaking.isValidStakeholder(_stakeholders[i]), "Must be valid stakeholder");
+            }
+            taskStakeholders[_taskId].push(_stakeholders[i]);
+        }
+    }
+    
+    /**
+     * @dev Get stakeholder approval percentage for a task
+     * @param _taskId ID of the task
+     * @return Percentage of eligible stakeholders who have approved
+     */
+    function getStakeholderApprovalPercentage(uint256 _taskId) external view returns (uint256) {
+        if (address(tokenStaking) == address(0)) {
+            return tasks[_taskId].stakeholderApproval ? 100 : 0;
+        }
+        
+        address[] memory stakeholders = taskStakeholders[_taskId];
+        if (stakeholders.length == 0) {
+            return tasks[_taskId].stakeholderApproval ? 100 : 0;
+        }
+        
+        uint256 eligibleStakeholders = 0;
+        uint256 approvals = 0;
+        
+        for (uint i = 0; i < stakeholders.length; i++) {
+            if (tokenStaking.isValidStakeholder(stakeholders[i])) {
+                eligibleStakeholders++;
+                if (stakeholderApprovals[_taskId][stakeholders[i]]) {
+                    approvals++;
+                }
+            }
+        }
+        
+        if (eligibleStakeholders == 0) {
+            return 0;
+        }
+        
+        return (approvals * 100) / eligibleStakeholders;
     }
 }

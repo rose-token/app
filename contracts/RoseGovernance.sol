@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 import "./RoseToken.sol";
 import "./RoseReputation.sol";
 import "./RoseMarketplace.sol";
+import "./TokenStaking.sol";
 
 /**
  * @title RoseGovernance
@@ -15,12 +16,14 @@ contract RoseGovernance {
     RoseToken public roseToken;
     RoseReputation public roseReputation;
     RoseMarketplace public roseMarketplace;
+    TokenStaking public tokenStaking;
     
     // Governance parameters
     uint256 public proposalDuration = 7 days;
     uint256 public executionDelay = 2 days;
     uint256 public minimumTokensToPropose;
     uint256 public proposalCounter;
+    uint256 public constant PAYOUT_APPROVAL_THRESHOLD = 66; // 66% threshold for final payouts
     
     // STAR voting parameters
     uint8 public constant MAX_SCORE = 5;
@@ -81,6 +84,14 @@ contract RoseGovernance {
         roseReputation = _roseReputation;
         roseMarketplace = _roseMarketplace;
         minimumTokensToPropose = _minimumTokensToPropose;
+    }
+    
+    /**
+     * @dev Set the TokenStaking contract reference
+     */
+    function setTokenStaking(TokenStaking _tokenStaking) external {
+        require(msg.sender == address(roseMarketplace) || msg.sender == address(this), "Only marketplace or governance can set token staking");
+        tokenStaking = _tokenStaking;
     }
     
     /**
@@ -199,13 +210,18 @@ contract RoseGovernance {
     }
     
     /**
-     * @dev Calculate voting weight based on locked tokens and reputation levels
+     * @dev Calculate voting weight based on locked tokens, staked tokens, and reputation levels
      * @param _voter Address of the voter
      * @return Weight of the voter's vote
      */
     function calculateVotingWeight(address _voter) public view returns (uint256) {
         // Base weight from locked tokens (1 token = 1 weight)
         uint256 weight = lockedTokens[_voter];
+        
+        // Add weight from staked tokens if TokenStaking is set
+        if (address(tokenStaking) != address(0)) {
+            weight += tokenStaking.getStakedAmount(_voter);
+        }
         
         // Add bonus weight from reputation levels
         uint256 customerLevel = roseReputation.getLevel(_voter, RoseReputation.Role.Customer);
