@@ -20,6 +20,17 @@ async function main() {
   
   const roseReputationAddress = await roseMarketplace.roseReputation();
   console.log("RoseReputation deployed to:", roseReputationAddress);
+
+  const StakeholderRegistry = await hre.ethers.getContractFactory("StakeholderRegistry");
+  const stakeholderRegistry = await StakeholderRegistry.deploy(roseTokenAddress, roseReputationAddress);
+  await stakeholderRegistry.waitForDeployment();
+  
+  const stakeholderRegistryAddress = await stakeholderRegistry.getAddress();
+  console.log("StakeholderRegistry deployed to:", stakeholderRegistryAddress);
+  
+  await roseMarketplace.setStakeholderRegistry(stakeholderRegistryAddress);
+  console.log("StakeholderRegistry set in marketplace");
+  
   
   const minimumTokensToPropose = hre.ethers.parseEther("10"); // 10 ROSE tokens
   const RoseGovernance = await hre.ethers.getContractFactory("RoseGovernance");
@@ -36,6 +47,9 @@ async function main() {
   
   await roseMarketplace.setGovernanceContract(governanceAddress);
   console.log("Governance contract set in marketplace");
+  
+  await stakeholderRegistry.authorizeContract(marketplaceAddress);
+  console.log("Marketplace authorized to use stakeholder registry");
 
   console.log("\nContract Details:");
   console.log("----------------");
@@ -43,6 +57,7 @@ async function main() {
   console.log("RoseToken:", roseTokenAddress);
   console.log("RoseReputation:", roseReputationAddress);
   console.log("RoseGovernance:", governanceAddress);
+  console.log("StakeholderRegistry:", stakeholderRegistryAddress);
   console.log("DAO Treasury:", daoTreasury);
   
   const deploymentOutput = {
@@ -50,6 +65,7 @@ async function main() {
     tokenAddress: roseTokenAddress,
     reputationAddress: roseReputationAddress,
     governanceAddress: governanceAddress,
+    stakeholderRegistryAddress: stakeholderRegistryAddress,
     daoTreasuryAddress: daoTreasury
   };
   

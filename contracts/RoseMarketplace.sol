@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
 import "./RoseReputation.sol";
+import "./StakeholderRegistry.sol";
 import "hardhat/console.sol";
 
 /**
@@ -21,6 +22,9 @@ contract RoseMarketplace {
     
     // Reference to the RoseReputation contract
     RoseReputation public roseReputation;
+    
+    // Reference to the StakeholderRegistry contract
+    StakeholderRegistry public stakeholderRegistry;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -173,6 +177,18 @@ contract RoseMarketplace {
     }
     
     /**
+     * @dev Set the stakeholder registry contract address
+     * @param _stakeholderRegistry Address of the StakeholderRegistry contract
+     */
+    function setStakeholderRegistry(address _stakeholderRegistry) external {
+        // In a production system, you would add access control here
+        // For this example, we're allowing anyone to set this initially
+        // In reality, you would restrict this to owner or multisig
+        require(_stakeholderRegistry != address(0), "StakeholderRegistry cannot be zero address");
+        stakeholderRegistry = StakeholderRegistry(_stakeholderRegistry);
+    }
+    
+    /**
      * @dev Modifier to restrict access to governance contract
      */
     modifier onlyGovernance() {
@@ -255,6 +271,12 @@ contract RoseMarketplace {
         require(t.stakeholder == address(0), "Task already has a stakeholder");
         require(t.customer != msg.sender, "Customer cannot be stakeholder for their own task");
         
+        // Check stakeholder registry eligibility (if registry is set)
+        if (address(stakeholderRegistry) != address(0)) {
+            require(stakeholderRegistry.isEligibleStakeholder(msg.sender), "Not eligible stakeholder");
+            require(!stakeholderRegistry.checkRoleConflict(msg.sender, t.customer, t.worker), "Role conflict detected");
+        }
+        
         // Calculate required 10% deposit
         uint256 requiredDeposit = t.deposit / 10;
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
@@ -318,6 +340,11 @@ contract RoseMarketplace {
         require(!bidding.workerHasBid[msg.sender], "Worker has already placed a bid");
         require(t.customer != msg.sender, "Customer cannot bid on own task");
         require(t.stakeholder != msg.sender, "Stakeholder cannot bid on this task");
+        
+        // Check role conflicts (if registry is set)
+        if (address(stakeholderRegistry) != address(0)) {
+            require(!stakeholderRegistry.checkRoleConflict(msg.sender, t.customer, t.stakeholder), "Role conflict detected");
+        }
         
         // Transfer stake from worker to contract
         require(roseToken.transferFrom(msg.sender, address(this), bidding.minStake), "Stake transfer failed");
