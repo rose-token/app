@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import CommentSection from './CommentSection';
+import ProgressTracker from '../governance/ProgressTracker';
 import { ethers } from 'ethers';
 
 const getBidStatusText = (status) => {
@@ -70,6 +71,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
   const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
   const canBid = !isCustomer && !isStakeholder && task.status === TaskStatus.Bidding && task.worker === '0x0000000000000000000000000000000000000000';
   const canStartBidding = (isCustomer || isStakeholder) && task.status === TaskStatus.Bidding && minimumStake === '0';
+  
   
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
   
@@ -266,6 +268,12 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         
         {canBid && (
           <div className="flex flex-col space-y-3 border-t pt-3 mt-2">
+            <div className="bg-blue-50 p-3 rounded-md mb-2">
+              <h4 className="text-sm font-semibold text-blue-800">Worker Bid Submission</h4>
+              <p className="text-xs text-blue-600 mt-1">
+                This task follows the unified governance workflow. Your bid requires token staking to demonstrate commitment.
+              </p>
+            </div>
             <h4 className="text-sm font-semibold">Place a Bid</h4>
             <p className="text-xs text-gray-600">Minimum stake required: {minimumStake} ROSE</p>
             
@@ -329,9 +337,12 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
                   onChange={(e) => setPortfolioLink(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
                   rows="2"
-                  placeholder="Brief description of your experience"
+                  placeholder="Brief description of your experience and relevant work"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Provide evidence of your expertise to help stakeholders evaluate your bid
+                </p>
               </div>
               
               <div>
@@ -344,17 +355,26 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
                   onChange={(e) => setImplementationPlan(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
                   rows="3"
-                  placeholder="Describe how you plan to implement this task"
+                  placeholder="Detailed plan for completing this task, including milestones"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Clear implementation plans help stakeholders assess feasibility and quality
+                </p>
               </div>
             </div>
             
+            <div className="bg-yellow-50 p-3 rounded-md mb-2">
+              <p className="text-xs text-yellow-800">
+                <strong>Note:</strong> By submitting this bid, you agree to stake {minimumStake} ROSE tokens. 
+                Stakeholders will use ranked choice voting to evaluate all bids fairly.
+              </p>
+            </div>
             <button 
               onClick={() => onBid(task.id, bidAmount, estimatedDuration, storyPoints, portfolioLink, implementationPlan)} 
               className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium"
             >
-              Submit Bid
+              Submit Bid & Stake Tokens
             </button>
           </div>
         )}
@@ -469,6 +489,22 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onDispute, onAcceptPay
         </div>
       )}
       
+      {/* Progress Tracker - visible to all participants */}
+      {(isCustomer || isWorker || isStakeholder) && (
+        <div className="mt-4">
+          <ProgressTracker 
+            proposal={null} // TODO: Link to actual proposal data
+            task={task}
+            stakeholderApprovals={{
+              approvalCount: task.stakeholderApproval ? 1 : 0,
+              totalStakeholders: 1, // TODO: Get actual stakeholder count
+              approvalPercentage: task.stakeholderApproval ? 100 : 0,
+              isApproved: task.stakeholderApproval
+            }}
+          />
+        </div>
+      )}
+
       {/* Comments section - only visible to stakeholders, customers, and workers */}
       {showComments && (isCustomer || isWorker || isStakeholder) && (
         <CommentSection 
