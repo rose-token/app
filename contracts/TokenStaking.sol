@@ -66,6 +66,8 @@ contract TokenStaking {
     event ElectionStarted(uint256 electionId, uint256 startTime, uint256 endTime);
     event VoteCast(uint256 electionId, address indexed voter, address[] preferences);
     event ElectionFinalized(uint256 electionId, address winner);
+    event BidEvaluationStarted(uint256 electionId, uint256 taskId, address[] bidders);
+    event BidEvaluationFinalized(uint256 electionId, uint256 taskId, address selectedBidder);
     
     constructor(RoseToken _roseToken, StakeholderRegistry _stakeholderRegistry, address _daoTreasury) {
         roseToken = _roseToken;
@@ -129,6 +131,32 @@ contract TokenStaking {
         emit ElectionStarted(electionCounter, election.startTime, election.endTime);
         return electionCounter;
     }
+
+    /**
+     * @dev Start a bid evaluation election for marketplace task
+     * @param taskId The marketplace task ID being evaluated
+     * @param bidders Array of worker addresses who placed bids
+     * @param ipfsDataHash IPFS hash containing bid evaluation data
+     * @return electionId The ID of the created election
+     */
+    function startBidEvaluationElection(
+        uint256 taskId,
+        address[] calldata bidders,
+        string calldata ipfsDataHash
+    ) external onlyAuthorized returns (uint256) {
+        require(bidders.length >= 2, "Need at least 2 bidders to evaluate");
+        
+        electionCounter++;
+        StakeholderElection storage election = elections[electionCounter];
+        election.startTime = block.timestamp;
+        election.endTime = block.timestamp + VOTING_PERIOD;
+        election.candidates = bidders;
+        election.ipfsDataHash = ipfsDataHash;
+        
+        emit ElectionStarted(electionCounter, election.startTime, election.endTime);
+        emit BidEvaluationStarted(electionCounter, taskId, bidders);
+        return electionCounter;
+    }
     
     /**
      * @dev Cast a ranked choice vote in an election
@@ -188,6 +216,29 @@ contract TokenStaking {
         election.isFinalized = true;
         
         emit ElectionFinalized(electionId, winner);
+    }
+
+    /**
+     * @dev Finalize bid evaluation election and notify marketplace
+     * @param electionId The election ID to finalize
+     * @param taskId The marketplace task ID this election was for
+     */
+    function finalizeBidEvaluationElection(uint256 electionId, uint256 taskId) external {
+        StakeholderElection storage election = elections[electionId];
+        require(block.timestamp > election.endTime, "Voting period not ended");
+        require(!election.isFinalized, "Election already finalized");
+        
+        if (election.voters.length == 0) {
+            election.isFinalized = true;
+            return;
+        }
+        
+        address selectedBidder = _runInstantRunoffVoting(electionId);
+        election.winner = selectedBidder;
+        election.isFinalized = true;
+        
+        emit ElectionFinalized(electionId, selectedBidder);
+        emit BidEvaluationFinalized(electionId, taskId, selectedBidder);
     }
     
     /**

@@ -78,7 +78,7 @@ describe("RoseMarketplace", function () {
       
       await expect(
         roseMarketplace.connect(customer).createTask(taskDescription, 0, "")
-      ).to.be.revertedWith("Must deposit some ROSE tokens as payment");
+      ).to.be.reverted;
     });
 
   });

@@ -103,6 +103,14 @@ contract RoseGovernance {
     }
     
     /**
+     * @dev Set the BidEvaluationManager contract reference in the marketplace
+     * This is a deployment helper function that can be called during contract setup
+     */
+    function setMarketplaceBidEvaluationManager(address _bidEvaluationManager) external {
+        roseMarketplace.setBidEvaluationManager(_bidEvaluationManager);
+    }
+    
+    /**
      * @dev Lock tokens to participate in governance
      * @param _amount Amount of tokens to lock
      * @param _duration Duration in seconds for which to lock tokens
