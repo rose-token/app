@@ -95,6 +95,14 @@ contract RoseGovernance {
     }
     
     /**
+     * @dev Set the TokenStaking contract reference in the marketplace
+     * This is a deployment helper function that can be called during contract setup
+     */
+    function setMarketplaceTokenStaking(TokenStaking _tokenStaking) external {
+        roseMarketplace.setTokenStaking(_tokenStaking);
+    }
+    
+    /**
      * @dev Lock tokens to participate in governance
      * @param _amount Amount of tokens to lock
      * @param _duration Duration in seconds for which to lock tokens
