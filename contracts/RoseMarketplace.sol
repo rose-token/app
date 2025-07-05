@@ -29,6 +29,8 @@ contract RoseMarketplace {
     
     // Reference to the TokenStaking contract
     TokenStaking public tokenStaking;
+    
+    address public bidEvaluationManager;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -206,6 +208,11 @@ contract RoseMarketplace {
     function setTokenStaking(TokenStaking _tokenStaking) external {
         require(msg.sender == address(roseToken) || msg.sender == governanceContract, "Unauthorized");
         tokenStaking = _tokenStaking;
+    }
+    
+    function setBidEvaluationManager(address _bidEvaluationManager) external {
+        require(msg.sender == address(roseToken) || msg.sender == governanceContract, "Unauthorized");
+        bidEvaluationManager = _bidEvaluationManager;
     }
     
     /**
@@ -450,6 +457,11 @@ contract RoseMarketplace {
         
         t.status = TaskStatus.ShortlistSelected;
         emit ShortlistSelected(_taskId, _selectedBidIndices);
+        
+        if (bidEvaluationManager != address(0) && taskStakeholders[_taskId].length > 1 && _selectedBidIndices.length > 1) {
+            (bool success,) = bidEvaluationManager.call(abi.encodeWithSignature("startStakeholderBidEvaluation(uint256,uint256[])", _taskId, _selectedBidIndices));
+            require(success, "Bid evaluation failed");
+        }
     }
     
     /**
@@ -1044,5 +1056,9 @@ contract RoseMarketplace {
         }
         
         return eligible == 0 ? 0 : (approved * 100) / eligible;
+    }
+    
+    function getTaskStakeholderCount(uint256 _taskId) external view returns (uint256) {
+        return taskStakeholders[_taskId].length;
     }
 }

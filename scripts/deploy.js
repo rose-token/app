@@ -61,6 +61,16 @@ async function main() {
   await roseGovernance.setMarketplaceTokenStaking(tokenStakingAddress);
   console.log("TokenStaking set in marketplace via governance");
 
+  const BidEvaluationManager = await hre.ethers.getContractFactory("BidEvaluationManager");
+  const bidEvaluationManager = await BidEvaluationManager.deploy(tokenStakingAddress, marketplaceAddress);
+  await bidEvaluationManager.waitForDeployment();
+  
+  const bidEvaluationManagerAddress = await bidEvaluationManager.getAddress();
+  console.log("BidEvaluationManager deployed to:", bidEvaluationManagerAddress);
+  
+  await roseMarketplace.setBidEvaluationManager(bidEvaluationManagerAddress);
+  console.log("BidEvaluationManager set in marketplace");
+
   console.log("\nContract Details:");
   console.log("----------------");
   console.log("RoseMarketplace:", marketplaceAddress);
@@ -69,6 +79,7 @@ async function main() {
   console.log("RoseGovernance:", governanceAddress);
   console.log("StakeholderRegistry:", stakeholderRegistryAddress);
   console.log("TokenStaking:", tokenStakingAddress);
+  console.log("BidEvaluationManager:", bidEvaluationManagerAddress);
   console.log("DAO Treasury:", daoTreasury);
   
   const deploymentOutput = {
@@ -78,6 +89,7 @@ async function main() {
     governanceAddress: governanceAddress,
     stakeholderRegistryAddress: stakeholderRegistryAddress,
     tokenStakingAddress: tokenStakingAddress,
+    bidEvaluationManagerAddress: bidEvaluationManagerAddress,
     daoTreasuryAddress: daoTreasury
   };
   
