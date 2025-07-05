@@ -4,6 +4,7 @@ import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';  
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import StakeholderElectionManager from '../components/governance/StakeholderElectionManager';
 
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
@@ -472,6 +473,28 @@ const GovernancePage = () => {
           </form>  
         </CollapsibleSection>  
       )}  
+        
+      {/* Stakeholder Elections Section */}
+      <CollapsibleSection id="stakeholder-elections" title="Stakeholder Elections">
+        <div className="space-y-4">
+          <p>
+            Stakeholder elections are a critical part of the Rose Token governance system. 
+            They ensure that only legitimate stakeholders can participate in key governance decisions 
+            and prevent bad actors from playing multiple roles in the ecosystem.
+          </p>
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">How Stakeholder Elections Work:</h4>
+            <ul className="list-disc pl-6 space-y-1 text-sm">
+              <li>Elections run on a 2-week cycle to select verified stakeholders</li>
+              <li>Candidates must stake tokens to demonstrate commitment</li>
+              <li>Voting uses ranked-choice system with drag-and-drop interface</li>
+              <li>Winners are determined through instant runoff voting algorithm</li>
+              <li>Selected stakeholders have authority to approve final payouts (66% threshold)</li>
+            </ul>
+          </div>
+          <StakeholderElectionManager />
+        </div>
+      </CollapsibleSection>
         
       {/* Proposal List */}  
       <CollapsibleSection id="proposals" title="Governance Proposals">  
