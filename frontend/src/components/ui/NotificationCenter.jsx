@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
 import { Button } from './button';
 import { Badge } from './badge';
-import { Alert, AlertDescription } from './alert';
 import { Bell, X, Check, Clock, AlertTriangle, Info, CheckCircle } from 'lucide-react';
 
 const NotificationCenter = ({ 
@@ -30,19 +29,6 @@ const NotificationCenter = ({
     }
   };
 
-  const getNotificationVariant = (type) => {
-    switch (type) {
-      case 'error':
-        return 'destructive';
-      case 'warning':
-        return 'default';
-      case 'success':
-        return 'default';
-      case 'info':
-      default:
-        return 'default';
-    }
-  };
 
   const filteredNotifications = notifications.filter(notification => {
     if (filter === 'unread') return !notification.read;

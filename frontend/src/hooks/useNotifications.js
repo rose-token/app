@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [notificationHistory, setNotificationHistory] = useState([]);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
 
   const addNotification = useCallback((notification) => {
     const newNotification = {
@@ -40,11 +44,7 @@ export const useNotifications = () => {
         removeNotification(newNotification.id);
       }, newNotification.hideAfter);
     }
-  }, []);
-
-  const removeNotification = useCallback((id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
+  }, [removeNotification]);
 
   const markAsRead = useCallback((id) => {
     setNotifications(prev => 

@@ -9,7 +9,7 @@ import { useNotifications } from '../../hooks/useNotifications';
 import NotificationCenter from '../ui/NotificationCenter';
 import ApprovalProgressChart from './ApprovalProgressChart';
 import { ethers } from 'ethers';
-import { Clock, Users, TrendingUp, Award, Bell, CheckCircle } from 'lucide-react';
+import { Clock, Users, TrendingUp, Award, CheckCircle } from 'lucide-react';
 
 const CollapsibleSection = ({ id, title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -34,7 +34,6 @@ const StakeholderDashboard = () => {
   const { account, isConnected } = useEthereum();
   const {
     notifications,
-    addNotification,
     removeNotification,
     markAsRead,
     markAllAsRead,
@@ -185,7 +184,7 @@ const StakeholderDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [roseMarketplace, roseReputation, roseToken, isConnected, account, contractsReady.readOnly]);
+  }, [roseMarketplace, roseReputation, roseToken, isConnected, account, contractsReady.readOnly, addApprovalNotification, addReputationNotification, addTaskCompletionNotification, previousData]);
 
   useEffect(() => {
     fetchStakeholderData();
