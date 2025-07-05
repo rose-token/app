@@ -58,8 +58,11 @@ async function main() {
   const tokenStakingAddress = await tokenStaking.getAddress();
   console.log("TokenStaking deployed to:", tokenStakingAddress);
   
-  await roseMarketplace.setTokenStaking(tokenStaking.getAddress());
-  console.log("TokenStaking set in marketplace");
+  await roseGovernance.setTokenStaking(tokenStaking.getAddress());
+  console.log("TokenStaking set in governance");
+  
+  await roseGovernance.setMarketplaceTokenStaking(tokenStaking.getAddress());
+  console.log("TokenStaking set in marketplace via governance");
 
   console.log("\nContract Details:");
   console.log("----------------");
