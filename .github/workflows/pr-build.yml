@@ -30,7 +30,6 @@ jobs:
         run: node scripts/update-abi.js
         
       - name: Deploy to Sepolia
-        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
           SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
