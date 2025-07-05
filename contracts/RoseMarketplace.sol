@@ -166,7 +166,7 @@ contract RoseMarketplace {
      * @param _daoTreasury The address where part of minted tokens go
      */
     constructor(address _daoTreasury) {
-        require(_daoTreasury != address(0), "DAO treasury cannot be zero");
+        require(_daoTreasury != address(0));
         daoTreasury = _daoTreasury;
         governanceContract = address(0); // Initially no governance contract
 
@@ -185,8 +185,8 @@ contract RoseMarketplace {
         // In a production system, you would add access control here
         // For this example, we're allowing anyone to set this initially
         // In reality, you would restrict this to owner or multisig
-        require(governanceContract == address(0), "Governance contract already set");
-        require(_governanceContract != address(0), "Invalid governance address");
+        require(governanceContract == address(0));
+        require(_governanceContract != address(0));
         governanceContract = _governanceContract;
     }
     
@@ -198,7 +198,7 @@ contract RoseMarketplace {
         // In a production system, you would add access control here
         // For this example, we're allowing anyone to set this initially
         // In reality, you would restrict this to owner or multisig
-        require(_stakeholderRegistry != address(0), "Invalid registry address");
+        require(_stakeholderRegistry != address(0));
         stakeholderRegistry = StakeholderRegistry(_stakeholderRegistry);
     }
     
@@ -206,12 +206,12 @@ contract RoseMarketplace {
      * @dev Set the token staking contract address
      */
     function setTokenStaking(TokenStaking _tokenStaking) external {
-        require(msg.sender == address(roseToken) || msg.sender == governanceContract, "Unauthorized");
+        require(msg.sender == address(roseToken) || msg.sender == governanceContract);
         tokenStaking = _tokenStaking;
     }
     
     function setBidEvaluationManager(address _bidEvaluationManager) external {
-        require(msg.sender == address(roseToken) || msg.sender == governanceContract, "Unauthorized");
+        require(msg.sender == address(roseToken) || msg.sender == governanceContract);
         bidEvaluationManager = _bidEvaluationManager;
     }
     
@@ -219,7 +219,7 @@ contract RoseMarketplace {
      * @dev Modifier to restrict access to governance contract
      */
     modifier onlyGovernance() {
-        require(msg.sender == governanceContract, "Only governance contract can call");
+        require(msg.sender == governanceContract);
         _;
     }
 
@@ -230,10 +230,10 @@ contract RoseMarketplace {
      * @param _detailedDescription Optional detailed information about the task (can be empty string)
      */
     function createTask(string calldata _description, uint256 _tokenAmount, string calldata _detailedDescription) external {
-        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
+        require(_tokenAmount > 0);
         
         // Transfer tokens from customer to the contract
-        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount));
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
@@ -266,10 +266,10 @@ contract RoseMarketplace {
         uint256 _tokenAmount, 
         string calldata _detailedDescription
     ) external onlyGovernance returns (uint256) {
-        require(_tokenAmount > 0, "Must deposit some ROSE tokens as payment");
+        require(_tokenAmount > 0);
         
         // Transfer tokens from treasury to the contract
-        require(roseToken.transferFrom(daoTreasury, address(this), _tokenAmount), "Token transfer failed");
+        require(roseToken.transferFrom(daoTreasury, address(this), _tokenAmount));
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
@@ -309,7 +309,7 @@ contract RoseMarketplace {
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
         
         // Transfer tokens from stakeholder to the contract
-        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount), "Token transfer failed");
+        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount));
         
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
@@ -460,7 +460,7 @@ contract RoseMarketplace {
         
         if (bidEvaluationManager != address(0) && taskStakeholders[_taskId].length > 1 && _selectedBidIndices.length > 1) {
             (bool success,) = bidEvaluationManager.call(abi.encodeWithSignature("startStakeholderBidEvaluation(uint256,uint256[])", _taskId, _selectedBidIndices));
-            require(success, "Bid evaluation failed");
+            require(success);
         }
     }
     

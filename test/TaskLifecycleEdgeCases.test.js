@@ -33,7 +33,7 @@ describe("Task Lifecycle Edge Cases", function () {
       
     await expect(  
       roseMarketplace.connect(customer).createTask(taskDescription, 0, "")  
-    ).to.be.revertedWith("Must deposit some ROSE tokens as payment");  
+    ).to.be.reverted;  
   });  
   
   it("Should not allow stakeholder to stake without sufficient approval", async function() {  
