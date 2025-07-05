@@ -391,9 +391,16 @@ const GovernancePage = () => {
         </div>  
       </CollapsibleSection>  
         
-      {/* Create Proposal Section */}  
+      {/* Create Proposal Section - Enhanced Customer Portal */}  
       {true && (  
-        <CollapsibleSection id="create-proposal" title="Create New Proposal">  
+        <CollapsibleSection id="create-proposal" title="Customer Portal - Create New Proposal">
+          <div className="bg-green-50 p-4 rounded-lg mb-4">
+            <h4 className="font-semibold text-green-800 mb-2">Unified Governance Workflow</h4>
+            <p className="text-sm text-green-700">
+              All work now flows through DAO proposals to ensure stakeholder legitimacy and prevent bad actors. 
+              Choose your funding source and let verified stakeholders evaluate proposals through ranked choice voting.
+            </p>
+          </div>
           <form onSubmit={handleCreateProposal} className="space-y-4">  
             <div>  
               <label className="block mb-1 font-medium">Proposal Type</label>  
@@ -405,7 +412,10 @@ const GovernancePage = () => {
               >  
                 <option value="Work">Work Proposal</option>  
                 <option value="Governance">Governance Proposal</option>  
-              </select>  
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Work proposals create tasks for completion. Governance proposals modify platform rules.
+              </p>
             </div>  
             
             <div>  
@@ -420,7 +430,13 @@ const GovernancePage = () => {
                 {newProposal.proposalType === 'Work' && (  
                   <option value="Customer">Customer Funded</option>  
                 )}  
-              </select>  
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {newProposal.fundingSource === 'DAO' 
+                  ? 'Community treasury funds this proposal through collective decision-making'
+                  : 'You provide direct funding while stakeholders ensure quality and legitimacy'
+                }
+              </p>
             </div>  
             
             <div>  
@@ -455,21 +471,35 @@ const GovernancePage = () => {
             </div>  
               
             <div>  
-              <label className="block mb-1 font-medium">Requested Tokens (ROSE)</label>  
+              <label className="block mb-1 font-medium">
+                {newProposal.fundingSource === 'Customer' ? 'Your Funding Amount (ROSE)' : 'Requested Tokens (ROSE)'}
+              </label>  
               <input  
                 type="number"  
                 value={newProposal.tokenAmount}  
                 onChange={(e) => setNewProposal({...newProposal, tokenAmount: e.target.value})}  
                 className="w-full border rounded p-2"  
                 required  
-              />  
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {newProposal.fundingSource === 'Customer' 
+                  ? 'Amount you will deposit to fund this work. Workers receive 60%, stakeholders 20%, DAO 20%'
+                  : 'Amount requested from DAO treasury. Subject to community approval through STAR voting'
+                }
+              </p>
             </div>  
               
+            <div className="bg-blue-50 p-3 rounded-md mb-4">
+              <p className="text-xs text-blue-800">
+                <strong>Next Steps:</strong> After submission, stakeholders will evaluate your proposal using ranked choice voting. 
+                Approved proposals enter a 2-week stakeholder selection cycle before work begins.
+              </p>
+            </div>
             <Button   
               type="submit"  
               className="bg-rose-500 text-white hover:bg-rose-600"  
             >  
-              Submit Proposal  
+              Submit to Governance Process
             </Button>  
           </form>  
         </CollapsibleSection>  
