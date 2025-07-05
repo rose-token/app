@@ -68,7 +68,7 @@ async function main() {
   const bidEvaluationManagerAddress = await bidEvaluationManager.getAddress();
   console.log("BidEvaluationManager deployed to:", bidEvaluationManagerAddress);
   
-  await roseMarketplace.setBidEvaluationManager(bidEvaluationManagerAddress);
+  await roseGovernance.setMarketplaceBidEvaluationManager(bidEvaluationManagerAddress);
   console.log("BidEvaluationManager set in marketplace");
 
   console.log("\nContract Details:");
