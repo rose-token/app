@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import StakeholderElectionManager from '../components/governance/StakeholderElectionManager';
+import StakeholderDashboard from '../components/governance/StakeholderDashboard';
 
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
@@ -473,6 +474,11 @@ const GovernancePage = () => {
           </form>  
         </CollapsibleSection>  
       )}  
+        
+      {/* Stakeholder Dashboard Section */}
+      <CollapsibleSection id="stakeholder-dashboard" title="Stakeholder Dashboard">
+        <StakeholderDashboard />
+      </CollapsibleSection>
         
       {/* Stakeholder Elections Section */}
       <CollapsibleSection id="stakeholder-elections" title="Stakeholder Elections">
