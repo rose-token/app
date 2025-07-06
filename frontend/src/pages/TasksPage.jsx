@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';
-import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
 
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
@@ -23,7 +24,19 @@ const TasksPage = () => {
   });
   
   const { account, isConnected } = useEthereum();
-  const { roseMarketplace, roseToken } = useContract();
+  const { roseMarketplace, roseToken, roseGovernance, contractsReady } = useContract();
+  
+  const [newProposal, setNewProposal] = useState({
+    description: '',
+    detailedDescription: '',
+    tokenAmount: '',
+    proposalType: 'Work',
+    fundingSource: 'DAO',
+    additionalData: ''
+  });
+  
+  const [proposals, setProposals] = useState([]);
+  const [lockedTokens, setLockedTokens] = useState(0);
   
   const fetchTaskDetails = useCallback(async (taskId) => {
     if (!roseMarketplace) return null;
@@ -371,10 +384,164 @@ const TasksPage = () => {
       setError(errorMessage);
     }
   };
+
+  const handleCreateProposal = async (e) => {
+    e.preventDefault();
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+    
+    try {
+      const amount = ethers.utils.parseEther(newProposal.tokenAmount);
+      
+      let ipfsHash = '';
+      if (newProposal.additionalData.trim()) {
+        const { uploadProposalToIPFS } = await import('../utils/ipfs/pinataService');
+        ipfsHash = await uploadProposalToIPFS({
+          additionalData: newProposal.additionalData,
+          proposalType: newProposal.proposalType,
+          fundingSource: newProposal.fundingSource,
+          metadata: {
+            createdBy: account,
+            createdAt: new Date().toISOString()
+          }
+        });
+      }
+      
+      const proposalTypeNum = newProposal.proposalType === 'Work' ? 0 : 1;
+      const fundingSourceNum = newProposal.fundingSource === 'DAO' ? 0 : 1;
+      
+      const tx = await roseGovernance.createTaskProposal(
+        newProposal.description,
+        newProposal.detailedDescription,
+        amount,
+        proposalTypeNum,
+        fundingSourceNum,
+        ipfsHash
+      );
+      await tx.wait();
+      
+      setNewProposal({
+        description: '',
+        detailedDescription: '',
+        tokenAmount: '',
+        proposalType: 'Work',
+        fundingSource: 'DAO',
+        additionalData: ''
+      });
+      
+      debouncedFetchTasks();
+      fetchProposals();
+    } catch (err) {
+      console.error('Error creating proposal:', err);
+      setError('Failed to create proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleVote = async (proposalId, score) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+    
+    try {
+      const tx = await roseGovernance.vote(proposalId, score);
+      await tx.wait();
+      
+      fetchProposals();
+    } catch (err) {
+      console.error('Error voting on proposal:', err);
+      setError('Failed to vote on proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleFinalizeProposal = async (proposalId) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+    
+    try {
+      const tx = await roseGovernance.finalizeProposal(proposalId);
+      await tx.wait();
+      
+      fetchProposals();
+    } catch (err) {
+      console.error('Error finalizing proposal:', err);
+      setError('Failed to finalize proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleExecuteProposal = async (proposalId) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+    
+    try {
+      const tx = await roseGovernance.executeProposal(proposalId);
+      await tx.wait();
+      
+      fetchProposals();
+    } catch (err) {
+      console.error('Error executing proposal:', err);
+      setError('Failed to execute proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const fetchProposals = useCallback(async () => {
+    if (!roseGovernance || !isConnected || !contractsReady.readOnly) return;
+    
+    try {
+      const counter = await roseGovernance.proposalCounter();
+      const proposalPromises = [];
+      
+      for (let i = 1; i <= counter.toNumber(); i++) {
+        proposalPromises.push(roseGovernance.proposals(i));
+      }
+      
+      const proposalResults = await Promise.all(proposalPromises);
+      const formattedProposals = proposalResults.map((proposal, index) => {
+        const proposalTime = new Date(proposal.proposalTime.toNumber() * 1000);
+        
+        let status = 'Active';
+        if (proposal.executed) {
+          status = 'Executed';
+        } else if (proposal.approved) {
+          status = 'Approved';
+        } else if (proposal.finalized) {
+          status = 'Rejected';
+        }
+        
+        return {
+          id: index + 1,
+          description: proposal.description,
+          detailedDescription: proposal.detailedDescription,
+          proposer: proposal.proposer,
+          tokenAmount: ethers.utils.formatEther(proposal.tokenAmount),
+          proposalType: proposal.proposalType,
+          fundingSource: proposal.fundingSource,
+          proposalTime: proposalTime,
+          status: status,
+          approved: proposal.approved,
+          executed: proposal.executed,
+          finalized: proposal.finalized
+        };
+      });
+      
+      setProposals(formattedProposals);
+      
+      if (account) {
+        const locked = await roseGovernance.lockedTokens(account);
+        setLockedTokens(ethers.utils.formatEther(locked));
+      }
+    } catch (err) {
+      console.error('Error fetching proposals:', err);
+      setError('Failed to fetch proposals: ' + (err.message || 'Unknown error'));
+    }
+  }, [roseGovernance, isConnected, contractsReady.readOnly, account]);
   
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
+    }
+    
+    if (roseGovernance && contractsReady.readOnly) {
+      fetchProposals();
+    }
+  }, [roseMarketplace, roseGovernance, contractsReady.readOnly, debouncedFetchTasks, fetchProposals]);
+
+  useEffect(() => {
+    if (roseMarketplace) {
       
       const paymentFilter = roseMarketplace.filters.PaymentReleased();
       const paymentListener = (taskId, worker, amount) => {
@@ -491,7 +658,217 @@ const TasksPage = () => {
         <>
           <TokenDistributionChart />
           
-          <CreateTaskForm onTaskCreated={debouncedFetchTasks} />
+          <div className="border rounded-lg overflow-hidden mb-4">
+            <div className="bg-muted p-4">
+              <h3 className="font-semibold">Create New Proposal</h3>
+            </div>
+            <div className="p-4">
+              <div className="bg-green-50 p-4 rounded-lg mb-4">
+                <h4 className="font-semibold text-green-800 mb-2">Unified Governance Workflow</h4>
+                <p className="text-sm text-green-700">
+                  All work now flows through DAO proposals to ensure stakeholder legitimacy and prevent bad actors. 
+                  Choose your funding source and let verified stakeholders evaluate proposals through ranked choice voting.
+                </p>
+              </div>
+              <form onSubmit={handleCreateProposal} className="space-y-4">
+                <div>
+                  <label className="block mb-1 font-medium">Proposal Type</label>
+                  <select
+                    value={newProposal.proposalType}
+                    onChange={(e) => setNewProposal({...newProposal, proposalType: e.target.value})}
+                    className="w-full border rounded p-2"
+                    required
+                  >
+                    <option value="Work">Work Proposal</option>
+                    <option value="Governance">Governance Proposal</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Work proposals create tasks for completion. Governance proposals modify platform rules.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Funding Source</label>
+                  <select
+                    value={newProposal.fundingSource}
+                    onChange={(e) => setNewProposal({...newProposal, fundingSource: e.target.value})}
+                    className="w-full border rounded p-2"
+                    required
+                  >
+                    <option value="DAO">DAO Treasury</option>
+                    {newProposal.proposalType === 'Work' && (
+                      <option value="Customer">Customer Funded</option>
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {newProposal.fundingSource === 'DAO' 
+                      ? 'Community treasury funds this proposal through collective decision-making'
+                      : 'You provide direct funding while stakeholders ensure quality and legitimacy'
+                    }
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Proposal Title</label>
+                  <input
+                    type="text"
+                    value={newProposal.description}
+                    onChange={(e) => setNewProposal({...newProposal, description: e.target.value})}
+                    className="w-full border rounded p-2"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Detailed Description</label>
+                  <textarea
+                    value={newProposal.detailedDescription}
+                    onChange={(e) => setNewProposal({...newProposal, detailedDescription: e.target.value})}
+                    className="w-full border rounded p-2 h-32"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">Additional Data (Optional)</label>
+                  <textarea
+                    value={newProposal.additionalData}
+                    onChange={(e) => setNewProposal({...newProposal, additionalData: e.target.value})}
+                    className="w-full border rounded p-2 h-24"
+                    placeholder="Additional proposal data, requirements, or specifications (will be stored on IPFS)"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-1 font-medium">
+                    {newProposal.fundingSource === 'Customer' ? 'Your Funding Amount (ROSE)' : 'Requested Tokens (ROSE)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={newProposal.tokenAmount}
+                    onChange={(e) => setNewProposal({...newProposal, tokenAmount: e.target.value})}
+                    className="w-full border rounded p-2"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {newProposal.fundingSource === 'Customer' 
+                      ? 'Amount you will deposit to fund this work. Workers receive 60%, stakeholders 20%, DAO 20%'
+                      : 'Amount requested from DAO treasury. Subject to community approval through STAR voting'
+                    }
+                  </p>
+                </div>
+                
+                <div className="bg-blue-50 p-3 rounded-md mb-4">
+                  <p className="text-xs text-blue-800">
+                    <strong>Next Steps:</strong> After submission, stakeholders will evaluate your proposal using ranked choice voting. 
+                    Approved proposals enter a 2-week stakeholder selection cycle before work begins.
+                  </p>
+                </div>
+                <Button
+                  type="submit"
+                  className="bg-rose-500 text-white hover:bg-rose-600"
+                >
+                  Submit to Governance Process
+                </Button>
+              </form>
+            </div>
+          </div>
+          
+          <div className="border rounded-lg overflow-hidden mb-4">
+            <div className="bg-muted p-4">
+              <h3 className="font-semibold">Governance Proposals</h3>
+            </div>
+            <div className="p-4">
+              {proposals.length === 0 ? (
+                <p>No proposals found.</p>
+              ) : (
+                <div className="space-y-6">
+                  {proposals.map(proposal => (
+                    <Card key={proposal.id} className="overflow-hidden">
+                      <div className="bg-gray-50 p-4 flex justify-between items-center">
+                        <div>
+                          <h3 className="font-semibold">{proposal.description}</h3>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              proposal.proposalType === 0 ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                            }`}>
+                              {proposal.proposalType === 0 ? 'Work' : 'Governance'}
+                            </span>
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              proposal.fundingSource === 0 ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {proposal.fundingSource === 0 ? 'DAO Funded' : 'Customer Funded'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            Proposed by {proposal.proposer.substring(0, 6)}...{proposal.proposer.substring(38)} 
+                            on {proposal.proposalTime.toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div>
+                          <span className={`px-3 py-1 rounded text-sm ${
+                            proposal.status === 'Active' ? 'bg-blue-100 text-blue-800' :
+                            proposal.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                            proposal.status === 'Executed' ? 'bg-purple-100 text-purple-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {proposal.status}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4">
+                        <p className="mb-4">{proposal.detailedDescription}</p>
+                        
+                        <div className="flex items-center mb-4">
+                          <span className="font-medium mr-2">Requested amount:</span>
+                          <span>{proposal.tokenAmount} ROSE</span>
+                        </div>
+                        
+                        {proposal.status === 'Active' && parseFloat(lockedTokens) > 0 && (
+                          <div className="mb-4">
+                            <h4 className="font-medium mb-2">Cast Your Vote</h4>
+                            <div className="flex gap-2">
+                              {[0, 1, 2, 3, 4, 5].map(score => (
+                                <Button
+                                  key={score}
+                                  onClick={() => handleVote(proposal.id, score)}
+                                  className="bg-gray-200 hover:bg-gray-300"
+                                >
+                                  {score}
+                                </Button>
+                              ))}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1">
+                              0 = Strongly oppose, 5 = Strongly support
+                            </p>
+                          </div>
+                        )}
+                        
+                        {proposal.status === 'Active' && (
+                          <Button
+                            onClick={() => handleFinalizeProposal(proposal.id)}
+                            className="bg-blue-500 text-white hover:bg-blue-600 mr-2"
+                          >
+                            Finalize Proposal
+                          </Button>
+                        )}
+                        
+                        {proposal.status === 'Approved' && (
+                          <Button
+                            onClick={() => handleExecuteProposal(proposal.id)}
+                            className="bg-green-500 text-white hover:bg-green-600"
+                          >
+                            Execute Proposal
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4">Available Tasks</h2>
