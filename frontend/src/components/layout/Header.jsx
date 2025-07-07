@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import NetworkSelector from '../wallet/NetworkSelector';
 import { useEthereum } from '../../hooks/useEthereum';
+import { useFaucet } from '../../hooks/useFaucet';
 
 const Header = ({ toggleSidebar }) => {
   const { isConnected, connectWallet, account } = useEthereum();
+  const { claimTokens, isLoading, error, canClaim } = useFaucet();
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const handleFaucetClaim = async () => {
+    const result = await claimTokens();
+    if (result.success) {
+      setSuccessMessage(result.message);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 py-4 shadow-sm">
@@ -22,6 +33,22 @@ const Header = ({ toggleSidebar }) => {
           
         <div className="flex items-center space-x-4">
           {isConnected && <NetworkSelector />}
+          
+          {/* Faucet Button - only show when wallet is connected */}
+          {isConnected && (
+            <button
+              onClick={handleFaucetClaim}
+              disabled={!canClaim || isLoading}
+              className={`px-4 py-2 rounded-md font-medium text-white ${
+                !canClaim || isLoading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {isLoading ? 'Claiming...' : 'Claim 100 ROSE'}
+            </button>
+          )}
+          
           <button 
             onClick={connectWallet} 
             className="bg-primary text-white hover:bg-opacity-90 px-4 py-2 rounded-md font-medium"
@@ -30,6 +57,18 @@ const Header = ({ toggleSidebar }) => {
           </button>
         </div>
       </div>
+      
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="bg-green-100 text-green-700 p-2 text-center text-sm">
+          {successMessage}
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-100 text-red-700 p-2 text-center text-sm">
+          {error}
+        </div>
+      )}
     </header>
   );
 };

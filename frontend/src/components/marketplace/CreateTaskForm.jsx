@@ -250,35 +250,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}
         </button>
         
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                if (!roseMarketplace) {
-                  setError('Wallet not connected or contracts not loaded. Please connect your wallet and try again.');
-                  return;
-                }
-                
-                const amount = ethers.utils.parseEther("100");
-                const tx = await roseMarketplace.claimFaucetTokens(amount);
-                await tx.wait();
-                alert("Successfully claimed 100 ROSE tokens!");
-              } catch (err) {
-                console.error("Error claiming tokens:", err);
-                setError(err.message || "Failed to claim tokens");
-              }
-            }}
-            disabled={!roseMarketplace || isLoading}
-            className={`w-full py-2 px-4 rounded-md font-medium text-white ${
-              !roseMarketplace || isLoading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700'
-            }`}
-          >
-            Claim 100 ROSE Tokens (Test Faucet)
-          </button>
-        </div>
       </form>
     </div>
   );
