@@ -24,7 +24,7 @@ const StakeholderElectionManager = () => {
       setIsLoading(true);
       setError(null);
 
-      const currentElectionId = await tokenStaking.currentElectionId();
+      const currentElectionId = await tokenStaking.electionCounter();
       if (currentElectionId.gt(0)) {
         const election = await tokenStaking.elections(currentElectionId);
         const candidateCount = await tokenStaking.getCandidateCount(currentElectionId);
