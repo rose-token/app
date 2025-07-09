@@ -420,4 +420,72 @@ contract TokenStaking {
     function getStakedAmount(address user) external view returns (uint256) {
         return stakedTokens[user].amount;
     }
+
+    /**
+     * @dev Get candidate count for an election
+     */
+    function getCandidateCount(uint256 electionId) external view returns (uint256) {
+        return elections[electionId].candidates.length;
+    }
+
+    /**
+     * @dev Get candidate information including vote count
+     */
+    function getCandidate(uint256 electionId, uint256 index) external view returns (
+        address candidate,
+        uint256 voteCount,
+        bool eliminated
+    ) {
+        require(index < elections[electionId].candidates.length, "Invalid candidate index");
+        
+        StakeholderElection storage election = elections[electionId];
+        address candidateAddr = election.candidates[index];
+        
+        // Calculate current vote count for this candidate
+        uint256 votes = 0;
+        for (uint i = 0; i < election.voters.length; i++) {
+            address voter = election.voters[i];
+            address[] memory preferences = election.votes[voter].preferences;
+            uint256 weight = election.votes[voter].weight;
+            
+            // Count first preference votes for this candidate
+            if (preferences.length > 0 && preferences[0] == candidateAddr) {
+                votes += weight;
+            }
+        }
+        
+        // Mark as eliminated if election is finalized and candidate didn't win
+        bool isEliminated = false;
+        if (election.isFinalized && election.winner != candidateAddr) {
+            isEliminated = true;
+        }
+        
+        return (candidateAddr, votes, isEliminated);
+    }
+
+    /**
+     * @dev Get vote information for a voter (enhanced version of getVoterPreferences)
+     */
+    function getVote(uint256 electionId, address voter) external view returns (
+        address[] memory preferences,
+        uint256 weight,
+        uint256 timestamp
+    ) {
+        RankedChoiceVote storage vote = elections[electionId].votes[voter];
+        return (vote.preferences, vote.weight, vote.timestamp);
+    }
+
+    /**
+     * @dev Get election results
+     */
+    function getElectionResults(uint256 electionId) external view returns (
+        address winner,
+        uint256 totalRounds
+    ) {
+        StakeholderElection storage election = elections[electionId];
+        require(election.isFinalized, "Election not finalized");
+        
+        // Return 1 round since we don't track intermediate rounds
+        return (election.winner, 1);
+    }
 }
