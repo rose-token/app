@@ -106,7 +106,7 @@ jobs:
           echo "DAO_TREASURY_ADDRESS=$DAO_TREASURY_ADDRESS" >> $GITHUB_ENV
           
           # Create a JSON file with contract addresses for artifact passing
-          echo "{\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"tokenAddress\":\"$TOKEN_ADDRESS\",\"reputationAddress\":\"$REPUTATION_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"daoTreasuryAddress\":\"$DAO_TREASURY_ADDRESS\"}" > contract-addresses.json
+          echo "{\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"tokenAddress\":\"$TOKEN_ADDRESS\",\"reputationAddress\":\"$REPUTATION_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"daoTreasuryAddress\":\"$DAO_TREASURY_ADDRESS\",\"tokenStakingAddress\":\"$TOKEN_STAKING_ADDRESS\",\"stakeholderRegistryAddress\":\"$STAKEHOLDER_REGISTRY_ADDRESS\",\"bidEvaluationManagerAddress\":\"$BID_EVALUATION_MANAGER_ADDRESS\"}" > contract-addresses.json
       
       - name: Upload Contract Addresses Artifact
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -152,6 +152,9 @@ jobs:
           REPUTATION_ADDRESS=$(cat contract-addresses.json | jq -r '.reputationAddress')
           GOVERNANCE_ADDRESS=$(cat contract-addresses.json | jq -r '.governanceAddress')
           DAO_TREASURY_ADDRESS=$(cat contract-addresses.json | jq -r '.daoTreasuryAddress')
+          TOKEN_STAKING_ADDRESS=$(cat contract-addresses.json | jq -r '.tokenStakingAddress')
+          STAKEHOLDER_REGISTRY_ADDRESS=$(cat contract-addresses.json | jq -r '.stakeholderRegistryAddress')
+          BID_EVALUATION_MANAGER_ADDRESS=$(cat contract-addresses.json | jq -r '.bidEvaluationManagerAddress')
           
           # Set outputs for use in next steps
           echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
@@ -159,6 +162,9 @@ jobs:
           echo "REPUTATION_ADDRESS=$REPUTATION_ADDRESS" >> $GITHUB_ENV
           echo "GOVERNANCE_ADDRESS=$GOVERNANCE_ADDRESS" >> $GITHUB_ENV
           echo "DAO_TREASURY_ADDRESS=$DAO_TREASURY_ADDRESS" >> $GITHUB_ENV
+          echo "TOKEN_STAKING_ADDRESS=$TOKEN_STAKING_ADDRESS" >> $GITHUB_ENV
+          echo "STAKEHOLDER_REGISTRY_ADDRESS=$STAKEHOLDER_REGISTRY_ADDRESS" >> $GITHUB_ENV
+          echo "BID_EVALUATION_MANAGER_ADDRESS=$BID_EVALUATION_MANAGER_ADDRESS" >> $GITHUB_ENV
           
           echo "Using contract addresses from artifact:"
           echo "Marketplace: $MARKETPLACE_ADDRESS"
@@ -166,6 +172,9 @@ jobs:
           echo "Reputation: $REPUTATION_ADDRESS"
           echo "Governance: $GOVERNANCE_ADDRESS"
           echo "DAO Treasury: $DAO_TREASURY_ADDRESS"
+          echo "Token Staking: $TOKEN_STAKING_ADDRESS"
+          echo "Stakeholder Registry: $STAKEHOLDER_REGISTRY_ADDRESS"
+          echo "Bid Evaluation Manager: $BID_EVALUATION_MANAGER_ADDRESS"
       
       - name: Set Build Version
         run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
@@ -184,6 +193,9 @@ jobs:
           REACT_APP_REPUTATION_ADDRESS: ${{ env.REPUTATION_ADDRESS }}
           REACT_APP_GOVERNANCE_ADDRESS: ${{ env.GOVERNANCE_ADDRESS }}
           REACT_APP_DAO_TREASURY_ADDRESS: ${{ env.DAO_TREASURY_ADDRESS }}
+          REACT_APP_TOKEN_STAKING_ADDRESS: ${{ env.TOKEN_STAKING_ADDRESS }}
+          REACT_APP_STAKEHOLDER_REGISTRY_ADDRESS: ${{ env.STAKEHOLDER_REGISTRY_ADDRESS }}
+          REACT_APP_BID_EVALUATION_MANAGER_ADDRESS: ${{ env.BID_EVALUATION_MANAGER_ADDRESS }}
           REACT_APP_BUILD_VERSION: ${{ env.BUILD_VERSION }}
           REACT_APP_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
           REACT_APP_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
