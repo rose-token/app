@@ -37,7 +37,7 @@ export const useWorkerAnalytics = () => {
     if (!roseMarketplace || !account) return [];
     
     try {
-      const taskCount = await roseMarketplace.getTaskCount();
+      const taskCount = await roseMarketplace.taskCounter();
       const completedTasks = [];
       
       for (let i = 1; i <= taskCount; i++) {
@@ -62,7 +62,7 @@ export const useWorkerAnalytics = () => {
     if (!roseMarketplace || !account) return [];
     
     try {
-      const taskCount = await roseMarketplace.getTaskCount();
+      const taskCount = await roseMarketplace.taskCounter();
       const claimedTasks = [];
       
       for (let i = 1; i <= taskCount; i++) {
@@ -84,7 +84,7 @@ export const useWorkerAnalytics = () => {
     if (!roseMarketplace || !account) return [];
     
     try {
-      const taskCount = await roseMarketplace.getTaskCount();
+      const taskCount = await roseMarketplace.taskCounter();
       const recentActivity = [];
       
       for (let i = Math.max(1, taskCount - 10); i <= taskCount; i++) {
