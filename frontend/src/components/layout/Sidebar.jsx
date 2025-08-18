@@ -64,17 +64,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             Marketplace  
           </NavLink>  
           <NavLink   
-            to="/analytics"   
-            className={({ isActive }) =>   
-              isActive   
-                ? "font-medium text-white px-3 py-2 rounded-md bg-white/10"   
-                : "text-white/80 hover:text-white px-3 py-2 rounded-md hover:bg-white/5"  
-            }  
-            onClick={() => window.innerWidth < 768 && toggleSidebar()}  
-          >  
-            Worker Analytics  
-          </NavLink>  
-          <NavLink   
             to="/bugs"   
             className={({ isActive }) =>   
               isActive   
