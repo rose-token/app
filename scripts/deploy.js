@@ -5,6 +5,10 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
 
+  // Display deployer's ETH balance
+  const initialBalance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log("Deployer's Sepolia ETH balance:", hre.ethers.formatEther(initialBalance), "ETH");
+
   const daoTreasury = process.env.DAO_TREASURY_ADDRESS || deployer.address;
   console.log("DAO Treasury address:", daoTreasury);
 
@@ -99,6 +103,13 @@ async function main() {
   );
   
   console.log("Deployment information saved to deployment-output.json");
+  
+  // Display final balance and gas consumed
+  const finalBalance = await hre.ethers.provider.getBalance(deployer.address);
+  const gasUsed = initialBalance - finalBalance;
+  console.log("\n=== Deployment Cost Summary ===");
+  console.log("Final Sepolia ETH balance:", hre.ethers.formatEther(finalBalance), "ETH");
+  console.log("Total ETH used for deployment:", hre.ethers.formatEther(gasUsed), "ETH");
 }
 
 main()
