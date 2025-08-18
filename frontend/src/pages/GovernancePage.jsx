@@ -4,8 +4,6 @@ import { useContract } from '../hooks/useContract';
 import { ethers } from 'ethers';  
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import StakeholderElectionManager from '../components/governance/StakeholderElectionManager';
-import StakeholderDashboard from '../components/governance/StakeholderDashboard';
 
 const CollapsibleSection = ({ id, title, children }) => {  
   const [isOpen, setIsOpen] = React.useState(false);  
@@ -505,32 +503,6 @@ const GovernancePage = () => {
         </CollapsibleSection>  
       )}  
         
-      {/* Stakeholder Dashboard Section */}
-      <CollapsibleSection id="stakeholder-dashboard" title="Stakeholder Dashboard">
-        <StakeholderDashboard />
-      </CollapsibleSection>
-        
-      {/* Stakeholder Elections Section */}
-      <CollapsibleSection id="stakeholder-elections" title="Stakeholder Elections">
-        <div className="space-y-4">
-          <p>
-            Stakeholder elections are a critical part of the Rose Token governance system. 
-            They ensure that only legitimate stakeholders can participate in key governance decisions 
-            and prevent bad actors from playing multiple roles in the ecosystem.
-          </p>
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">How Stakeholder Elections Work:</h4>
-            <ul className="list-disc pl-6 space-y-1 text-sm">
-              <li>Elections run on a 2-week cycle to select verified stakeholders</li>
-              <li>Candidates must stake tokens to demonstrate commitment</li>
-              <li>Voting uses ranked-choice system with drag-and-drop interface</li>
-              <li>Winners are determined through instant runoff voting algorithm</li>
-              <li>Selected stakeholders have authority to approve final payouts (66% threshold)</li>
-            </ul>
-          </div>
-          <StakeholderElectionManager />
-        </div>
-      </CollapsibleSection>
         
       {/* Proposal List */}  
       <CollapsibleSection id="proposals" title="Governance Proposals">  
@@ -689,34 +661,7 @@ const GovernancePage = () => {
         </div>  
       </CollapsibleSection>  
         
-      <CollapsibleSection id="governance-roadmap" title="Governance Roadmap">  
-        <div className="space-y-4">  
-          <p>  
-            The Rose Token governance system will evolve over time to become increasingly decentralized.  
-          </p>  
-          <h3 className="text-xl font-semibold">Phase 1: Foundation (Current)</h3>  
-          <ul className="list-disc pl-6 space-y-2">  
-            <li>Treasury establishment with 20% of all minted tokens</li>  
-            <li>Initial governance framework development</li>  
-            <li>Community forums for discussion</li>  
-          </ul>  
-            
-          <h3 className="text-xl font-semibold mt-4">Phase 2: Governance Token</h3>  
-          <ul className="list-disc pl-6 space-y-2">  
-            <li>Implementation of on-chain voting mechanisms</li>  
-            <li>Proposal system launch</li>  
-            <li>Snapshot voting integration</li>  
-          </ul>  
-            
-          <h3 className="text-xl font-semibold mt-4">Phase 3: Full DAO</h3>  
-          <ul className="list-disc pl-6 space-y-2">  
-            <li>Transition to a fully community-governed DAO</li>  
-            <li>Multi-signature treasury management</li>  
-            <li>Delegation and representative systems</li>  
-            <li>Governance incentive mechanisms</li>  
-          </ul>  
-        </div>  
-      </CollapsibleSection>  
+  
         
       {error && (  
         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">  
