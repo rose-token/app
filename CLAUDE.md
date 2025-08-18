@@ -162,3 +162,112 @@ The project uses aggressive optimization for gas efficiency:
 - Optimizer enabled with 1 run
 - `viaIR: true` for additional optimizations
 - Impacts deployment costs but reduces transaction costs
+
+## MANDATORY: Git Workflow & CI/CD Monitoring
+
+**IMPORTANT**: You MUST follow these workflows for ALL code changes:
+
+### 1. Branch Creation & Development
+```bash
+# ALWAYS create a new feature branch for changes
+git checkout -b feature/descriptive-branch-name
+
+# Make your changes and commit them
+git add .
+git commit -m "feat: descriptive commit message"
+
+# Push the branch
+git push -u origin feature/descriptive-branch-name
+```
+
+### 2. Pull Request Creation
+After pushing your branch, you MUST:
+```bash
+# Create a pull request using GitHub CLI
+gh pr create --title "feat: your feature title" --body "Description of changes"
+```
+
+### 3. CI/CD Pipeline Monitoring
+**CRITICAL**: After creating a PR, you MUST continuously monitor the CI/CD pipeline:
+
+```bash
+# Watch PR checks status
+gh pr checks --watch
+
+# If using web interface, monitor at:
+# https://github.com/[owner]/rose-token/pull/[PR-number]/checks
+```
+
+### 4. CI/CD Failure Response Protocol
+If CI/CD checks fail, you MUST:
+
+1. **Fetch the failure logs immediately**:
+```bash
+# Get workflow run details
+gh run list --limit 5
+gh run view [run-id]
+
+# Download logs for failed jobs
+gh run download [run-id]
+```
+
+2. **Analyze and fix the failure**:
+   - Read error messages carefully
+   - Identify the failing test or build step
+   - Fix the issue in your feature branch
+   - Commit and push the fix
+
+3. **Continue monitoring until all checks pass**:
+```bash
+# After pushing fixes
+git add .
+git commit -m "fix: resolve CI/CD failure - [specific issue]"
+git push
+
+# Resume monitoring
+gh pr checks --watch
+```
+
+### 5. PR Build Workflow Details
+The project has two main CI/CD jobs that MUST pass:
+
+- **build-contracts**: Runs contract tests, compilation, and Sepolia deployment
+- **build-frontend**: Builds the React application with ABI updates
+
+Common failure points to watch for:
+- Contract test failures (check test output)
+- Missing environment variables (ensure secrets are configured)
+- Frontend build errors (check for TypeScript/ESLint issues)
+- ABI generation failures (ensure contracts compile first)
+
+### 6. Workflow Commands Reference
+```bash
+# Check PR status
+gh pr status
+
+# View specific PR checks
+gh pr checks [PR-number]
+
+# View workflow runs
+gh workflow list
+gh workflow view pr-build.yml
+
+# Re-run failed checks
+gh run rerun [run-id]
+
+# View PR in browser for detailed CI/CD status
+gh pr view --web
+```
+
+**NEVER**:
+- Push directly to main branch
+- Merge a PR with failing CI/CD checks
+- Ignore CI/CD failures
+- Skip the monitoring step after creating a PR
+
+**ALWAYS**:
+- Create a feature branch for changes
+- Create a pull request for review
+- Monitor CI/CD pipeline until completion
+- Fix any failures immediately and re-monitor
+- Only merge after all checks pass
