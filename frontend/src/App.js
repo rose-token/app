@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
-import BugsPage from './pages/BugsPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
 import GovernancePage from './pages/GovernancePage';
@@ -36,8 +35,7 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<TasksPage />} />
-                <Route path="/bugs" element={<BugsPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/governance" element={<GovernancePage />} />
               </Routes>

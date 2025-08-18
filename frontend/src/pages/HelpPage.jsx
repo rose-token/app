@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { uploadCommentToIPFS, fetchCommentFromIPFS, isCID } from '../utils/ipfs/pinataService';
 
 const HelpPage = () => {
   const [expandedSections, setExpandedSections] = useState({
@@ -8,14 +9,161 @@ const HelpPage = () => {
     whitepaper: false,
     faq: false,
     troubleshooting: false,
-    glossary: false
+    glossary: false,
+    bugReports: false
   });
+  
+  // Bug report states
+  const [bugTitle, setBugTitle] = useState('');
+  const [bugDescription, setBugDescription] = useState('');
+  const [bugSteps, setBugSteps] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bugError, setBugError] = useState('');
+  const [bugSuccess, setBugSuccess] = useState('');
+  const [submittedCid, setSubmittedCid] = useState('');
+  const [bugReports, setBugReports] = useState([]);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [lookupCid, setLookupCid] = useState('');
+  const [lookupReport, setLookupReport] = useState(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections({
       ...expandedSections,
       [section]: !expandedSections[section]
     });
+    
+    // Load bug reports when bug reports section is opened
+    if (section === 'bugReports' && !expandedSections.bugReports) {
+      const storedBugs = JSON.parse(localStorage.getItem('submittedBugs') || '[]');
+      setBugReports(storedBugs);
+    }
+  };
+
+  // Bug report submission handler
+  const handleBugSubmit = async (e) => {
+    e.preventDefault();
+    if (!bugTitle.trim() || !bugDescription.trim()) return;
+    
+    try {
+      setIsSubmitting(true);
+      setBugError('');
+      setBugSuccess('');
+      
+      const bugData = JSON.stringify({
+        title: bugTitle,
+        description: bugDescription,
+        steps: bugSteps,
+        timestamp: new Date().toISOString(),
+        type: 'bug-report'
+      });
+      
+      const cid = await uploadCommentToIPFS(bugData);
+      
+      const storedBugs = JSON.parse(localStorage.getItem('submittedBugs') || '[]');
+      const newBug = {
+        cid,
+        title: bugTitle,
+        timestamp: new Date().toISOString()
+      };
+      storedBugs.push(newBug);
+      localStorage.setItem('submittedBugs', JSON.stringify(storedBugs));
+      
+      // Update local state
+      setBugReports([...bugReports, newBug]);
+      
+      setBugTitle('');
+      setBugDescription('');
+      setBugSteps('');
+      setSubmittedCid(cid);
+      setBugSuccess(`Bug report submitted successfully! CID: ${cid}`);
+    } catch (err) {
+      console.error('Error submitting bug report:', err);
+      if (err.message.includes('Pinata')) {
+        setBugError('Failed to upload bug report to IPFS. Please check Pinata API keys.');
+      } else {
+        setBugError('Failed to submit bug report');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Fetch report details from list
+  const fetchReportDetails = useCallback(async (cid) => {
+    if (!cid) return;
+    
+    try {
+      setIsLoadingReport(true);
+      setBugError('');
+      
+      const reportData = await fetchCommentFromIPFS(cid);
+      const parsedData = typeof reportData === 'string' 
+        ? JSON.parse(reportData) 
+        : reportData;
+      
+      setSelectedReport({
+        cid,
+        ...parsedData
+      });
+    } catch (err) {
+      console.error('Error fetching report details:', err);
+      setBugError('Failed to fetch report details from IPFS');
+    } finally {
+      setIsLoadingReport(false);
+    }
+  }, []);
+
+  // Look up report by CID
+  const handleLookupReport = useCallback(async (e) => {
+    e.preventDefault();
+    if (!lookupCid.trim()) return;
+    
+    try {
+      setIsLookingUp(true);
+      setBugError('');
+      setBugSuccess('');
+      setLookupReport(null);
+      
+      if (!isCID(lookupCid)) {
+        setBugError('Invalid CID format. Please enter a valid IPFS Content Identifier.');
+        return;
+      }
+      
+      const reportData = await fetchCommentFromIPFS(lookupCid);
+      
+      const parsedData = typeof reportData === 'string' 
+        ? JSON.parse(reportData) 
+        : reportData;
+      
+      if (parsedData.type !== 'bug-report') {
+        setBugError('The content at this CID is not a bug report.');
+        return;
+      }
+      
+      setLookupReport({
+        cid: lookupCid,
+        ...parsedData
+      });
+      setBugSuccess('Bug report found!');
+    } catch (err) {
+      console.error('Error looking up report:', err);
+      setBugError('Failed to fetch report. The CID may be invalid or the content is not available on IPFS.');
+    } finally {
+      setIsLookingUp(false);
+    }
+  }, [lookupCid]);
+
+  const formatDate = (dateString) => {
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
   const CollapsibleSection = ({ id, title, children }) => (
@@ -473,6 +621,231 @@ const HelpPage = () => {
               <p>{item.definition}</p>
             </div>
           ))}
+        </div>
+      </CollapsibleSection>
+      
+      <CollapsibleSection id="bugReports" title="Bug Reports & Feedback">
+        <div className="space-y-6">
+          <p className="text-lg">
+            Help us improve Rose Token by reporting bugs and issues you encounter. 
+            All bug reports are stored on IPFS for transparency and permanence.
+          </p>
+          
+          {/* Error and success messages */}
+          {bugError && (
+            <div className="p-3 bg-red-100 text-red-700 rounded-md">
+              {bugError}
+            </div>
+          )}
+          
+          {bugSuccess && (
+            <div className="p-3 bg-green-100 text-green-700 rounded-md">
+              {bugSuccess}
+            </div>
+          )}
+          
+          {/* Submit Bug Report Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-xl font-semibold mb-4">Submit a Bug Report</h3>
+            <form onSubmit={handleBugSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={bugTitle}
+                  onChange={(e) => setBugTitle(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="Brief description of the issue"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={bugDescription}
+                  onChange={(e) => setBugDescription(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  placeholder="Detailed description of the bug"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Steps to Reproduce
+                </label>
+                <textarea
+                  value={bugSteps}
+                  onChange={(e) => setBugSteps(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  placeholder="1. Go to...&#10;2. Click on...&#10;3. See error..."
+                />
+              </div>
+              
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-primary text-white py-2 px-4 rounded-md hover:bg-opacity-90 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Bug Report'}
+              </button>
+            </form>
+            
+            {submittedCid && (
+              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+                <p>Your bug report has been stored on IPFS.</p>
+                <p className="text-sm mt-1">
+                  <strong>CID:</strong> {submittedCid}
+                </p>
+                <p className="text-xs mt-2">
+                  Save this CID to reference your bug report later.
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* View Submitted Reports Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-xl font-semibold mb-4">Your Submitted Bug Reports</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* List of reports */}
+              <div className="md:col-span-1 border-r pr-4">
+                {bugReports.length === 0 ? (
+                  <p className="text-gray-500">No bug reports submitted yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {bugReports.map((report) => (
+                      <li 
+                        key={report.cid}
+                        className={`p-3 rounded-md cursor-pointer hover:bg-gray-50 ${
+                          selectedReport?.cid === report.cid ? 'bg-blue-50 border border-blue-200' : 'border border-gray-200'
+                        }`}
+                        onClick={() => fetchReportDetails(report.cid)}
+                      >
+                        <h4 className="font-medium text-gray-900 truncate">{report.title}</h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDate(report.timestamp)}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1 truncate">
+                          CID: {report.cid}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              
+              {/* Report details */}
+              <div className="md:col-span-2 pl-4">
+                {isLoadingReport ? (
+                  <div className="flex justify-center items-center h-40">
+                    <p>Loading report details...</p>
+                  </div>
+                ) : selectedReport ? (
+                  <div>
+                    <h4 className="text-lg font-semibold">{selectedReport.title}</h4>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Submitted on {formatDate(selectedReport.timestamp)}
+                    </p>
+                    
+                    <div className="mb-4">
+                      <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
+                      <div className="p-3 bg-gray-50 rounded-md">
+                        <p className="whitespace-pre-wrap">{selectedReport.description}</p>
+                      </div>
+                    </div>
+                    
+                    {selectedReport.steps && (
+                      <div className="mb-4">
+                        <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
+                        <div className="p-3 bg-gray-50 rounded-md">
+                          <p className="whitespace-pre-wrap">{selectedReport.steps}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-4 text-xs text-gray-500">
+                      <p>IPFS Content Identifier (CID): {selectedReport.cid}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-40 text-gray-500">
+                    <p>Select a report to view details</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Look Up Report by CID Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-xl font-semibold mb-4">Look Up Bug Report by CID</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              If you have a CID from a previously submitted bug report, you can look it up here.
+            </p>
+            
+            <form onSubmit={handleLookupReport} className="mb-6">
+              <div className="flex flex-col md:flex-row gap-2">
+                <input
+                  type="text"
+                  value={lookupCid}
+                  onChange={(e) => setLookupCid(e.target.value)}
+                  placeholder="Enter IPFS Content Identifier (CID)"
+                  className="flex-grow p-2 border border-gray-300 rounded-md"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isLookingUp}
+                  className="bg-primary text-white py-2 px-4 rounded-md hover:bg-opacity-90 disabled:opacity-50"
+                >
+                  {isLookingUp ? 'Looking up...' : 'Look Up Report'}
+                </button>
+              </div>
+            </form>
+            
+            {isLookingUp ? (
+              <div className="flex justify-center items-center h-40">
+                <p>Loading report details...</p>
+              </div>
+            ) : lookupReport ? (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="text-lg font-semibold">{lookupReport.title}</h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Submitted on {formatDate(lookupReport.timestamp)}
+                </p>
+                
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
+                  <div className="p-3 bg-gray-50 rounded-md">
+                    <p className="whitespace-pre-wrap">{lookupReport.description}</p>
+                  </div>
+                </div>
+                
+                {lookupReport.steps && (
+                  <div className="mb-4">
+                    <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
+                    <div className="p-3 bg-gray-50 rounded-md">
+                      <p className="whitespace-pre-wrap">{lookupReport.steps}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>IPFS Content Identifier (CID): {lookupReport.cid}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-center items-center h-40 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                <p>Enter a CID to look up a bug report</p>
+              </div>
+            )}
+          </div>
         </div>
       </CollapsibleSection>
     </div>
