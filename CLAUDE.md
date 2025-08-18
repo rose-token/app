@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Subagent Usage Policy
+
+**ALWAYS use subagents (Task tool) whenever possible** to maximize efficiency and reduce context usage:
+
+### When to Use Subagents:
+- **File Search Operations**: Use general-purpose agent for searching across multiple files, understanding codebase structure, or finding specific implementations
+- **Complex Multi-Step Tasks**: Delegate research, analysis, and implementation steps to subagents
+- **Open-Ended Exploration**: When you need to understand how something works in the codebase before making changes
+- **Parallel Operations**: Launch multiple subagents concurrently for independent tasks
+- **Pattern Matching**: Use subagents for finding all occurrences of patterns, similar code, or related functionality
+
+### Subagent Best Practices:
+1. **Be Specific**: Provide detailed instructions about what the subagent should find and return
+2. **Use Concurrently**: Launch multiple subagents in parallel when tasks are independent
+3. **Trust Results**: Subagent outputs should generally be trusted and acted upon
+4. **Reduce Context**: Prefer subagents over multiple direct tool calls for complex searches
+
+### Example Usage Patterns:
+- "Find all files that import X and understand how they use it" → Use general-purpose agent
+- "Search for error handling patterns in the codebase" → Use general-purpose agent
+- "Understand the authentication flow" → Use general-purpose agent
+- "Find and analyze all test files for component Y" → Use general-purpose agent
+
+**Remember**: Subagents are stateless - provide complete instructions in a single prompt as you cannot send follow-up messages.
+
 ## Project Overview
 
 Rose Token is a decentralized Web3 marketplace with a token distribution model. The project consists of:
