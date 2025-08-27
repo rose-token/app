@@ -29,6 +29,7 @@ const Header = ({ toggleSidebar }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+          Help Fund Us! bc1qq554ytglmsjay5dmw6zqy0q7np8kqx4lule83j
         </div>
           
         <div className="flex items-center space-x-4">
