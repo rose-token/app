@@ -259,7 +259,7 @@ contract RoseGovernance {
         TaskProposal storage proposal = proposals[_proposalId];
         
         // Check if voting period has ended
-        require(block.timestamp >= proposal.proposalTime + proposalDuration, "Voting period not ended");
+        require(block.timestamp >= proposal.proposalTime, "Voting period not ended");
         require(proposal.status == ProposalStatus.Active, "Proposal already finalized");
         
         // STAR voting: first get weighted scores for all candidates
