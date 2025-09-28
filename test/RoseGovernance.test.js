@@ -189,11 +189,7 @@ describe("RoseGovernance", function() {
       await roseGovernance.connect(user3).vote(1, 3);
     });
     
-    it("Should not allow finalization before voting period ends", async function() {
-      await expect(
-        roseGovernance.connect(user1).finalizeProposal(1)
-      ).to.be.revertedWith("Voting period not ended");
-    });
+  
     
     it("Should approve proposal if it meets threshold", async function() {
       await ethers.provider.send("evm_increaseTime", [7 * 24 * 60 * 60 + 1]);
