@@ -478,6 +478,11 @@ const TasksPage = () => {
     }
   };
 
+  const getStatusText = (statusCode) => {
+    const statuses = ['Active', 'Approved', 'Rejected', 'Executed', 'Expired'];
+    return statuses[statusCode] || 'Unknown';
+  };
+
   const fetchProposals = useCallback(async () => {
     if (!roseGovernance || !isConnected || !contractsReady.readOnly) return;
     
@@ -493,15 +498,6 @@ const TasksPage = () => {
       const formattedProposals = proposalResults.map((proposal, index) => {
         const proposalTime = new Date(proposal.proposalTime.toNumber() * 1000);
         
-        let status = 'Active';
-        if (proposal.executed) {
-          status = 'Executed';
-        } else if (proposal.approved) {
-          status = 'Approved';
-        } else if (proposal.finalized) {
-          status = 'Rejected';
-        }
-        
         return {
           id: index + 1,
           description: proposal.description,
@@ -511,10 +507,8 @@ const TasksPage = () => {
           proposalType: proposal.proposalType,
           fundingSource: proposal.fundingSource,
           proposalTime: proposalTime,
-          status: status,
-          approved: proposal.approved,
-          executed: proposal.executed,
-          finalized: proposal.finalized
+          status: getStatusText(proposal.status),
+          statusCode: proposal.status
         };
       });
       
