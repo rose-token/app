@@ -30,10 +30,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Rose Token is a decentralized Web3 marketplace with a token distribution model. The project consists of:
-- Solidity smart contracts for the Ethereum blockchain
+- Solidity smart contracts for the Ethereum blockchain (7 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
 - Token distribution: 60% worker, 20% stakeholder, 20% DAO treasury
+- Base reward: 100 ROSE tokens per completed task
+
+### MVP Status (October 2024)
+The project is currently in **MVP (Minimum Viable Product)** mode. Complex features have been removed to focus on core functionality:
+
+**REMOVED FEATURES** (as of commit f81f4e3):
+- Competitive bidding system (placeBid, selectShortlist, finalizeWorkerSelection)
+- Multi-stakeholder approval workflow
+- Comments system (addComment, getTaskComments)
+- Dispute resolution mechanisms
+- Complex refund logic
+- PGP key storage and encryption
+
+**CURRENT MVP FEATURES**:
+- Simple task creation with ETH deposits
+- Single-stakeholder validation model
+- Direct worker claiming (first-come, first-served)
+- Straightforward approval and payment flow
+- STAR voting governance
+- Token staking for stakeholder elections
 
 ## Development Commands
 
@@ -80,43 +100,116 @@ npm test
 
 The smart contracts must be deployed in a specific sequence due to dependencies:
 
-1. **RoseMarketplace** (deployed first)
+1. **RoseMarketplace** (459 lines, deployed first)
    - Automatically deploys RoseToken and RoseReputation in its constructor
-   - Central hub for task management
-   - Handles token minting and distribution
+   - Central hub for task management and lifecycle orchestration
+   - Handles token minting and distribution (60/20/20 split)
+   - Manages task statuses: StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
+   - Includes faucet functionality for testing (claim tokens)
+   - Base reward: 100 ROSE tokens per task
 
-2. **StakeholderRegistry** 
+2. **RoseToken** (94 lines)
+   - ERC20 token with name "Rose Token", symbol "ROSE", 18 decimals
+   - Minting restricted to RoseMarketplace contract only
+   - Standard transfer, approve, transferFrom functionality
+
+3. **RoseReputation** (132 lines)
+   - Tracks reputation and experience for all three roles (Customer, Worker, Stakeholder)
+   - Separate reputation tracking per role
+   - Called by marketplace when tasks complete successfully
+
+4. **StakeholderRegistry** (213 lines)
    - Requires RoseToken and RoseReputation addresses
-   - Manages stakeholder registration and permissions
+   - Manages stakeholder registration with 1000 ROSE minimum token requirement
+   - Enforces role separation and 14-day cooling period for role changes
+   - Blacklist functionality for bad actors
+   - Contract authorization system
 
-3. **RoseGovernance**
+5. **RoseGovernance** (352 lines)
    - Requires RoseToken, RoseReputation, and RoseMarketplace addresses
-   - Implements STAR voting system
-   - Can create tasks using treasury funds
+   - Implements STAR voting system (scores 0-5 per proposal)
+   - Token locking mechanism with configurable duration
+   - Minimum 10 ROSE tokens required to create proposals
+   - 66% threshold for final payouts
+   - Proposal types: Work or Governance
+   - Funding sources: DAO treasury or Customer
+   - Stores proposal data hashes on IPFS
 
-4. **TokenStaking**
+6. **TokenStaking** (491 lines)
    - Requires RoseToken, StakeholderRegistry, and DAO treasury addresses
-   - Manages token staking for governance participation
+   - Minimum stake: 1000 ROSE tokens
+   - Lock period: 14 days
+   - Ranked choice voting for stakeholder elections
+   - Slashing mechanism for penalizing bad behavior
+   - Election tracking with IPFS storage
 
-5. **BidEvaluationManager**
+7. **BidEvaluationManager** (110 lines)
    - Requires TokenStaking and RoseMarketplace addresses
-   - Handles bidding logic for tasks
+   - Handles bid evaluation logic (simplified in MVP)
+   - Currently minimal functionality due to MVP scope
 
-After deployment, contracts are linked via setter methods:
-- `roseMarketplace.setStakeholderRegistry()`
-- `roseMarketplace.setGovernanceContract()`
-- `roseGovernance.setMarketplaceTokenStaking()`
-- `roseGovernance.setMarketplaceBidEvaluationManager()`
+After deployment, contracts are linked via setter methods in scripts/deploy.js:
+- `roseMarketplace.setStakeholderRegistry(stakeholderRegistryAddress)`
+- `roseMarketplace.setGovernanceContract(governanceAddress)`
+- `roseGovernance.setMarketplaceTokenStaking(tokenStakingAddress)`
+- `roseGovernance.setMarketplaceBidEvaluationManager(bidEvaluationManagerAddress)`
 - `stakeholderRegistry.authorizeContract(marketplaceAddress)`
+
+Deployment creates `deployment-output.json` with all contract addresses and displays:
+- Deployer's Sepolia ETH balance (initial and final)
+- Total ETH used for deployment (gas costs)
+- All deployed contract addresses
 
 ## Key Contract Interactions
 
-### Task Lifecycle
-1. Customer creates task with ETH deposit → RoseMarketplace
-2. Worker claims task → RoseMarketplace checks StakeholderRegistry
-3. Worker completes task → RoseMarketplace
-4. Stakeholder approves → RoseMarketplace mints tokens via RoseToken
-5. Tokens distributed: 60% worker, 20% stakeholder, 20% DAO
+### Task Lifecycle (Simplified MVP Version)
+
+**Task Status Flow:**
+```
+StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
+```
+
+**Detailed Flow:**
+
+1. **Task Creation** (Status: StakeholderRequired)
+   - Customer creates task with ETH deposit via `createTask()`
+   - Task includes: title, description, reward (100 ROSE), IPFS data hash
+   - Initial status: StakeholderRequired
+   - Customer funds held in escrow in marketplace contract
+
+2. **Stakeholder Stakes** (Status: Open)
+   - Stakeholder calls `stakeOnTask()` with 10% of task reward
+   - Task status changes to Open
+   - Task becomes available for workers
+
+3. **Worker Claims Task** (Status: InProgress)
+   - Worker calls `claimTask()` to be assigned
+   - First-come, first-served (no competitive bidding in MVP)
+   - Task status changes to InProgress
+   - Worker address locked to task
+
+4. **Worker Completes Work** (Status: Completed)
+   - Worker calls `completeTask()` after finishing work
+   - Task status changes to Completed
+   - Awaits approval from customer and stakeholder
+
+5. **Approval Process** (Status: ApprovedPendingPayment)
+   - Customer calls `approveTask()` to confirm satisfactory work
+   - Stakeholder calls `approveTask()` to validate quality
+   - Both approvals required (in MVP, simpler than multi-stakeholder)
+   - Task status changes to ApprovedPendingPayment
+   - Tokens minted via RoseToken contract
+
+6. **Payment Distribution** (Status: Closed)
+   - Worker calls `acceptPayment()` to receive tokens
+   - Distribution occurs:
+     - 60 ROSE → Worker (60%)
+     - 20 ROSE → Stakeholder (20%)
+     - 20 ROSE → DAO Treasury (20%)
+   - ETH deposit returned to customer
+   - Stakeholder gets their 10% stake back
+   - Reputation points awarded via RoseReputation
+   - Task status changes to Closed
 
 ### Governance Flow
 1. Users stake tokens → TokenStaking
@@ -126,47 +219,160 @@ After deployment, contracts are linked via setter methods:
 
 ## Frontend Architecture
 
-The frontend uses React with custom webpack configuration (via react-app-rewired) to handle Web3 dependencies:
+The frontend uses React 18.2.0 with custom webpack configuration (via react-app-rewired) to handle Web3 dependencies.
 
-- **Components**: Organized by feature (governance/, marketplace/, wallet/, bugs/)
-- **Hooks**: Custom React hooks for contract interaction (useContract, useEthereum)
-- **Contract ABIs**: Located in frontend/src/contracts/
-- **MetaMask Integration**: Uses @metamask/sdk-react
-- **IPFS Integration**: Uses Pinata for decentralized storage
+### Pages (4 main pages in frontend/src/pages/)
+- **TasksPage.jsx** - Main marketplace with task list, creation form, filtering, and task cards
+- **GovernancePage.jsx** - DAO governance with proposals, STAR voting, and treasury management
+- **ProfilePage.jsx** - User profile display and role management (Customer/Worker/Stakeholder)
+- **HelpPage.jsx** - Help documentation and bug reporting functionality
+
+### Component Organization (frontend/src/components/)
+
+**Marketplace Components:**
+- `CreateTaskForm.jsx` - Task creation with ETH deposit and IPFS description storage
+- `TaskList.jsx` - Display tasks with filtering and sorting
+- `TaskCard.jsx` - Individual task display with status and actions
+- `TaskFilters.jsx` - Filter options (stakeholder needed, worker needed, my tasks, closed)
+- `TokenDistributionChart.jsx` - Visual representation of 60/20/20 token split
+
+**Governance Components:**
+- `ProgressTracker.jsx` - Voting progress and proposal status display
+
+**Wallet Components:**
+- `TokenBalance.jsx` - Display ROSE token balance
+- `NetworkSelector.jsx` - Network/chain selection (Sepolia support)
+- `ExchangeRate.jsx` - Token exchange rate display
+- `WalletNotConnected.jsx` - Prompts for MetaMask wallet connection
+
+**Layout Components:**
+- `Layout.jsx` - Main page wrapper with header and sidebar
+- `Header.jsx` - Top navigation bar with wallet connection
+- `Sidebar.jsx` - Side navigation menu
+
+**UI Components** (Radix UI primitives):
+- `button.jsx`, `card.jsx`, `badge.jsx`, `alert.jsx`, `skeleton.jsx`
+- `ErrorMessage.jsx` - Error display utility
+- `NotificationCenter.jsx` - Toast notification system
+
+### Custom Hooks (frontend/src/hooks/)
+- **useEthereum.js** - MetaMask wallet connection, account management, chain ID tracking
+- **useContract.js** - Contract instance initialization, address fetching, method validation
+- **useNotifications.js** - Toast notification management
+- **useProfile.js** - User profile state management
+- **useFaucet.js** - Faucet token claiming functionality
+
+### Utilities
+
+**IPFS Integration (frontend/src/utils/ipfs/):**
+- `pinataService.js` - Pinata API integration for uploading/fetching task data and proposals
+- `profileService.js` - Profile data IPFS storage and retrieval
+
+**Other Utilities:**
+- `taskStatus.js` - Task status constants and helper functions
+- `constants/networks.js` - Network configuration (Sepolia support)
+
+### Key Dependencies
+- **Blockchain**: ethers.js 5.7.2, @metamask/sdk-react 0.32.1
+- **Framework**: React 18.2.0, React Router v6
+- **Styling**: Tailwind CSS, Radix UI components
+- **Data**: @tanstack/react-query 4.36.1, Recharts 2.15.3
+- **IPFS**: @pinata/sdk 2.1.0
+- **Security**: DOMPurify 3.2.6 (XSS protection)
+- **Build**: react-app-rewired (webpack customization for Node.js polyfills)
+
+### Configuration Files
+- **config-overrides.js** - Webpack polyfills for Node.js modules (stream, buffer, process) required for Web3
+- **tailwind.config.js** - Tailwind CSS customization
+- **postcss.config.js** - PostCSS configuration for Tailwind
 
 ## Testing Approach
 
-Tests cover critical functionality:
-- Token minting and distribution
-- Task lifecycle (creation, claiming, completion, approval)
-- Governance voting mechanisms
-- Staking and unstaking
-- Bidding system
-- Refund mechanisms
-- Edge cases and security
+The project has **7 test suites** covering 1,069 lines of test code. Tests use Hardhat and Chai for contract testing.
 
-Run individual test suites:
+### Test Files (test/)
+
+| Test File | Lines | Coverage |
+|-----------|-------|----------|
+| **RoseMarketplace.test.js** | 228 | Task creation, lifecycle management, payment distribution, escrow |
+| **RoseGovernance.test.js** | 252 | Token locking/unlocking, STAR voting, proposal creation, threshold checks |
+| **TokenStaking.test.js** | 191 | Staking/unstaking, ranked choice voting, election tracking, slashing |
+| **RoseToken.test.js** | 130 | Minting, transfers, allowances, approvals, access control |
+| **TaskLifecycleEdgeCases.test.js** | 123 | Edge cases in task workflow, error conditions, invalid states |
+| **DetailedDescription.test.js** | 74 | Detailed task description handling and IPFS storage |
+| **Faucet.test.js** | 71 | Faucet token claiming, rate limiting, error cases |
+
+### Test Coverage Areas
+
+**Core Functionality:**
+- Token minting and distribution (60/20/20 split verification)
+- Complete task lifecycle from creation to payment
+- Governance voting mechanisms (STAR voting with scores 0-5)
+- Staking and unstaking with lock periods
+- Reputation tracking across all roles
+- Stakeholder registration and role management
+
+**MVP Features (Post-Simplification):**
+- Simple task creation with ETH deposits
+- First-come, first-served worker claiming
+- Single-stakeholder approval workflow
+- Direct payment distribution
+- Faucet functionality for testing
+
+**Edge Cases & Security:**
+- Invalid state transitions
+- Unauthorized access attempts
+- Time-based operations (block time increases)
+- Edge case scenarios in task lifecycle
+- Token distribution accuracy
+
+**Note**: Tests for removed features (bidding, multi-stakeholder, comments, disputes, refunds) have been removed as part of MVP simplification.
+
+### Running Tests
+
 ```bash
-npx hardhat test test/RoseToken.test.js
+# Run all tests
+npm test
+
+# Run specific test file
+npx hardhat test test/RoseMarketplace.test.js
 npx hardhat test test/RoseGovernance.test.js
 npx hardhat test test/TokenStaking.test.js
+npx hardhat test test/RoseToken.test.js
+npx hardhat test test/TaskLifecycleEdgeCases.test.js
+npx hardhat test test/DetailedDescription.test.js
+npx hardhat test test/Faucet.test.js
+
+# Run tests with gas reporting
+npx hardhat test --network hardhat
 ```
 
 ## Environment Variables
 
-Create `.env` file in root:
-```
-SEPOLIA_RPC_URL=your_rpc_url
-PRIVATE_KEY=your_private_key
-DAO_TREASURY_ADDRESS=treasury_address
-ETHERSCAN_API_KEY=your_api_key
+### Root Directory `.env` (for contract deployment)
+```bash
+SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+PRIVATE_KEY=your_wallet_private_key_without_0x_prefix
+DAO_TREASURY_ADDRESS=0x_treasury_address_for_dao_funds
+ETHERSCAN_API_KEY=your_etherscan_api_key_for_verification
 ```
 
-Create `.env` in frontend/:
+### Frontend `.env` (frontend/.env)
+```bash
+# Required Contract Addresses (obtained from deployment-output.json)
+REACT_APP_MARKETPLACE_ADDRESS=0x_deployed_marketplace_address
+REACT_APP_TOKEN_ADDRESS=0x_deployed_token_address
+
+# Optional: RPC URL (defaults to MetaMask provider)
+REACT_APP_ETHEREUM_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+
+# IPFS Integration via Pinata
+REACT_APP_PINATA_API_KEY=your_pinata_api_key
+REACT_APP_PINATA_SECRET_API_KEY=your_pinata_secret_key
+REACT_APP_PINATA_JWT=your_pinata_jwt_token
 ```
-REACT_APP_MARKETPLACE_ADDRESS=deployed_marketplace_address
-REACT_APP_TOKEN_ADDRESS=deployed_token_address
-```
+
+**Note**: Use `frontend/.env.example` as a template for required variables.
 
 ## Contract Addresses Management
 
@@ -254,16 +460,48 @@ gh pr checks --watch
 ```
 
 ### 5. PR Build Workflow Details
-The project has two main CI/CD jobs that MUST pass:
+The project has **two CI/CD workflows** in `.github/workflows/`:
 
-- **build-contracts**: Runs contract tests, compilation, and Sepolia deployment
-- **build-frontend**: Builds the React application with ABI updates
+#### A. PR Build Workflow (`pr-build.yml`) - Runs on Pull Requests
+Two **parallel** jobs that MUST both pass:
+
+1. **build-contracts** job:
+   - Install dependencies: `npm ci`
+   - Run all tests: `npx hardhat test`
+   - Compile contracts: `npx hardhat compile`
+   - Generate ABIs: `node scripts/update-abi.js`
+
+2. **build-frontend** job:
+   - Install root dependencies: `npm ci`
+   - Install frontend dependencies: `cd frontend && npm install`
+   - Compile contracts and update ABIs: `npm run update-abi`
+   - Build frontend: `cd frontend && npm run build`
+   - Uses placeholder contract addresses (`0x0000...`) for build validation
+   - Requires Pinata secrets for IPFS integration
+
+#### B. Combined Deploy Workflow (`combined-deploy.yml`) - Main Branch + Manual
+Two **sequential** jobs for full deployment:
+
+1. **deploy-contracts** job:
+   - Run tests and compile contracts
+   - Deploy to Sepolia testnet: `npm run deploy:sepolia`
+   - Wait 90 seconds for contract propagation
+   - Verify contracts on Etherscan using API v2
+   - Save deployment addresses as artifact
+
+2. **deploy-frontend** job (depends on deploy-contracts):
+   - Download contract addresses artifact
+   - Update ABIs with actual deployed addresses
+   - Build frontend with real contract addresses
+   - Deploy to GitHub Pages
 
 Common failure points to watch for:
-- Contract test failures (check test output)
-- Missing environment variables (ensure secrets are configured)
-- Frontend build errors (check for TypeScript/ESLint issues)
-- ABI generation failures (ensure contracts compile first)
+- **Contract test failures**: Check test output for specific failing tests
+- **Missing environment variables**: Ensure GitHub secrets are configured (SEPOLIA_RPC_URL, PRIVATE_KEY, ETHERSCAN_API_KEY, Pinata keys)
+- **Frontend build errors**: Check for React/webpack/dependency issues
+- **ABI generation failures**: Ensure contracts compile successfully first
+- **Etherscan verification failures**: Check API key and network configuration
+- **Deployment failures**: Verify sufficient ETH in deployer wallet for Sepolia gas
 
 ### 6. Workflow Commands Reference
 ```bash
@@ -296,3 +534,126 @@ gh pr view --web
 - Monitor CI/CD pipeline until completion
 - Fix any failures immediately and re-monitor
 - Only merge after all checks pass
+
+---
+
+## Recent Changes & Architecture Notes
+
+### October 2024: MVP Simplification (Commit f81f4e3)
+
+The project underwent **major simplification** to focus on core MVP functionality. The following features were **REMOVED**:
+
+#### Removed Contract Features:
+- **Bidding System**: `placeBid()`, `selectShortlist()`, `finalizeWorkerSelection()`, `startBiddingPhase()`
+- **Multi-Stakeholder Approval**: Simplified to single stakeholder per task
+- **Comments System**: `addComment()`, `getTaskComments()`, comment storage
+- **Dispute Resolution**: `disputeTask()`, `resolveDispute()`, arbitration logic
+- **Complex Refunds**: Simplified refund mechanisms
+- **PGP Encryption**: PGP key storage and encrypted messaging removed
+
+#### Removed Frontend Components:
+- `CommentSection.jsx` component
+- `KeyManagement.jsx` component (PGP key management)
+- `pgpService.js` utility (encryption/decryption)
+- `uploadEncryptedCommentToIPFS()` from pinataService
+- Multi-stakeholder approval UI workflows
+- Bidding interface and shortlist displays
+
+#### What Remains (MVP Core):
+✅ Task creation with ETH deposits
+✅ First-come, first-served worker claiming
+✅ Single-stakeholder validation model (10% stake required)
+✅ Simple approval workflow (customer + stakeholder)
+✅ Token minting and distribution (60/20/20 split)
+✅ STAR voting governance system
+✅ Token staking for stakeholder elections
+✅ Reputation tracking across roles
+✅ Faucet for testing
+✅ IPFS integration for proposals and task data
+
+### Other Notable Changes
+
+**October 24, 2024** (Commit e685e09):
+- Fixed Etherscan verification to use API v2
+- Improved error handling in verification process
+
+**October 23, 2024** (Commit 4dba93b):
+- Simplified marketplace contracts for MVP
+- Removed stakeholder sections from governance page
+- Reordered navigation items in sidebar
+- Migrated bug reports to Help page
+- Fixed proposal status reading in TasksPage
+
+### Current Architecture Philosophy
+
+The codebase follows a **"Progressive Enhancement"** approach:
+1. **MVP Phase** (Current): Core functionality with simplified workflows
+2. **Future Enhancements**: Complex features can be added back incrementally
+   - Competitive bidding and worker selection
+   - Multi-stakeholder validation
+   - On-chain commenting and messaging
+   - Dispute resolution and arbitration
+   - Advanced refund mechanisms
+
+### Development Best Practices
+
+When working with this codebase:
+
+1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP)
+2. **Test Coverage**: All 7 test suites must pass before merging
+3. **Gas Optimization**: Contracts use aggressive optimization (`runs: 1`, `viaIR: true`)
+4. **ABI Synchronization**: Always run `npm run update-abi` after contract changes
+5. **Deployment Order**: Follow the specific sequence in scripts/deploy.js
+6. **Etherscan Verification**: Uses API v2 with proper error handling
+7. **Frontend Environment**: Requires Pinata credentials for IPFS integration
+8. **Network Support**: Primarily targets Sepolia testnet (chainId: 11155111)
+
+### Repository Structure Summary
+
+```
+rose-token/
+├── contracts/           # 7 Solidity contracts (1,851 lines)
+├── test/                # 7 test suites (1,069 lines)
+├── scripts/             # Deployment and utility scripts
+├── frontend/            # React application
+│   ├── src/
+│   │   ├── pages/       # 4 main pages
+│   │   ├── components/  # Feature-organized components
+│   │   ├── hooks/       # 5 custom React hooks
+│   │   ├── utils/       # IPFS, task status utilities
+│   │   ├── contracts/   # 7 generated ABI files
+│   │   └── constants/   # Network and configuration constants
+├── .github/workflows/   # 2 CI/CD workflows
+└── CLAUDE.md            # This file - project guidance for Claude Code
+```
+
+### Key Metrics
+- **Smart Contracts**: 7 contracts, 1,851 total lines
+- **Test Coverage**: 7 test suites, 1,069 total lines
+- **Frontend Pages**: 4 main pages (Tasks, Governance, Profile, Help)
+- **Custom Hooks**: 5 React hooks for Web3 integration
+- **ABI Files**: 7 auto-generated from compiled contracts
+- **CI/CD Jobs**: 2 workflows (PR validation + deployment)
+- **Token Economics**: 60% worker, 20% stakeholder, 20% DAO
+- **Base Task Reward**: 100 ROSE tokens
+- **Minimum Stake**: 1000 ROSE (for stakeholders)
+- **Minimum Proposal**: 10 ROSE (for governance)
+
+---
+
+## Additional Resources
+
+- **Hardhat Documentation**: https://hardhat.org/docs
+- **Ethers.js v5 Docs**: https://docs.ethers.org/v5/
+- **React Router v6**: https://reactrouter.com/
+- **Tailwind CSS**: https://tailwindcss.com/docs
+- **Radix UI**: https://www.radix-ui.com/
+- **Pinata IPFS**: https://docs.pinata.cloud/
+- **MetaMask SDK**: https://docs.metamask.io/wallet/how-to/use-sdk/
+
+---
+
+**Last Updated**: October 2024 (Post-MVP Simplification)
+**Solidity Version**: 0.8.17
+**Node Version**: 18.x
+**Network**: Sepolia (chainId: 11155111)
