@@ -398,7 +398,7 @@ const TasksPage = () => {
       console.error('Error fetching proposals:', err);
       setError('Failed to fetch proposals: ' + (err.message || 'Unknown error'));
     }
-  }, [roseGovernance, isConnected, contractsReady.readOnly, account]);
+  }, [roseGovernance, isConnected, contractsReady.readOnly]);
   
   useEffect(() => {
     if (roseMarketplace) {
