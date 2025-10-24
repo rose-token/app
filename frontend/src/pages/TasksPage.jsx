@@ -293,31 +293,54 @@ const TasksPage = () => {
     }
   };
 
-  const handleVote = async (proposalId, score) => {
+  const handleStakeOnProposal = async (proposalId, tokenAmount) => {
     if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
-    
+
     try {
-      const tx = await roseGovernance.vote(proposalId, score);
+      const stakeAmount = ethers.utils.parseEther(tokenAmount).div(10); // 10% of proposal amount
+
+      // Check allowance and approve if needed
+      const currentAllowance = await roseToken.allowance(account, await roseGovernance.getAddress());
+      if (currentAllowance.lt(stakeAmount)) {
+        const approveTx = await roseToken.approve(await roseGovernance.getAddress(), stakeAmount);
+        await approveTx.wait();
+      }
+
+      const tx = await roseGovernance.stakeOnProposal(proposalId);
       await tx.wait();
-      
+
       fetchProposals();
     } catch (err) {
-      console.error('Error voting on proposal:', err);
-      setError('Failed to vote on proposal: ' + (err.message || 'Unknown error'));
+      console.error('Error staking on proposal:', err);
+      setError('Failed to stake on proposal: ' + (err.message || 'Unknown error'));
     }
   };
 
-  const handleFinalizeProposal = async (proposalId) => {
+  const handleApproveProposal = async (proposalId) => {
     if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
-    
+
     try {
-      const tx = await roseGovernance.finalizeProposal(proposalId);
+      const tx = await roseGovernance.approveProposal(proposalId);
       await tx.wait();
-      
+
       fetchProposals();
     } catch (err) {
-      console.error('Error finalizing proposal:', err);
-      setError('Failed to finalize proposal: ' + (err.message || 'Unknown error'));
+      console.error('Error approving proposal:', err);
+      setError('Failed to approve proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleRejectProposal = async (proposalId) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+
+    try {
+      const tx = await roseGovernance.rejectProposal(proposalId);
+      await tx.wait();
+
+      fetchProposals();
+    } catch (err) {
+      console.error('Error rejecting proposal:', err);
+      setError('Failed to reject proposal: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -336,7 +359,7 @@ const TasksPage = () => {
   };
 
   const getStatusText = (statusCode) => {
-    const statuses = ['Active', 'Approved', 'Rejected', 'Executed', 'Expired'];
+    const statuses = ['Active', 'Staked', 'Approved', 'Rejected', 'Executed'];
     return statuses[statusCode] || 'Unknown';
   };
 
@@ -354,7 +377,7 @@ const TasksPage = () => {
       const proposalResults = await Promise.all(proposalPromises);
       const formattedProposals = proposalResults.map((proposal, index) => {
         const proposalTime = new Date(proposal.proposalTime.toNumber() * 1000);
-        
+
         return {
           id: index + 1,
           description: proposal.description,
@@ -365,7 +388,9 @@ const TasksPage = () => {
           fundingSource: proposal.fundingSource,
           proposalTime: proposalTime,
           status: getStatusText(proposal.status),
-          statusCode: proposal.status
+          statusCode: proposal.status,
+          stakeholder: proposal.stakeholder,
+          stakedAmount: ethers.utils.formatEther(proposal.stakedAmount)
         };
       });
       
@@ -485,8 +510,8 @@ const TasksPage = () => {
               <div className="bg-green-50 p-4 rounded-lg mb-4">
                 <h4 className="font-semibold text-green-800 mb-2">Unified Governance Workflow</h4>
                 <p className="text-sm text-green-700">
-                  All work now flows through DAO proposals to ensure stakeholder legitimacy and prevent bad actors. 
-                  Choose your funding source and let verified stakeholders evaluate proposals through ranked choice voting.
+                  All work now flows through DAO proposals to ensure stakeholder legitimacy and prevent bad actors.
+                  Choose your funding source and let verified stakeholders validate proposals by staking 10%.
                 </p>
               </div>
               <form onSubmit={handleCreateProposal} className="space-y-4">
@@ -579,8 +604,8 @@ const TasksPage = () => {
                 
                 <div className="bg-blue-50 p-3 rounded-md mb-4">
                   <p className="text-xs text-blue-800">
-                    <strong>Next Steps:</strong> After submission, stakeholders will evaluate your proposal using ranked choice voting. 
-                    Approved proposals enter a 2-week stakeholder selection cycle before work begins.
+                    <strong>Next Steps:</strong> After submission, a stakeholder will stake 10% to validate your proposal.
+                    Once approved, there's a 2-day execution delay before the task is created.
                   </p>
                 </div>
                 <Button
@@ -644,35 +669,54 @@ const TasksPage = () => {
                           <span>{proposal.tokenAmount} ROSE</span>
                         </div>
                         
-                        {proposal.status === 'Active' && parseFloat(lockedTokens) > 0 && (
-                          <div className="mb-4">
-                            <h4 className="font-medium mb-2">Cast Your Vote</h4>
-                            <div className="flex gap-2">
-                              {[0, 1, 2, 3, 4, 5].map(score => (
-                                <Button
-                                  key={score}
-                                  onClick={() => handleVote(proposal.id, score)}
-                                  className="bg-gray-200 hover:bg-gray-300"
-                                >
-                                  {score}
-                                </Button>
-                              ))}
-                            </div>
-                            <p className="text-sm text-gray-500 mt-1">
-                              0 = Strongly oppose, 5 = Strongly support
+                        {proposal.stakeholder && proposal.stakeholder !== ethers.constants.AddressZero && (
+                          <div className="mb-4 p-3 bg-blue-50 rounded">
+                            <p className="text-sm">
+                              <span className="font-medium">Stakeholder:</span> {proposal.stakeholder.substring(0, 6)}...{proposal.stakeholder.substring(38)}
+                            </p>
+                            <p className="text-sm">
+                              <span className="font-medium">Staked:</span> {proposal.stakedAmount} ROSE (10%)
                             </p>
                           </div>
                         )}
-                        
+
                         {proposal.status === 'Active' && (
-                          <Button
-                            onClick={() => handleFinalizeProposal(proposal.id)}
-                            className="bg-blue-500 text-white hover:bg-blue-600 mr-2"
-                          >
-                            Finalize Proposal
-                          </Button>
+                          <div className="mb-4">
+                            <Button
+                              onClick={() => handleStakeOnProposal(proposal.id, proposal.tokenAmount)}
+                              className="bg-blue-500 text-white hover:bg-blue-600 mr-2"
+                            >
+                              Stake 10% & Validate
+                            </Button>
+                            <Button
+                              onClick={() => handleRejectProposal(proposal.id)}
+                              className="bg-red-500 text-white hover:bg-red-600"
+                            >
+                              Reject
+                            </Button>
+                            <p className="text-sm text-gray-500 mt-2">
+                              Stake {(parseFloat(proposal.tokenAmount) * 0.1).toFixed(2)} ROSE (10%) to validate
+                            </p>
+                          </div>
                         )}
-                        
+
+                        {proposal.status === 'Staked' && proposal.stakeholder === account && (
+                          <div className="mb-4">
+                            <Button
+                              onClick={() => handleApproveProposal(proposal.id)}
+                              className="bg-green-500 text-white hover:bg-green-600 mr-2"
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              onClick={() => handleRejectProposal(proposal.id)}
+                              className="bg-red-500 text-white hover:bg-red-600"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+
                         {proposal.status === 'Approved' && (
                           <Button
                             onClick={() => handleExecuteProposal(proposal.id)}

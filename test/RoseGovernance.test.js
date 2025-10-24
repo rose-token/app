@@ -43,7 +43,8 @@ describe("RoseGovernance", function() {
 
     await roseMarketplace.setGovernanceContract(await roseGovernance.getAddress());
 
-    for (let i = 0; i < 5; i++) {
+    // Claim enough tokens to distribute to all users
+    for (let i = 0; i < 7; i++) {
       await roseMarketplace.claimFaucetTokens(ethers.parseEther("100"));
     }
 
