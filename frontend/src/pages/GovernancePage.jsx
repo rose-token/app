@@ -73,27 +73,27 @@ const GovernancePage = () => {
         setAllowance(ethers.utils.formatEther(tokenAllowance));  
       }  
         
-      // Fetch proposals  
-      const proposalList = [];  
-      for (let i = 1; i <= counter.toNumber(); i++) {  
-        const proposal = await roseGovernance.proposals(i);  
-        proposalList.push({  
-          id: proposal.id.toNumber(),  
-          proposer: proposal.proposer,  
-          description: proposal.description,  
-          detailedDescription: proposal.detailedDescription,  
-          tokenAmount: ethers.utils.formatEther(proposal.tokenAmount),  
-          proposalTime: new Date(proposal.proposalTime.toNumber() * 1000),  
-          executionTime: proposal.executionTime.toNumber() > 0   
-            ? new Date(proposal.executionTime.toNumber() * 1000)   
-            : null,  
-          status: getStatusText(proposal.status),  
+      // Fetch proposals
+      const proposalList = [];
+      for (let i = 1; i <= counter.toNumber(); i++) {
+        const proposal = await roseGovernance.proposals(i);
+        proposalList.push({
+          id: proposal.id.toNumber(),
+          proposer: proposal.proposer,
+          description: proposal.description,
+          detailedDescription: proposal.detailedDescription,
+          tokenAmount: ethers.utils.formatEther(proposal.tokenAmount),
+          proposalTime: new Date(proposal.proposalTime.toNumber() * 1000),
+          executionTime: proposal.executionTime.toNumber() > 0
+            ? new Date(proposal.executionTime.toNumber() * 1000)
+            : null,
+          status: getStatusText(proposal.status),
           proposalType: proposal.proposalType,
           fundingSource: proposal.fundingSource,
           ipfsDataHash: proposal.ipfsDataHash,
-          totalScoreSum: proposal.totalScoreSum, // Keep as BigNumber to avoid numeric overflow  
-          finalWinner: proposal.finalWinner  
-        });  
+          stakeholder: proposal.stakeholder,
+          stakedAmount: ethers.utils.formatEther(proposal.stakedAmount)
+        });
       }  
         
       setProposals(proposalList.reverse()); // Show newest first  
@@ -108,9 +108,9 @@ const GovernancePage = () => {
     fetchGovernanceData();  
   }, [fetchGovernanceData]);  
     
-  const getStatusText = (statusCode) => {  
-    const statuses = ['Active', 'Approved', 'Rejected', 'Executed', 'Expired'];  
-    return statuses[statusCode] || 'Unknown';  
+  const getStatusText = (statusCode) => {
+    const statuses = ['Active', 'Staked', 'Approved', 'Rejected', 'Executed'];
+    return statuses[statusCode] || 'Unknown';
   };  
     
   const handleLockTokens = async () => {  
@@ -200,32 +200,55 @@ const GovernancePage = () => {
     }  
   };  
     
-  const handleVote = async (proposalId, score) => {  
-    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;  
-      
-    try {  
-      const tx = await roseGovernance.vote(proposalId, score);  
-      await tx.wait();  
-        
+  const handleStakeOnProposal = async (proposalId, tokenAmount) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+
+    try {
+      const stakeAmount = ethers.utils.parseEther(tokenAmount).div(10); // 10% of proposal amount
+
+      // Check allowance and approve if needed
+      const currentAllowance = await roseToken.allowance(account, roseGovernance.address);
+      if (currentAllowance.lt(stakeAmount)) {
+        const approveTx = await roseToken.approve(roseGovernance.address, stakeAmount);
+        await approveTx.wait();
+      }
+
+      const tx = await roseGovernance.stakeOnProposal(proposalId);
+      await tx.wait();
+
       fetchGovernanceData();
-    } catch (err) {  
-      console.error('Error voting on proposal:', err);  
-      setError('Failed to vote on proposal: ' + (err.message || 'Unknown error'));  
-    }  
-  };  
-    
-  const handleFinalizeProposal = async (proposalId) => {  
-    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;  
-      
-    try {  
-      const tx = await roseGovernance.finalizeProposal(proposalId);  
-      await tx.wait();  
-        
+    } catch (err) {
+      console.error('Error staking on proposal:', err);
+      setError('Failed to stake on proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleApproveProposal = async (proposalId) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+
+    try {
+      const tx = await roseGovernance.approveProposal(proposalId);
+      await tx.wait();
+
       fetchGovernanceData();
-    } catch (err) {  
-      console.error('Error finalizing proposal:', err);  
-      setError('Failed to finalize proposal: ' + (err.message || 'Unknown error'));  
-    }  
+    } catch (err) {
+      console.error('Error approving proposal:', err);
+      setError('Failed to approve proposal: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleRejectProposal = async (proposalId) => {
+    if (!roseGovernance || !isConnected || !contractsReady.readWrite) return;
+
+    try {
+      const tx = await roseGovernance.rejectProposal(proposalId);
+      await tx.wait();
+
+      fetchGovernanceData();
+    } catch (err) {
+      console.error('Error rejecting proposal:', err);
+      setError('Failed to reject proposal: ' + (err.message || 'Unknown error'));
+    }
   };  
     
   const handleExecuteProposal = async (proposalId) => {  
@@ -321,11 +344,11 @@ const GovernancePage = () => {
             <p className="text-sm text-gray-500">Execution Delay</p>  
             <p className="text-2xl font-bold">{executionDelay} days</p>  
           </div>  
-          <div className="bg-white p-4 rounded shadow">  
-            <p className="text-sm text-gray-500">Active Proposals</p>  
-            <p className="text-2xl font-bold">  
-              {proposals.filter(p => p.status === 'Active').length}  
-            </p>  
+          <div className="bg-white p-4 rounded shadow">
+            <p className="text-sm text-gray-500">Active Proposals</p>
+            <p className="text-2xl font-bold">
+              {proposals.filter(p => p.status === 'Active' || p.status === 'Staked').length}
+            </p>
           </div>  
         </div>  
       </div>  
@@ -544,51 +567,70 @@ const GovernancePage = () => {
                   </div>  
                 </div>  
                   
-                <div className="p-4">  
-                  <p className="mb-4">{proposal.detailedDescription}</p>  
-                    
-                  <div className="flex items-center mb-4">  
-                    <span className="font-medium mr-2">Requested amount:</span>  
-                    <span>{proposal.tokenAmount} ROSE</span>  
-                  </div>  
-                    
-                  {proposal.status === 'Active' && parseFloat(lockedTokens) > 0 && (  
-                    <div className="mb-4">  
-                      <h4 className="font-medium mb-2">Cast Your Vote</h4>  
-                      <div className="flex gap-2">  
-                        {[0, 1, 2, 3, 4, 5].map(score => (  
-                          <Button  
-                            key={score}  
-                            onClick={() => handleVote(proposal.id, score)}  
-                            className="bg-gray-200 hover:bg-gray-300"  
-                          >  
-                            {score}  
-                          </Button>  
-                        ))}  
-                      </div>  
-                      <p className="text-sm text-gray-500 mt-1">  
-                        0 = Strongly oppose, 5 = Strongly support  
-                      </p>  
-                    </div>  
-                  )}  
-                    
-                  {proposal.status === 'Active' && (  
-                    <Button  
-                      onClick={() => handleFinalizeProposal(proposal.id)}  
-                      className="bg-blue-500 text-white hover:bg-blue-600 mr-2"  
-                    >  
-                      Finalize Proposal  
-                    </Button>  
-                  )}  
-                    
-                  {proposal.status === 'Approved' && (  
-                    <Button  
-                      onClick={() => handleExecuteProposal(proposal.id)}  
-                      className="bg-green-500 text-white hover:bg-green-600"  
-                    >  
-                      Execute Proposal  
-                    </Button>  
-                  )}  
+                <div className="p-4">
+                  <p className="mb-4">{proposal.detailedDescription}</p>
+
+                  <div className="flex items-center mb-4">
+                    <span className="font-medium mr-2">Requested amount:</span>
+                    <span>{proposal.tokenAmount} ROSE</span>
+                  </div>
+
+                  {proposal.stakeholder && proposal.stakeholder !== ethers.constants.AddressZero && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded">
+                      <p className="text-sm">
+                        <span className="font-medium">Stakeholder:</span> {proposal.stakeholder.substring(0, 6)}...{proposal.stakeholder.substring(38)}
+                      </p>
+                      <p className="text-sm">
+                        <span className="font-medium">Staked:</span> {proposal.stakedAmount} ROSE (10%)
+                      </p>
+                    </div>
+                  )}
+
+                  {proposal.status === 'Active' && (
+                    <div className="mb-4">
+                      <Button
+                        onClick={() => handleStakeOnProposal(proposal.id, proposal.tokenAmount)}
+                        className="bg-blue-500 text-white hover:bg-blue-600 mr-2"
+                      >
+                        Stake 10% & Validate
+                      </Button>
+                      <Button
+                        onClick={() => handleRejectProposal(proposal.id)}
+                        className="bg-red-500 text-white hover:bg-red-600"
+                      >
+                        Reject Proposal
+                      </Button>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Stake {(parseFloat(proposal.tokenAmount) * 0.1).toFixed(2)} ROSE (10%) to validate this proposal
+                      </p>
+                    </div>
+                  )}
+
+                  {proposal.status === 'Staked' && proposal.stakeholder === account && (
+                    <div className="mb-4">
+                      <Button
+                        onClick={() => handleApproveProposal(proposal.id)}
+                        className="bg-green-500 text-white hover:bg-green-600 mr-2"
+                      >
+                        Approve Proposal
+                      </Button>
+                      <Button
+                        onClick={() => handleRejectProposal(proposal.id)}
+                        className="bg-red-500 text-white hover:bg-red-600"
+                      >
+                        Reject Proposal
+                      </Button>
+                    </div>
+                  )}
+
+                  {proposal.status === 'Approved' && (
+                    <Button
+                      onClick={() => handleExecuteProposal(proposal.id)}
+                      className="bg-green-500 text-white hover:bg-green-600"
+                    >
+                      Execute Proposal
+                    </Button>
+                  )}
                 </div>  
               </Card>  
             ))}  
@@ -615,50 +657,52 @@ const GovernancePage = () => {
         </div>  
       </CollapsibleSection>  
         
-      <CollapsibleSection id="voting-mechanism" title="Voting Mechanism">  
-        <div className="space-y-4">  
-          <p>  
-            Rose Token uses a token-weighted voting system where each ROSE token represents one vote.  
-            This ensures that those with the highest stake in the ecosystem have proportional influence  
-            over its direction.  
-          </p>  
-          <p>  
-            Key aspects of the voting mechanism:  
-          </p>  
-          <ul className="list-disc pl-6 space-y-2">  
-            <li>One ROSE token equals one vote</li>  
-            <li>Voting is conducted on-chain for transparency</li>  
-            <li>Voting periods typically last 7 days</li>  
-            <li>A minimum quorum of 10% of circulating tokens is required for a vote to be valid</li>  
-          </ul>  
-        </div>  
+      <CollapsibleSection id="approval-mechanism" title="Stakeholder Approval Mechanism">
+        <div className="space-y-4">
+          <p>
+            Rose Token uses a simplified single-stakeholder approval model for governance proposals.
+            This ensures efficient validation while maintaining quality control.
+          </p>
+          <p>
+            Key aspects of the approval mechanism:
+          </p>
+          <ul className="list-disc pl-6 space-y-2">
+            <li>Single stakeholder stakes 10% of proposal amount to validate it</li>
+            <li>Stakeholder reviews and approves or rejects the proposal</li>
+            <li>Approved proposals have a 2-day execution delay</li>
+            <li>Stakeholder gets their stake back when proposal is executed or rejected</li>
+            <li>This model ensures accountability and prevents spam proposals</li>
+          </ul>
+        </div>
       </CollapsibleSection>  
         
-      <CollapsibleSection id="proposal-system" title="Proposal System">  
-        <div className="space-y-4">  
-          <p>  
-            Any ROSE token holder can submit proposals for community consideration.  
-            Proposals can range from technical improvements to treasury allocations.  
-          </p>  
-          <p>  
-            The proposal process follows these stages:  
-          </p>  
-          <ol className="list-decimal pl-6 space-y-2">  
-            <li>  
-              <strong>Proposal Submission</strong> - Authors must hold at least 1% of circulating supply   
-              to submit proposals  
-            </li>  
-            <li>  
-              <strong>Discussion Period</strong> - 3 days for community feedback and proposal refinement  
-            </li>  
-            <li>  
-              <strong>Voting Period</strong> - 7 days for token holders to cast their votes  
-            </li>  
-            <li>  
-              <strong>Execution</strong> - If approved, proposals are implemented by the development team  
-            </li>  
-          </ol>  
-        </div>  
+      <CollapsibleSection id="proposal-system" title="Proposal System">
+        <div className="space-y-4">
+          <p>
+            Any ROSE token holder with sufficient locked tokens can submit proposals for stakeholder validation.
+            Proposals can be work tasks or governance changes.
+          </p>
+          <p>
+            The proposal process follows these stages:
+          </p>
+          <ol className="list-decimal pl-6 space-y-2">
+            <li>
+              <strong>Proposal Submission</strong> - Authors must have minimum tokens locked ({minimumTokensToPropose} ROSE)
+            </li>
+            <li>
+              <strong>Stakeholder Staking</strong> - A stakeholder stakes 10% of proposal amount to validate
+            </li>
+            <li>
+              <strong>Stakeholder Approval</strong> - Stakeholder reviews and approves or rejects
+            </li>
+            <li>
+              <strong>Execution Delay</strong> - {executionDelay} day delay before execution
+            </li>
+            <li>
+              <strong>Execution</strong> - Approved proposals create tasks in the marketplace
+            </li>
+          </ol>
+        </div>
       </CollapsibleSection>  
         
   
