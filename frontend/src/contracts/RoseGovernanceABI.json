@@ -190,6 +190,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "PAYOUT_APPROVAL_THRESHOLD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -497,6 +510,58 @@
     "outputs": [
       {
         "internalType": "contract RoseToken",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_bidEvaluationManager",
+        "type": "address"
+      }
+    ],
+    "name": "setMarketplaceBidEvaluationManager",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract TokenStaking",
+        "name": "_tokenStaking",
+        "type": "address"
+      }
+    ],
+    "name": "setMarketplaceTokenStaking",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract TokenStaking",
+        "name": "_tokenStaking",
+        "type": "address"
+      }
+    ],
+    "name": "setTokenStaking",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tokenStaking",
+    "outputs": [
+      {
+        "internalType": "contract TokenStaking",
         "name": "",
         "type": "address"
       }

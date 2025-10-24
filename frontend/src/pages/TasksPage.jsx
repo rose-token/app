@@ -180,18 +180,6 @@ const TasksPage = () => {
     }
   };
   
-  const handleDisputeTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
-    
-    try {
-      const tx = await roseMarketplace.disputeTask(taskId);
-      await tx.wait();
-      debouncedFetchTasks(); // Use debounced version
-    } catch (err) {
-      console.error('Error disputing task:', err);
-      setError('Failed to dispute task');
-    }
-  };
   
   const handleAcceptPayment = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
@@ -253,137 +241,6 @@ const TasksPage = () => {
     }
   };
   
-  const handleBidTask = async (taskId, bidAmount, estimatedDuration, storyPoints, portfolioLink, implementationPlan) => {
-    if (!isConnected || !roseMarketplace || !roseToken) return;
-    
-    try {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        setError('Task not found');
-        return;
-      }
-      
-      if (task.customer === account) {
-        setError('You cannot bid on your own task');
-        return;
-      }
-      
-      if (task.stakeholder === account) {
-        setError('Stakeholders cannot bid on tasks');
-        return;
-      }
-      
-      if (task.status !== TaskStatus.Bidding) {
-        setError('This task is not in the bidding phase');
-        return;
-      }
-      
-      const bidAmountWei = ethers.utils.parseEther(bidAmount.toString());
-      
-      const minStake = await roseMarketplace.getMinimumBidStake(taskId);
-      console.log("Minimum bid stake required:", minStake.toString());
-      
-      console.log("Approving token transfer for bid stake...");
-      const approveTx = await roseToken.approve(roseMarketplace.address, minStake.toString());
-      await approveTx.wait();
-      console.log("Token approval confirmed");
-      
-      console.log("Placing bid...");
-      const tx = await roseMarketplace.placeBid(
-        taskId,
-        bidAmountWei,
-        estimatedDuration * 86400, // Convert days to seconds
-        storyPoints,
-        portfolioLink, // Using direct text instead of IPFS hash
-        implementationPlan, // Using direct text instead of IPFS hash
-        { gasLimit: 500000 }
-      );
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Bid placed successfully");
-      
-      debouncedFetchTasks();
-    } catch (err) {
-      console.error('Error placing bid:', err);
-      const errorMessage = err.message.includes('execution reverted') 
-        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to place bid'
-        : 'Failed to place bid';
-      setError(errorMessage);
-    }
-  };
-  
-  const handleShortlistBids = async (taskId, selectedBidIndices) => {
-    if (!isConnected || !roseMarketplace) return;
-    
-    try {
-      console.log("Shortlisting bids for task:", taskId);
-      const tx = await roseMarketplace.selectShortlist(taskId, selectedBidIndices, {
-        gasLimit: 500000
-      });
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Bids shortlisted successfully");
-      
-      debouncedFetchTasks();
-    } catch (err) {
-      console.error('Error shortlisting bids:', err);
-      const errorMessage = err.message.includes('execution reverted') 
-        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to shortlist bids'
-        : 'Failed to shortlist bids';
-      setError(errorMessage);
-    }
-  };
-  
-  const handleFinalizeWorkerSelection = async (taskId, finalBidIndex) => {
-    if (!isConnected || !roseMarketplace) return;
-    
-    try {
-      console.log("Selecting worker for task:", taskId);
-      const tx = await roseMarketplace.finalizeWorkerSelection(taskId, finalBidIndex, {
-        gasLimit: 500000
-      });
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Worker selected successfully");
-      
-      debouncedFetchTasks();
-    } catch (err) {
-      console.error('Error selecting worker:', err);
-      const errorMessage = err.message.includes('execution reverted') 
-        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to select worker'
-        : 'Failed to select worker';
-      setError(errorMessage);
-    }
-  };
-  
-  const handleStartBidding = async (taskId, biddingDuration, minStake) => {
-    if (!isConnected || !roseMarketplace) return;
-    
-    try {
-      console.log("Starting bidding phase for task:", taskId);
-      const tx = await roseMarketplace.startBiddingPhase(
-        taskId, 
-        biddingDuration * 86400, // Convert days to seconds
-        ethers.utils.parseEther(minStake.toString()),
-        { gasLimit: 300000 }
-      );
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Bidding phase started successfully");
-      
-      debouncedFetchTasks();
-    } catch (err) {
-      console.error('Error starting bidding phase:', err);
-      const errorMessage = err.message.includes('execution reverted') 
-        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to start bidding'
-        : 'Failed to start bidding';
-      setError(errorMessage);
-    }
-  };
 
   const handleCreateProposal = async (e) => {
     e.preventDefault();
@@ -565,43 +422,11 @@ const TasksPage = () => {
       };
       roseMarketplace.on(stakeholderStakedFilter, stakeholderStakedListener);
       
-      const bidPlacedFilter = roseMarketplace.filters.BidPlaced();
-      const bidPlacedListener = (taskId, worker, bidAmount, storyPoints, reputationScore) => {
-        console.log("Bid placed event:", { taskId, worker, bidAmount, storyPoints, reputationScore });
-        fetchTasks(); // Refresh tasks after bid is placed
-      };
-      roseMarketplace.on(bidPlacedFilter, bidPlacedListener);
-      
-      const biddingStartedFilter = roseMarketplace.filters.BiddingStarted();
-      const biddingStartedListener = (taskId, startTime, endTime, minStake) => {
-        console.log("Bidding started event:", { taskId, startTime, endTime, minStake });
-        fetchTasks(); // Refresh tasks after bidding starts
-      };
-      roseMarketplace.on(biddingStartedFilter, biddingStartedListener);
-      
-      const shortlistSelectedFilter = roseMarketplace.filters.ShortlistSelected();
-      const shortlistSelectedListener = (taskId, selectedBidIndices) => {
-        console.log("Shortlist selected event:", { taskId, selectedBidIndices });
-        fetchTasks(); // Refresh tasks after shortlist selection
-      };
-      roseMarketplace.on(shortlistSelectedFilter, shortlistSelectedListener);
-      
-      const workerSelectedFilter = roseMarketplace.filters.WorkerSelected();
-      const workerSelectedListener = (taskId, worker, bidAmount) => {
-        console.log("Worker selected event:", { taskId, worker, bidAmount });
-        fetchTasks(); // Refresh tasks after worker selection
-      };
-      roseMarketplace.on(workerSelectedFilter, workerSelectedListener);
-      
       return () => {
         roseMarketplace.off(paymentFilter, paymentListener);
         roseMarketplace.off(closedFilter, closedListener);
         roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
         roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
-        roseMarketplace.off(bidPlacedFilter, bidPlacedListener);
-        roseMarketplace.off(biddingStartedFilter, biddingStartedListener);
-        roseMarketplace.off(shortlistSelectedFilter, shortlistSelectedListener);
-        roseMarketplace.off(workerSelectedFilter, workerSelectedListener);
       };
     }
   }, [roseMarketplace, debouncedFetchTasks, fetchTasks]);
@@ -615,7 +440,7 @@ const TasksPage = () => {
       return true;
     }
     
-    if (filters.needWorker && (task.status === TaskStatus.Open || task.status === TaskStatus.Bidding)) {
+    if (filters.needWorker && task.status === TaskStatus.Open) {
       return true;
     }
     
@@ -874,13 +699,8 @@ const TasksPage = () => {
               onClaim={handleClaimTask}
               onComplete={handleCompleteTask}
               onApprove={handleApproveTask}
-              onDispute={handleDisputeTask}
               onAcceptPayment={handleAcceptPayment}
               onStake={handleStakeTask}
-              onBid={handleBidTask}
-              onShortlistBids={handleShortlistBids}
-              onFinalizeWorkerSelection={handleFinalizeWorkerSelection}
-              onStartBidding={handleStartBidding}
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}
