@@ -147,7 +147,7 @@ describe("RoseMarketplace", function () {
 
       task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
-      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
     
@@ -168,7 +168,7 @@ describe("RoseMarketplace", function () {
 
       task = await roseMarketplace.tasks(1);
       expect(task.customerApproval).to.equal(true);
-      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
 
@@ -180,7 +180,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       
       let task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(6); // TaskStatus.ApprovedPendingPayment
+      expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
       
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
       
@@ -191,7 +191,7 @@ describe("RoseMarketplace", function () {
         .withArgs(1, worker.address, taskDeposit);
         
       task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(5); // TaskStatus.Closed
+      expect(task.status).to.equal(4); // TaskStatus.Closed
       expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
       
       const workerReward = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
@@ -224,28 +224,5 @@ describe("RoseMarketplace", function () {
       expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + treasuryAmount);
     });
 
-    it("Should handle disputes", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
-
-      await expect(roseMarketplace.connect(customer).disputeTask(1))
-        .to.emit(roseMarketplace, "TaskDisputed")
-        .withArgs(1);
-
-      const task = await roseMarketplace.tasks(1);
-      expect(task.status).to.equal(4); // TaskStatus.Disputed
-
-      const workerBalanceBefore = await roseToken.balanceOf(worker.address);
-      
-      await expect(roseMarketplace.connect(stakeholder).resolveDispute(1, false))
-        .to.emit(roseMarketplace, "TaskClosed")
-        .withArgs(1);
-
-      const workerReward = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      
-      const workerBalanceAfter = await roseToken.balanceOf(worker.address);
-      expect(workerBalanceAfter - workerBalanceBefore).to.equal(taskDeposit + workerReward);
-    });
   });
 });
