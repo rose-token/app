@@ -14,37 +14,6 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "taskId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "commentId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "author",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "parentCommentId",
-        "type": "uint256"
-      }
-    ],
-    "name": "CommentAdded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
         "indexed": true,
         "internalType": "address",
         "name": "to",
@@ -83,50 +52,6 @@
       }
     ],
     "name": "PaymentReleased",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "taskId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "customerRefund",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "stakeholderRefund",
-        "type": "uint256"
-      }
-    ],
-    "name": "RefundProcessed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "taskId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "requestedBy",
-        "type": "address"
-      }
-    ],
-    "name": "RefundRequested",
     "type": "event"
   },
   {
@@ -228,19 +153,6 @@
       }
     ],
     "name": "TaskCreated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "TaskDisputed",
     "type": "event"
   },
   {
@@ -397,29 +309,6 @@
         "internalType": "uint256",
         "name": "_taskId",
         "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "_ipfsCid",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_parentCommentId",
-        "type": "uint256"
-      }
-    ],
-    "name": "addComment",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
       }
     ],
     "name": "approveCompletionByCustomer",
@@ -441,42 +330,16 @@
     "type": "function"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "bidEvaluationManager",
+    "outputs": [
       {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
-    "name": "approveRefundByCustomer",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "approveRefundByStakeholder",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "approveRefundByWorker",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -506,24 +369,6 @@
       }
     ],
     "name": "claimTask",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_description",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_tokenAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "createTask",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -594,65 +439,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "disputeTask",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getTaskComments",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "author",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "timestamp",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "contentHash",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "uint256",
-            "name": "parentCommentId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "ipfsCid",
-            "type": "string"
-          }
-        ],
-        "internalType": "struct RoseMarketplace.Comment[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "governanceContract",
     "outputs": [
@@ -674,37 +460,6 @@
       }
     ],
     "name": "markTaskCompleted",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      }
-    ],
-    "name": "requestRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_taskId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "_refundToCustomer",
-        "type": "bool"
-      }
-    ],
-    "name": "resolveDispute",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -739,6 +494,19 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "_bidEvaluationManager",
+        "type": "address"
+      }
+    ],
+    "name": "setBidEvaluationManager",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "_governanceContract",
         "type": "address"
       }
@@ -751,14 +519,40 @@
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "_publicKey",
-        "type": "string"
+        "internalType": "address",
+        "name": "_stakeholderRegistry",
+        "type": "address"
       }
     ],
-    "name": "setPublicKey",
+    "name": "setStakeholderRegistry",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract TokenStaking",
+        "name": "_tokenStaking",
+        "type": "address"
+      }
+    ],
+    "name": "setTokenStaking",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "stakeholderRegistry",
+    "outputs": [
+      {
+        "internalType": "contract StakeholderRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -777,69 +571,6 @@
     "name": "stakeholderStake",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "taskCommentCount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "taskComments",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "author",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "contentHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "parentCommentId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "ipfsCid",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -916,16 +647,6 @@
         "type": "bool"
       },
       {
-        "internalType": "bool",
-        "name": "workerApproval",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "refundRequested",
-        "type": "bool"
-      },
-      {
         "internalType": "uint256",
         "name": "storyPoints",
         "type": "uint256"
@@ -935,19 +656,13 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "userPublicKeys",
+    "inputs": [],
+    "name": "tokenStaking",
     "outputs": [
       {
-        "internalType": "string",
+        "internalType": "contract TokenStaking",
         "name": "",
-        "type": "string"
+        "type": "address"
       }
     ],
     "stateMutability": "view",
