@@ -189,9 +189,10 @@ contract RoseGovernance {
     function stakeOnProposal(uint256 _proposalId) external {
         TaskProposal storage proposal = proposals[_proposalId];
 
-        // Check if proposal is active and not already staked
-        require(proposal.status == ProposalStatus.Active, "Proposal is not active");
+        // Check if proposal already has a stakeholder first (more specific error)
         require(proposal.stakeholder == address(0), "Proposal already has a stakeholder");
+        // Check if proposal is active
+        require(proposal.status == ProposalStatus.Active, "Proposal is not active");
         require(proposal.proposer != msg.sender, "Proposer cannot stake on their own proposal");
 
         // Calculate required 10% stake

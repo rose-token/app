@@ -36,7 +36,6 @@ const TasksPage = () => {
   });
   
   const [proposals, setProposals] = useState([]);
-  const [lockedTokens, setLockedTokens] = useState(0);
   
   const fetchTaskDetails = useCallback(async (taskId) => {
     if (!roseMarketplace) return null;
@@ -300,9 +299,9 @@ const TasksPage = () => {
       const stakeAmount = ethers.utils.parseEther(tokenAmount).div(10); // 10% of proposal amount
 
       // Check allowance and approve if needed
-      const currentAllowance = await roseToken.allowance(account, await roseGovernance.getAddress());
+      const currentAllowance = await roseToken.allowance(account, roseGovernance.address);
       if (currentAllowance.lt(stakeAmount)) {
-        const approveTx = await roseToken.approve(await roseGovernance.getAddress(), stakeAmount);
+        const approveTx = await roseToken.approve(roseGovernance.address, stakeAmount);
         await approveTx.wait();
       }
 
@@ -395,11 +394,6 @@ const TasksPage = () => {
       });
       
       setProposals(formattedProposals);
-      
-      if (account) {
-        const locked = await roseGovernance.lockedTokens(account);
-        setLockedTokens(ethers.utils.formatEther(locked));
-      }
     } catch (err) {
       console.error('Error fetching proposals:', err);
       setError('Failed to fetch proposals: ' + (err.message || 'Unknown error'));
