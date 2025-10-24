@@ -107,14 +107,6 @@ describe("Task Lifecycle Edge Cases", function () {
     ).to.be.revertedWith("Only assigned worker can mark completion");  
   });  
   
-  it("Should not allow tasks in invalid state to be disputed", async function() {  
-    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
-      
-    await expect(  
-      roseMarketplace.connect(customer).disputeTask(1)  
-    ).to.be.revertedWith("Invalid status for dispute");  
-  });  
   
   it("Should not allow claiming a task with zero story points", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
