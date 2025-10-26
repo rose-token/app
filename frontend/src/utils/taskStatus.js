@@ -1,14 +1,12 @@
+// Task status enum matching RoseMarketplace.sol contract
+// enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
 export const TaskStatus = {
   Open: 0,
   StakeholderRequired: 1,
   InProgress: 2,
   Completed: 3,
-  Disputed: 4,
-  Closed: 5,
-  ApprovedPendingPayment: 6,
-  RefundRequested: 7,
-  Bidding: 8,
-  ShortlistSelected: 9
+  Closed: 4,
+  ApprovedPendingPayment: 5
 };
 
 export const getStatusText = (status) => {
@@ -21,18 +19,10 @@ export const getStatusText = (status) => {
       return 'In Progress';
     case TaskStatus.Completed:
       return 'Completed';
-    case TaskStatus.Disputed:
-      return 'Disputed';
     case TaskStatus.Closed:
       return 'Closed';
     case TaskStatus.ApprovedPendingPayment:
       return 'Ready for Payment';
-    case TaskStatus.RefundRequested:
-      return 'Refund Requested';
-    case TaskStatus.Bidding:
-      return 'Bidding';
-    case TaskStatus.ShortlistSelected:
-      return 'Shortlist Selected';
     default:
       return 'Unknown';
   }
@@ -48,18 +38,10 @@ export const getStatusColor = (status) => {
       return 'bg-yellow-100 text-yellow-800';
     case TaskStatus.Completed:
       return 'bg-green-100 text-green-800';
-    case TaskStatus.Disputed:
-      return 'bg-red-100 text-red-800';
     case TaskStatus.Closed:
       return 'bg-gray-100 text-gray-800';
     case TaskStatus.ApprovedPendingPayment:
       return 'bg-purple-100 text-purple-800';
-    case TaskStatus.RefundRequested:
-      return 'bg-pink-100 text-pink-800';
-    case TaskStatus.Bidding:
-      return 'bg-indigo-100 text-indigo-800';
-    case TaskStatus.ShortlistSelected:
-      return 'bg-teal-100 text-teal-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }
