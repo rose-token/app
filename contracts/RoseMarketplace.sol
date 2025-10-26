@@ -271,18 +271,18 @@ contract RoseMarketplace {
         require(_storyPoints > 0, "Story points must be greater than zero");
         require(msg.sender != address(0), "Worker cannot be zero address");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
-        
-        // Tasks can be claimed directly if they are in Open or StakeholderRequired status
-        require(t.status == TaskStatus.Open || t.status == TaskStatus.StakeholderRequired, 
-                "Task must be in a claimable state");
+
+        // Tasks can only be claimed when status is Open (after stakeholder has staked)
+        require(t.status == TaskStatus.Open,
+                "Task must be Open for claiming");
 
         t.worker = msg.sender;
         t.storyPoints = _storyPoints;
         t.status = TaskStatus.InProgress;
-        
+
         // Award experience to worker for claiming a task
         roseReputation.awardExperience(msg.sender, RoseReputation.Role.Worker, roseReputation.WORKER_CLAIM_EXP());
-        
+
         emit TaskClaimed(_taskId, msg.sender, _storyPoints);
     }
 
