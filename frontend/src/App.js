@@ -4,7 +4,6 @@ import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
-import GovernancePage from './pages/GovernancePage';
 import { MetaMaskProvider } from '@metamask/sdk-react';
 import { EthereumProvider } from './hooks/useEthereum';
 import { ProfileProvider } from './hooks/useProfile';
@@ -35,9 +34,8 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<TasksPage />} />
-                    <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/help" element={<HelpPage />} />
-                <Route path="/governance" element={<GovernancePage />} />
               </Routes>
             </Layout>
           </Router>

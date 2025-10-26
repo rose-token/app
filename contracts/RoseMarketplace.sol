@@ -34,9 +34,6 @@ contract RoseMarketplace {
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
-    
-    // DAO Governance contract that can create tasks using treasury funds
-    address public governanceContract;
 
     // A simple enum to track task status
     enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
@@ -100,26 +97,12 @@ contract RoseMarketplace {
     constructor(address _daoTreasury) {
         require(_daoTreasury != address(0));
         daoTreasury = _daoTreasury;
-        governanceContract = address(0); // Initially no governance contract
 
         // Deploy the RoseToken, designating this marketplace as its minter
         roseToken = new RoseToken(address(this));
         
         // Deploy the RoseReputation contract for tracking experience and levels
         roseReputation = new RoseReputation();
-    }
-    
-    /**
-     * @dev Set the governance contract address
-     * @param _governanceContract Address of the governance contract
-     */
-    function setGovernanceContract(address _governanceContract) external {
-        // In a production system, you would add access control here
-        // For this example, we're allowing anyone to set this initially
-        // In reality, you would restrict this to owner or multisig
-        require(governanceContract == address(0));
-        require(_governanceContract != address(0));
-        governanceContract = _governanceContract;
     }
     
     /**
@@ -138,23 +121,15 @@ contract RoseMarketplace {
      * @dev Set the token staking contract address
      */
     function setTokenStaking(TokenStaking _tokenStaking) external {
-        require(msg.sender == address(roseToken) || msg.sender == governanceContract);
+        require(msg.sender == address(roseToken));
         tokenStaking = _tokenStaking;
     }
-    
+
     function setBidEvaluationManager(address _bidEvaluationManager) external {
-        require(msg.sender == address(roseToken) || msg.sender == governanceContract);
+        require(msg.sender == address(roseToken));
         bidEvaluationManager = _bidEvaluationManager;
     }
     
-    /**
-     * @dev Modifier to restrict access to governance contract
-     */
-    modifier onlyGovernance() {
-        require(msg.sender == governanceContract);
-        _;
-    }
-
     /**
      * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
@@ -181,38 +156,6 @@ contract RoseMarketplace {
         roseReputation.awardExperience(msg.sender, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_CREATION_EXP());
 
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
-    }
-    
-
-    /**
-     * @dev Create a task from the governance contract using treasury funds
-     * @param _description A brief description of the task
-     * @param _tokenAmount Amount of ROSE tokens to deposit 
-     * @param _detailedDescription Optional detailed information about the task
-     * @return The ID of the created task
-     */
-    function createTaskFromGovernance(
-        string calldata _description, 
-        uint256 _tokenAmount, 
-        string calldata _detailedDescription
-    ) external onlyGovernance returns (uint256) {
-        require(_tokenAmount > 0);
-        
-        // Transfer tokens from treasury to the contract
-        require(roseToken.transferFrom(daoTreasury, address(this), _tokenAmount));
-
-        taskCounter++;
-        Task storage newTask = tasks[taskCounter];
-        newTask.customer = daoTreasury; // Treasury is the customer
-        newTask.deposit = _tokenAmount;
-        newTask.description = _description;
-        newTask.detailedDescription = _detailedDescription;
-        newTask.status = TaskStatus.StakeholderRequired;
-        newTask.customerApproval = false;
-        newTask.stakeholderApproval = false;
-        
-        emit TaskCreated(taskCounter, daoTreasury, _tokenAmount);
-        return taskCounter;
     }
 
     /**

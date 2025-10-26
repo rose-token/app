@@ -4,7 +4,6 @@ const path = require('path');
 const marketplaceArtifact = require('../artifacts/contracts/RoseMarketplace.sol/RoseMarketplace.json');
 const tokenArtifact = require('../artifacts/contracts/RoseToken.sol/RoseToken.json');
 const reputationArtifact = require('../artifacts/contracts/RoseReputation.sol/RoseReputation.json');
-const governanceArtifact = require('../artifacts/contracts/RoseGovernance.sol/RoseGovernance.json');
 const tokenStakingArtifact = require('../artifacts/contracts/TokenStaking.sol/TokenStaking.json');
 const stakeholderRegistryArtifact = require('../artifacts/contracts/StakeholderRegistry.sol/StakeholderRegistry.json');
 const bidEvaluationManagerArtifact = require('../artifacts/contracts/BidEvaluationManager.sol/BidEvaluationManager.json');
@@ -28,11 +27,6 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(targetDir, 'RoseReputationABI.json'),
   JSON.stringify(reputationArtifact.abi, null, 2)
-);
-
-fs.writeFileSync(
-  path.join(targetDir, 'RoseGovernanceABI.json'),
-  JSON.stringify(governanceArtifact.abi, null, 2)
 );
 
 fs.writeFileSync(

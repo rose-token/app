@@ -34,24 +34,7 @@ async function main() {
   
   await roseMarketplace.setStakeholderRegistry(stakeholderRegistryAddress);
   console.log("StakeholderRegistry set in marketplace");
-  
-  
-  const minimumTokensToPropose = hre.ethers.parseEther("10"); // 10 ROSE tokens
-  const RoseGovernance = await hre.ethers.getContractFactory("RoseGovernance");
-  const roseGovernance = await RoseGovernance.deploy(
-    roseTokenAddress,
-    roseReputationAddress,
-    marketplaceAddress,
-    minimumTokensToPropose
-  );
-  await roseGovernance.waitForDeployment();
-  
-  const governanceAddress = await roseGovernance.getAddress();
-  console.log("RoseGovernance deployed to:", governanceAddress);
-  
-  await roseMarketplace.setGovernanceContract(governanceAddress);
-  console.log("Governance contract set in marketplace");
-  
+
   await stakeholderRegistry.authorizeContract(marketplaceAddress);
   console.log("Marketplace authorized to use stakeholder registry");
 
@@ -61,9 +44,6 @@ async function main() {
   
   const tokenStakingAddress = await tokenStaking.getAddress();
   console.log("TokenStaking deployed to:", tokenStakingAddress);
-  
-  await roseGovernance.setMarketplaceTokenStaking(tokenStakingAddress);
-  console.log("TokenStaking set in marketplace via governance");
 
   const BidEvaluationManager = await hre.ethers.getContractFactory("BidEvaluationManager");
   const bidEvaluationManager = await BidEvaluationManager.deploy(tokenStakingAddress, marketplaceAddress);
@@ -71,26 +51,21 @@ async function main() {
   
   const bidEvaluationManagerAddress = await bidEvaluationManager.getAddress();
   console.log("BidEvaluationManager deployed to:", bidEvaluationManagerAddress);
-  
-  await roseGovernance.setMarketplaceBidEvaluationManager(bidEvaluationManagerAddress);
-  console.log("BidEvaluationManager set in marketplace");
 
   console.log("\nContract Details:");
   console.log("----------------");
   console.log("RoseMarketplace:", marketplaceAddress);
   console.log("RoseToken:", roseTokenAddress);
   console.log("RoseReputation:", roseReputationAddress);
-  console.log("RoseGovernance:", governanceAddress);
   console.log("StakeholderRegistry:", stakeholderRegistryAddress);
   console.log("TokenStaking:", tokenStakingAddress);
   console.log("BidEvaluationManager:", bidEvaluationManagerAddress);
   console.log("DAO Treasury:", daoTreasury);
-  
+
   const deploymentOutput = {
     marketplaceAddress: marketplaceAddress,
     tokenAddress: roseTokenAddress,
     reputationAddress: roseReputationAddress,
-    governanceAddress: governanceAddress,
     stakeholderRegistryAddress: stakeholderRegistryAddress,
     tokenStakingAddress: tokenStakingAddress,
     bidEvaluationManagerAddress: bidEvaluationManagerAddress,
