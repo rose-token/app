@@ -1,3 +1,6 @@
 node_modules/
 # Contract addresses file (generated during deployment)
 frontend/src/contracts/addresses.json
+# Build artifacts
+frontend/build/
+build/
