@@ -50,31 +50,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           </button>  
         </div>  
           
-        {/* Navigation links */}  
-        <nav className="flex flex-col p-4 space-y-3">  
-          <NavLink   
-            to="/"   
-            className={({ isActive }) =>   
-              isActive   
-                ? "font-medium text-white px-3 py-2 rounded-md bg-white/10"   
-                : "text-white/80 hover:text-white px-3 py-2 rounded-md hover:bg-white/5"  
-            }  
-            onClick={() => window.innerWidth < 768 && toggleSidebar()}  
-          >  
-            Marketplace  
-          </NavLink>  
-  
-          <NavLink   
-            to="/governance"   
-            className={({ isActive }) =>   
-              isActive   
-                ? "font-medium text-white px-3 py-2 rounded-md bg-white/10"   
-                : "text-white/80 hover:text-white px-3 py-2 rounded-md hover:bg-white/5"  
-            }  
-            onClick={() => window.innerWidth < 768 && toggleSidebar()}  
-          >  
-            Governance  
-          </NavLink>  
+        {/* Navigation links */}
+        <nav className="flex flex-col p-4 space-y-3">
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              isActive
+                ? "font-medium text-white px-3 py-2 rounded-md bg-white/10"
+                : "text-white/80 hover:text-white px-3 py-2 rounded-md hover:bg-white/5"
+            }
+            onClick={() => window.innerWidth < 768 && toggleSidebar()}
+          >
+            Marketplace
+          </NavLink>
+
           {isConnected && (  
             <NavLink   
               to="/profile"   

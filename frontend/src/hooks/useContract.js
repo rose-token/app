@@ -5,7 +5,6 @@ import { useEthereum } from './useEthereum';
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import RoseReputationABI from '../contracts/RoseReputationABI.json';
-import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import TokenStakingABI from '../contracts/TokenStakingABI.json';
 import StakeholderRegistryABI from '../contracts/StakeholderRegistryABI.json';
 import BidEvaluationManagerABI from '../contracts/BidEvaluationManagerABI.json';
@@ -16,27 +15,24 @@ const logInitialAddresses = () => {
   const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
   const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
   const reputationAddress = process.env.REACT_APP_REPUTATION_ADDRESS || DEFAULT_ADDRESS;
-  const governanceAddress = process.env.REACT_APP_GOVERNANCE_ADDRESS || DEFAULT_ADDRESS;
   const daoTreasuryAddress = process.env.REACT_APP_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
   const tokenStakingAddress = process.env.REACT_APP_TOKEN_STAKING_ADDRESS || DEFAULT_ADDRESS;
   const stakeholderRegistryAddress = process.env.REACT_APP_STAKEHOLDER_REGISTRY_ADDRESS || DEFAULT_ADDRESS;
   const bidEvaluationManagerAddress = process.env.REACT_APP_BID_EVALUATION_MANAGER_ADDRESS || DEFAULT_ADDRESS;
-  
+
   console.log('🌹 Contract Addresses (Initial Config):');
   console.log('Marketplace:', marketplaceAddress);
   console.log('Token:', tokenAddress);
   console.log('DAO Treasury:', daoTreasuryAddress);
-  console.log('Governance:', governanceAddress);
   console.log('Reputation:', reputationAddress);
   console.log('Token Staking:', tokenStakingAddress);
   console.log('Stakeholder Registry:', stakeholderRegistryAddress);
   console.log('Bid Evaluation Manager:', bidEvaluationManagerAddress);
-  
+
   return {
     marketplaceAddress,
     tokenAddress,
     reputationAddress,
-    governanceAddress,
     daoTreasuryAddress,
     tokenStakingAddress,
     stakeholderRegistryAddress,
@@ -51,7 +47,6 @@ export const useContract = () => {
   const [roseMarketplace, setRoseMarketplace] = useState(null);
   const [roseToken, setRoseToken] = useState(null);
   const [roseReputation, setRoseReputation] = useState(null);
-  const [roseGovernance, setRoseGovernance] = useState(null);
   const [tokenStaking, setTokenStaking] = useState(null);
   const [stakeholderRegistry, setStakeholderRegistry] = useState(null);
   const [bidEvaluationManager, setBidEvaluationManager] = useState(null);
@@ -88,7 +83,6 @@ export const useContract = () => {
       }
         
       addresses.reputationAddress = await roseMarketplace.roseReputation();
-      addresses.governanceAddress = await roseMarketplace.governanceContract();
       addresses.daoTreasuryAddress = await roseMarketplace.daoTreasury();
       addresses.tokenStakingAddress = await roseMarketplace.tokenStaking();
       addresses.stakeholderRegistryAddress = await roseMarketplace.stakeholderRegistry();
@@ -99,7 +93,6 @@ export const useContract = () => {
       console.log('Marketplace Address:', addresses.marketplaceAddress);
       console.log('Token Address:', addresses.tokenAddress);
       console.log('Reputation Address:', addresses.reputationAddress);
-      console.log('Governance Address:', addresses.governanceAddress);
       console.log('DAO Treasury Address:', addresses.daoTreasuryAddress);
       console.log('Token Staking Address:', addresses.tokenStakingAddress);
       console.log('Stakeholder Registry Address:', addresses.stakeholderRegistryAddress);
@@ -171,12 +164,6 @@ export const useContract = () => {
           provider
         );
 
-        const governanceContract = new ethers.Contract(
-          contractAddresses.governanceAddress,
-          RoseGovernanceABI,
-          provider
-        );
-
         const tokenStakingContract = new ethers.Contract(
           contractAddresses.tokenStakingAddress,
           TokenStakingABI,
@@ -198,11 +185,10 @@ export const useContract = () => {
         setRoseMarketplace(marketplaceContract);
         setRoseToken(tokenContract);
         setRoseReputation(reputationContract);
-        setRoseGovernance(governanceContract);
         setTokenStaking(tokenStakingContract);
         setStakeholderRegistry(stakeholderRegistryContract);
         setBidEvaluationManager(bidEvaluationManagerContract);
-        
+
         contractsInitialized.readOnly = true;
         setContractsReady(prev => ({ ...prev, readOnly: true }));
         console.log('Read-only contracts initialized successfully');
@@ -280,12 +266,6 @@ export const useContract = () => {
           signer
         );
 
-        const governanceContract = new ethers.Contract(
-          contractAddresses.governanceAddress,
-          RoseGovernanceABI,
-          signer
-        );
-
         const tokenStakingContract = new ethers.Contract(
           contractAddresses.tokenStakingAddress,
           TokenStakingABI,
@@ -307,11 +287,10 @@ export const useContract = () => {
         setRoseMarketplace(marketplaceContract);
         setRoseToken(tokenContract);
         setRoseReputation(reputationContract);
-        setRoseGovernance(governanceContract);
         setTokenStaking(tokenStakingContract);
         setStakeholderRegistry(stakeholderRegistryContract);
         setBidEvaluationManager(bidEvaluationManagerContract);
-        
+
         if (!allAddresses && !fetchAttempted.value) {
           try {
             await fetchAllAddresses();
@@ -361,7 +340,6 @@ export const useContract = () => {
     roseMarketplace,
     roseToken,
     roseReputation,
-    roseGovernance,
     tokenStaking,
     stakeholderRegistry,
     bidEvaluationManager,
