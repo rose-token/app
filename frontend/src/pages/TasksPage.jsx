@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEthereum } from '../hooks/useEthereum';
 import { useContract } from '../hooks/useContract';
-import { ethers } from 'ethers';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
 
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
@@ -24,7 +21,7 @@ const TasksPage = () => {
   });
   
   const { account, isConnected } = useEthereum();
-  const { roseMarketplace, roseToken, contractsReady } = useContract();
+  const { roseMarketplace, roseToken } = useContract();
   
   const fetchTaskDetails = useCallback(async (taskId) => {
     if (!roseMarketplace) return null;
