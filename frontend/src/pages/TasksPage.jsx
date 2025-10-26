@@ -4,6 +4,7 @@ import { useContract } from '../hooks/useContract';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
+import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
 
@@ -318,9 +319,11 @@ const TasksPage = () => {
         <>
           <TokenDistributionChart />
 
+          <CreateTaskForm onTaskCreated={debouncedFetchTasks} />
+
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-4">Available Tasks</h2>
-            
+
             <TaskFilters filters={filters} setFilters={setFilters} />
             
             <TaskList
