@@ -121,7 +121,23 @@ const TasksPage = () => {
       setError(errorMessage);
     }
   };
-  
+
+  const handleUnclaimTask = async (taskId) => {
+    if (!isConnected || !roseMarketplace) return;
+
+    try {
+      const tx = await roseMarketplace.unclaimTask(taskId);
+      await tx.wait();
+      debouncedFetchTasks();
+    } catch (err) {
+      console.error('Error unclaiming task:', err);
+      const errorMessage = err.message.includes('execution reverted')
+        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to unclaim task'
+        : 'Failed to unclaim task';
+      setError(errorMessage);
+    }
+  };
+
   const handleCompleteTask = async (taskId) => {
     if (!isConnected || !roseMarketplace) return;
     
@@ -410,6 +426,7 @@ const TasksPage = () => {
             <TaskList
               tasks={filteredTasks}
               onClaim={handleClaimTask}
+              onUnclaim={handleUnclaimTask}
               onComplete={handleCompleteTask}
               onApprove={handleApproveTask}
               onAcceptPayment={handleAcceptPayment}
