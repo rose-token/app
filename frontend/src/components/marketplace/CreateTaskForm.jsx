@@ -229,7 +229,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             required
           />
           <p className="mt-1 text-sm text-gray-500">
-            🔒 Private - Only visible to customer, stakeholder, and worker. Stored on IPFS. ({detailedDescription.length} characters)
+            Private - Only visible to customer, stakeholder, and worker. ({detailedDescription.length} characters)
           </p>
         </div>
 
