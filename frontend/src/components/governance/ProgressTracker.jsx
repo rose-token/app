@@ -3,24 +3,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { CheckCircle, Clock, Award } from 'lucide-react';
 
-const ProgressTracker = ({ proposal, task, stakeholderApprovals }) => {
+const ProgressTracker = ({ task }) => {
   const getStageStatus = (stage) => {
+    // Task status: 0=StakeholderRequired, 1=Open, 2=InProgress, 3=Completed, 4=ApprovedPendingPayment, 5=Closed
     switch (stage) {
-      case 'proposal':
-        return proposal?.status === 'Approved' ? 'completed' : 
-               proposal?.status === 'Active' ? 'active' : 'pending';
-      case 'stakeholder-selection':
-        return task?.stakeholder && task.stakeholder !== '0x0000000000000000000000000000000000000000' ? 'completed' : 
-               proposal?.status === 'Approved' ? 'active' : 'pending';
-      case 'work-execution':
-        return task?.status === 3 ? 'completed' : // Completed status
-               task?.status === 2 ? 'active' : 'pending'; // InProgress status
-      case 'stakeholder-approval':
-        return stakeholderApprovals?.isApproved ? 'completed' :
+      case 'task-creation':
+        return task ? 'completed' : 'pending';
+      case 'stakeholder-stake':
+        return task?.status >= 1 ? 'completed' :
+               task?.status === 0 ? 'active' : 'pending';
+      case 'worker-claim':
+        return task?.status >= 2 ? 'completed' :
+               task?.status === 1 ? 'active' : 'pending';
+      case 'work-completion':
+        return task?.status >= 3 ? 'completed' :
+               task?.status === 2 ? 'active' : 'pending';
+      case 'approval':
+        return task?.status >= 4 ? 'completed' :
                task?.status === 3 ? 'active' : 'pending';
       case 'payment':
-        return task?.status === 5 ? 'completed' : // Closed/Paid status
-               stakeholderApprovals?.isApproved ? 'active' : 'pending';
+        return task?.status === 5 ? 'completed' :
+               task?.status === 4 ? 'active' : 'pending';
       default:
         return 'pending';
     }
@@ -34,33 +37,39 @@ const ProgressTracker = ({ proposal, task, stakeholderApprovals }) => {
 
   const stages = [
     {
-      id: 'proposal',
-      title: 'DAO Proposal',
-      description: 'Community evaluates proposal through STAR voting',
-      status: getStageStatus('proposal')
+      id: 'task-creation',
+      title: 'Task Creation',
+      description: 'Customer creates task and deposits ROSE tokens',
+      status: getStageStatus('task-creation')
     },
     {
-      id: 'stakeholder-selection',
-      title: 'Stakeholder Selection',
-      description: '2-week cycle for ranked choice stakeholder voting',
-      status: getStageStatus('stakeholder-selection')
+      id: 'stakeholder-stake',
+      title: 'Stakeholder Stakes',
+      description: 'Stakeholder stakes 10% of task value to validate',
+      status: getStageStatus('stakeholder-stake')
     },
     {
-      id: 'work-execution',
-      title: 'Work Execution',
-      description: 'Selected worker completes the task',
-      status: getStageStatus('work-execution')
+      id: 'worker-claim',
+      title: 'Worker Claims Task',
+      description: 'Worker claims task (first-come, first-served)',
+      status: getStageStatus('worker-claim')
     },
     {
-      id: 'stakeholder-approval',
-      title: 'Stakeholder Approval',
-      description: '66% stakeholder threshold for final payout',
-      status: getStageStatus('stakeholder-approval')
+      id: 'work-completion',
+      title: 'Work Completion',
+      description: 'Worker completes and submits the task',
+      status: getStageStatus('work-completion')
+    },
+    {
+      id: 'approval',
+      title: 'Approval Process',
+      description: 'Customer and stakeholder both approve the work',
+      status: getStageStatus('approval')
     },
     {
       id: 'payment',
       title: 'Payment Distribution',
-      description: 'Worker accepts payment (60/20/20 split)',
+      description: 'Worker accepts payment (93/5/2 split)',
       status: getStageStatus('payment')
     }
   ];
@@ -70,7 +79,7 @@ const ProgressTracker = ({ proposal, task, stakeholderApprovals }) => {
       <CardHeader>
         <CardTitle className="flex items-center">
           <Award className="h-5 w-5 mr-2" />
-          Unified Governance Progress
+          Task Progress
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -97,40 +106,19 @@ const ProgressTracker = ({ proposal, task, stakeholderApprovals }) => {
                   </Badge>
                 </div>
                 <p className="text-xs text-gray-600 mt-1">{stage.description}</p>
-                
-                {/* Additional details for active stages */}
-                {stage.id === 'stakeholder-approval' && stage.status === 'active' && stakeholderApprovals && (
-                  <div className="mt-2 p-2 bg-yellow-50 rounded text-xs">
-                    <div className="flex justify-between items-center">
-                      <span>Approval Progress:</span>
-                      <span className="font-medium">
-                        {stakeholderApprovals.approvalCount}/{stakeholderApprovals.totalStakeholders} 
-                        ({stakeholderApprovals.approvalPercentage.toFixed(1)}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                      <div 
-                        className="bg-yellow-500 h-1.5 rounded-full" 
-                        style={{ width: `${Math.min(100, stakeholderApprovals.approvalPercentage)}%` }}
-                      />
-                    </div>
-                    <p className="text-yellow-700 mt-1">
-                      Need {(66 - stakeholderApprovals.approvalPercentage).toFixed(1)}% more for approval
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           ))}
         </div>
         
         <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-          <h5 className="text-sm font-medium text-blue-800 mb-1">Governance Benefits</h5>
+          <h5 className="text-sm font-medium text-blue-800 mb-1">Task Benefits</h5>
           <ul className="text-xs text-blue-700 space-y-1">
-            <li>• Prevents bad actors from playing multiple roles</li>
-            <li>• Ensures stakeholder legitimacy through token staking</li>
-            <li>• Democratic decision-making via ranked choice voting</li>
-            <li>• 66% approval threshold protects against collusion</li>
+            <li>• Worker-focused: 93% of task value goes to worker</li>
+            <li>• Stakeholder earns 50% ROI on 10% stake (5% fee + stake returned)</li>
+            <li>• Sustainable platform: 2% minted to DAO treasury (~2% annual inflation)</li>
+            <li>• Dual approval protects quality (customer + stakeholder)</li>
+            <li>• Simple first-come, first-served worker assignment</li>
           </ul>
         </div>
       </CardContent>
