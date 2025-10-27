@@ -106,4 +106,45 @@ describe("Task Lifecycle Edge Cases", function () {
       roseMarketplace.connect(otherUser).markTaskCompleted(1)
     ).to.be.revertedWith("Only assigned worker can mark completion");
   });
+
+  it("Should enforce all three roles (customer, stakeholder, worker) are different addresses", async function() {
+    // Create task with customer
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+    // Verify customer cannot be stakeholder (already tested above, but included for completeness)
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await expect(
+      roseMarketplace.connect(customer).stakeholderStake(1, stakeholderDeposit)
+    ).to.be.revertedWith("Customer cannot be stakeholder for their own task");
+
+    // Stakeholder stakes successfully
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    // Verify customer cannot claim task
+    await expect(
+      roseMarketplace.connect(customer).claimTask(1)
+    ).to.be.revertedWith("Customer cannot claim their own task");
+
+    // Verify stakeholder cannot claim task they are validating
+    await expect(
+      roseMarketplace.connect(stakeholder).claimTask(1)
+    ).to.be.revertedWith("Stakeholder cannot claim task they are validating");
+
+    // Worker (different from customer and stakeholder) can successfully claim
+    await roseMarketplace.connect(worker).claimTask(1);
+
+    // Verify all three roles are different addresses
+    const task = await roseMarketplace.tasks(1);
+    expect(task.customer).to.equal(customer.address);
+    expect(task.stakeholder).to.equal(stakeholder.address);
+    expect(task.worker).to.equal(worker.address);
+
+    // Ensure all three addresses are different
+    expect(task.customer).to.not.equal(task.stakeholder);
+    expect(task.customer).to.not.equal(task.worker);
+    expect(task.stakeholder).to.not.equal(task.worker);
+  });
 });

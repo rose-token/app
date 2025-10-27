@@ -211,6 +211,45 @@ Tasks can be cancelled before a worker claims them. Cancellation is available fr
 
 **Note**: The task creation is now direct through the marketplace. There is no separate governance proposal workflow in the current MVP.
 
+### Role Separation & Security Requirements
+
+**IMPORTANT**: The RoseMarketplace contract enforces strict role separation to prevent conflicts of interest:
+
+**Role Uniqueness Requirement:**
+- All three roles (customer, stakeholder, worker) **MUST** be held by different addresses on the same task
+- No address can hold multiple roles on a single task
+- This prevents self-dealing and maintains validation integrity
+
+**Enforced Restrictions:**
+
+1. **Customer ≠ Stakeholder** (enforced in `stakeholderStake()`)
+   - Customer cannot be stakeholder for their own task
+   - Error: "Customer cannot be stakeholder for their own task"
+
+2. **Customer ≠ Worker** (enforced in `claimTask()`)
+   - Customer cannot claim their own task
+   - Error: "Customer cannot claim their own task"
+
+3. **Stakeholder ≠ Worker** (enforced in `claimTask()`)
+   - Stakeholder cannot claim task they are validating
+   - Error: "Stakeholder cannot claim task they are validating"
+   - **This prevents the critical conflict of interest where a stakeholder validates their own work**
+
+4. **Worker ≠ Stakeholder** (edge case, enforced in `stakeholderStake()`)
+   - Worker cannot become stakeholder for their own task
+   - Error: "Worker cannot be stakeholder for their own task"
+
+**Frontend Validation:**
+- TasksPage.jsx checks for role conflicts before claiming tasks
+- TaskCard.jsx disables "Claim Task" button if user is the stakeholder
+- User-friendly error messages displayed for all role conflicts
+
+**Security Rationale:**
+- **Prevents self-dealing**: No one can pay themselves or approve their own work
+- **Maintains validation integrity**: Stakeholders must be independent validators
+- **Ensures fairness**: All parties have aligned but separate incentives
+- **Protects tokenomics**: Prevents gaming of the 93/5/2 distribution model
+
 ## Frontend Architecture
 
 The frontend uses React 18.2.0 with custom webpack configuration (via react-app-rewired) to handle Web3 dependencies.
