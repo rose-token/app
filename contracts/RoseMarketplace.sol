@@ -25,8 +25,6 @@ contract RoseMarketplace {
     
     // Reference to the TokenStaking contract
     TokenStaking public tokenStaking;
-    
-    address public bidEvaluationManager;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -119,11 +117,6 @@ contract RoseMarketplace {
         tokenStaking = _tokenStaking;
     }
 
-    function setBidEvaluationManager(address _bidEvaluationManager) external {
-        require(msg.sender == address(roseToken));
-        bidEvaluationManager = _bidEvaluationManager;
-    }
-    
     /**
      * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
      * @param _description A brief description of the task
