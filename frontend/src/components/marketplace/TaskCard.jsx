@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import ProgressTracker from '../governance/ProgressTracker';
 
 const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
   const { account } = useEthereum();
-  const [storyPoints, setStoryPoints] = useState(1);
 
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -87,25 +86,12 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
         )}
         
         {canClaim && (
-          <div className="flex flex-col space-y-2">
-            <div className="flex items-center space-x-2">
-              <label htmlFor="storyPoints" className="text-sm font-medium">Story Points:</label>
-              <input
-                id="storyPoints"
-                type="number"
-                min="1"
-                value={storyPoints}
-                onChange={(e) => setStoryPoints(parseInt(e.target.value) || 1)}
-                className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1"
-              />
-            </div>
-            <button 
-              onClick={() => onClaim(task.id, storyPoints)} 
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
-            >
-              Claim Task
-            </button>
-          </div>
+          <button
+            onClick={() => onClaim(task.id)}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            Claim Task
+          </button>
         )}
         
         {canComplete && (

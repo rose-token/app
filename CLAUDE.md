@@ -153,7 +153,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
    - Stakeholder's 10% stake held in escrow
 
 3. **Worker Claims Task** (Status: InProgress)
-   - Worker calls `claimTask()` with story points estimation
+   - Worker calls `claimTask()` to claim the task
    - First-come, first-served (no competitive bidding in MVP)
    - Task status changes to InProgress
    - Worker address locked to task
