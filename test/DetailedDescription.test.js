@@ -1,74 +1,99 @@
-const { expect } = require("chai");  
-const { ethers } = require("hardhat");  
-  
-describe("Task Detailed Description", function () {  
-  let roseMarketplace;  
-  let roseToken;  
-  let owner;  
-  let customer;  
-  let daoTreasury;  
-  
-  const taskDescription = "Build a website";  
-  const detailedDescription = "This is a detailed description with requirements, specifications, and expected outcomes.";  
-  const taskDeposit = ethers.parseEther("1");  
-  
-  beforeEach(async function () {  
-    [owner, customer, daoTreasury] = await ethers.getSigners();  
-  
-    const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");  
-    roseMarketplace = await RoseMarketplace.deploy(daoTreasury.address);  
-    await roseMarketplace.waitForDeployment();  
-  
-    const roseTokenAddress = await roseMarketplace.roseToken();  
-    roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);  
-  
-    await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);  
-    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-  });  
-  
-  it("Should create a task with a detailed description", async function() {  
-    await roseMarketplace.connect(customer)["createTask(string,uint256,string)"](  
-      taskDescription,   
-      taskDeposit,   
-      detailedDescription  
-    );  
-  
-    const task = await roseMarketplace.tasks(1);  
-    expect(task.description).to.equal(taskDescription);  
-    expect(task.detailedDescription).to.equal(detailedDescription);  
-    expect(task.deposit).to.equal(taskDeposit);  
-  });  
-  
-  it("Should create a task with an empty detailed description when using the simpler function", async function() {
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("Task Detailed Description", function () {
+  let roseMarketplace;
+  let roseToken;
+  let customer;
+  let worker;
+  let stakeholder;
+  let otherUser;
+  let daoTreasury;
+
+  const taskTitle = "Build a website";
+  const taskDeposit = ethers.parseEther("1");
+  const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"; // Example IPFS hash
+
+  beforeEach(async function () {
+    [customer, worker, stakeholder, otherUser, daoTreasury] = await ethers.getSigners();
+
+    const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
+    roseMarketplace = await RoseMarketplace.deploy(daoTreasury.address);
+    await roseMarketplace.waitForDeployment();
+
+    const roseTokenAddress = await roseMarketplace.roseToken();
+    roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);
+
+    await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+  });
+
+  it("Should create a task with mandatory IPFS hash", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+    await expect(
+      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash)
+    )
+      .to.emit(roseMarketplace, "TaskCreated")
+      .withArgs(1, customer.address, taskDeposit);
 
     const task = await roseMarketplace.tasks(1);
-    expect(task.description).to.equal(taskDescription);
-    expect(task.detailedDescription).to.equal("");
-    expect(task.deposit).to.equal(taskDeposit);
-  });  
-  
-  it("Should handle empty strings for detailed description", async function() {  
-    await roseMarketplace.connect(customer)["createTask(string,uint256,string)"](  
-      taskDescription,   
-      taskDeposit,   
-      ""  
-    );  
-  
-    const task = await roseMarketplace.tasks(1);  
-    expect(task.detailedDescription).to.equal("");  
-  });  
-  
-  it("Should handle long detailed descriptions", async function() {  
-    const longDescription = "a".repeat(1000); // 1000 character description  
-      
-    await roseMarketplace.connect(customer)["createTask(string,uint256,string)"](  
-      taskDescription,   
-      taskDeposit,   
-      longDescription  
-    );  
-  
-    const task = await roseMarketplace.tasks(1);  
-    expect(task.detailedDescription).to.equal(longDescription);  
-  });  
+    expect(task.title).to.equal(taskTitle);
+    expect(task.detailedDescriptionHash).to.equal(ipfsHash);
+  });
+
+  it("Should revert if detailed description hash is empty", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+    await expect(
+      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, "")
+    ).to.be.revertedWith("Detailed description hash is required");
+  });
+
+  it("Should revert if title is empty", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+    await expect(
+      roseMarketplace.connect(customer).createTask("", taskDeposit, ipfsHash)
+    ).to.be.revertedWith("Title cannot be empty");
+  });
+
+  it("Should return true for isTaskParticipant when customer", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+
+    expect(await roseMarketplace.connect(customer).isTaskParticipant(1)).to.equal(true);
+  });
+
+  it("Should return true for isTaskParticipant when stakeholder", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+
+    await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    expect(await roseMarketplace.connect(stakeholder).isTaskParticipant(1)).to.equal(true);
+  });
+
+  it("Should return true for isTaskParticipant when worker", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+
+    await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    await roseMarketplace.connect(worker).claimTask(1);
+
+    expect(await roseMarketplace.connect(worker).isTaskParticipant(1)).to.equal(true);
+  });
+
+  it("Should return false for isTaskParticipant when not a participant", async function () {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+
+    expect(await roseMarketplace.connect(otherUser).isTaskParticipant(1)).to.equal(false);
+  });
 });

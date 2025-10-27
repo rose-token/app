@@ -18,6 +18,9 @@ describe("RoseMarketplace", function () {
   const TREASURY_SHARE = 2;
   const SHARE_DENOMINATOR = 100;
 
+  // Test IPFS hash for detailed descriptions
+  const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
+
   beforeEach(async function () {
     [owner, customer, worker, stakeholder, daoTreasury] = await ethers.getSigners();
     burnAddress = "0x000000000000000000000000000000000000dEaD";
@@ -45,16 +48,16 @@ describe("RoseMarketplace", function () {
   });
 
   describe("Task Creation", function () {
-    const taskDescription = "Build a website";
+    const taskTitle = "Build a website";
     const taskDeposit = ethers.parseEther("1");
 
     it("Should allow customers to create tasks", async function () {
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
-      
+
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      
+
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "")
+        roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash)
       )
         .to.emit(roseMarketplace, "TaskCreated")
         .withArgs(1, customer.address, taskDeposit);
@@ -65,7 +68,8 @@ describe("RoseMarketplace", function () {
       expect(task.customer).to.equal(customer.address);
       expect(task.stakeholder).to.equal(ethers.ZeroAddress);
       expect(task.deposit).to.equal(taskDeposit);
-      expect(task.description).to.equal(taskDescription);
+      expect(task.title).to.equal(taskTitle);
+      expect(task.detailedDescriptionHash).to.equal(ipfsHash);
       expect(task.status).to.equal(1); // TaskStatus.StakeholderRequired
       expect(task.customerApproval).to.equal(false);
       expect(task.stakeholderApproval).to.equal(false);
@@ -73,26 +77,46 @@ describe("RoseMarketplace", function () {
 
     it("Should revert if deposit is zero", async function () {
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
-      
+
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      
+
       await expect(
-        roseMarketplace.connect(customer).createTask(taskDescription, 0, "")
-      ).to.be.reverted;
+        roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash)
+      ).to.be.revertedWith("Token amount must be greater than zero");
+    });
+
+    it("Should revert if title is empty", async function () {
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+      await expect(
+        roseMarketplace.connect(customer).createTask("", taskDeposit, ipfsHash)
+      ).to.be.revertedWith("Title cannot be empty");
+    });
+
+    it("Should revert if detailed description hash is empty", async function () {
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+      await expect(
+        roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, "")
+      ).to.be.revertedWith("Detailed description hash is required");
     });
 
   });
 
   describe("Task Lifecycle", function () {
-    const taskDescription = "Build a website";
+    const taskTitle = "Build a website";
     const taskDeposit = ethers.parseEther("1");
 
     beforeEach(async function () {
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
-      
+
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
       
       const stakeholderDeposit = taskDeposit / 10n;
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
@@ -284,14 +308,14 @@ describe("RoseMarketplace", function () {
   });
 
   describe("Task Cancellation", function () {
-    const taskDescription = "Build a website";
+    const taskTitle = "Build a website";
     const taskDeposit = ethers.parseEther("1");
 
     it("Should allow customer to cancel task in StakeholderRequired status", async function () {
       // Customer creates a task
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       const customerBalanceBefore = await roseToken.balanceOf(customer.address);
 
@@ -316,7 +340,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
 
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       // Stakeholder stakes
       const stakeholderDeposit = taskDeposit / 10n;
@@ -350,7 +374,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
 
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       // Stakeholder stakes
       const stakeholderDeposit = taskDeposit / 10n;
@@ -380,7 +404,7 @@ describe("RoseMarketplace", function () {
       // Customer creates a task
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       const customerBalanceBefore = await roseToken.balanceOf(customer.address);
 
@@ -398,7 +422,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
 
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       // Stakeholder stakes
       const stakeholderDeposit = taskDeposit / 10n;
@@ -424,7 +448,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
 
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       const stakeholderDeposit = taskDeposit / 10n;
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
@@ -447,7 +471,7 @@ describe("RoseMarketplace", function () {
       // Customer creates a task
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       // Random address tries to cancel
       await expect(
@@ -459,7 +483,7 @@ describe("RoseMarketplace", function () {
       // Customer creates a task
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       // Cancel once
       await roseMarketplace.connect(customer).cancelTask(1);
@@ -474,7 +498,7 @@ describe("RoseMarketplace", function () {
       // Test 1: Cancellation before stakeholder stakes
       await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       await expect(roseMarketplace.connect(customer).cancelTask(1))
         .to.emit(roseMarketplace, "TaskCancelled")
@@ -485,7 +509,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
 
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
       const stakeholderDeposit = taskDeposit / 10n;
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);

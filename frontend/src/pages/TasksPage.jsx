@@ -26,9 +26,9 @@ const TasksPage = () => {
   
   const fetchTaskDetails = useCallback(async (taskId) => {
     if (!roseMarketplace) return null;
-    
+
     const task = await roseMarketplace.tasks(taskId);
-    
+
     return {
       id: taskId,
       customer: task.customer,
@@ -36,7 +36,8 @@ const TasksPage = () => {
       stakeholder: task.stakeholder,
       deposit: task.deposit.toString(),
       stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
-      description: task.description,
+      description: task.title,  // Use 'title' field from contract
+      detailedDescription: task.detailedDescriptionHash,  // IPFS hash
       status: task.status,
       customerApproval: task.customerApproval,
       stakeholderApproval: task.stakeholderApproval

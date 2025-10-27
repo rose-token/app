@@ -32,8 +32,8 @@ contract RoseMarketplace {
         address stakeholder;
         uint256 deposit;           // Payment in ROSE tokens the customer puts up
         uint256 stakeholderDeposit; // 10% deposit from stakeholder in ROSE tokens
-        string description;        // Basic metadata or instructions
-        string detailedDescription; // Optional detailed information about the task
+        string title;              // Short public title (on-chain)
+        string detailedDescriptionHash; // IPFS hash for detailed description (mandatory, off-chain)
         TaskStatus status;
         bool customerApproval;
         bool stakeholderApproval;
@@ -91,14 +91,16 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
-     * @param _description A brief description of the task
+     * @dev Create a new task with a title and IPFS hash for detailed description
+     * @param _title Short public title of the task
      * @param _tokenAmount Amount of ROSE tokens to deposit
-     * @param _detailedDescription Optional detailed information about the task (can be empty string)
+     * @param _detailedDescriptionHash IPFS hash containing detailed task description (mandatory)
      */
-    function createTask(string calldata _description, uint256 _tokenAmount, string calldata _detailedDescription) external {
-        require(_tokenAmount > 0);
-        
+    function createTask(string calldata _title, uint256 _tokenAmount, string calldata _detailedDescriptionHash) external {
+        require(_tokenAmount > 0, "Token amount must be greater than zero");
+        require(bytes(_title).length > 0, "Title cannot be empty");
+        require(bytes(_detailedDescriptionHash).length > 0, "Detailed description hash is required");
+
         // Transfer tokens from customer to the contract
         require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount));
 
@@ -106,8 +108,8 @@ contract RoseMarketplace {
         Task storage newTask = tasks[taskCounter];
         newTask.customer = msg.sender;
         newTask.deposit = _tokenAmount;
-        newTask.description = _description;
-        newTask.detailedDescription = _detailedDescription; // Store the detailed description (can be empty)
+        newTask.title = _title;
+        newTask.detailedDescriptionHash = _detailedDescriptionHash;
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
@@ -371,15 +373,26 @@ contract RoseMarketplace {
      */
     function claimFaucetTokens(uint256 _amount) external {
         require(_amount <= 100 ether, "Cannot claim more than 100 ROSE tokens at once");
-        
+
         // Mint tokens to the caller
         roseToken.mint(msg.sender, _amount);
-        
+
         emit FaucetTokensClaimed(msg.sender, _amount);
     }
 
+    /**
+     * @dev Check if caller is a participant in the task (customer, worker, or stakeholder)
+     * @param _taskId ID of the task
+     * @return bool True if caller is a participant
+     */
+    function isTaskParticipant(uint256 _taskId) external view returns (bool) {
+        Task storage t = tasks[_taskId];
+        return (
+            t.customer == msg.sender ||
+            t.worker == msg.sender ||
+            t.stakeholder == msg.sender
+        );
+    }
 
 
-    
-    
 }
