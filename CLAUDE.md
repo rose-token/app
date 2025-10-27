@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Rose Token is a decentralized Web3 marketplace with a task-value-based token distribution model. The project consists of:
-- Solidity smart contracts for the Ethereum blockchain (5 contracts)
+- Solidity smart contracts for the Ethereum blockchain (4 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
 - **New Tokenomics (as of October 2024)**: 93% worker, 5% stakeholder, 2% DAO
@@ -135,11 +135,6 @@ The smart contracts must be deployed in a specific sequence due to dependencies:
    - Slashing mechanism for penalizing bad behavior
    - Election tracking with IPFS storage
    - Currently deployed but not actively used in MVP
-
-6. **BidEvaluationManager** (110 lines)
-   - Requires TokenStaking and RoseMarketplace addresses
-   - Handles bid evaluation logic (simplified in MVP)
-   - Currently minimal functionality due to MVP scope
 
 After deployment, contracts are linked via setter methods in scripts/deploy.js:
 - `roseMarketplace.setStakeholderRegistry(stakeholderRegistryAddress)`
@@ -671,6 +666,26 @@ The project underwent **further simplification** by removing the RoseReputation 
 - **Reduced Gas Costs**: Fewer contract calls during task lifecycle
 - **Cleaner Architecture**: Fewer dependencies between contracts
 
+### October 2024: BidEvaluationManager Contract Removal
+
+The project underwent **additional simplification** by removing the BidEvaluationManager contract:
+
+#### Removed Components:
+- **BidEvaluationManager.sol** (110 lines) - Entire contract removed
+- Removed `bidEvaluationManager` address variable from RoseMarketplace
+- Removed `setBidEvaluationManager()` function from RoseMarketplace
+- Removed BidEvaluationManager deployment from scripts/deploy.js
+- Removed BidEvaluationManager from scripts/update-abi.js
+- Removed BidEvaluationManagerABI.json from frontend
+- Removed all BidEvaluationManager references from frontend/src/hooks/useContract.js
+
+#### Why This Change:
+- **Unused in MVP**: Competitive bidding was already removed in earlier MVP simplification
+- **No Current Purpose**: Contract handled stakeholder voting on worker selection, which doesn't exist in current first-come, first-served model
+- **Reduced Contract Count**: From 5 contracts down to 4 core contracts
+- **Simplified Deployment**: Fewer contracts to deploy and maintain
+- **Cleaner Architecture**: Removed dead code and unused dependencies
+
 ### Other Notable Changes
 
 **October 24, 2024** (Commit e685e09):
@@ -696,7 +711,7 @@ The codebase follows a **"Progressive Enhancement"** approach:
 
 When working with this codebase:
 
-1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance, reputation)
+1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance, reputation, BidEvaluationManager)
 2. **Test Coverage**: All 6 test suites must pass before merging
 3. **Gas Optimization**: Contracts use aggressive optimization (`runs: 1`, `viaIR: true`)
 4. **ABI Synchronization**: Always run `npm run update-abi` after contract changes
@@ -709,7 +724,7 @@ When working with this codebase:
 
 ```
 rose-token/
-├── contracts/           # 6 Solidity contracts (~1,566 lines)
+├── contracts/           # 4 Solidity contracts (~1,456 lines)
 ├── test/                # 6 test suites (~817 lines)
 ├── scripts/             # Deployment and utility scripts
 ├── frontend/            # React application
@@ -718,18 +733,18 @@ rose-token/
 │   │   ├── components/  # Feature-organized components
 │   │   ├── hooks/       # 5 custom React hooks
 │   │   ├── utils/       # IPFS, task status utilities
-│   │   ├── contracts/   # 5 generated ABI files
+│   │   ├── contracts/   # 4 generated ABI files
 │   │   └── constants/   # Network and configuration constants
 ├── .github/workflows/   # 2 CI/CD workflows
 └── CLAUDE.md            # This file - project guidance for Claude Code
 ```
 
 ### Key Metrics
-- **Smart Contracts**: 5 contracts (RoseReputation removed for MVP)
+- **Smart Contracts**: 4 contracts (RoseReputation and BidEvaluationManager removed for MVP)
 - **Test Coverage**: 6 test suites, ~817 total lines
 - **Frontend Pages**: 3 main pages (Tasks, Profile, Help)
 - **Custom Hooks**: 5 React hooks for Web3 integration
-- **ABI Files**: 5 auto-generated from compiled contracts
+- **ABI Files**: 4 auto-generated from compiled contracts
 - **CI/CD Jobs**: 2 workflows (PR validation + deployment)
 - **Token Economics**: 93% worker, 5% stakeholder, 2% DAO (from 1.02x pot)
 - **Token Distribution Model**: Task-value-based (no fixed base reward)
