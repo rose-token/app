@@ -259,6 +259,47 @@ const TasksPage = () => {
     }
   };
 
+  const handleCancelTask = async (taskId) => {
+    if (!isConnected || !roseMarketplace) return;
+
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        setError('Task not found');
+        return;
+      }
+
+      console.log("Cancelling task:", taskId);
+      const tx = await roseMarketplace.cancelTask(taskId, {
+        gasLimit: 300000
+      });
+
+      console.log("Waiting for transaction:", tx.hash);
+      await tx.wait();
+      console.log("Transaction confirmed - task cancelled");
+
+      debouncedFetchTasks();
+    } catch (err) {
+      console.error('Error cancelling task:', err);
+
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to cancel task';
+
+      if (err.message.includes('Task can only be cancelled in StakeholderRequired or Open status')) {
+        errorMessage = 'Task cannot be cancelled at this stage. Only tasks in StakeholderRequired or Open status can be cancelled.';
+      } else if (err.message.includes('Only customer or stakeholder can cancel task')) {
+        errorMessage = 'You are not authorized to cancel this task. Only the customer or stakeholder can cancel.';
+      } else if (err.message.includes('execution reverted')) {
+        const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
+        if (revertReason) {
+          errorMessage = revertReason;
+        }
+      }
+
+      setError(errorMessage);
+    }
+  };
+
   useEffect(() => {
     if (roseMarketplace) {
       debouncedFetchTasks();
@@ -295,12 +336,20 @@ const TasksPage = () => {
         fetchTasks(); // Refresh tasks after stakeholder staking
       };
       roseMarketplace.on(stakeholderStakedFilter, stakeholderStakedListener);
-      
+
+      const taskCancelledFilter = roseMarketplace.filters.TaskCancelled();
+      const taskCancelledListener = (taskId, cancelledBy, customerRefund, stakeholderRefund) => {
+        console.log("Task cancelled event:", { taskId, cancelledBy, customerRefund, stakeholderRefund });
+        fetchTasks(); // Refresh tasks after cancellation
+      };
+      roseMarketplace.on(taskCancelledFilter, taskCancelledListener);
+
       return () => {
         roseMarketplace.off(paymentFilter, paymentListener);
         roseMarketplace.off(closedFilter, closedListener);
         roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
         roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
+        roseMarketplace.off(taskCancelledFilter, taskCancelledListener);
       };
     }
   }, [roseMarketplace, debouncedFetchTasks, fetchTasks]);
@@ -365,6 +414,7 @@ const TasksPage = () => {
               onApprove={handleApproveTask}
               onAcceptPayment={handleAcceptPayment}
               onStake={handleStakeTask}
+              onCancel={handleCancelTask}
               isLoading={isLoading}
               isRefreshing={isRefreshing}
               error={error}

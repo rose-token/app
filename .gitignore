@@ -4,3 +4,6 @@ frontend/src/contracts/addresses.json
 # Build artifacts
 frontend/build/
 build/
+# Hardhat artifacts and cache
+artifacts/
+cache/

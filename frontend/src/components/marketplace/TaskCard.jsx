@@ -3,24 +3,28 @@ import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import ProgressTracker from '../governance/ProgressTracker';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onStake }) => {
+const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
   const { account } = useEthereum();
   const [storyPoints, setStoryPoints] = useState(1);
-  
+
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
   };
-  
+
   const isCustomer = account && task.customer.toLowerCase() === account.toLowerCase();
   const isWorker = account && task.worker.toLowerCase() === account.toLowerCase();
   const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
-  
+
   const canClaim = !isCustomer && task.status === TaskStatus.Open && !isWorker;
   const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
   const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
+
+  // Task can be cancelled by customer or stakeholder before worker claims
+  const canCancel = (isCustomer || isStakeholder) &&
+    (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open);
   
   
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
@@ -132,12 +136,21 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
         )}
         
         {canAcceptPayment && (
-          <button 
-            onClick={() => onAcceptPayment(task.id)} 
+          <button
+            onClick={() => onAcceptPayment(task.id)}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1"
           >
             <span>Accept Payment</span>
             <span className="text-xs">(gas fees apply)</span>
+          </button>
+        )}
+
+        {canCancel && (
+          <button
+            onClick={() => onCancel(task.id)}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            Cancel Task
           </button>
         )}
       </div>
