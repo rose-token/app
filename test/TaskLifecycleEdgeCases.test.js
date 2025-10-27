@@ -55,17 +55,17 @@ describe("Task Lifecycle Edge Cases", function () {
     ).to.be.revertedWith("Not authorized to mint");  
   });  
   
-  it("Should not allow customer to claim their own task", async function() {  
-    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
-      
-    const stakeholderDeposit = taskDeposit / 10n;  
-    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);  
-      
-    await expect(  
-      roseMarketplace.connect(customer).claimTask(1, 5)  
-    ).to.be.revertedWith("Customer cannot claim their own task");  
+  it("Should not allow customer to claim their own task", async function() {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    await expect(
+      roseMarketplace.connect(customer).claimTask(1)
+    ).to.be.revertedWith("Customer cannot claim their own task");
   });  
   
   it("Should not allow stakeholder to be the customer", async function() {  
@@ -92,32 +92,18 @@ describe("Task Lifecycle Edge Cases", function () {
     ).to.be.revertedWith("Must deposit exactly 10% of task value");  
   });  
   
-  it("Should not allow non-worker to mark task as completed", async function() {  
-    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
-      
-    const stakeholderDeposit = taskDeposit / 10n;  
-    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);  
-      
-    await roseMarketplace.connect(worker).claimTask(1, 5);  
-      
-    await expect(  
-      roseMarketplace.connect(otherUser).markTaskCompleted(1)  
-    ).to.be.revertedWith("Only assigned worker can mark completion");  
-  });  
-  
-  
-  it("Should not allow claiming a task with zero story points", async function() {  
-    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
-      
-    const stakeholderDeposit = taskDeposit / 10n;  
-    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);  
-      
-    await expect(  
-      roseMarketplace.connect(worker).claimTask(1, 0)  
-    ).to.be.revertedWith("Story points must be greater than zero");  
-  });  
+  it("Should not allow non-worker to mark task as completed", async function() {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    await roseMarketplace.connect(worker).claimTask(1);
+
+    await expect(
+      roseMarketplace.connect(otherUser).markTaskCompleted(1)
+    ).to.be.revertedWith("Only assigned worker can mark completion");
+  });
 });

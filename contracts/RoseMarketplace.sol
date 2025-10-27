@@ -35,9 +35,8 @@ contract RoseMarketplace {
         string description;        // Basic metadata or instructions
         string detailedDescription; // Optional detailed information about the task
         TaskStatus status;
-        bool customerApproval;     
+        bool customerApproval;
         bool stakeholderApproval;
-        uint256 storyPoints;       // Estimated effort in story points
     }
     
 
@@ -51,7 +50,7 @@ contract RoseMarketplace {
     // Events for logging
     event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
     event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit);
-    event TaskClaimed(uint256 taskId, address indexed worker, uint256 storyPoints);
+    event TaskClaimed(uint256 taskId, address indexed worker);
     event TaskCompleted(uint256 taskId);
     event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount);
     event TaskClosed(uint256 taskId);
@@ -199,16 +198,14 @@ contract RoseMarketplace {
 
 
     /**
-     * @dev Worker claims an open task and provides story points estimation
+     * @dev Worker claims an open task
      * @param _taskId ID of the task to be claimed
-     * @param _storyPoints Integer value representing the estimated effort in story points
      */
-    function claimTask(uint256 _taskId, uint256 _storyPoints) external {
+    function claimTask(uint256 _taskId) external {
         Task storage t = tasks[_taskId];
         // Check specific conditions first to ensure proper error messages
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
-        require(_storyPoints > 0, "Story points must be greater than zero");
         require(msg.sender != address(0), "Worker cannot be zero address");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
 
@@ -217,10 +214,9 @@ contract RoseMarketplace {
                 "Task must be Open for claiming");
 
         t.worker = msg.sender;
-        t.storyPoints = _storyPoints;
         t.status = TaskStatus.InProgress;
 
-        emit TaskClaimed(_taskId, msg.sender, _storyPoints);
+        emit TaskClaimed(_taskId, msg.sender);
     }
 
     /**

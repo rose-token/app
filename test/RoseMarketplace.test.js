@@ -100,27 +100,23 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should allow workers to claim tasks", async function () {
-      const storyPoints = 5; // Example story points value
-      await expect(roseMarketplace.connect(worker).claimTask(1, storyPoints))
+      await expect(roseMarketplace.connect(worker).claimTask(1))
         .to.emit(roseMarketplace, "TaskClaimed")
-        .withArgs(1, worker.address, storyPoints);
+        .withArgs(1, worker.address);
 
       const task = await roseMarketplace.tasks(1);
       expect(task.worker).to.equal(worker.address);
       expect(task.status).to.equal(2); // TaskStatus.InProgress
-      expect(task.storyPoints).to.equal(storyPoints); // Verify story points were stored
     });
 
     it("Should not allow customers to claim their own tasks", async function () {
-      const storyPoints = 5;
       await expect(
-        roseMarketplace.connect(customer).claimTask(1, storyPoints)
+        roseMarketplace.connect(customer).claimTask(1)
       ).to.be.revertedWith("Customer cannot claim their own task");
     });
 
     it("Should allow workers to mark tasks as completed", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
+      await roseMarketplace.connect(worker).claimTask(1);
 
       await expect(roseMarketplace.connect(worker).markTaskCompleted(1))
         .to.emit(roseMarketplace, "TaskCompleted")
@@ -131,8 +127,7 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should allow customer and stakeholder approvals and mark task ready for payment (customer first)", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
+      await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
 
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
@@ -152,8 +147,7 @@ describe("RoseMarketplace", function () {
     });
     
     it("Should allow stakeholder and customer approvals and mark task ready for payment (stakeholder first)", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
+      await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
 
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
@@ -173,8 +167,7 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should allow worker to accept payment after approvals", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
+      await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
@@ -204,8 +197,7 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should mint tokens and distribute according to new tokenomics", async function () {
-      const storyPoints = 5;
-      await roseMarketplace.connect(worker).claimTask(1, storyPoints);
+      await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
 
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
@@ -380,7 +372,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
 
       // Worker claims the task (changes status to InProgress)
-      await roseMarketplace.connect(worker).claimTask(1, 5);
+      await roseMarketplace.connect(worker).claimTask(1);
 
       // Try to cancel - should fail because status is now InProgress
       await expect(

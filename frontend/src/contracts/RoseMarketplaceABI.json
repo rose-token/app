@@ -83,6 +83,37 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "cancelledBy",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "customerRefund",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "stakeholderRefund",
+        "type": "uint256"
+      }
+    ],
+    "name": "TaskCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
@@ -93,12 +124,6 @@
         "internalType": "address",
         "name": "worker",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "storyPoints",
-        "type": "uint256"
       }
     ],
     "name": "TaskClaimed",
@@ -201,19 +226,6 @@
   },
   {
     "inputs": [],
-    "name": "BASE_REWARD",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "BURN_ADDRESS",
     "outputs": [
       {
@@ -227,7 +239,7 @@
   },
   {
     "inputs": [],
-    "name": "BURN_SHARE",
+    "name": "MINT_PERCENTAGE",
     "outputs": [
       {
         "internalType": "uint256",
@@ -330,16 +342,16 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "bidEvaluationManager",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view",
+    "name": "cancelTask",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -360,11 +372,6 @@
       {
         "internalType": "uint256",
         "name": "_taskId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_storyPoints",
         "type": "uint256"
       }
     ],
@@ -397,50 +404,8 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_description",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_tokenAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "_detailedDescription",
-        "type": "string"
-      }
-    ],
-    "name": "createTaskFromGovernance",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "daoTreasury",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "governanceContract",
     "outputs": [
       {
         "internalType": "address",
@@ -466,88 +431,10 @@
   },
   {
     "inputs": [],
-    "name": "roseReputation",
-    "outputs": [
-      {
-        "internalType": "contract RoseReputation",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "roseToken",
     "outputs": [
       {
         "internalType": "contract RoseToken",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_bidEvaluationManager",
-        "type": "address"
-      }
-    ],
-    "name": "setBidEvaluationManager",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_governanceContract",
-        "type": "address"
-      }
-    ],
-    "name": "setGovernanceContract",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_stakeholderRegistry",
-        "type": "address"
-      }
-    ],
-    "name": "setStakeholderRegistry",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "contract TokenStaking",
-        "name": "_tokenStaking",
-        "type": "address"
-      }
-    ],
-    "name": "setTokenStaking",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "stakeholderRegistry",
-    "outputs": [
-      {
-        "internalType": "contract StakeholderRegistry",
         "name": "",
         "type": "address"
       }
@@ -645,24 +532,6 @@
         "internalType": "bool",
         "name": "stakeholderApproval",
         "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "storyPoints",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "tokenStaking",
-    "outputs": [
-      {
-        "internalType": "contract TokenStaking",
-        "name": "",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
