@@ -11,11 +11,11 @@ describe("RoseMarketplace", function () {
   let daoTreasury;
   let burnAddress;
 
-  const BASE_REWARD = ethers.parseEther("100");
-  const WORKER_SHARE = 60;
-  const STAKEHOLDER_SHARE = 20;
-  const TREASURY_SHARE = 20;
-  const BURN_SHARE = 0;
+  // New tokenomics: 93% worker / 5% stakeholder / 2% DAO
+  const MINT_PERCENTAGE = 2;
+  const WORKER_SHARE = 93;
+  const STAKEHOLDER_SHARE = 5;
+  const TREASURY_SHARE = 2;
   const SHARE_DENOMINATOR = 100;
 
   beforeEach(async function () {
@@ -193,35 +193,41 @@ describe("RoseMarketplace", function () {
       task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(4); // TaskStatus.Closed
       expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
-      
-      const workerReward = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      
+
+      // New tokenomics: mint 2% of task value, total pot = 1.02x, worker gets 93% of pot
+      const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
+      const totalPot = taskDeposit + mintAmount;
+      const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+
       const workerBalanceAfter = await roseToken.balanceOf(worker.address);
-      expect(workerBalanceAfter - workerBalanceBefore).to.equal(taskDeposit + workerReward);
+      expect(workerBalanceAfter - workerBalanceBefore).to.equal(workerAmount);
     });
 
-    it("Should mint tokens when worker accepts payment", async function () {
+    it("Should mint tokens and distribute according to new tokenomics", async function () {
       const storyPoints = 5;
       await roseMarketplace.connect(worker).claimTask(1, storyPoints);
       await roseMarketplace.connect(worker).markTaskCompleted(1);
-      
+
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
       const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
       const treasuryBalanceBefore = await roseToken.balanceOf(daoTreasury.address);
-      
+
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       await roseMarketplace.connect(worker).acceptPayment(1);
 
-      const workerAmount = (BASE_REWARD * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      const stakeholderAmount = (BASE_REWARD * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      const treasuryAmount = (BASE_REWARD * BigInt(TREASURY_SHARE)) / BigInt(SHARE_DENOMINATOR);
+      // New tokenomics calculations
+      const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
+      const totalPot = taskDeposit + mintAmount;
+      const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+      const stakeholderFee = (totalPot * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+      const stakeholderStakeRefund = taskDeposit / 10n;
+      const stakeholderTotal = stakeholderStakeRefund + stakeholderFee;
 
-      const stakeholderDepositRefund = taskDeposit / 10n;
-      
-      expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + taskDeposit + workerAmount);
-      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderBalanceBefore + stakeholderDepositRefund + stakeholderAmount);
-      expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + treasuryAmount);
+      // Verify distributions
+      expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + workerAmount);
+      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderBalanceBefore + stakeholderTotal);
+      expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + mintAmount);
     });
 
   });
