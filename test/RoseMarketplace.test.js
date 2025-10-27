@@ -178,26 +178,26 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(worker).markTaskCompleted(1);
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
-      
+
       let task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
-      
+
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
-      
+
+      // Calculate expected worker amount with new tokenomics
+      const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
+      const totalPot = taskDeposit + mintAmount;
+      const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+
       await expect(roseMarketplace.connect(worker).acceptPayment(1))
         .to.emit(roseMarketplace, "TaskClosed")
         .withArgs(1)
         .and.to.emit(roseMarketplace, "PaymentReleased")
-        .withArgs(1, worker.address, taskDeposit);
-        
+        .withArgs(1, worker.address, workerAmount);
+
       task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(4); // TaskStatus.Closed
       expect(task.deposit).to.equal(0); // Deposit should be transferred to worker
-
-      // New tokenomics: mint 2% of task value, total pot = 1.02x, worker gets 93% of pot
-      const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
-      const totalPot = taskDeposit + mintAmount;
-      const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
 
       const workerBalanceAfter = await roseToken.balanceOf(worker.address);
       expect(workerBalanceAfter - workerBalanceBefore).to.equal(workerAmount);
