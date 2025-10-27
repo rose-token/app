@@ -1,10 +1,6 @@
 import React from 'react';
 
 const TokenDistributionChart = () => {
-  const workerShare = 93;
-  const stakeholderShare = 5;
-  const treasuryShare = 2;
-
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
       <h2 className="text-xl font-semibold mb-4">Token Distribution Model</h2>
@@ -13,62 +9,58 @@ const TokenDistributionChart = () => {
         The total distribution pot (customer payment + minted tokens) is distributed as follows:
       </p>
 
-      <div className="relative h-8 bg-gray-200 rounded-full overflow-hidden mb-4">
-        <div
-          className="absolute h-full bg-green-500"
-          style={{ width: `${workerShare}%` }}
-          title={`Worker: ${workerShare}%`}
-        ></div>
-        <div
-          className="absolute h-full bg-blue-500"
-          style={{ width: `${stakeholderShare}%`, left: `${workerShare}%` }}
-          title={`Stakeholder: ${stakeholderShare}%`}
-        ></div>
-        <div
-          className="absolute h-full bg-purple-500"
-          style={{ width: `${treasuryShare}%`, left: `${workerShare + stakeholderShare}%` }}
-          title={`DAO Treasury: ${treasuryShare}%`}
-        ></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {/* Worker Card */}
+        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+              <p className="text-sm font-semibold text-green-900">Worker</p>
+            </div>
+            <span className="text-2xl font-bold text-green-700">93%</span>
+          </div>
+          <p className="text-xs text-gray-600">of distribution pot</p>
+          <p className="text-xs text-green-700 font-medium mt-1">9.486 ROSE (for 10 ROSE task)</p>
+        </div>
+
+        {/* Stakeholder Card */}
+        <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+              <p className="text-sm font-semibold text-blue-900">Stakeholder</p>
+            </div>
+            <span className="text-2xl font-bold text-blue-700">5%</span>
+          </div>
+          <p className="text-xs text-gray-600">fee + 10% stake back</p>
+          <p className="text-xs text-blue-700 font-medium mt-1">1.51 ROSE total (51% ROI)</p>
+        </div>
+
+        {/* DAO Treasury Card */}
+        <div className="bg-purple-50 border-2 border-purple-500 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+              <p className="text-sm font-semibold text-purple-900">DAO Treasury</p>
+            </div>
+            <span className="text-2xl font-bold text-purple-700">2%</span>
+          </div>
+          <p className="text-xs text-gray-600">minted tokens</p>
+          <p className="text-xs text-purple-700 font-medium mt-1">0.2 ROSE (creates inflation)</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="flex items-center">
-          <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
-          <div>
-            <p className="text-sm font-medium">Worker</p>
-            <p className="text-xs text-gray-500">{workerShare}% of distribution pot</p>
-          </div>
+      <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
+        <p className="font-medium mb-2">How it works (10 ROSE task example):</p>
+        <div className="space-y-1 text-xs">
+          <p>• Customer deposits: <span className="font-semibold">10 ROSE</span> (escrowed in contract)</p>
+          <p>• Stakeholder stakes: <span className="font-semibold">1 ROSE</span> (10% of task value, returned on completion)</p>
+          <p>• Platform mints: <span className="font-semibold">0.2 ROSE</span> → DAO treasury</p>
+          <p>• Total distribution pot: <span className="font-semibold">10.2 ROSE</span> (customer deposit + minted tokens)</p>
+          <p className="pt-2 border-t border-gray-300 mt-2">
+            The pot is distributed 93/5/2, with stakeholder also receiving their stake back for a 51% ROI.
+          </p>
         </div>
-
-        <div className="flex items-center">
-          <div className="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
-          <div>
-            <p className="text-sm font-medium">Stakeholder</p>
-            <p className="text-xs text-gray-500">{stakeholderShare}% fee + 10% stake back</p>
-          </div>
-        </div>
-
-        <div className="flex items-center">
-          <div className="w-4 h-4 bg-purple-500 rounded-full mr-2"></div>
-          <div>
-            <p className="text-sm font-medium">DAO Treasury</p>
-            <p className="text-xs text-gray-500">{treasuryShare}% minted tokens</p>
-          </div>
-        </div>
-
-
-      </div>
-
-      <div className="mt-4 text-sm text-gray-600">
-        <p className="font-medium mb-2">Example: 10 ROSE task</p>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>Customer deposits: 10 ROSE (escrowed)</li>
-          <li>Stakeholder stakes: 1 ROSE (10% of task value)</li>
-          <li>Platform mints: 0.2 ROSE to DAO treasury</li>
-          <li>Distribution pot: 10.2 ROSE (deposit + minted)</li>
-          <li>Worker receives: 9.486 ROSE (93% of pot)</li>
-          <li>Stakeholder receives: 1.51 ROSE total (1.0 stake + 0.51 fee = 51% ROI)</li>
-        </ul>
       </div>
     </div>
   );
