@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Rose Token is a decentralized Web3 marketplace with a task-value-based token distribution model. The project consists of:
-- Solidity smart contracts for the Ethereum blockchain (4 contracts)
+- Solidity smart contracts for the Ethereum blockchain (2 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
 - **New Tokenomics (as of October 2024)**: 93% worker, 5% stakeholder, 2% DAO
@@ -104,9 +104,9 @@ npm test
 
 ## Contract Architecture & Deployment Order
 
-The smart contracts must be deployed in a specific sequence due to dependencies:
+The smart contracts have a simple deployment structure:
 
-1. **RoseMarketplace** (459 lines, deployed first)
+1. **RoseMarketplace** (331 lines, deployed first)
    - Automatically deploys RoseToken in its constructor
    - Central hub for task management and lifecycle orchestration
    - Handles token minting and distribution (93/5/2 split)
@@ -120,27 +120,7 @@ The smart contracts must be deployed in a specific sequence due to dependencies:
    - Minting restricted to RoseMarketplace contract only
    - Standard transfer, approve, transferFrom functionality
 
-3. **StakeholderRegistry** (213 lines)
-   - Requires RoseToken address
-   - Manages stakeholder registration with 1000 ROSE minimum token requirement
-   - Enforces role separation and 14-day cooling period for role changes
-   - Blacklist functionality for bad actors
-   - Contract authorization system
-
-4. **TokenStaking** (491 lines)
-   - Requires RoseToken, StakeholderRegistry, and DAO treasury addresses
-   - Minimum stake: 1000 ROSE tokens
-   - Lock period: 14 days
-   - Ranked choice voting for stakeholder elections
-   - Slashing mechanism for penalizing bad behavior
-   - Election tracking with IPFS storage
-   - Currently deployed but not actively used in MVP
-
-After deployment, contracts are linked via setter methods in scripts/deploy.js:
-- `roseMarketplace.setStakeholderRegistry(stakeholderRegistryAddress)`
-- `stakeholderRegistry.authorizeContract(marketplaceAddress)`
-
-Deployment creates `deployment-output.json` with all contract addresses and displays:
+Deployment creates `deployment-output.json` with contract addresses and displays:
 - Deployer's Sepolia ETH balance (initial and final)
 - Total ETH used for deployment (gas costs)
 - All deployed contract addresses
@@ -276,14 +256,13 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 
 ## Testing Approach
 
-The project has **6 test suites** covering ~817 lines of test code. Tests use Hardhat and Chai for contract testing.
+The project has **5 test suites** covering ~626 lines of test code. Tests use Hardhat and Chai for contract testing.
 
 ### Test Files (test/)
 
 | Test File | Lines | Coverage |
 |-----------|-------|----------|
 | **RoseMarketplace.test.js** | 228 | Task creation, lifecycle management, payment distribution, escrow |
-| **TokenStaking.test.js** | 191 | Staking/unstaking, ranked choice voting, election tracking, slashing |
 | **RoseToken.test.js** | 130 | Minting, transfers, allowances, approvals, access control |
 | **TaskLifecycleEdgeCases.test.js** | 123 | Edge cases in task workflow, error conditions, invalid states |
 | **DetailedDescription.test.js** | 74 | Detailed task description handling and IPFS storage |
@@ -292,14 +271,11 @@ The project has **6 test suites** covering ~817 lines of test code. Tests use Ha
 ### Test Coverage Areas
 
 **Core Functionality:**
-- Token minting and distribution (60/20/20 split verification)
+- Token minting and distribution (93/5/2 split verification)
 - Complete task lifecycle from creation to payment
-- Governance voting mechanisms (STAR voting with scores 0-5)
-- Staking and unstaking with lock periods
-- Stakeholder registration and role management
 
 **MVP Features (Post-Simplification):**
-- Simple task creation with ETH deposits
+- Simple task creation with ROSE token deposits
 - First-come, first-served worker claiming
 - Single-stakeholder approval workflow
 - Direct payment distribution
@@ -322,7 +298,6 @@ npm test
 
 # Run specific test file
 npx hardhat test test/RoseMarketplace.test.js
-npx hardhat test test/TokenStaking.test.js
 npx hardhat test test/RoseToken.test.js
 npx hardhat test test/TaskLifecycleEdgeCases.test.js
 npx hardhat test test/DetailedDescription.test.js
@@ -686,6 +661,32 @@ The project underwent **additional simplification** by removing the BidEvaluatio
 - **Simplified Deployment**: Fewer contracts to deploy and maintain
 - **Cleaner Architecture**: Removed dead code and unused dependencies
 
+### October 2024: TokenStaking and StakeholderRegistry Contract Removal
+
+The project underwent **further simplification** by removing the TokenStaking and StakeholderRegistry contracts:
+
+#### Removed Components:
+- **TokenStaking.sol** (491 lines) - Entire contract removed
+- **StakeholderRegistry.sol** (213 lines) - Entire contract removed
+- Removed `stakeholderRegistry` and `tokenStaking` address variables from RoseMarketplace
+- Removed `setStakeholderRegistry()` and `setTokenStaking()` functions from RoseMarketplace
+- Removed StakeholderRegistry role eligibility checks in `stakeholderStake()`
+- Removed contract deployments from scripts/deploy.js
+- Removed contract linking calls (`setStakeholderRegistry`, `authorizeContract`)
+- Removed from scripts/update-abi.js
+- Removed TokenStakingABI.json and StakeholderRegistryABI.json from frontend
+- Removed all references from frontend/src/hooks/useContract.js
+
+#### Why This Change:
+- **Unused in MVP**: Stakeholder registration and token staking were not essential for core functionality
+- **Simplified Stakeholder Model**: Removed barriers to entry - any address can now be a stakeholder by staking 10% of task value
+- **No Role Management Needed**: Customer check (line 154) is sufficient to prevent conflicts
+- **Reduced Contract Count**: From 4 contracts down to 2 core contracts
+- **Simplified Deployment**: No contract linking or authorization needed
+- **Lower Gas Costs**: Fewer contract calls during stakeholderStake operation
+- **Cleaner Architecture**: Direct inline checks instead of external contract dependencies
+- **Future Enhancement**: Stakeholder reputation and governance can be added later as separate modules
+
 ### Other Notable Changes
 
 **October 24, 2024** (Commit e685e09):
@@ -711,8 +712,8 @@ The codebase follows a **"Progressive Enhancement"** approach:
 
 When working with this codebase:
 
-1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance, reputation, BidEvaluationManager)
-2. **Test Coverage**: All 6 test suites must pass before merging
+1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance, reputation, BidEvaluationManager, TokenStaking, StakeholderRegistry)
+2. **Test Coverage**: All 5 test suites must pass before merging
 3. **Gas Optimization**: Contracts use aggressive optimization (`runs: 1`, `viaIR: true`)
 4. **ABI Synchronization**: Always run `npm run update-abi` after contract changes
 5. **Deployment Order**: Follow the specific sequence in scripts/deploy.js
@@ -724,8 +725,8 @@ When working with this codebase:
 
 ```
 rose-token/
-├── contracts/           # 4 Solidity contracts (~1,456 lines)
-├── test/                # 6 test suites (~817 lines)
+├── contracts/           # 2 Solidity contracts (~425 lines)
+├── test/                # 5 test suites (~626 lines)
 ├── scripts/             # Deployment and utility scripts
 ├── frontend/            # React application
 │   ├── src/
@@ -733,18 +734,18 @@ rose-token/
 │   │   ├── components/  # Feature-organized components
 │   │   ├── hooks/       # 5 custom React hooks
 │   │   ├── utils/       # IPFS, task status utilities
-│   │   ├── contracts/   # 4 generated ABI files
+│   │   ├── contracts/   # 2 generated ABI files
 │   │   └── constants/   # Network and configuration constants
 ├── .github/workflows/   # 2 CI/CD workflows
 └── CLAUDE.md            # This file - project guidance for Claude Code
 ```
 
 ### Key Metrics
-- **Smart Contracts**: 4 contracts (RoseReputation and BidEvaluationManager removed for MVP)
-- **Test Coverage**: 6 test suites, ~817 total lines
+- **Smart Contracts**: 2 contracts (RoseReputation, BidEvaluationManager, TokenStaking, and StakeholderRegistry removed for MVP)
+- **Test Coverage**: 5 test suites, ~626 total lines
 - **Frontend Pages**: 3 main pages (Tasks, Profile, Help)
 - **Custom Hooks**: 5 React hooks for Web3 integration
-- **ABI Files**: 4 auto-generated from compiled contracts
+- **ABI Files**: 2 auto-generated from compiled contracts
 - **CI/CD Jobs**: 2 workflows (PR validation + deployment)
 - **Token Economics**: 93% worker, 5% stakeholder, 2% DAO (from 1.02x pot)
 - **Token Distribution Model**: Task-value-based (no fixed base reward)
