@@ -2,8 +2,6 @@
 pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
-import "./StakeholderRegistry.sol";
-import "./TokenStaking.sol";
 import "hardhat/console.sol";
 
 /**
@@ -19,12 +17,6 @@ contract RoseMarketplace {
 
     // Reference to the RoseToken contract
     RoseToken public roseToken;
-
-    // Reference to the StakeholderRegistry contract
-    StakeholderRegistry public stakeholderRegistry;
-    
-    // Reference to the TokenStaking contract
-    TokenStaking public tokenStaking;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -96,26 +88,6 @@ contract RoseMarketplace {
         // Deploy the RoseToken, designating this marketplace as its minter
         roseToken = new RoseToken(address(this));
     }
-    
-    /**
-     * @dev Set the stakeholder registry contract address
-     * @param _stakeholderRegistry Address of the StakeholderRegistry contract
-     */
-    function setStakeholderRegistry(address _stakeholderRegistry) external {
-        // In a production system, you would add access control here
-        // For this example, we're allowing anyone to set this initially
-        // In reality, you would restrict this to owner or multisig
-        require(_stakeholderRegistry != address(0));
-        stakeholderRegistry = StakeholderRegistry(_stakeholderRegistry);
-    }
-    
-    /**
-     * @dev Set the token staking contract address
-     */
-    function setTokenStaking(TokenStaking _tokenStaking) external {
-        require(msg.sender == address(roseToken));
-        tokenStaking = _tokenStaking;
-    }
 
     /**
      * @dev Create a new task, depositing ROSE tokens that will be paid to the worker upon successful completion.
@@ -152,13 +124,7 @@ contract RoseMarketplace {
         require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
         require(t.stakeholder == address(0), "Task already has a stakeholder");
         require(t.customer != msg.sender, "Customer cannot be stakeholder for their own task");
-        
-        // Check stakeholder registry eligibility (if registry is set)
-        if (address(stakeholderRegistry) != address(0)) {
-            require(stakeholderRegistry.isEligibleStakeholder(msg.sender), "Not eligible stakeholder");
-            require(!stakeholderRegistry.checkRoleConflict(msg.sender, t.customer, t.worker), "Role conflict detected");
-        }
-        
+
         // Calculate required 10% deposit
         uint256 requiredDeposit = t.deposit / 10;
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");

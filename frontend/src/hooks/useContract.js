@@ -4,8 +4,6 @@ import { useEthereum } from './useEthereum';
 
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
-import TokenStakingABI from '../contracts/TokenStakingABI.json';
-import StakeholderRegistryABI from '../contracts/StakeholderRegistryABI.json';
 
 const DEFAULT_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -13,22 +11,16 @@ const logInitialAddresses = () => {
   const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
   const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
   const daoTreasuryAddress = process.env.REACT_APP_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
-  const tokenStakingAddress = process.env.REACT_APP_TOKEN_STAKING_ADDRESS || DEFAULT_ADDRESS;
-  const stakeholderRegistryAddress = process.env.REACT_APP_STAKEHOLDER_REGISTRY_ADDRESS || DEFAULT_ADDRESS;
 
   console.log('🌹 Contract Addresses (Initial Config):');
   console.log('Marketplace:', marketplaceAddress);
   console.log('Token:', tokenAddress);
   console.log('DAO Treasury:', daoTreasuryAddress);
-  console.log('Token Staking:', tokenStakingAddress);
-  console.log('Stakeholder Registry:', stakeholderRegistryAddress);
 
   return {
     marketplaceAddress,
     tokenAddress,
-    daoTreasuryAddress,
-    tokenStakingAddress,
-    stakeholderRegistryAddress
+    daoTreasuryAddress
   };
 };
 
@@ -38,8 +30,6 @@ export const useContract = () => {
   const { provider, signer, isConnected, account } = useEthereum();
   const [roseMarketplace, setRoseMarketplace] = useState(null);
   const [roseToken, setRoseToken] = useState(null);
-  const [tokenStaking, setTokenStaking] = useState(null);
-  const [stakeholderRegistry, setStakeholderRegistry] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allAddresses, setAllAddresses] = useState(null);
@@ -73,16 +63,12 @@ export const useContract = () => {
       }
 
       addresses.daoTreasuryAddress = await roseMarketplace.daoTreasury();
-      addresses.tokenStakingAddress = await roseMarketplace.tokenStaking();
-      addresses.stakeholderRegistryAddress = await roseMarketplace.stakeholderRegistry();
 
       console.log('=== ROSE CONTRACT ADDRESSES (Fetched) ===');
       console.log('Connected Account:', account);
       console.log('Marketplace Address:', addresses.marketplaceAddress);
       console.log('Token Address:', addresses.tokenAddress);
       console.log('DAO Treasury Address:', addresses.daoTreasuryAddress);
-      console.log('Token Staking Address:', addresses.tokenStakingAddress);
-      console.log('Stakeholder Registry Address:', addresses.stakeholderRegistryAddress);
       console.log('==============================');
       
       setAllAddresses(addresses);
@@ -103,7 +89,7 @@ export const useContract = () => {
       return;
     }
     
-    if (contractsInitialized.readOnly && roseMarketplace && roseToken && tokenStaking && stakeholderRegistry) {
+    if (contractsInitialized.readOnly && roseMarketplace && roseToken) {
       return;
     }
     
@@ -144,22 +130,8 @@ export const useContract = () => {
           provider
         );
 
-        const tokenStakingContract = new ethers.Contract(
-          contractAddresses.tokenStakingAddress,
-          TokenStakingABI,
-          provider
-        );
-
-        const stakeholderRegistryContract = new ethers.Contract(
-          contractAddresses.stakeholderRegistryAddress,
-          StakeholderRegistryABI,
-          provider
-        );
-
         setRoseMarketplace(marketplaceContract);
         setRoseToken(tokenContract);
-        setTokenStaking(tokenStakingContract);
-        setStakeholderRegistry(stakeholderRegistryContract);
 
         contractsInitialized.readOnly = true;
         setContractsReady(prev => ({ ...prev, readOnly: true }));
@@ -184,7 +156,7 @@ export const useContract = () => {
       return;
     }
     
-    if (contractsInitialized.readWrite && roseMarketplace && roseToken && tokenStaking && stakeholderRegistry && contractMethods.valid) {
+    if (contractsInitialized.readWrite && roseMarketplace && roseToken && contractMethods.valid) {
       return;
     }
     
@@ -232,22 +204,8 @@ export const useContract = () => {
           signer
         );
 
-        const tokenStakingContract = new ethers.Contract(
-          contractAddresses.tokenStakingAddress,
-          TokenStakingABI,
-          signer
-        );
-
-        const stakeholderRegistryContract = new ethers.Contract(
-          contractAddresses.stakeholderRegistryAddress,
-          StakeholderRegistryABI,
-          signer
-        );
-
         setRoseMarketplace(marketplaceContract);
         setRoseToken(tokenContract);
-        setTokenStaking(tokenStakingContract);
-        setStakeholderRegistry(stakeholderRegistryContract);
 
         if (!allAddresses && !fetchAttempted.value) {
           try {
@@ -297,8 +255,6 @@ export const useContract = () => {
   return {
     roseMarketplace,
     roseToken,
-    tokenStaking,
-    stakeholderRegistry,
     isLoading,
     error,
     allAddresses,
