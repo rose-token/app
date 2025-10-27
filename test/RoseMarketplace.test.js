@@ -115,6 +115,12 @@ describe("RoseMarketplace", function () {
       ).to.be.revertedWith("Customer cannot claim their own task");
     });
 
+    it("Should not allow stakeholder to claim task they are validating", async function () {
+      await expect(
+        roseMarketplace.connect(stakeholder).claimTask(1)
+      ).to.be.revertedWith("Stakeholder cannot claim task they are validating");
+    });
+
     it("Should allow workers to mark tasks as completed", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
 

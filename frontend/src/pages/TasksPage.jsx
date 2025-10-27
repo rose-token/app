@@ -99,6 +99,11 @@ const TasksPage = () => {
       return;
     }
 
+    if (task.stakeholder === account) {
+      setError('You cannot claim a task you are validating as stakeholder');
+      return;
+    }
+
     if (task.worker !== '0x0000000000000000000000000000000000000000') {
       setError('Task has already been claimed by another worker');
       return;

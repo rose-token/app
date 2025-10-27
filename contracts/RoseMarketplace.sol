@@ -124,6 +124,7 @@ contract RoseMarketplace {
         require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
         require(t.stakeholder == address(0), "Task already has a stakeholder");
         require(t.customer != msg.sender, "Customer cannot be stakeholder for their own task");
+        require(t.worker != msg.sender, "Worker cannot be stakeholder for their own task");
 
         // Calculate required 10% deposit
         uint256 requiredDeposit = t.deposit / 10;
@@ -206,6 +207,7 @@ contract RoseMarketplace {
         // Check specific conditions first to ensure proper error messages
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
+        require(t.stakeholder != msg.sender, "Stakeholder cannot claim task they are validating");
         require(msg.sender != address(0), "Worker cannot be zero address");
         require(t.stakeholder != address(0), "Task must have a stakeholder");
 

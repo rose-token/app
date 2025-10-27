@@ -14,7 +14,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
   const isWorker = account && task.worker.toLowerCase() === account.toLowerCase();
   const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
 
-  const canClaim = !isCustomer && task.status === TaskStatus.Open && !isWorker;
+  const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker;
   const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
