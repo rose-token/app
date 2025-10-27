@@ -140,16 +140,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
               <p className="text-xs text-red-600 mt-1">{detailsError}</p>
             )}
           </div>
-        ) : (
-          <div className="border border-gray-300 rounded-md p-3 bg-gray-100 text-center">
-            <p className="text-sm text-gray-600">
-              🔒 Detailed description is private
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Become a participant (customer, stakeholder, or worker) to view full details
-            </p>
-          </div>
-        )}
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
