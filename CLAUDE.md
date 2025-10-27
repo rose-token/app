@@ -29,12 +29,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rose Token is a decentralized Web3 marketplace with a token distribution model. The project consists of:
+Rose Token is a decentralized Web3 marketplace with a task-value-based token distribution model. The project consists of:
 - Solidity smart contracts for the Ethereum blockchain (6 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
-- Token distribution: 60% worker, 20% stakeholder, 20% DAO treasury
-- Base reward: 100 ROSE tokens per completed task
+- **New Tokenomics (as of October 2024)**: 93% worker, 5% stakeholder, 2% DAO
+  - Customer pays task value in ROSE tokens (escrowed)
+  - Stakeholder stakes 10% of task value (returned on completion)
+  - Platform mints 2% of task value → DAO treasury (creates ~2% annual inflation)
+  - Total distribution pot = customer payment + minted tokens (1.02x task value)
+  - Worker receives 93% of pot, Stakeholder receives 5% fee + stake back (50% ROI on stake)
 
 ### MVP Status (October 2024)
 The project is currently in **MVP (Minimum Viable Product)** mode. Complex features have been removed to focus on core functionality:
@@ -48,11 +52,13 @@ The project is currently in **MVP (Minimum Viable Product)** mode. Complex featu
 - PGP key storage and encryption
 
 **CURRENT MVP FEATURES**:
-- Simple task creation with ETH deposits
-- Single-stakeholder validation model (10% stake required)
+- Simple task creation with ROSE token deposits (escrowed in marketplace contract)
+- Single-stakeholder validation model (10% stake required in ROSE tokens)
 - Direct worker claiming (first-come, first-served)
 - Straightforward approval and payment flow
+- Token minting and distribution (93/5/2 split)
 - Token staking for stakeholder elections (future use)
+- Faucet functionality for testing
 
 ## Development Commands
 
@@ -102,10 +108,11 @@ The smart contracts must be deployed in a specific sequence due to dependencies:
 1. **RoseMarketplace** (459 lines, deployed first)
    - Automatically deploys RoseToken and RoseReputation in its constructor
    - Central hub for task management and lifecycle orchestration
-   - Handles token minting and distribution (60/20/20 split)
+   - Handles token minting and distribution (93/5/2 split)
    - Manages task statuses: StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
    - Includes faucet functionality for testing (claim tokens)
-   - Base reward: 100 ROSE tokens per task
+   - Escrows customer's ROSE token payment until task completion
+   - Mints 2% of task value to DAO treasury on completion (creates ~2% annual inflation)
 
 2. **RoseToken** (94 lines)
    - ERC20 token with name "Rose Token", symbol "ROSE", 18 decimals
@@ -159,44 +166,56 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 **Detailed Flow:**
 
 1. **Task Creation** (Status: StakeholderRequired)
-   - Customer creates task with ETH deposit via `createTask()`
-   - Task includes: title, description, reward (100 ROSE), IPFS data hash
+   - Customer creates task via `createTask()` with ROSE token deposit
+   - Customer must approve marketplace contract to transfer tokens
+   - Task includes: title, description, ROSE token amount, IPFS data hash
    - Initial status: StakeholderRequired
-   - Customer funds held in escrow in marketplace contract
+   - Customer's ROSE tokens held in escrow in marketplace contract
 
 2. **Stakeholder Stakes** (Status: Open)
-   - Stakeholder calls `stakeOnTask()` with 10% of task reward
+   - Stakeholder calls `stakeholderStake()` with exactly 10% of task value in ROSE tokens
+   - Stakeholder must approve marketplace contract to transfer tokens
    - Task status changes to Open
    - Task becomes available for workers
+   - Stakeholder's 10% stake held in escrow
 
 3. **Worker Claims Task** (Status: InProgress)
-   - Worker calls `claimTask()` to be assigned
+   - Worker calls `claimTask()` with story points estimation
    - First-come, first-served (no competitive bidding in MVP)
    - Task status changes to InProgress
    - Worker address locked to task
 
 4. **Worker Completes Work** (Status: Completed)
-   - Worker calls `completeTask()` after finishing work
+   - Worker calls `markTaskCompleted()` after finishing work
    - Task status changes to Completed
    - Awaits approval from customer and stakeholder
 
 5. **Approval Process** (Status: ApprovedPendingPayment)
-   - Customer calls `approveTask()` to confirm satisfactory work
-   - Stakeholder calls `approveTask()` to validate quality
-   - Both approvals required (in MVP, simpler than multi-stakeholder)
-   - Task status changes to ApprovedPendingPayment
-   - Tokens minted via RoseToken contract
+   - Customer calls `approveCompletionByCustomer()` to confirm satisfactory work
+   - Stakeholder calls `approveCompletionByStakeholder()` to validate quality
+   - Both approvals required (can be done in any order)
+   - Task status changes to ApprovedPendingPayment when both approvals received
+   - Task ready for worker to accept payment
 
 6. **Payment Distribution** (Status: Closed)
-   - Worker calls `acceptPayment()` to receive tokens
-   - Distribution occurs:
-     - 60 ROSE → Worker (60%)
-     - 20 ROSE → Stakeholder (20%)
-     - 20 ROSE → DAO Treasury (20%)
-   - ETH deposit returned to customer
-   - Stakeholder gets their 10% stake back
-   - Reputation points awarded via RoseReputation
+   - Worker calls `acceptPayment()` to trigger distribution
+   - Platform mints 2% of task value to DAO treasury
+   - Total distribution pot = customer deposit + minted tokens (1.02x task value)
+   - Distribution occurs from the pot:
+     - **Worker**: 93% of pot (e.g., 9.486 ROSE for 10 ROSE task)
+     - **Stakeholder**: 5% of pot as fee + 10% stake returned (e.g., 1.51 ROSE total for 10 ROSE task)
+     - **DAO Treasury**: 2% minted (e.g., 0.2 ROSE for 10 ROSE task)
+   - Reputation points awarded via RoseReputation to all participants
    - Task status changes to Closed
+
+**Tokenomics Example (10 ROSE task):**
+- Customer deposits: 10 ROSE (escrowed)
+- Stakeholder stakes: 1 ROSE (10%, escrowed)
+- Platform mints: 0.2 ROSE → DAO
+- Total pot: 10.2 ROSE
+- Worker receives: 9.486 ROSE (93% of 10.2)
+- Stakeholder receives: 1.51 ROSE (1.0 stake + 0.51 fee = 51% ROI on stake)
+- DAO receives: 0.2 ROSE (creates ~2% annual inflation as tasks complete)
 
 **Note**: The task creation is now direct through the marketplace. There is no separate governance proposal workflow in the current MVP.
 
@@ -215,7 +234,7 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 - `TaskList.jsx` - Display tasks with filtering and sorting
 - `TaskCard.jsx` - Individual task display with status and actions
 - `TaskFilters.jsx` - Filter options (stakeholder needed, worker needed, my tasks, closed)
-- `TokenDistributionChart.jsx` - Visual representation of 60/20/20 token split
+- `TokenDistributionChart.jsx` - Visual representation of 93/5/2 token split
 - `ProgressTracker.jsx` - Task progress tracking for participants
 
 **Wallet Components:**
@@ -516,6 +535,58 @@ gh pr view --web
 
 ## Recent Changes & Architecture Notes
 
+### October 2024: New Tokenomics Model (Commit 445df00)
+
+The project implemented a **new task-value-based tokenomics model** replacing the old fixed-reward system:
+
+#### Changes to Token Distribution:
+**Old Model (removed):**
+- Fixed 100 ROSE base reward minted per task
+- Split: 60% worker, 20% stakeholder, 20% DAO
+- All payments came from minted tokens
+
+**New Model (current):**
+- Task-value-based distribution (no fixed base reward)
+- Mint only 2% of task value → DAO treasury (creates ~2% annual inflation)
+- Total distribution pot = customer payment + minted tokens (1.02x task value)
+- Split from pot: **93% worker, 5% stakeholder fee, 2% DAO**
+- Stakeholder gets 10% stake returned + 5% fee (50% ROI on stake)
+
+#### Implementation Changes:
+**Contract Changes (RoseMarketplace.sol):**
+- Removed `BASE_REWARD` constant
+- Added `MINT_PERCENTAGE = 2` constant
+- Updated distribution percentages: `WORKER_SHARE = 93`, `STAKEHOLDER_SHARE = 5`, `TREASURY_SHARE = 2`
+- Rewrote `_finalizeTask()` to implement new distribution logic
+- Removed old `_mintReward()` function
+
+**Test Updates (RoseMarketplace.test.js):**
+- Updated test constants to match new tokenomics
+- Fixed calculation expectations for worker payments
+- Updated token distribution verification tests
+
+#### Example Transaction Flow (10 ROSE task):
+**Inputs:**
+- Customer deposits: 10 ROSE (escrowed in marketplace)
+- Stakeholder stakes: 1 ROSE (10% of task value, escrowed)
+
+**On Task Completion:**
+- Platform mints: 0.2 ROSE → DAO treasury
+- Total pot: 10.2 ROSE (10 + 0.2)
+- Worker receives: 9.486 ROSE (93% of 10.2)
+- Stakeholder receives: 1.51 ROSE total
+  - 1.0 ROSE (stake returned)
+  - 0.51 ROSE (5% of 10.2 as fee)
+  - 51% ROI on 1 ROSE stake
+- DAO receives: 0.2 ROSE (2% of task value, already minted)
+
+#### Why This Change:
+- **Worker-Focused Economics**: Workers receive 93% of value, up from 60%
+- **Sustainable Inflation**: Only 2% minted per task (vs 100% in old model)
+- **Stakeholder Incentive**: 50% ROI on stake encourages quality validation
+- **Task-Value Scaling**: Distribution scales with actual task value, not fixed amount
+- **Clearer Value Proposition**: $1000 task pays ~$950 to worker (93% of $1020)
+
 ### October 2024: MVP Simplification (Commit f81f4e3)
 
 The project underwent **major simplification** to focus on core MVP functionality. The following features were **REMOVED**:
@@ -537,11 +608,11 @@ The project underwent **major simplification** to focus on core MVP functionalit
 - Bidding interface and shortlist displays
 
 #### What Remains (MVP Core):
-✅ Task creation with ETH deposits (direct, no governance)
+✅ Task creation with ROSE token deposits (direct, no governance)
 ✅ First-come, first-served worker claiming
-✅ Single-stakeholder validation model (10% stake required)
+✅ Single-stakeholder validation model (10% stake required in ROSE tokens)
 ✅ Simple approval workflow (customer + stakeholder)
-✅ Token minting and distribution (60/20/20 split)
+✅ Token minting and distribution (93/5/2 split, task-value-based)
 ✅ Token staking for stakeholder elections (deployed but not integrated)
 ✅ Reputation tracking across roles
 ✅ Faucet for testing
@@ -647,9 +718,11 @@ rose-token/
 - **Custom Hooks**: 5 React hooks for Web3 integration
 - **ABI Files**: 6 auto-generated from compiled contracts
 - **CI/CD Jobs**: 2 workflows (PR validation + deployment)
-- **Token Economics**: 60% worker, 20% stakeholder, 20% DAO
-- **Base Task Reward**: 100 ROSE tokens
-- **Stakeholder Stake Required**: 10% of task value
+- **Token Economics**: 93% worker, 5% stakeholder, 2% DAO (from 1.02x pot)
+- **Token Distribution Model**: Task-value-based (no fixed base reward)
+- **Platform Minting**: 2% of task value → DAO (creates ~2% annual inflation)
+- **Stakeholder Stake Required**: 10% of task value (returned on completion)
+- **Stakeholder ROI**: 50% on stake (5% fee on 10% stake)
 
 ---
 
@@ -665,7 +738,7 @@ rose-token/
 
 ---
 
-**Last Updated**: October 2024 (Post-MVP Simplification)
+**Last Updated**: October 2024 (New Tokenomics Model - 93/5/2)
 **Solidity Version**: 0.8.17
 **Node Version**: 18.x
 **Network**: Sepolia (chainId: 11155111)
