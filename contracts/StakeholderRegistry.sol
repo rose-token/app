@@ -2,7 +2,6 @@
 pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
-import "./RoseReputation.sol";
 
 /**
  * @title StakeholderRegistry
@@ -11,7 +10,6 @@ import "./RoseReputation.sol";
  */
 contract StakeholderRegistry {
     RoseToken public roseToken;
-    RoseReputation public roseReputation;
     
     // 2-week cooling period as specified in requirements
     uint256 public constant ROLE_CHANGE_COOLING_PERIOD = 14 days;
@@ -61,9 +59,8 @@ contract StakeholderRegistry {
         _;
     }
     
-    constructor(RoseToken _roseToken, RoseReputation _roseReputation) {
+    constructor(RoseToken _roseToken) {
         roseToken = _roseToken;
-        roseReputation = _roseReputation;
         owner = msg.sender;
     }
     

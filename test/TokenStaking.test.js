@@ -2,24 +2,19 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("TokenStaking", function () {
-  let tokenStaking, roseToken, stakeholderRegistry, roseReputation;
+  let tokenStaking, roseToken, stakeholderRegistry;
   let owner, stakeholder1, stakeholder2, stakeholder3, daoTreasury;
 
   beforeEach(async function () {
     [owner, stakeholder1, stakeholder2, stakeholder3, daoTreasury] = await ethers.getSigners();
-    
+
     const RoseToken = await ethers.getContractFactory("RoseToken");
     roseToken = await RoseToken.deploy(owner.address);
     await roseToken.waitForDeployment();
-    
-    const RoseReputation = await ethers.getContractFactory("RoseReputation");
-    roseReputation = await RoseReputation.deploy();
-    await roseReputation.waitForDeployment();
-    
+
     const StakeholderRegistry = await ethers.getContractFactory("StakeholderRegistry");
     stakeholderRegistry = await StakeholderRegistry.deploy(
-      await roseToken.getAddress(), 
-      await roseReputation.getAddress()
+      await roseToken.getAddress()
     );
     await stakeholderRegistry.waitForDeployment();
     

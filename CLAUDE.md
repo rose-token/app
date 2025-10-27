@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Rose Token is a decentralized Web3 marketplace with a task-value-based token distribution model. The project consists of:
-- Solidity smart contracts for the Ethereum blockchain (6 contracts)
+- Solidity smart contracts for the Ethereum blockchain (5 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
 - **New Tokenomics (as of October 2024)**: 93% worker, 5% stakeholder, 2% DAO
@@ -50,6 +50,7 @@ The project is currently in **MVP (Minimum Viable Product)** mode. Complex featu
 - Dispute resolution mechanisms
 - Complex refund logic
 - PGP key storage and encryption
+- Reputation tracking and experience points (RoseReputation contract)
 
 **CURRENT MVP FEATURES**:
 - Simple task creation with ROSE token deposits (escrowed in marketplace contract)
@@ -106,7 +107,7 @@ npm test
 The smart contracts must be deployed in a specific sequence due to dependencies:
 
 1. **RoseMarketplace** (459 lines, deployed first)
-   - Automatically deploys RoseToken and RoseReputation in its constructor
+   - Automatically deploys RoseToken in its constructor
    - Central hub for task management and lifecycle orchestration
    - Handles token minting and distribution (93/5/2 split)
    - Manages task statuses: StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
@@ -119,19 +120,14 @@ The smart contracts must be deployed in a specific sequence due to dependencies:
    - Minting restricted to RoseMarketplace contract only
    - Standard transfer, approve, transferFrom functionality
 
-3. **RoseReputation** (132 lines)
-   - Tracks reputation and experience for all three roles (Customer, Worker, Stakeholder)
-   - Separate reputation tracking per role
-   - Called by marketplace when tasks complete successfully
-
-4. **StakeholderRegistry** (213 lines)
-   - Requires RoseToken and RoseReputation addresses
+3. **StakeholderRegistry** (213 lines)
+   - Requires RoseToken address
    - Manages stakeholder registration with 1000 ROSE minimum token requirement
    - Enforces role separation and 14-day cooling period for role changes
    - Blacklist functionality for bad actors
    - Contract authorization system
 
-5. **TokenStaking** (491 lines)
+4. **TokenStaking** (491 lines)
    - Requires RoseToken, StakeholderRegistry, and DAO treasury addresses
    - Minimum stake: 1000 ROSE tokens
    - Lock period: 14 days
@@ -205,7 +201,6 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
      - **Worker**: 93% of pot (e.g., 9.486 ROSE for 10 ROSE task)
      - **Stakeholder**: 5% of pot as fee + 10% stake returned (e.g., 1.51 ROSE total for 10 ROSE task)
      - **DAO Treasury**: 2% minted (e.g., 0.2 ROSE for 10 ROSE task)
-   - Reputation points awarded via RoseReputation to all participants
    - Task status changes to Closed
 
 **Tokenomics Example (10 ROSE task):**
@@ -306,7 +301,6 @@ The project has **6 test suites** covering ~817 lines of test code. Tests use Ha
 - Complete task lifecycle from creation to payment
 - Governance voting mechanisms (STAR voting with scores 0-5)
 - Staking and unstaking with lock periods
-- Reputation tracking across all roles
 - Stakeholder registration and role management
 
 **MVP Features (Post-Simplification):**
@@ -614,7 +608,6 @@ The project underwent **major simplification** to focus on core MVP functionalit
 ✅ Simple approval workflow (customer + stakeholder)
 ✅ Token minting and distribution (93/5/2 split, task-value-based)
 ✅ Token staking for stakeholder elections (deployed but not integrated)
-✅ Reputation tracking across roles
 ✅ Faucet for testing
 ✅ IPFS integration for task data
 
@@ -658,6 +651,26 @@ Customer + Stakeholder approve → ApprovedPendingPayment
 Worker → acceptPayment() → Closed
 ```
 
+### October 2024: Reputation System Removal
+
+The project underwent **further simplification** by removing the RoseReputation contract and all reputation tracking:
+
+#### Removed Components:
+- **RoseReputation.sol** (132 lines) - Entire reputation contract removed
+- Removed reputation tracking for Customer, Worker, and Stakeholder roles
+- Removed experience point awards throughout task lifecycle
+- Removed reputation level calculations and minting bonuses
+- Removed `roseReputation` references from RoseMarketplace
+- Removed RoseReputation parameter from StakeholderRegistry constructor
+- Removed RoseReputationABI from frontend and useContract hook
+
+#### Why This Change:
+- **Simplified MVP**: Reputation system added complexity without immediate value
+- **Focus on Core Mechanics**: Task completion and payment flow are the priority
+- **Future Enhancement**: Reputation can be added back as a separate module later
+- **Reduced Gas Costs**: Fewer contract calls during task lifecycle
+- **Cleaner Architecture**: Fewer dependencies between contracts
+
 ### Other Notable Changes
 
 **October 24, 2024** (Commit e685e09):
@@ -683,7 +696,7 @@ The codebase follows a **"Progressive Enhancement"** approach:
 
 When working with this codebase:
 
-1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance)
+1. **Understand MVP Scope**: Don't reference removed features (bidding, comments, disputes, PGP, governance, reputation)
 2. **Test Coverage**: All 6 test suites must pass before merging
 3. **Gas Optimization**: Contracts use aggressive optimization (`runs: 1`, `viaIR: true`)
 4. **ABI Synchronization**: Always run `npm run update-abi` after contract changes
@@ -705,18 +718,18 @@ rose-token/
 │   │   ├── components/  # Feature-organized components
 │   │   ├── hooks/       # 5 custom React hooks
 │   │   ├── utils/       # IPFS, task status utilities
-│   │   ├── contracts/   # 6 generated ABI files
+│   │   ├── contracts/   # 5 generated ABI files
 │   │   └── constants/   # Network and configuration constants
 ├── .github/workflows/   # 2 CI/CD workflows
 └── CLAUDE.md            # This file - project guidance for Claude Code
 ```
 
 ### Key Metrics
-- **Smart Contracts**: 6 contracts, ~1,566 total lines
+- **Smart Contracts**: 5 contracts (RoseReputation removed for MVP)
 - **Test Coverage**: 6 test suites, ~817 total lines
 - **Frontend Pages**: 3 main pages (Tasks, Profile, Help)
 - **Custom Hooks**: 5 React hooks for Web3 integration
-- **ABI Files**: 6 auto-generated from compiled contracts
+- **ABI Files**: 5 auto-generated from compiled contracts
 - **CI/CD Jobs**: 2 workflows (PR validation + deployment)
 - **Token Economics**: 93% worker, 5% stakeholder, 2% DAO (from 1.02x pot)
 - **Token Distribution Model**: Task-value-based (no fixed base reward)

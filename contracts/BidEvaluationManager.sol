@@ -3,7 +3,6 @@ pragma solidity ^0.8.17;
 
 import "./TokenStaking.sol";
 import "./RoseToken.sol";
-import "./RoseReputation.sol";
 
 interface IRoseMarketplace {
     enum BidStatus { Active, Shortlisted, Selected, Rejected, Withdrawn }

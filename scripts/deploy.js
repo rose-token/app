@@ -21,12 +21,9 @@ async function main() {
 
   const roseTokenAddress = await roseMarketplace.roseToken();
   console.log("RoseToken deployed to:", roseTokenAddress);
-  
-  const roseReputationAddress = await roseMarketplace.roseReputation();
-  console.log("RoseReputation deployed to:", roseReputationAddress);
 
   const StakeholderRegistry = await hre.ethers.getContractFactory("StakeholderRegistry");
-  const stakeholderRegistry = await StakeholderRegistry.deploy(roseTokenAddress, roseReputationAddress);
+  const stakeholderRegistry = await StakeholderRegistry.deploy(roseTokenAddress);
   await stakeholderRegistry.waitForDeployment();
   
   const stakeholderRegistryAddress = await stakeholderRegistry.getAddress();
@@ -56,7 +53,6 @@ async function main() {
   console.log("----------------");
   console.log("RoseMarketplace:", marketplaceAddress);
   console.log("RoseToken:", roseTokenAddress);
-  console.log("RoseReputation:", roseReputationAddress);
   console.log("StakeholderRegistry:", stakeholderRegistryAddress);
   console.log("TokenStaking:", tokenStakingAddress);
   console.log("BidEvaluationManager:", bidEvaluationManagerAddress);
@@ -65,7 +61,6 @@ async function main() {
   const deploymentOutput = {
     marketplaceAddress: marketplaceAddress,
     tokenAddress: roseTokenAddress,
-    reputationAddress: roseReputationAddress,
     stakeholderRegistryAddress: stakeholderRegistryAddress,
     tokenStakingAddress: tokenStakingAddress,
     bidEvaluationManagerAddress: bidEvaluationManagerAddress,

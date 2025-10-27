@@ -2,7 +2,6 @@
 pragma solidity ^0.8.17;
 
 import "./RoseToken.sol";
-import "./RoseReputation.sol";
 import "./StakeholderRegistry.sol";
 import "./TokenStaking.sol";
 import "hardhat/console.sol";
@@ -20,10 +19,7 @@ contract RoseMarketplace {
 
     // Reference to the RoseToken contract
     RoseToken public roseToken;
-    
-    // Reference to the RoseReputation contract
-    RoseReputation public roseReputation;
-    
+
     // Reference to the StakeholderRegistry contract
     StakeholderRegistry public stakeholderRegistry;
     
@@ -91,7 +87,7 @@ contract RoseMarketplace {
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /**
-     * @dev Constructor sets up the RoseToken contract, RoseReputation contract, and DAO treasury address.
+     * @dev Constructor sets up the RoseToken contract and DAO treasury address.
      * In a production design, you'd likely manage these addresses with Ownable logic.
      * @param _daoTreasury The address where part of minted tokens go
      */
@@ -101,9 +97,6 @@ contract RoseMarketplace {
 
         // Deploy the RoseToken, designating this marketplace as its minter
         roseToken = new RoseToken(address(this));
-        
-        // Deploy the RoseReputation contract for tracking experience and levels
-        roseReputation = new RoseReputation();
     }
     
     /**
@@ -153,9 +146,6 @@ contract RoseMarketplace {
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
 
-        // Award experience to customer for creating a task
-        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_CREATION_EXP());
-
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
 
@@ -186,10 +176,7 @@ contract RoseMarketplace {
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
         t.status = TaskStatus.Open;
-        
-        // Award experience to stakeholder for staking on a task
-        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Stakeholder, roseReputation.STAKEHOLDER_STAKE_EXP());
-        
+
         emit StakeholderStaked(_taskId, msg.sender, _tokenAmount);
     }
 
@@ -224,9 +211,6 @@ contract RoseMarketplace {
         t.storyPoints = _storyPoints;
         t.status = TaskStatus.InProgress;
 
-        // Award experience to worker for claiming a task
-        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Worker, roseReputation.WORKER_CLAIM_EXP());
-
         emit TaskClaimed(_taskId, msg.sender, _storyPoints);
     }
 
@@ -239,10 +223,7 @@ contract RoseMarketplace {
         require(t.worker == msg.sender, "Only assigned worker can mark completion");
         require(t.status == TaskStatus.InProgress, "Task must be in progress");
         t.status = TaskStatus.Completed;
-        
-        // Award experience to worker for completing a task
-        roseReputation.awardExperience(msg.sender, RoseReputation.Role.Worker, roseReputation.WORKER_TASK_COMPLETION_EXP());
-        
+
         emit TaskCompleted(_taskId);
     }
 
@@ -354,10 +335,6 @@ contract RoseMarketplace {
             console.log("Stakeholder fee:", stakeholderFee);
             t.stakeholderDeposit = 0;
             require(roseToken.transfer(t.stakeholder, stakeholderTotal), "Transfer to stakeholder failed");
-
-            // Award experience to customer and stakeholder for task completion
-            roseReputation.awardExperience(t.customer, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_COMPLETION_EXP());
-            roseReputation.awardExperience(t.stakeholder, RoseReputation.Role.Stakeholder, roseReputation.STAKEHOLDER_TASK_COMPLETION_EXP());
         }
     }
 
