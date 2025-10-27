@@ -13,7 +13,8 @@ describe("Task Lifecycle Edge Cases", function () {
 
   const taskTitle = "Build a website";
   const taskDeposit = ethers.parseEther("1");
-  const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";  
+  const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
+  const testPrUrl = "https://github.com/test/repo/pull/123";  
   
   beforeEach(async function () {  
     [owner, customer, worker, stakeholder, otherUser, daoTreasury] = await ethers.getSigners();  
@@ -104,7 +105,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseMarketplace.connect(worker).claimTask(1);
 
     await expect(
-      roseMarketplace.connect(otherUser).markTaskCompleted(1)
+      roseMarketplace.connect(otherUser).markTaskCompleted(1, testPrUrl)
     ).to.be.revertedWith("Only assigned worker can mark completion");
   });
 

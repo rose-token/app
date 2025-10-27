@@ -34,6 +34,7 @@ contract RoseMarketplace {
         uint256 stakeholderDeposit; // 10% deposit from stakeholder in ROSE tokens
         string title;              // Short public title (on-chain)
         string detailedDescriptionHash; // IPFS hash for detailed description (mandatory, off-chain)
+        string prUrl;              // GitHub Pull Request URL (mandatory on completion)
         TaskStatus status;
         bool customerApproval;
         bool stakeholderApproval;
@@ -51,7 +52,7 @@ contract RoseMarketplace {
     event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
     event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit);
     event TaskClaimed(uint256 taskId, address indexed worker);
-    event TaskCompleted(uint256 taskId);
+    event TaskCompleted(uint256 taskId, string prUrl);
     event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount);
     event TaskClosed(uint256 taskId);
     event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
@@ -244,14 +245,18 @@ contract RoseMarketplace {
     /**
      * @dev Worker marks a task as completed. Customer & stakeholder still must approve to release funds & mint tokens.
      * @param _taskId ID of the task to mark completed
+     * @param _prUrl GitHub Pull Request URL for the completed work (mandatory)
      */
-    function markTaskCompleted(uint256 _taskId) external {
+    function markTaskCompleted(uint256 _taskId, string calldata _prUrl) external {
         Task storage t = tasks[_taskId];
         require(t.worker == msg.sender, "Only assigned worker can mark completion");
         require(t.status == TaskStatus.InProgress, "Task must be in progress");
-        t.status = TaskStatus.Completed;
+        require(bytes(_prUrl).length > 0, "PR URL cannot be empty");
 
-        emit TaskCompleted(_taskId);
+        t.status = TaskStatus.Completed;
+        t.prUrl = _prUrl;
+
+        emit TaskCompleted(_taskId, _prUrl);
     }
 
     /**

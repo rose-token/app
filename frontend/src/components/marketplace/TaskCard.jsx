@@ -15,6 +15,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const [canViewDetails, setCanViewDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
 
+  // PR URL modal state
+  const [showPrUrlModal, setShowPrUrlModal] = useState(false);
+  const [prUrl, setPrUrl] = useState('');
+  const [prUrlError, setPrUrlError] = useState('');
+
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
   };
@@ -66,6 +71,34 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     } finally {
       setIsLoadingDetails(false);
     }
+  };
+
+  // Handle PR URL validation and submission
+  const validatePrUrl = (url) => {
+    if (!url || url.trim().length === 0) {
+      return 'PR URL is required';
+    }
+    if (!url.includes('github.com') || !url.includes('/pull/')) {
+      return 'Please enter a valid GitHub Pull Request URL (must contain "github.com" and "/pull/")';
+    }
+    return '';
+  };
+
+  const handleMarkCompleted = () => {
+    setPrUrl('');
+    setPrUrlError('');
+    setShowPrUrlModal(true);
+  };
+
+  const handleSubmitCompletion = () => {
+    const error = validatePrUrl(prUrl);
+    if (error) {
+      setPrUrlError(error);
+      return;
+    }
+
+    setShowPrUrlModal(false);
+    onComplete(task.id, prUrl);
   };
 
   const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker;
@@ -168,6 +201,21 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         )}
       </div>
 
+      {/* Display PR URL if task is completed or beyond */}
+      {task.prUrl && task.status >= TaskStatus.Completed && (
+        <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+          <p className="text-sm text-gray-600 mb-1">Pull Request:</p>
+          <a
+            href={task.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-600 hover:text-blue-800 underline break-all"
+          >
+            {task.prUrl}
+          </a>
+        </div>
+      )}
+
       {task.status === TaskStatus.Completed && (
         <div className="mb-4 flex space-x-4">
           <div className="flex items-center">
@@ -212,7 +260,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
         {canComplete && (
           <button
-            onClick={() => onComplete(task.id)}
+            onClick={handleMarkCompleted}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Mark Completed
@@ -261,6 +309,49 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {isParticipant && (
         <div className="mt-4">
           <ProgressTracker task={task} />
+        </div>
+      )}
+
+      {/* PR URL Modal */}
+      {showPrUrlModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Mark Task as Completed</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Please provide the GitHub Pull Request URL for the completed work:
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                GitHub PR URL *
+              </label>
+              <input
+                type="text"
+                value={prUrl}
+                onChange={(e) => setPrUrl(e.target.value)}
+                placeholder="https://github.com/owner/repo/pull/123"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {prUrlError && (
+                <p className="text-xs text-red-600 mt-1">{prUrlError}</p>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowPrUrlModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitCompletion}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-md"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

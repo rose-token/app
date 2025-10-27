@@ -150,6 +150,12 @@
         "internalType": "uint256",
         "name": "taskId",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "prUrl",
+        "type": "string"
       }
     ],
     "name": "TaskCompleted",
@@ -203,6 +209,25 @@
       }
     ],
     "name": "TaskReadyForPayment",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousWorker",
+        "type": "address"
+      }
+    ],
+    "name": "TaskUnclaimed",
     "type": "event"
   },
   {
@@ -384,7 +409,7 @@
     "inputs": [
       {
         "internalType": "string",
-        "name": "_description",
+        "name": "_title",
         "type": "string"
       },
       {
@@ -394,7 +419,7 @@
       },
       {
         "internalType": "string",
-        "name": "_detailedDescription",
+        "name": "_detailedDescriptionHash",
         "type": "string"
       }
     ],
@@ -422,6 +447,30 @@
         "internalType": "uint256",
         "name": "_taskId",
         "type": "uint256"
+      }
+    ],
+    "name": "isTaskParticipant",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_prUrl",
+        "type": "string"
       }
     ],
     "name": "markTaskCompleted",
@@ -510,12 +559,17 @@
       },
       {
         "internalType": "string",
-        "name": "description",
+        "name": "title",
         "type": "string"
       },
       {
         "internalType": "string",
-        "name": "detailedDescription",
+        "name": "detailedDescriptionHash",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "prUrl",
         "type": "string"
       },
       {
@@ -535,6 +589,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      }
+    ],
+    "name": "unclaimTask",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]
