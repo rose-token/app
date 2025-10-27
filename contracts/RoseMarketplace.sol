@@ -160,9 +160,6 @@ contract RoseMarketplace {
             "Only customer or stakeholder can cancel task"
         );
 
-        // Ensure no worker has claimed the task yet
-        require(t.worker == address(0), "Cannot cancel task after worker has claimed it");
-
         console.log("Cancelling task:", _taskId);
         console.log("Cancelled by:", msg.sender);
 

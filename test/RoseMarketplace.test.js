@@ -379,17 +379,17 @@ describe("RoseMarketplace", function () {
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
 
-      // Worker claims the task
+      // Worker claims the task (changes status to InProgress)
       await roseMarketplace.connect(worker).claimTask(1, 5);
 
-      // Try to cancel - should fail
+      // Try to cancel - should fail because status is now InProgress
       await expect(
         roseMarketplace.connect(customer).cancelTask(1)
-      ).to.be.revertedWith("Cannot cancel task after worker has claimed it");
+      ).to.be.revertedWith("Task can only be cancelled in StakeholderRequired or Open status");
 
       await expect(
         roseMarketplace.connect(stakeholder).cancelTask(1)
-      ).to.be.revertedWith("Cannot cancel task after worker has claimed it");
+      ).to.be.revertedWith("Task can only be cancelled in StakeholderRequired or Open status");
     });
 
     it("Should NOT allow cancellation by random address", async function () {
