@@ -145,16 +145,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
       {/* Progress Tracker - visible to all participants */}
       {(isCustomer || isWorker || isStakeholder) && (
         <div className="mt-4">
-          <ProgressTracker 
-            proposal={null} // TODO: Link to actual proposal data
-            task={task}
-            stakeholderApprovals={{
-              approvalCount: task.stakeholderApproval ? 1 : 0,
-              totalStakeholders: 1,
-              approvalPercentage: task.stakeholderApproval ? 100 : 0,
-              isApproved: task.stakeholderApproval
-            }}
-          />
+          <ProgressTracker task={task} />
         </div>
       )}
     </div>
