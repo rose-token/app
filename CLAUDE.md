@@ -132,6 +132,8 @@ Deployment creates `deployment-output.json` with contract addresses and displays
 **Task Status Flow:**
 ```
 StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
+     ↓               ↓
+     └───────────────┴──→ (cancelTask) → Closed (with refunds)
 ```
 
 **Detailed Flow:**
@@ -177,6 +179,26 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
      - **Stakeholder**: 5% of pot as fee + 10% stake returned (e.g., 1.51 ROSE total for 10 ROSE task)
      - **DAO Treasury**: 2% minted (e.g., 0.2 ROSE for 10 ROSE task)
    - Task status changes to Closed
+
+**Task Cancellation (Alternative Flow):**
+
+Tasks can be cancelled before a worker claims them. Cancellation is available from two states:
+
+- **From StakeholderRequired Status**:
+  - Customer can call `cancelTask()` to cancel before stakeholder stakes
+  - Customer deposit is fully refunded
+  - Task status set to Closed
+
+- **From Open Status**:
+  - Either customer OR stakeholder can call `cancelTask()` to cancel
+  - Customer deposit is fully refunded
+  - Stakeholder deposit (10% stake) is fully refunded
+  - Task status set to Closed
+
+**Cancellation Restrictions:**
+- Cannot cancel once a worker has claimed the task (status InProgress or later)
+- Only customer or stakeholder can cancel (not random addresses)
+- Emits `TaskCancelled` event with refund amounts for tracking
 
 **Tokenomics Example (10 ROSE task):**
 - Customer deposits: 10 ROSE (escrowed)
