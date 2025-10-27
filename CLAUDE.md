@@ -158,6 +158,15 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
    - Task status changes to InProgress
    - Worker address locked to task
 
+3.5. **Worker Unclaims Task** (Optional, Status: Open)
+   - Worker calls `unclaimTask()` to release the task
+   - Available only while task is in `InProgress` status
+   - Cannot unclaim after marking task as `Completed`
+   - Task status reverts to `Open`
+   - Worker address is cleared from task
+   - Another worker can now claim the task
+   - Emits `TaskUnclaimed` event
+
 4. **Worker Completes Work** (Status: Completed)
    - Worker calls `markTaskCompleted()` after finishing work
    - Task status changes to Completed
@@ -559,6 +568,35 @@ gh pr view --web
 ---
 
 ## Recent Changes & Architecture Notes
+
+### October 2025: Worker Unclaim Feature
+
+Added ability for workers to unclaim tasks they've claimed but cannot complete:
+
+**Contract Changes:**
+- New `unclaimTask()` function in RoseMarketplace.sol (line 229)
+- New `TaskUnclaimed` event (line 61)
+- Only worker can unclaim, only while InProgress
+- Task reverts to Open status when unclaimed
+- Worker address cleared, allowing another worker to claim
+
+**Test Coverage:**
+- Added 4 test cases to RoseMarketplace.test.js
+- Added 1 edge case test to TaskLifecycleEdgeCases.test.js
+- Tests verify unclaim functionality, event emission, role restrictions, and re-claiming
+
+**Frontend:**
+- Added "Unclaim Task" button visible to assigned worker (TaskCard.jsx)
+- Shows while task is InProgress
+- Yellow color (#F59E0B) to differentiate from other actions
+- Handler added to TasksPage.jsx with error handling
+
+**Benefits:**
+- Prevents tasks from being stuck indefinitely
+- Improves marketplace liquidity
+- Better UX for both workers and customers
+- No financial penalty for honest workers who realize they can't complete
+- Enables task reassignment without requiring cancellation
 
 ### October 2024: New Tokenomics Model (Commit 445df00)
 

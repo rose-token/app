@@ -147,4 +147,18 @@ describe("Task Lifecycle Edge Cases", function () {
     expect(task.customer).to.not.equal(task.worker);
     expect(task.stakeholder).to.not.equal(task.worker);
   });
+
+  it("Should not allow unclaiming task that was never claimed", async function() {
+    await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+    const stakeholderDeposit = taskDeposit / 10n;
+    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+    // Task is Open but no worker claimed it
+    await expect(
+      roseMarketplace.connect(worker).unclaimTask(1)
+    ).to.be.revertedWith("Only assigned worker can unclaim");
+  });
 });

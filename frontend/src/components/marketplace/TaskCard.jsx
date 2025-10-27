@@ -3,7 +3,7 @@ import { useEthereum } from '../../hooks/useEthereum';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import ProgressTracker from '../governance/ProgressTracker';
 
-const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
+const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
   const { account } = useEthereum();
 
   const formatTokens = (wei) => {
@@ -15,6 +15,7 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
   const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
 
   const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker;
+  const canUnclaim = isWorker && task.status === TaskStatus.InProgress;
   const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
   const canApproveAsCustomer = isCustomer && task.status === TaskStatus.Completed && !task.customerApproval;
@@ -93,7 +94,17 @@ const TaskCard = ({ task, onClaim, onComplete, onApprove, onAcceptPayment, onSta
             Claim Task
           </button>
         )}
-        
+
+        {canUnclaim && (
+          <button
+            onClick={() => onUnclaim(task.id)}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            title="Release this task so another worker can claim it"
+          >
+            Unclaim Task
+          </button>
+        )}
+
         {canComplete && (
           <button 
             onClick={() => onComplete(task.id)} 

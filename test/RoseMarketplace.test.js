@@ -228,6 +228,59 @@ describe("RoseMarketplace", function () {
       expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + mintAmount);
     });
 
+    it("Should allow worker to unclaim a task", async function () {
+      // Worker claims the task
+      await roseMarketplace.connect(worker).claimTask(1);
+
+      let task = await roseMarketplace.tasks(1);
+      expect(task.worker).to.equal(worker.address);
+      expect(task.status).to.equal(2); // TaskStatus.InProgress
+
+      // Worker unclaims the task
+      await expect(roseMarketplace.connect(worker).unclaimTask(1))
+        .to.emit(roseMarketplace, "TaskUnclaimed")
+        .withArgs(1, worker.address);
+
+      task = await roseMarketplace.tasks(1);
+      expect(task.worker).to.equal(ethers.ZeroAddress);
+      expect(task.status).to.equal(0); // TaskStatus.Open
+    });
+
+    it("Should allow another worker to claim after unclaim", async function () {
+      const [, , , , , otherWorker] = await ethers.getSigners();
+
+      // First worker claims
+      await roseMarketplace.connect(worker).claimTask(1);
+
+      // First worker unclaims
+      await roseMarketplace.connect(worker).unclaimTask(1);
+
+      // Second worker can now claim
+      await expect(roseMarketplace.connect(otherWorker).claimTask(1))
+        .to.emit(roseMarketplace, "TaskClaimed")
+        .withArgs(1, otherWorker.address);
+
+      const task = await roseMarketplace.tasks(1);
+      expect(task.worker).to.equal(otherWorker.address);
+    });
+
+    it("Should not allow non-worker to unclaim task", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+
+      await expect(
+        roseMarketplace.connect(customer).unclaimTask(1)
+      ).to.be.revertedWith("Only assigned worker can unclaim");
+    });
+
+    it("Should not allow unclaiming completed task", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1);
+
+      await expect(
+        roseMarketplace.connect(worker).unclaimTask(1)
+      ).to.be.revertedWith("Task must be in progress to unclaim");
+    });
+
   });
 
   describe("Task Cancellation", function () {

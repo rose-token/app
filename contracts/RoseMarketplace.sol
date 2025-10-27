@@ -58,6 +58,7 @@ contract RoseMarketplace {
     event TokensMinted(address indexed to, uint256 amount);
     event FaucetTokensClaimed(address indexed to, uint256 amount);
     event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
+    event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury
@@ -219,6 +220,23 @@ contract RoseMarketplace {
         t.status = TaskStatus.InProgress;
 
         emit TaskClaimed(_taskId, msg.sender);
+    }
+
+    /**
+     * @dev Worker unclaims a task they previously claimed, returning it to Open status
+     * @param _taskId ID of the task to unclaim
+     */
+    function unclaimTask(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+        require(t.worker == msg.sender, "Only assigned worker can unclaim");
+        require(t.status == TaskStatus.InProgress, "Task must be in progress to unclaim");
+
+        // Clear worker and revert to Open status
+        address previousWorker = t.worker;
+        t.worker = address(0);
+        t.status = TaskStatus.Open;
+
+        emit TaskUnclaimed(_taskId, previousWorker);
     }
 
     /**
