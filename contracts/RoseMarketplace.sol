@@ -258,7 +258,7 @@ contract RoseMarketplace {
         t.customerApproval = true;
         
         // Add debug logging
-        console.log("Task", _taskId, "customer approved");
+        console.log("Customer approved task:", _taskId);
         console.log("Stakeholder approval status:", t.stakeholderApproval);
         
         // Once both approvals are in, mark task as ready for worker to accept payment
@@ -283,7 +283,7 @@ contract RoseMarketplace {
         t.stakeholderApproval = true;
         
         // Add debug logging
-        console.log("Task", _taskId, "stakeholder approved");
+        console.log("Stakeholder approved task:", _taskId);
         console.log("Customer approval status:", t.customerApproval);
         
         // Check if both customer and stakeholder have approved
@@ -349,7 +349,9 @@ contract RoseMarketplace {
 
             // Return stakeholder's stake + their fee
             uint256 stakeholderTotal = t.stakeholderDeposit + stakeholderFee;
-            console.log("Stakeholder receives:", stakeholderTotal, "(stake:", t.stakeholderDeposit, "+ fee:", stakeholderFee, ")");
+            console.log("Stakeholder total:", stakeholderTotal);
+            console.log("Stake returned:", t.stakeholderDeposit);
+            console.log("Stakeholder fee:", stakeholderFee);
             t.stakeholderDeposit = 0;
             require(roseToken.transfer(t.stakeholder, stakeholderTotal), "Transfer to stakeholder failed");
 
