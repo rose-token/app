@@ -231,4 +231,219 @@ describe("RoseMarketplace", function () {
     });
 
   });
+
+  describe("Task Cancellation", function () {
+    const taskDescription = "Build a website";
+    const taskDeposit = ethers.parseEther("1");
+
+    it("Should allow customer to cancel task in StakeholderRequired status", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+
+      // Customer cancels the task
+      await expect(roseMarketplace.connect(customer).cancelTask(1))
+        .to.emit(roseMarketplace, "TaskCancelled")
+        .withArgs(1, customer.address, taskDeposit, 0);
+
+      // Check task status is Closed
+      const task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(4); // TaskStatus.Closed
+      expect(task.deposit).to.equal(0);
+
+      // Check customer received refund
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
+    });
+
+    it("Should allow customer to cancel task in Open status (after stakeholder stakes)", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      // Stakeholder stakes
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+
+      // Customer cancels the task
+      await expect(roseMarketplace.connect(customer).cancelTask(1))
+        .to.emit(roseMarketplace, "TaskCancelled")
+        .withArgs(1, customer.address, taskDeposit, stakeholderDeposit);
+
+      // Check task status is Closed
+      const task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(4); // TaskStatus.Closed
+      expect(task.deposit).to.equal(0);
+      expect(task.stakeholderDeposit).to.equal(0);
+
+      // Check both received refunds
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
+      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+    });
+
+    it("Should allow stakeholder to cancel task in Open status", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      // Stakeholder stakes
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+
+      // Stakeholder cancels the task
+      await expect(roseMarketplace.connect(stakeholder).cancelTask(1))
+        .to.emit(roseMarketplace, "TaskCancelled")
+        .withArgs(1, stakeholder.address, taskDeposit, stakeholderDeposit);
+
+      // Check task status is Closed
+      const task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(4); // TaskStatus.Closed
+
+      // Check both received refunds
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
+      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+    });
+
+    it("Should refund customer deposit when cancelled", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+
+      // Customer cancels
+      await roseMarketplace.connect(customer).cancelTask(1);
+
+      // Verify refund
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
+    });
+
+    it("Should refund both customer and stakeholder when cancelled after staking", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      // Stakeholder stakes
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+
+      // Cancel
+      await roseMarketplace.connect(customer).cancelTask(1);
+
+      // Verify both refunds
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
+      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+    });
+
+    it("Should NOT allow cancellation if worker has claimed", async function () {
+      // Setup task with stakeholder
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+
+      // Worker claims the task (changes status to InProgress)
+      await roseMarketplace.connect(worker).claimTask(1, 5);
+
+      // Try to cancel - should fail because status is now InProgress
+      await expect(
+        roseMarketplace.connect(customer).cancelTask(1)
+      ).to.be.revertedWith("Task can only be cancelled in StakeholderRequired or Open status");
+
+      await expect(
+        roseMarketplace.connect(stakeholder).cancelTask(1)
+      ).to.be.revertedWith("Task can only be cancelled in StakeholderRequired or Open status");
+    });
+
+    it("Should NOT allow cancellation by random address", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      // Random address tries to cancel
+      await expect(
+        roseMarketplace.connect(worker).cancelTask(1)
+      ).to.be.revertedWith("Only customer or stakeholder can cancel task");
+    });
+
+    it("Should NOT allow cancellation if task is already closed", async function () {
+      // Customer creates a task
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      // Cancel once
+      await roseMarketplace.connect(customer).cancelTask(1);
+
+      // Try to cancel again - should fail
+      await expect(
+        roseMarketplace.connect(customer).cancelTask(1)
+      ).to.be.revertedWith("Task can only be cancelled in StakeholderRequired or Open status");
+    });
+
+    it("Should emit TaskCancelled event with correct parameters", async function () {
+      // Test 1: Cancellation before stakeholder stakes
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      await expect(roseMarketplace.connect(customer).cancelTask(1))
+        .to.emit(roseMarketplace, "TaskCancelled")
+        .withArgs(1, customer.address, taskDeposit, 0);
+
+      // Test 2: Cancellation after stakeholder stakes
+      await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+      await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+
+      const stakeholderDeposit = taskDeposit / 10n;
+      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(2, stakeholderDeposit);
+
+      await expect(roseMarketplace.connect(stakeholder).cancelTask(2))
+        .to.emit(roseMarketplace, "TaskCancelled")
+        .withArgs(2, stakeholder.address, taskDeposit, stakeholderDeposit);
+    });
+
+  });
 });

@@ -58,6 +58,7 @@ contract RoseMarketplace {
     event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
     event TokensMinted(address indexed to, uint256 amount);
     event FaucetTokensClaimed(address indexed to, uint256 amount);
+    event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury
@@ -139,15 +140,64 @@ contract RoseMarketplace {
         emit StakeholderStaked(_taskId, msg.sender, _tokenAmount);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /**
+     * @dev Cancel a task before a worker claims it. Refunds deposits to customer and stakeholder (if staked).
+     * Can be called by either the customer or the stakeholder.
+     * @param _taskId ID of the task to cancel
+     */
+    function cancelTask(uint256 _taskId) external {
+        Task storage t = tasks[_taskId];
+
+        // Check task status - only allow cancellation before worker claims
+        require(
+            t.status == TaskStatus.StakeholderRequired || t.status == TaskStatus.Open,
+            "Task can only be cancelled in StakeholderRequired or Open status"
+        );
+
+        // Check caller is authorized (customer or stakeholder)
+        require(
+            msg.sender == t.customer || msg.sender == t.stakeholder,
+            "Only customer or stakeholder can cancel task"
+        );
+
+        console.log("Cancelling task:", _taskId);
+        console.log("Cancelled by:", msg.sender);
+
+        // Initialize refund amounts
+        uint256 customerRefund = 0;
+        uint256 stakeholderRefund = 0;
+
+        // Refund customer deposit
+        if (t.deposit > 0) {
+            customerRefund = t.deposit;
+            console.log("Refunding customer:", customerRefund);
+            require(roseToken.transfer(t.customer, customerRefund), "Customer refund failed");
+            t.deposit = 0;
+        }
+
+        // Refund stakeholder deposit if they have staked
+        if (t.stakeholder != address(0) && t.stakeholderDeposit > 0) {
+            stakeholderRefund = t.stakeholderDeposit;
+            console.log("Refunding stakeholder:", stakeholderRefund);
+            require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Stakeholder refund failed");
+            t.stakeholderDeposit = 0;
+        }
+
+        // Set task status to Closed
+        t.status = TaskStatus.Closed;
+
+        // Emit event
+        emit TaskCancelled(_taskId, msg.sender, customerRefund, stakeholderRefund);
+    }
+
+
+
+
+
+
+
+
+
     /**
      * @dev Worker claims an open task and provides story points estimation
      * @param _taskId ID of the task to be claimed
