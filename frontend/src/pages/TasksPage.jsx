@@ -192,37 +192,69 @@ const TasksPage = () => {
   
   const handleStakeTask = async (taskId) => {
     if (!isConnected || !roseMarketplace || !roseToken) return;
-    
+
     try {
       const task = tasks.find(t => t.id === taskId);
       if (!task) {
         setError('Task not found');
         return;
       }
-      
+
+      // Calculate required stake (10% of task deposit)
       const depositAmount = window.BigInt(task.deposit) / window.BigInt(10);
       console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
-      
+
+      // Check user's ROSE token balance
+      const userBalance = await roseToken.balanceOf(account);
+      const userBalanceBigInt = window.BigInt(userBalance.toString());
+
+      if (userBalanceBigInt < depositAmount) {
+        const shortfall = depositAmount - userBalanceBigInt;
+        const shortfallInRose = Number(shortfall) / 1e18;
+        setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake. Use the faucet to claim more tokens.`);
+        return;
+      }
+
       console.log("Approving token transfer...");
       const approveTx = await roseToken.approve(roseMarketplace.address, depositAmount.toString());
       await approveTx.wait();
       console.log("Token approval confirmed");
-      
+
       console.log("Staking tokens...");
       const tx = await roseMarketplace.stakeholderStake(taskId, depositAmount.toString(), {
         gasLimit: 300000
       });
-      
+
       console.log("Waiting for transaction:", tx.hash);
       await tx.wait();
       console.log("Transaction confirmed");
-      
+
       debouncedFetchTasks();
     } catch (err) {
       console.error('Error staking as stakeholder:', err);
-      const errorMessage = err.message.includes('execution reverted') 
-        ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to stake as stakeholder'
-        : 'Failed to stake as stakeholder';
+
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to stake as stakeholder';
+
+      if (err.message.includes('Not eligible stakeholder')) {
+        errorMessage = 'You are not eligible to be a stakeholder. There may be a role conflict or insufficient tokens.';
+      } else if (err.message.includes('Insufficient tokens')) {
+        errorMessage = 'Insufficient ROSE tokens. Use the faucet to claim more tokens.';
+      } else if (err.message.includes('Role conflict')) {
+        errorMessage = 'Role conflict detected. You cannot be a stakeholder for this task (you may be the customer or worker).';
+      } else if (err.message.includes('Customer cannot be stakeholder')) {
+        errorMessage = 'You cannot be a stakeholder for your own task.';
+      } else if (err.message.includes('Task already has a stakeholder')) {
+        errorMessage = 'This task already has a stakeholder.';
+      } else if (err.message.includes('Must deposit exactly 10%')) {
+        errorMessage = 'Stake amount must be exactly 10% of the task deposit.';
+      } else if (err.message.includes('execution reverted')) {
+        const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
+        if (revertReason) {
+          errorMessage = revertReason;
+        }
+      }
+
       setError(errorMessage);
     }
   };

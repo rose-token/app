@@ -15,9 +15,10 @@ contract StakeholderRegistry {
     
     // 2-week cooling period as specified in requirements
     uint256 public constant ROLE_CHANGE_COOLING_PERIOD = 14 days;
-    
+
     // Minimum token holding requirement for stakeholder eligibility
-    uint256 public minimumTokenRequirement = 1000 ether; // 1000 ROSE tokens
+    // Set to 0 for MVP/testing - can be increased later via updateMinimumTokenRequirement()
+    uint256 public minimumTokenRequirement = 0; // No minimum for MVP
     
     enum UserRole { None, Customer, Worker, Stakeholder }
     
