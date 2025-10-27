@@ -3,32 +3,33 @@ import { ethers } from 'ethers';
 import { useEthereum } from '../../hooks/useEthereum';
 import { useContract } from '../../hooks/useContract';
 import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
+import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState('');
   const [localContractsReady, setLocalContractsReady] = useState(false);
-  
+
   const { isConnected, chainId } = useEthereum();
-  const { 
-    roseMarketplace, 
-    roseToken, 
-    isLoading, 
-    error: contractError, 
+  const {
+    roseMarketplace,
+    roseToken,
+    isLoading,
+    error: contractError,
     contractMethods,
-    contractsReady 
+    contractsReady
   } = useContract();
-  
+
   useEffect(() => {
     if (!isConnected) {
       setLocalContractsReady(false);
       return;
     }
-    
+
     if (!isLoading && roseMarketplace && roseToken) {
       if (contractMethods.initialized && contractMethods.valid && contractsReady.readWrite) {
         setLocalContractsReady(true);
@@ -46,25 +47,35 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setError(`Contract error: ${contractError}`);
     }
   }, [roseMarketplace, roseToken, isLoading, contractError, contractMethods, contractsReady, isConnected]);
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!isConnected) {
       setError('Please connect your wallet first');
       return;
     }
-    
+
     if (chainId !== NETWORK_IDS.SEPOLIA) {
       setError(`Please switch to ${NETWORK_NAMES[NETWORK_IDS.SEPOLIA]} to create tasks`);
       return;
     }
-    
-    if (!description || !deposit) {
-      setError('Please fill in all fields');
+
+    if (!title || title.trim().length === 0) {
+      setError('Task title is required');
       return;
     }
-    
+
+    if (!detailedDescription || detailedDescription.trim().length === 0) {
+      setError('Detailed description is required');
+      return;
+    }
+
+    if (!deposit || parseFloat(deposit) <= 0) {
+      setError('Token amount must be greater than zero');
+      return;
+    }
+
     if (!localContractsReady) {
       if (!isConnected) {
         setError('Please connect your wallet to create tasks');
@@ -73,7 +84,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       } else {
         setError('Contracts not properly initialized. Please refresh the page or reconnect your wallet.');
       }
-      console.error('Contract state:', { 
+      console.error('Contract state:', {
         marketplaceExists: !!roseMarketplace,
         tokenExists: !!roseToken,
         isLoading,
@@ -82,47 +93,59 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       });
       return;
     }
-    
+
     try {
       setError('');
-      
+
+      // Step 1: Upload detailed description to IPFS
+      setIsCreating(true);
+      console.log('Uploading detailed description to IPFS...');
+      const ipfsHash = await uploadTaskDescription(detailedDescription, title);
+      console.log('Uploaded to IPFS:', ipfsHash);
+
       const tokenAmount = ethers.utils.parseEther(deposit);
-      
+
       console.log('Using contracts:', {
         marketplaceAddress: roseMarketplace.address,
         tokenAddress: roseToken.address
       });
-      
+
+      // Step 2: Approve token transfer
       setIsApproving(true);
+      setIsCreating(false);
       const approveTx = await roseToken.approve(roseMarketplace.address, tokenAmount);
       await approveTx.wait();
       setIsApproving(false);
-      
+
+      // Step 3: Create task with IPFS hash
       setIsCreating(true);
       const tx = await roseMarketplace.createTask(
-        description,
+        title,
         tokenAmount,
-        detailedDescription // Add the detailed description parameter
+        ipfsHash
       );
-      
+
       await tx.wait();
-      
-      setDescription('');
+
+      // Reset form
+      setTitle('');
+      setDetailedDescription('');
       setDeposit('');
-      setDetailedDescription(''); // Reset the detailed description
-      
+
       if (onTaskCreated) {
         onTaskCreated();
       }
     } catch (err) {
       console.error('Error creating task:', err);
-      
-      if (err.code === 'INVALID_ARGUMENT') {
+
+      if (err.message && err.message.includes('Pinata')) {
+        setError('Failed to upload task description to IPFS. Please check your Pinata configuration.');
+      } else if (err.code === 'INVALID_ARGUMENT') {
         setError('Invalid argument to createTask function. Check parameter types.');
       } else if (err.message && err.message.includes('not a function')) {
         setError('Contract method not found. Please refresh the page or reconnect your wallet.');
-        
-        console.error('Contract state when error occurred:', { 
+
+        console.error('Contract state when error occurred:', {
           marketplaceExists: !!roseMarketplace,
           tokenExists: !!roseToken,
           isLoading,
@@ -141,11 +164,11 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setIsCreating(false);
     }
   };
-  
+
   if (isLoading) {
     return <div className="text-center py-4">Loading contracts...</div>;
   }
-  
+
   if (!isConnected) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
@@ -156,7 +179,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       </div>
     );
   }
-  
+
   if (contractsReady && contractsReady.readOnly && !contractsReady.readWrite) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
@@ -167,49 +190,52 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       </div>
     );
   }
-  
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
       <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
-      
+
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Task Description
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+            Task Title *
           </label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+          <input
+            id="title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            rows="3"
-            placeholder="Describe the task in detail..."
+            placeholder="e.g., Build a responsive landing page"
             required
+            maxLength={100}
           />
+          <p className="mt-1 text-sm text-gray-500">
+            Public title visible to everyone ({title.length}/100)
+          </p>
         </div>
-        
+
         <div className="mb-4">
           <label htmlFor="detailedDescription" className="block text-sm font-medium text-gray-700 mb-1">
-            Detailed Description (Optional)
+            Detailed Description *
           </label>
           <textarea
             id="detailedDescription"
             value={detailedDescription}
             onChange={(e) => setDetailedDescription(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            rows="5"
-            placeholder="Provide more in-depth information about the task (optional)..."
+            rows="6"
+            placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc. Only visible to task participants."
+            required
           />
           <p className="mt-1 text-sm text-gray-500">
-            Use this field to provide additional details, requirements, or context for the task
+            🔒 Private - Only visible to customer, stakeholder, and worker. Stored on IPFS. ({detailedDescription.length} characters)
           </p>
         </div>
-        
-        {/* Stakeholder field removed - stakeholders will stake 10% after task creation */}
-        
+
         <div className="mb-6">
           <label htmlFor="deposit" className="block text-sm font-medium text-gray-700 mb-1">
-            ROSE Token Deposit
+            Payment Amount (ROSE Tokens) *
           </label>
           <div className="relative">
             <input
@@ -218,9 +244,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="0.1"
+              placeholder="e.g., 100"
               step="0.01"
-              min="0"
+              min="0.01"
               required
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -231,13 +257,13 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             This amount in ROSE tokens will be paid to the worker upon successful completion
           </p>
         </div>
-        
+
         {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
             {error}
           </div>
         )}
-        
+
         <button
           type="submit"
           disabled={isCreating || isApproving || !isConnected}
@@ -249,7 +275,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         >
           {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}
         </button>
-        
+
       </form>
     </div>
   );

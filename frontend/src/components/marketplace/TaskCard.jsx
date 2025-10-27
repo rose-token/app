@@ -1,18 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEthereum } from '../../hooks/useEthereum';
+import { useContract } from '../../hooks/useContract';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
+import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
   const { account } = useEthereum();
+  const { roseMarketplace } = useContract();
+
+  const [detailedContent, setDetailedContent] = useState(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [canViewDetails, setCanViewDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
   };
 
   const isCustomer = account && task.customer.toLowerCase() === account.toLowerCase();
-  const isWorker = account && task.worker.toLowerCase() === account.toLowerCase();
-  const isStakeholder = account && task.stakeholder.toLowerCase() === account.toLowerCase();
+  const isWorker = account && task.worker && task.worker.toLowerCase() === account.toLowerCase();
+  const isStakeholder = account && task.stakeholder && task.stakeholder.toLowerCase() === account.toLowerCase();
+  const isParticipant = isCustomer || isWorker || isStakeholder;
+
+  // Check if user can view details
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!account || !roseMarketplace || !task.id) return;
+
+      try {
+        const hasAccess = await roseMarketplace.isTaskParticipant(task.id);
+        setCanViewDetails(hasAccess);
+      } catch (error) {
+        console.error('Error checking access:', error);
+        setCanViewDetails(false);
+      }
+    };
+
+    checkAccess();
+  }, [account, roseMarketplace, task.id]);
+
+  // Fetch detailed description from IPFS
+  const loadDetailedDescription = async () => {
+    if (!canViewDetails) {
+      setDetailsError('You must be a task participant to view details');
+      return;
+    }
+
+    if (!task.detailedDescription || task.detailedDescription.length === 0) {
+      setDetailsError('No detailed description available');
+      return;
+    }
+
+    setIsLoadingDetails(true);
+    setDetailsError('');
+
+    try {
+      const content = await fetchTaskDescription(task.detailedDescription);
+      setDetailedContent(content);
+      setShowDetails(true);
+    } catch (error) {
+      console.error('Error loading detailed description:', error);
+      setDetailsError('Failed to load detailed description from IPFS');
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
 
   const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker;
   const canUnclaim = isWorker && task.status === TaskStatus.InProgress;
@@ -25,10 +79,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   // Task can be cancelled by customer or stakeholder before worker claims
   const canCancel = (isCustomer || isStakeholder) &&
     (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open);
-  
-  
+
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
-  
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-4 border border-gray-200">
       <div className="flex justify-between items-start mb-4">
@@ -37,7 +90,68 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           {getStatusText(task.status)}
         </span>
       </div>
-      
+
+      {/* Detailed Description Section */}
+      <div className="mb-4">
+        {canViewDetails ? (
+          <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
+            {!showDetails ? (
+              <button
+                onClick={loadDetailedDescription}
+                disabled={isLoadingDetails}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+              >
+                {isLoadingDetails ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Loading details...
+                  </>
+                ) : (
+                  <>
+                    <span className="mr-2">📄</span>
+                    View Detailed Description
+                  </>
+                )}
+              </button>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-semibold text-sm text-gray-700">Detailed Description</h4>
+                  <button
+                    onClick={() => setShowDetails(false)}
+                    className="text-gray-500 hover:text-gray-700 text-xs"
+                  >
+                    Hide
+                  </button>
+                </div>
+                {detailedContent && (
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200">
+                    {detailedContent.description}
+                    {detailedContent.uploadedAt && (
+                      <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                        Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {detailsError && (
+              <p className="text-xs text-red-600 mt-1">{detailsError}</p>
+            )}
+          </div>
+        ) : (
+          <div className="border border-gray-300 rounded-md p-3 bg-gray-100 text-center">
+            <p className="text-sm text-gray-600">
+              🔒 Detailed description is private
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Become a participant (customer, stakeholder, or worker) to view full details
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-sm text-gray-500">Customer</p>
@@ -53,7 +167,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         </div>
         <div>
           <p className="text-sm text-gray-500">Stakeholder</p>
-          <p className="text-sm font-medium truncate">{task.stakeholder}</p>
+          <p className="text-sm font-medium truncate">{task.stakeholder || 'Not assigned'}</p>
         </div>
         {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
           <div>
@@ -62,7 +176,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </div>
         )}
       </div>
-      
+
       {task.status === TaskStatus.Completed && (
         <div className="mb-4 flex space-x-4">
           <div className="flex items-center">
@@ -75,17 +189,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </div>
         </div>
       )}
-      
+
       <div className="flex flex-wrap gap-2 mt-4">
         {canStake && (
-          <button 
-            onClick={() => onStake(task.id)} 
+          <button
+            onClick={() => onStake(task.id)}
             className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Stake as Stakeholder
           </button>
         )}
-        
+
         {canClaim && (
           <button
             onClick={() => onClaim(task.id)}
@@ -106,32 +220,32 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         )}
 
         {canComplete && (
-          <button 
-            onClick={() => onComplete(task.id)} 
+          <button
+            onClick={() => onComplete(task.id)}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Mark Completed
           </button>
         )}
-        
+
         {canApproveAsCustomer && (
-          <button 
-            onClick={() => onApprove(task.id, 'customer')} 
+          <button
+            onClick={() => onApprove(task.id, 'customer')}
             className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Approve as Customer
           </button>
         )}
-        
+
         {canApproveAsStakeholder && (
-          <button 
-            onClick={() => onApprove(task.id, 'stakeholder')} 
+          <button
+            onClick={() => onApprove(task.id, 'stakeholder')}
             className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md border border-indigo-400"
           >
             ✓ Approve as Stakeholder
           </button>
         )}
-        
+
         {canAcceptPayment && (
           <button
             onClick={() => onAcceptPayment(task.id)}
@@ -151,9 +265,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </button>
         )}
       </div>
-      
+
       {/* Progress Tracker - visible to all participants */}
-      {(isCustomer || isWorker || isStakeholder) && (
+      {isParticipant && (
         <div className="mt-4">
           <ProgressTracker task={task} />
         </div>

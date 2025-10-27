@@ -139,9 +139,12 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 **Detailed Flow:**
 
 1. **Task Creation** (Status: StakeholderRequired)
-   - Customer creates task via `createTask()` with ROSE token deposit
+   - Customer creates task via `createTask()` with:
+     - **Title**: Short public description (max 100 chars, on-chain)
+     - **IPFS Hash**: Hash of detailed description (mandatory, stored on IPFS)
+     - **Token Amount**: Payment in ROSE tokens
    - Customer must approve marketplace contract to transfer tokens
-   - Task includes: title, description, ROSE token amount, IPFS data hash
+   - Detailed description uploaded to IPFS before contract call
    - Initial status: StakeholderRequired
    - Customer's ROSE tokens held in escrow in marketplace contract
 
@@ -259,6 +262,31 @@ Tasks can be cancelled before a worker claims them. Cancellation is available fr
 - **Ensures fairness**: All parties have aligned but separate incentives
 - **Protects tokenomics**: Prevents gaming of the 93/5/2 distribution model
 
+### IPFS Integration & Privacy
+
+**Task Description Storage:**
+- **Title** (on-chain): Short public title, visible to everyone
+- **Detailed Description** (IPFS): Comprehensive details, private to participants
+
+**IPFS Upload Process:**
+1. User writes detailed description in CreateTaskForm
+2. Frontend uploads to IPFS via Pinata API
+3. Returns IPFS hash (e.g., `QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG`)
+4. Hash stored in contract `detailedDescriptionHash` field
+5. Content never stored on-chain (gas optimization)
+
+**Privacy Enforcement:**
+- Frontend checks `isTaskParticipant(taskId)` before fetching IPFS content
+- Only customer, stakeholder, and worker can view detailed description
+- Non-participants see privacy notice
+- IPFS content is public but hash is not discoverable without contract access
+
+**Benefits:**
+- Reduces gas costs (no long strings on-chain)
+- Protects sensitive task requirements
+- Enables rich formatting (markdown, structured data)
+- Immutable task specifications
+
 ## Frontend Architecture
 
 The frontend uses React 18.2.0 with custom webpack configuration (via react-app-rewired) to handle Web3 dependencies.
@@ -304,6 +332,10 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 
 **IPFS Integration (frontend/src/utils/ipfs/):**
 - `pinataService.js` - Pinata API integration for uploading/fetching task data
+  - `uploadTaskDescription()` - Upload detailed descriptions to IPFS
+  - `fetchTaskDescription()` - Retrieve task descriptions from IPFS
+  - `uploadProposalToIPFS()`, `fetchProposalFromIPFS()` - Proposal management
+  - `uploadCommentToIPFS()`, `fetchCommentFromIPFS()` - Comment management
 - `profileService.js` - Profile data IPFS storage and retrieval
 
 **Other Utilities:**

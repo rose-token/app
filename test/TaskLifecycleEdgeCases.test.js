@@ -1,18 +1,19 @@
 const { expect } = require("chai");  
 const { ethers } = require("hardhat");  
   
-describe("Task Lifecycle Edge Cases", function () {  
-  let roseMarketplace;  
-  let roseToken;  
-  let owner;  
-  let customer;  
-  let worker;  
-  let stakeholder;  
-  let otherUser;  
-  let daoTreasury;  
-  
-  const taskDescription = "Build a website";  
-  const taskDeposit = ethers.parseEther("1");  
+describe("Task Lifecycle Edge Cases", function () {
+  let roseMarketplace;
+  let roseToken;
+  let owner;
+  let customer;
+  let worker;
+  let stakeholder;
+  let otherUser;
+  let daoTreasury;
+
+  const taskTitle = "Build a website";
+  const taskDeposit = ethers.parseEther("1");
+  const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";  
   
   beforeEach(async function () {  
     [owner, customer, worker, stakeholder, otherUser, daoTreasury] = await ethers.getSigners();  
@@ -32,13 +33,13 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
       
     await expect(  
-      roseMarketplace.connect(customer).createTask(taskDescription, 0, "")  
+      roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash)  
     ).to.be.reverted;  
   });  
   
   it("Should not allow stakeholder to stake without sufficient approval", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);  
       
     const stakeholderDeposit = taskDeposit / 10n;  
       
@@ -57,7 +58,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow customer to claim their own task", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
@@ -70,7 +71,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow stakeholder to be the customer", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);  
       
     const stakeholderDeposit = taskDeposit / 10n;  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);  
@@ -82,7 +83,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow wrong deposit amount for stakeholder", async function() {  
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);  
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");  
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);  
       
     const wrongDeposit = taskDeposit / 5n; // Should be taskDeposit / 10n  
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), wrongDeposit);  
@@ -94,7 +95,7 @@ describe("Task Lifecycle Edge Cases", function () {
   
   it("Should not allow non-worker to mark task as completed", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
@@ -110,7 +111,7 @@ describe("Task Lifecycle Edge Cases", function () {
   it("Should enforce all three roles (customer, stakeholder, worker) are different addresses", async function() {
     // Create task with customer
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
     // Verify customer cannot be stakeholder (already tested above, but included for completeness)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -150,7 +151,7 @@ describe("Task Lifecycle Edge Cases", function () {
 
   it("Should not allow unclaiming task that was never claimed", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskDescription, taskDeposit, "");
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
