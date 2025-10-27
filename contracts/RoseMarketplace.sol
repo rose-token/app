@@ -73,17 +73,18 @@ contract RoseMarketplace {
     event TokensMinted(address indexed to, uint256 amount);
     event FaucetTokensClaimed(address indexed to, uint256 amount);
 
-    // Reward parameters for demonstration
-    // On successful task completion, we mint a fixed base of 100 ROSE tokens
-    // then split them among the worker, stakeholder, treasury, and burn a fraction
-    uint256 public constant BASE_REWARD = 100 ether; // if decimals = 18, "100 ether" means 100 tokens
+    // Tokenomics parameters
+    // On successful task completion, we mint 2% of task value to DAO treasury
+    // Total distribution pot = customer payment + minted tokens (1.02x task value)
+    // Distribution: 93% worker, 5% stakeholder fee, 2% DAO (already minted)
 
-    // Example splits: 60% to worker, 20% to stakeholder, 20% to treasury, 0% burned
-    // (This is just an example ratio, tweak as desired.)
-    uint256 public constant WORKER_SHARE = 60;      // 60%
-    uint256 public constant STAKEHOLDER_SHARE = 20; // 20%
-    uint256 public constant TREASURY_SHARE = 20;    // 20%
-    uint256 public constant BURN_SHARE = 0;         // 0%
+    // Minting percentage (2% of task value goes to DAO as new tokens)
+    uint256 public constant MINT_PERCENTAGE = 2;
+
+    // Distribution percentages from the total pot (customer payment + minted amount)
+    uint256 public constant WORKER_SHARE = 93;      // 93% of pot
+    uint256 public constant STAKEHOLDER_SHARE = 5;  // 5% of pot (as fee, plus stake returned)
+    uint256 public constant TREASURY_SHARE = 2;     // 2% of pot (already minted separately)
     uint256 public constant SHARE_DENOMINATOR = 100;
 
     // Burn address (commonly the zero address or a dead address)
@@ -257,7 +258,7 @@ contract RoseMarketplace {
         t.customerApproval = true;
         
         // Add debug logging
-        console.log("Task", _taskId, "customer approved");
+        console.log("Customer approved task:", _taskId);
         console.log("Stakeholder approval status:", t.stakeholderApproval);
         
         // Once both approvals are in, mark task as ready for worker to accept payment
@@ -282,7 +283,7 @@ contract RoseMarketplace {
         t.stakeholderApproval = true;
         
         // Add debug logging
-        console.log("Task", _taskId, "stakeholder approved");
+        console.log("Stakeholder approved task:", _taskId);
         console.log("Customer approval status:", t.customerApproval);
         
         // Check if both customer and stakeholder have approved
@@ -311,75 +312,55 @@ contract RoseMarketplace {
 
     /**
      * @dev Internally finalize the task if both approvals are met in a non-disputed scenario.
+     * New tokenomics:
+     * - Mint 2% of task value to DAO
+     * - Total pot = customer payment + minted amount
+     * - Distribute: 93% worker, 5% stakeholder (fee), stakeholder gets stake back
      */
     function _finalizeTask(uint256 _taskId, bool _payout) internal {
         Task storage t = tasks[_taskId];
         t.status = TaskStatus.Closed;
         emit TaskClosed(_taskId);
-        
+
         if (_payout) {
-            uint256 amountToPay = t.deposit;
-            console.log("Paying out", amountToPay, "ROSE tokens to worker", t.worker);
+            uint256 taskValue = t.deposit;
+            console.log("Finalizing task with value:", taskValue);
+
+            // Mint 2% of task value to DAO treasury (this creates the 2% annual inflation)
+            uint256 mintAmount = (taskValue * MINT_PERCENTAGE) / SHARE_DENOMINATOR;
+            roseToken.mint(daoTreasury, mintAmount);
+            console.log("Minted to DAO:", mintAmount);
+
+            // Total pot = customer deposit + newly minted tokens
+            uint256 totalPot = taskValue + mintAmount;
+            console.log("Total distribution pot:", totalPot);
+
+            // Calculate distributions from the pot
+            uint256 workerAmount = (totalPot * WORKER_SHARE) / SHARE_DENOMINATOR;
+            uint256 stakeholderFee = (totalPot * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
+
+            console.log("Worker amount:", workerAmount);
+            console.log("Stakeholder fee:", stakeholderFee);
+
+            // Transfer to worker (from customer's deposit + any bonus)
             t.deposit = 0;
-            
-            // Transfer ROSE tokens to worker
-            require(roseToken.transfer(t.worker, amountToPay), "Transfer to worker failed");
-            console.log("Payment transfer success:", true);
-            
-            emit PaymentReleased(_taskId, t.worker, amountToPay);
-            
-            // Return stakeholder deposit
-            if (t.stakeholderDeposit > 0) {
-                uint256 stakeholderRefund = t.stakeholderDeposit;
-                t.stakeholderDeposit = 0;
-                require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Return of stakeholder deposit failed");
-            }
-            
+            require(roseToken.transfer(t.worker, workerAmount), "Transfer to worker failed");
+            emit PaymentReleased(_taskId, t.worker, workerAmount);
+
+            // Return stakeholder's stake + their fee
+            uint256 stakeholderTotal = t.stakeholderDeposit + stakeholderFee;
+            console.log("Stakeholder total:", stakeholderTotal);
+            console.log("Stake returned:", t.stakeholderDeposit);
+            console.log("Stakeholder fee:", stakeholderFee);
+            t.stakeholderDeposit = 0;
+            require(roseToken.transfer(t.stakeholder, stakeholderTotal), "Transfer to stakeholder failed");
+
             // Award experience to customer and stakeholder for task completion
             roseReputation.awardExperience(t.customer, RoseReputation.Role.Customer, roseReputation.CUSTOMER_TASK_COMPLETION_EXP());
             roseReputation.awardExperience(t.stakeholder, RoseReputation.Role.Stakeholder, roseReputation.STAKEHOLDER_TASK_COMPLETION_EXP());
-            
-            // Mint tokens to the worker, stakeholder, treasury, and burn portion
-            console.log("Minting rewards");
-            _mintReward(t.customer, t.worker, t.stakeholder);
         }
     }
 
-    /**
-     * @dev Mint the reward to the worker, stakeholder, and treasury according to splits. 
-     * This is where you can customize the "worker-focused" logic: 
-     * e.g., more to worker, some to stakeholder, some to treasury, etc.
-     * Applies reputation bonus based on combined levels of customer, worker, and stakeholder.
-     */
-    function _mintReward(address _customer, address _worker, address _stakeholder) internal {
-        // Calculate reputation bonus percentage (0-50%)
-        uint256 bonusPercentage = roseReputation.calculateMintingBonus(_customer, _stakeholder, _worker);
-        
-        // Calculate the total reward with bonus
-        uint256 totalReward = BASE_REWARD;
-        if (bonusPercentage > 0) {
-            // Apply bonus (e.g., 5% bonus = BASE_REWARD * 105 / 100)
-            totalReward = (BASE_REWARD * (100 + bonusPercentage)) / 100;
-        }
-        
-        // Split the total reward by the percentages defined above
-        uint256 workerAmount = (totalReward * WORKER_SHARE) / SHARE_DENOMINATOR;
-        uint256 stakeholderAmount = (totalReward * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
-        uint256 treasuryAmount = (totalReward * TREASURY_SHARE) / SHARE_DENOMINATOR;
-        // No burn amount calculation needed since BURN_SHARE is 0
-
-        console.log("Minting with reputation bonus:", bonusPercentage, "%");
-        console.log("Total reward with bonus:", totalReward);
-        
-        // Mint to worker
-        roseToken.mint(_worker, workerAmount);
-
-        // Mint to stakeholder
-        roseToken.mint(_stakeholder, stakeholderAmount);
-
-        // Mint to the DAO treasury
-        roseToken.mint(daoTreasury, treasuryAmount);
-    }
 
     
     /**
