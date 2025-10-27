@@ -5,25 +5,37 @@ import { CheckCircle, Clock, Award } from 'lucide-react';
 
 const ProgressTracker = ({ task }) => {
   const getStageStatus = (stage) => {
-    // Task status: 0=StakeholderRequired, 1=Open, 2=InProgress, 3=Completed, 4=ApprovedPendingPayment, 5=Closed
+    // Task status from contract enum: 0=Open, 1=StakeholderRequired, 2=InProgress, 3=Completed, 4=Closed, 5=ApprovedPendingPayment
+    // Lifecycle flow: Created(1) → Staked(0) → Claimed(2) → Completed(3) → Approved(5) → Closed(4)
     switch (stage) {
       case 'task-creation':
         return task ? 'completed' : 'pending';
       case 'stakeholder-stake':
-        return task?.status >= 1 ? 'completed' :
-               task?.status === 0 ? 'active' : 'pending';
+        // Status 1 = StakeholderRequired (active, waiting for stake)
+        // Status 0, 2, 3, 5, 4 = already staked (completed)
+        return task?.status === 1 ? 'active' :
+               (task?.status === 0 || task?.status >= 2) ? 'completed' : 'pending';
       case 'worker-claim':
+        // Status 0 = Open (active, ready for worker to claim)
+        // Status 2, 3, 5, 4 = worker already claimed (completed)
+        // Status 1 = still needs stakeholder (pending)
         return task?.status >= 2 ? 'completed' :
-               task?.status === 1 ? 'active' : 'pending';
+               task?.status === 0 ? 'active' : 'pending';
       case 'work-completion':
-        return task?.status >= 3 ? 'completed' :
+        // Status 2 = InProgress (active, worker is working)
+        // Status 3, 5, 4 = work already completed (completed)
+        return (task?.status >= 3 && task?.status !== 0) ? 'completed' :
                task?.status === 2 ? 'active' : 'pending';
       case 'approval':
-        return task?.status >= 4 ? 'completed' :
+        // Status 3 = Completed (active, awaiting approval)
+        // Status 5, 4 = already approved (completed)
+        return (task?.status === 5 || task?.status === 4) ? 'completed' :
                task?.status === 3 ? 'active' : 'pending';
       case 'payment':
-        return task?.status === 5 ? 'completed' :
-               task?.status === 4 ? 'active' : 'pending';
+        // Status 4 = Closed (completed, payment distributed)
+        // Status 5 = ApprovedPendingPayment (active, ready for payment)
+        return task?.status === 4 ? 'completed' :
+               task?.status === 5 ? 'active' : 'pending';
       default:
         return 'pending';
     }
