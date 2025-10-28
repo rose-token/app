@@ -334,22 +334,27 @@ app.post('/webhook/task-approved', async (req, res) => {
 });
 
 // Serve frontend static files
-// Priority: 1) Built production files (frontend/build), 2) Development files (frontend/public)
-const frontendBuildPath = path.join(__dirname, 'frontend/build');
+// Priority: 1) Built production files, 2) Development files (frontend/public)
+// Check multiple build locations (Railway vs local build)
+const frontendBuildPath1 = path.join(__dirname, 'frontend/build');
+const frontendBuildPath2 = path.join(__dirname, 'build');
 const frontendPublicPath = path.join(__dirname, 'frontend/public');
 
 let frontendPath;
 let frontendMode;
 
-if (fs.existsSync(frontendBuildPath)) {
-  frontendPath = frontendBuildPath;
-  frontendMode = 'production (build)';
+if (fs.existsSync(frontendBuildPath1)) {
+  frontendPath = frontendBuildPath1;
+  frontendMode = 'production (frontend/build)';
+} else if (fs.existsSync(frontendBuildPath2)) {
+  frontendPath = frontendBuildPath2;
+  frontendMode = 'production (root/build)';
 } else if (fs.existsSync(frontendPublicPath)) {
   frontendPath = frontendPublicPath;
   frontendMode = 'development (public)';
 } else {
   console.error('❌ ERROR: No frontend directory found!');
-  console.error('   Expected either frontend/build or frontend/public');
+  console.error('   Expected frontend/build, build, or frontend/public');
   process.exit(1);
 }
 
