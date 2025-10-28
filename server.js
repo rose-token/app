@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { Octokit } = require('@octokit/rest');
 const { ethers } = require('ethers');
 require('dotenv').config();
@@ -12,6 +13,40 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
+/**
+ * Get marketplace contract address from environment variable or deployment artifacts
+ * Priority: 1) MARKETPLACE_ADDRESS env var, 2) deployment-output.json
+ * @returns {string|null} - Marketplace address (lowercase) or null
+ */
+function getMarketplaceAddress() {
+  // First try environment variable
+  if (process.env.MARKETPLACE_ADDRESS) {
+    return process.env.MARKETPLACE_ADDRESS.toLowerCase();
+  }
+
+  // Fall back to deployment-output.json
+  const deploymentFile = path.join(__dirname, 'deployment-output.json');
+
+  try {
+    if (fs.existsSync(deploymentFile)) {
+      const deploymentData = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
+
+      if (deploymentData.roseMarketplace) {
+        console.log('📄 Loaded marketplace address from deployment-output.json');
+        return deploymentData.roseMarketplace.toLowerCase();
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️  Could not read deployment-output.json:', error.message);
+  }
+
+  return null;
+}
+
+// Expected marketplace contract address (lowercase for comparison)
+// This can be updated after deployment via environment variable or deployment artifacts
+const EXPECTED_MARKETPLACE_ADDRESS = getMarketplaceAddress();
+
 // ABI for TaskApproved event
 const TASK_APPROVED_EVENT_ABI = [
   "event TaskApproved(uint256 indexed taskId, address indexed worker, string githubPrUrl)"
@@ -19,6 +54,30 @@ const TASK_APPROVED_EVENT_ABI = [
 
 // Create interface for decoding events
 const iface = new ethers.Interface(TASK_APPROVED_EVENT_ABI);
+
+/**
+ * Verify that the event came from the expected marketplace contract
+ * @param {string} contractAddress - Address from the webhook log
+ * @returns {boolean} - True if address matches or no verification configured
+ */
+function verifyContractAddress(contractAddress) {
+  if (!EXPECTED_MARKETPLACE_ADDRESS) {
+    console.warn('⚠️  WARNING: MARKETPLACE_ADDRESS not configured - accepting events from ANY contract');
+    console.warn('   Set MARKETPLACE_ADDRESS environment variable to enable verification');
+    return true; // Accept all if not configured (for initial setup)
+  }
+
+  const normalizedAddress = contractAddress.toLowerCase();
+  const isValid = normalizedAddress === EXPECTED_MARKETPLACE_ADDRESS;
+
+  if (!isValid) {
+    console.error('❌ Contract address mismatch!');
+    console.error(`   Expected: ${EXPECTED_MARKETPLACE_ADDRESS}`);
+    console.error(`   Received: ${normalizedAddress}`);
+  }
+
+  return isValid;
+}
 
 /**
  * Parse GitHub PR URL to extract owner, repo, and pull number
@@ -181,6 +240,16 @@ app.post('/webhook/task-approved', async (req, res) => {
       console.log('Transaction hash:', activity.hash);
       console.log('Block number:', activity.blockNum);
 
+      // Verify contract address if configured
+      if (activity.log && activity.log.address) {
+        console.log('Contract address:', activity.log.address);
+
+        if (!verifyContractAddress(activity.log.address)) {
+          console.log('Skipping event from unexpected contract address');
+          continue;
+        }
+      }
+
       // Decode the TaskApproved event
       const eventData = decodeTaskApprovedEvent(activity);
 
@@ -247,5 +316,16 @@ app.listen(PORT, () => {
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`Webhook endpoint: http://localhost:${PORT}/webhook/task-approved`);
   console.log(`Frontend: http://localhost:${PORT}`);
+  console.log('---------------------------------');
+
+  if (EXPECTED_MARKETPLACE_ADDRESS) {
+    console.log(`✅ Marketplace address: ${EXPECTED_MARKETPLACE_ADDRESS}`);
+    console.log('   (Contract address verification ENABLED)');
+  } else {
+    console.log('⚠️  Marketplace address: NOT CONFIGURED');
+    console.log('   (Accepting events from ANY contract)');
+    console.log('   Set MARKETPLACE_ADDRESS in .env to enable verification');
+  }
+
   console.log('=================================\n');
 });

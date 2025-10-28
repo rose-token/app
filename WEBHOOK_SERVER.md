@@ -48,6 +48,122 @@ event TaskApproved(
 );
 ```
 
+## Handling Contract Address Updates on Redeploy
+
+**Important**: The marketplace contract address changes every time you redeploy. This requires coordination between the Alchemy webhook and the server.
+
+### Approach 1: Update Alchemy Webhook After Each Deploy (Recommended for Production)
+
+**Pros**: Most secure - only events from your specific contract are processed
+**Cons**: Requires manual Alchemy webhook update after each deployment
+
+**Workflow:**
+1. Deploy contract → get new address from `deployment-output.json`
+2. Update Alchemy webhook configuration with new contract address:
+   - Go to Alchemy dashboard → Your webhook
+   - Update "Address" field with new contract address from `deployment-output.json`
+3. Restart server (it will auto-load new address from `deployment-output.json`)
+
+The server will automatically read the contract address from `deployment-output.json` and verify that webhook events match.
+
+### Approach 2: Watch All Activity + Server-Side Filtering (Easier for Development)
+
+**Pros**: No Alchemy reconfiguration needed after redeploys
+**Cons**: Server receives more webhook traffic (events from all contracts)
+
+**Setup:**
+1. Configure Alchemy webhook as "Address Activity" webhook **WITHOUT** specifying a contract address
+   - Or use "Custom Webhook" with broader filters
+2. Server automatically reads contract address from `deployment-output.json`
+3. Server filters out events from wrong contracts
+4. On redeploy:
+   - Just restart the server (picks up new `deployment-output.json`)
+   - No Alchemy configuration change needed
+
+**Configuration:**
+```env
+# No MARKETPLACE_ADDRESS needed - auto-reads from deployment-output.json
+GITHUB_TOKEN=ghp_...
+```
+
+### How the Server Finds the Contract Address
+
+The server uses this priority order:
+
+1. **Environment Variable** (if set): `MARKETPLACE_ADDRESS=0x...`
+2. **Deployment Artifact** (automatic): Reads `deployment-output.json`
+3. **No Verification** (warning mode): Accepts events from any contract
+
+**Example `deployment-output.json`:**
+```json
+{
+  "roseMarketplace": "0x1234...abcd",
+  "roseToken": "0x5678...efgh",
+  "timestamp": "2025-10-28T00:00:00.000Z"
+}
+```
+
+The server automatically reads `roseMarketplace` from this file on startup.
+
+### Recommended Development Workflow
+
+1. **Initial Deployment:**
+   ```bash
+   npm run deploy:sepolia
+   # Creates deployment-output.json with contract addresses
+   ```
+
+2. **Start Webhook Server:**
+   ```bash
+   npm start
+   # Server loads marketplace address from deployment-output.json
+   # Logs: "📄 Loaded marketplace address from deployment-output.json"
+   ```
+
+3. **Configure Alchemy:**
+   - **Option A** (production): Set specific contract address from `deployment-output.json`
+   - **Option B** (development): Use address activity webhook without filtering
+
+4. **After Redeployment:**
+   ```bash
+   # Deploy new version
+   npm run deploy:sepolia
+   # deployment-output.json is updated with NEW address
+
+   # Restart server to pick up new address
+   npm start
+   # Server automatically loads new address
+
+   # Option A users: Update Alchemy webhook with new address
+   # Option B users: No Alchemy changes needed
+   ```
+
+### Verification in Server Logs
+
+When webhook is received, server logs show verification:
+
+**If address matches:**
+```
+Contract address: 0x1234...abcd
+✅ Marketplace address: 0x1234...abcd
+   (Contract address verification ENABLED)
+```
+
+**If address doesn't match:**
+```
+Contract address: 0x5678...efgh
+❌ Contract address mismatch!
+   Expected: 0x1234...abcd
+   Received: 0x5678...efgh
+Skipping event from unexpected contract address
+```
+
+**If not configured:**
+```
+⚠️  WARNING: MARKETPLACE_ADDRESS not configured - accepting events from ANY contract
+   Set MARKETPLACE_ADDRESS environment variable to enable verification
+```
+
 ## Installation
 
 ### 1. Install Dependencies
