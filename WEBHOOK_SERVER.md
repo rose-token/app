@@ -320,23 +320,118 @@ Similar process:
 
 ## Alchemy Webhook Configuration
 
-Once your server is deployed, configure Alchemy to send webhooks:
+Once your server is deployed, configure Alchemy to send webhooks. **Recommended: Use Custom Webhook with Topic Filter** (no contract address needed).
+
+### Option 1: Custom Webhook with Event Topic (RECOMMENDED)
+
+**Perfect for development - survives contract redeployments!**
+
+1. **Create Alchemy App:**
+   - Go to [alchemy.com](https://www.alchemy.com)
+   - Create app for **Sepolia testnet**
+
+2. **Create Custom Webhook:**
+   - Go to "Notify" → "Create Webhook"
+   - Select **"Custom Webhook"** (or "GraphQL Webhook")
+   - **Webhook URL**: `https://your-app.railway.app/webhook/task-approved`
+   - **Network**: Sepolia
+
+3. **Configure Event Filter (Topic):**
+   - In webhook settings, add filter for event signature:
+   - **Event Topic 0**: `0x09aa7df800a4b4e4068aa4599c1246b9518840f47a2ff262f1273c49bf117d82`
+
+   This is the keccak256 hash of `TaskApproved(uint256,address,string)` - your server will display this on startup.
+
+4. **Benefits:**
+   - ✅ No contract address needed - filter by event signature only
+   - ✅ Works across ALL RoseMarketplace deployments
+   - ✅ No webhook reconfiguration on redeploy
+   - ✅ Server-side filtering verifies contract address
+   - ✅ Ignores other events (Transfer, Approval, etc.)
+
+5. **How it Works:**
+   ```
+   Alchemy → Filters by TaskApproved signature → Sends to Server
+             ↓
+   Server → Verifies contract address from deployment-output.json
+          → Decodes event
+          → Merges PR
+   ```
+
+**Get the Event Signature from Your Server:**
+
+When you start the server, it displays the signature:
+```bash
+npm start
+
+# Output shows:
+📋 TaskApproved event signature: 0x09aa7df800a4b4e4068aa4599c1246b9518840f47a2ff262f1273c49bf117d82
+```
+
+Copy this signature into your Alchemy webhook filter.
+
+### Option 2: Address Activity Webhook (Alternative)
+
+**Better for production - most specific filtering**
 
 1. **Create Alchemy App:**
    - Go to [alchemy.com](https://www.alchemy.com)
    - Create app for Sepolia testnet
 
-2. **Create Webhook:**
+2. **Create Address Activity Webhook:**
    - Go to "Notify" → "Create Webhook"
-   - Select "Address Activity"
-   - Enter your RoseMarketplace contract address
-   - Set webhook URL: `https://your-app.railway.app/webhook/task-approved`
-   - Optional: Filter for `TaskApproved` event
+   - Select **"Address Activity"**
+   - **Address to watch**: Get from `deployment-output.json` → `roseMarketplace` field
+   - **Webhook URL**: `https://your-app.railway.app/webhook/task-approved`
+   - Optional: Add event filter for `TaskApproved` (topic 0)
 
-3. **Test Webhook:**
-   - Approve a task on-chain
-   - Check your server logs for webhook processing
-   - Verify PR was merged on GitHub
+3. **After Each Deployment:**
+   - Get new contract address from `deployment-output.json`
+   - Update Alchemy webhook with new address
+   - Restart server (loads new address)
+
+### Comparison
+
+| Feature | Custom Webhook (Topic) | Address Activity |
+|---------|----------------------|------------------|
+| **Survives redeploy** | ✅ Yes | ❌ No - must update |
+| **Filters by event** | ✅ Topic 0 filter | ✅ Optional filter |
+| **Filters by address** | ❌ Server-side only | ✅ Alchemy-side |
+| **Setup complexity** | Easy - set once | Medium - update per deploy |
+| **Traffic to server** | Low (only TaskApproved) | Lowest (specific address + event) |
+| **Best for** | Development | Production |
+
+### Test Webhook
+
+After configuration:
+
+1. **Deploy Contract:**
+   ```bash
+   npm run deploy:sepolia
+   # Creates deployment-output.json
+   ```
+
+2. **Restart Server:**
+   ```bash
+   npm start
+   # Loads marketplace address from deployment-output.json
+   # Shows event signature to use in Alchemy
+   ```
+
+3. **Approve a Task on Sepolia:**
+   - Create task with GitHub PR URL
+   - Approve task on-chain
+   - TaskApproved event is emitted
+
+4. **Verify Webhook:**
+   - Check Railway/Render logs for:
+     ```
+     === Webhook received ===
+     ✓ Event signature matches TaskApproved
+     Contract address: 0x...
+     ✓ PR merged successfully
+     ```
+   - Check GitHub to confirm PR was merged
 
 ## How It Works
 

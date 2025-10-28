@@ -55,6 +55,33 @@ const TASK_APPROVED_EVENT_ABI = [
 // Create interface for decoding events
 const iface = new ethers.Interface(TASK_APPROVED_EVENT_ABI);
 
+// Calculate expected event signature hash for TaskApproved
+// This is the keccak256 hash of "TaskApproved(uint256,address,string)"
+const TASK_APPROVED_EVENT_SIGNATURE = iface.getEvent('TaskApproved').topicHash;
+
+console.log(`📋 TaskApproved event signature: ${TASK_APPROVED_EVENT_SIGNATURE}`);
+
+/**
+ * Verify that the event signature matches TaskApproved
+ * This is a fast pre-filter before attempting to decode the event
+ * @param {Array<string>} topics - Event topics from the log
+ * @returns {boolean} - True if first topic matches TaskApproved signature
+ */
+function verifyEventSignature(topics) {
+  if (!topics || topics.length === 0) {
+    return false;
+  }
+
+  const eventSignature = topics[0];
+  const isValid = eventSignature.toLowerCase() === TASK_APPROVED_EVENT_SIGNATURE.toLowerCase();
+
+  if (!isValid) {
+    console.log(`⏭️  Skipping non-TaskApproved event (signature: ${eventSignature.substring(0, 10)}...)`);
+  }
+
+  return isValid;
+}
+
 /**
  * Verify that the event came from the expected marketplace contract
  * @param {string} contractAddress - Address from the webhook log
@@ -240,6 +267,15 @@ app.post('/webhook/task-approved', async (req, res) => {
       console.log('Transaction hash:', activity.hash);
       console.log('Block number:', activity.blockNum);
 
+      // Quick pre-filter: Check event signature FIRST (most efficient filter)
+      if (activity.log && activity.log.topics) {
+        if (!verifyEventSignature(activity.log.topics)) {
+          // Not a TaskApproved event, skip quickly
+          continue;
+        }
+        console.log('✓ Event signature matches TaskApproved');
+      }
+
       // Verify contract address if configured
       if (activity.log && activity.log.address) {
         console.log('Contract address:', activity.log.address);
@@ -250,7 +286,7 @@ app.post('/webhook/task-approved', async (req, res) => {
         }
       }
 
-      // Decode the TaskApproved event
+      // Decode the TaskApproved event (full verification)
       const eventData = decodeTaskApprovedEvent(activity);
 
       if (!eventData) {
@@ -317,14 +353,17 @@ app.listen(PORT, () => {
   console.log(`Webhook endpoint: http://localhost:${PORT}/webhook/task-approved`);
   console.log(`Frontend: http://localhost:${PORT}`);
   console.log('---------------------------------');
+  console.log('Event Filtering:');
+  console.log(`  Event: TaskApproved only`);
+  console.log(`  Signature: ${TASK_APPROVED_EVENT_SIGNATURE}`);
 
   if (EXPECTED_MARKETPLACE_ADDRESS) {
-    console.log(`✅ Marketplace address: ${EXPECTED_MARKETPLACE_ADDRESS}`);
-    console.log('   (Contract address verification ENABLED)');
+    console.log(`  Contract: ${EXPECTED_MARKETPLACE_ADDRESS}`);
+    console.log('  ✅ Address verification ENABLED');
   } else {
-    console.log('⚠️  Marketplace address: NOT CONFIGURED');
-    console.log('   (Accepting events from ANY contract)');
-    console.log('   Set MARKETPLACE_ADDRESS in .env to enable verification');
+    console.log('  Contract: ANY (not configured)');
+    console.log('  ⚠️  Address verification DISABLED');
+    console.log('  Set MARKETPLACE_ADDRESS in .env to enable');
   }
 
   console.log('=================================\n');
