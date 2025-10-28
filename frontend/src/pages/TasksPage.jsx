@@ -38,6 +38,7 @@ const TasksPage = () => {
       stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
       description: task.title,  // Use 'title' field from contract
       detailedDescription: task.detailedDescriptionHash,  // IPFS hash
+      prUrl: task.prUrl || '',  // GitHub PR URL
       status: task.status,
       customerApproval: task.customerApproval,
       stakeholderApproval: task.stakeholderApproval
@@ -139,16 +140,19 @@ const TasksPage = () => {
     }
   };
 
-  const handleCompleteTask = async (taskId) => {
+  const handleCompleteTask = async (taskId, prUrl) => {
     if (!isConnected || !roseMarketplace) return;
-    
+
     try {
-      const tx = await roseMarketplace.markTaskCompleted(taskId);
+      const tx = await roseMarketplace.markTaskCompleted(taskId, prUrl);
       await tx.wait();
       debouncedFetchTasks(); // Use debounced version
     } catch (err) {
       console.error('Error completing task:', err);
-      setError('Failed to mark task as completed');
+      const errorMessage = err.message.includes('PR URL cannot be empty')
+        ? 'PR URL is required to mark task as completed'
+        : 'Failed to mark task as completed';
+      setError(errorMessage);
     }
   };
   

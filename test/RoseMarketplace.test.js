@@ -21,6 +21,9 @@ describe("RoseMarketplace", function () {
   // Test IPFS hash for detailed descriptions
   const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
 
+  // Test GitHub PR URL
+  const testPrUrl = "https://github.com/test/repo/pull/123";
+
   beforeEach(async function () {
     [owner, customer, worker, stakeholder, daoTreasury] = await ethers.getSigners();
     burnAddress = "0x000000000000000000000000000000000000dEaD";
@@ -148,17 +151,18 @@ describe("RoseMarketplace", function () {
     it("Should allow workers to mark tasks as completed", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
 
-      await expect(roseMarketplace.connect(worker).markTaskCompleted(1))
+      await expect(roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl))
         .to.emit(roseMarketplace, "TaskCompleted")
-        .withArgs(1);
+        .withArgs(1, testPrUrl);
 
       const task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(3); // TaskStatus.Completed
+      expect(task.prUrl).to.equal(testPrUrl);
     });
 
     it("Should allow customer and stakeholder approvals and mark task ready for payment (customer first)", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       
@@ -178,7 +182,7 @@ describe("RoseMarketplace", function () {
     
     it("Should allow stakeholder and customer approvals and mark task ready for payment (stakeholder first)", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       
@@ -198,7 +202,7 @@ describe("RoseMarketplace", function () {
 
     it("Should allow worker to accept payment after approvals", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
 
@@ -228,7 +232,7 @@ describe("RoseMarketplace", function () {
 
     it("Should mint tokens and distribute according to new tokenomics", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
       const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
@@ -298,11 +302,38 @@ describe("RoseMarketplace", function () {
 
     it("Should not allow unclaiming completed task", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
-      await roseMarketplace.connect(worker).markTaskCompleted(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       await expect(
         roseMarketplace.connect(worker).unclaimTask(1)
       ).to.be.revertedWith("Task must be in progress to unclaim");
+    });
+
+    it("Should reject task completion with empty PR URL", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+
+      await expect(
+        roseMarketplace.connect(worker).markTaskCompleted(1, "")
+      ).to.be.revertedWith("PR URL cannot be empty");
+
+      const task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(2); // Still InProgress
+    });
+
+    it("Should store PR URL when task is marked completed", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+
+      const task = await roseMarketplace.tasks(1);
+      expect(task.prUrl).to.equal(testPrUrl);
+    });
+
+    it("Should emit PR URL in TaskCompleted event", async function () {
+      await roseMarketplace.connect(worker).claimTask(1);
+
+      await expect(roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl))
+        .to.emit(roseMarketplace, "TaskCompleted")
+        .withArgs(1, testPrUrl);
     });
 
   });
