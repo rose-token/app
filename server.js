@@ -334,13 +334,34 @@ app.post('/webhook/task-approved', async (req, res) => {
 });
 
 // Serve frontend static files
-app.use(express.static(path.join(__dirname, 'frontend/build')));
+// Priority: 1) Built production files (frontend/build), 2) Development files (frontend/public)
+const frontendBuildPath = path.join(__dirname, 'frontend/build');
+const frontendPublicPath = path.join(__dirname, 'frontend/public');
+
+let frontendPath;
+let frontendMode;
+
+if (fs.existsSync(frontendBuildPath)) {
+  frontendPath = frontendBuildPath;
+  frontendMode = 'production (build)';
+} else if (fs.existsSync(frontendPublicPath)) {
+  frontendPath = frontendPublicPath;
+  frontendMode = 'development (public)';
+} else {
+  console.error('❌ ERROR: No frontend directory found!');
+  console.error('   Expected either frontend/build or frontend/public');
+  process.exit(1);
+}
+
+app.use(express.static(frontendPath));
 
 // Frontend routing - serve index.html for all other routes
 // This must be AFTER all API routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend/build/index.html'));
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
+
+console.log(`✅ Serving frontend from: ${frontendPath} (${frontendMode})`);
 
 // Start server
 const PORT = process.env.PORT || 3000;
@@ -351,7 +372,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`Webhook endpoint: http://localhost:${PORT}/webhook/task-approved`);
-  console.log(`Frontend: http://localhost:${PORT}`);
+  console.log(`Frontend: http://localhost:${PORT} (${frontendMode})`);
   console.log('---------------------------------');
   console.log('Event Filtering:');
   console.log(`  Event: TaskApproved only`);
