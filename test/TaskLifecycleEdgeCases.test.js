@@ -23,11 +23,12 @@ describe("Task Lifecycle Edge Cases", function () {
     roseMarketplace = await RoseMarketplace.deploy(daoTreasury.address);  
     await roseMarketplace.waitForDeployment();  
   
-    const roseTokenAddress = await roseMarketplace.roseToken();  
-    roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);  
-  
-    await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);  
-    await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);  
+    const roseTokenAddress = await roseMarketplace.roseToken();
+    roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);
+
+    // Transfer tokens from DAO treasury (which received 10,000 ROSE on deployment)
+    await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
+    await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);  
   });  
   
   it("Should not allow creating a task with zero deposit", async function() {  

@@ -21,6 +21,7 @@ async function main() {
 
   const roseTokenAddress = await roseMarketplace.roseToken();
   console.log("RoseToken deployed to:", roseTokenAddress);
+  console.log("Initial mint: 10,000 ROSE tokens sent to DAO Treasury");
 
   console.log("\nContract Details:");
   console.log("----------------");

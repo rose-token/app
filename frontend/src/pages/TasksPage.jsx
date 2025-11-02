@@ -232,7 +232,7 @@ const TasksPage = () => {
       if (userBalanceBigInt < depositAmount) {
         const shortfall = depositAmount - userBalanceBigInt;
         const shortfallInRose = Number(shortfall) / 1e18;
-        setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake. Use the faucet to claim more tokens.`);
+        setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake.`);
         return;
       }
 
@@ -260,7 +260,7 @@ const TasksPage = () => {
       if (err.message.includes('Not eligible stakeholder')) {
         errorMessage = 'You are not eligible to be a stakeholder. There may be a role conflict or insufficient tokens.';
       } else if (err.message.includes('Insufficient tokens')) {
-        errorMessage = 'Insufficient ROSE tokens. Use the faucet to claim more tokens.';
+        errorMessage = 'Insufficient ROSE tokens.';
       } else if (err.message.includes('Role conflict')) {
         errorMessage = 'Role conflict detected. You cannot be a stakeholder for this task (you may be the customer or worker).';
       } else if (err.message.includes('Customer cannot be stakeholder')) {

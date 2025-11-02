@@ -57,7 +57,6 @@ contract RoseMarketplace {
     event TaskClosed(uint256 taskId);
     event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount);
     event TokensMinted(address indexed to, uint256 amount);
-    event FaucetTokensClaimed(address indexed to, uint256 amount);
     event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
     event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
 
@@ -89,6 +88,9 @@ contract RoseMarketplace {
 
         // Deploy the RoseToken, designating this marketplace as its minter
         roseToken = new RoseToken(address(this));
+
+        // Mint initial 10,000 ROSE tokens to DAO treasury
+        roseToken.mint(_daoTreasury, 10000 ether);
     }
 
     /**
@@ -370,20 +372,6 @@ contract RoseMarketplace {
         }
     }
 
-
-    
-    /**
-     * @dev Faucet function to mint test ROSE tokens for users
-     * @param _amount Amount of ROSE tokens to mint (limited to prevent abuse)
-     */
-    function claimFaucetTokens(uint256 _amount) external {
-        require(_amount <= 100 ether, "Cannot claim more than 100 ROSE tokens at once");
-
-        // Mint tokens to the caller
-        roseToken.mint(msg.sender, _amount);
-
-        emit FaucetTokensClaimed(msg.sender, _amount);
-    }
 
     /**
      * @dev Check if caller is a participant in the task (customer, worker, or stakeholder)
