@@ -24,7 +24,8 @@ describe("Task Detailed Description", function () {
     const roseTokenAddress = await roseMarketplace.roseToken();
     roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);
 
-    await roseMarketplace.connect(customer).claimFaucetTokens(taskDeposit * 10n);
+    // Transfer tokens from DAO treasury (which received 10,000 ROSE on deployment)
+    await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
   });
 
   it("Should create a task with mandatory IPFS hash", async function () {
@@ -68,7 +69,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
-    await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+    await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
     await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
@@ -80,7 +81,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
-    await roseMarketplace.connect(stakeholder).claimFaucetTokens(taskDeposit);
+    await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
     await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);

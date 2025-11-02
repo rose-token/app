@@ -59,7 +59,7 @@ The project is currently in **MVP (Minimum Viable Product)** mode. Complex featu
 - Straightforward approval and payment flow
 - Token minting and distribution (93/5/2 split)
 - Token staking for stakeholder elections (future use)
-- Faucet functionality for testing
+- Initial DAO treasury funded with 10,000 ROSE on deployment
 
 ## Development Commands
 
@@ -108,10 +108,10 @@ The smart contracts have a simple deployment structure:
 
 1. **RoseMarketplace** (331 lines, deployed first)
    - Automatically deploys RoseToken in its constructor
+   - Mints initial 10,000 ROSE to DAO treasury on deployment
    - Central hub for task management and lifecycle orchestration
    - Handles token minting and distribution (93/5/2 split)
    - Manages task statuses: StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
-   - Includes faucet functionality for testing (claim tokens)
    - Escrows customer's ROSE token payment until task completion
    - Mints 2% of task value to DAO treasury on completion (creates ~2% annual inflation)
 
@@ -326,7 +326,6 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 - **useContract.js** - Contract instance initialization, address fetching, method validation
 - **useNotifications.js** - Toast notification management
 - **useProfile.js** - User profile state management
-- **useFaucet.js** - Faucet token claiming functionality
 
 ### Utilities
 
@@ -358,7 +357,7 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 
 ## Testing Approach
 
-The project has **5 test suites** covering ~626 lines of test code. Tests use Hardhat and Chai for contract testing.
+The project has **4 test suites** covering ~555 lines of test code. Tests use Hardhat and Chai for contract testing.
 
 ### Test Files (test/)
 
@@ -368,7 +367,6 @@ The project has **5 test suites** covering ~626 lines of test code. Tests use Ha
 | **RoseToken.test.js** | 130 | Minting, transfers, allowances, approvals, access control |
 | **TaskLifecycleEdgeCases.test.js** | 123 | Edge cases in task workflow, error conditions, invalid states |
 | **DetailedDescription.test.js** | 74 | Detailed task description handling and IPFS storage |
-| **Faucet.test.js** | 71 | Faucet token claiming, rate limiting, error cases |
 
 ### Test Coverage Areas
 
@@ -381,7 +379,7 @@ The project has **5 test suites** covering ~626 lines of test code. Tests use Ha
 - First-come, first-served worker claiming
 - Single-stakeholder approval workflow
 - Direct payment distribution
-- Faucet functionality for testing
+- Initial DAO treasury funding (10,000 ROSE on deployment)
 
 **Edge Cases & Security:**
 - Invalid state transitions
@@ -403,7 +401,6 @@ npx hardhat test test/RoseMarketplace.test.js
 npx hardhat test test/RoseToken.test.js
 npx hardhat test test/TaskLifecycleEdgeCases.test.js
 npx hardhat test test/DetailedDescription.test.js
-npx hardhat test test/Faucet.test.js
 
 # Run tests with gas reporting
 npx hardhat test --network hardhat
@@ -709,7 +706,7 @@ The project underwent **major simplification** to focus on core MVP functionalit
 ✅ Simple approval workflow (customer + stakeholder)
 ✅ Token minting and distribution (93/5/2 split, task-value-based)
 ✅ Token staking for stakeholder elections (deployed but not integrated)
-✅ Faucet for testing
+✅ Initial DAO treasury funded with 10,000 ROSE on deployment
 ✅ IPFS integration for task data
 
 ### October 2024: Governance Layer Removal (Commit 722b17f)
