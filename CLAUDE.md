@@ -33,7 +33,7 @@ Rose Token is a decentralized Web3 marketplace with a task-value-based token dis
 - Solidity smart contracts for the Ethereum blockchain (2 contracts)
 - React frontend for user interaction
 - Three core roles: Customers (create tasks), Workers (complete tasks), Stakeholders (validate work)
-- **New Tokenomics (as of October 2024)**: 95% worker, 5% stakeholder, 2% DAO
+- **New Tokenomics (as of November 2024)**: 95% worker, 5% stakeholder, 2% DAO
   - Customer pays task value in ROSE tokens (escrowed)
   - Stakeholder stakes 10% of task value (returned on completion)
   - Platform mints 2% of task value → DAO treasury (creates ~2% annual inflation, separate from distribution)
@@ -110,7 +110,7 @@ The smart contracts have a simple deployment structure:
    - Automatically deploys RoseToken in its constructor
    - Mints initial 10,000 ROSE to DAO treasury on deployment
    - Central hub for task management and lifecycle orchestration
-   - Handles token minting and distribution (93/5/2 split)
+   - Handles token minting and distribution (95/5 split from customer deposit, 2% minted to DAO separately)
    - Manages task statuses: StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
    - Escrows customer's ROSE token payment until task completion
    - Mints 2% of task value to DAO treasury on completion (creates ~2% annual inflation)
@@ -260,7 +260,7 @@ Tasks can be cancelled before a worker claims them. Cancellation is available fr
 - **Prevents self-dealing**: No one can pay themselves or approve their own work
 - **Maintains validation integrity**: Stakeholders must be independent validators
 - **Ensures fairness**: All parties have aligned but separate incentives
-- **Protects tokenomics**: Prevents gaming of the 93/5/2 distribution model
+- **Protects tokenomics**: Prevents gaming of the 95/5 distribution model (plus 2% DAO minting)
 
 ### IPFS Integration & Privacy
 
@@ -302,7 +302,7 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 - `TaskList.jsx` - Display tasks with filtering and sorting
 - `TaskCard.jsx` - Individual task display with status and actions
 - `TaskFilters.jsx` - Filter options (stakeholder needed, worker needed, my tasks, closed)
-- `TokenDistributionChart.jsx` - Visual representation of 93/5/2 token split
+- `TokenDistributionChart.jsx` - Visual representation of 95/5 token split (from customer deposit, 2% DAO minting separate)
 - `ProgressTracker.jsx` - Task progress tracking for participants
 
 **Wallet Components:**
@@ -371,7 +371,7 @@ The project has **4 test suites** covering ~555 lines of test code. Tests use Ha
 ### Test Coverage Areas
 
 **Core Functionality:**
-- Token minting and distribution (93/5/2 split verification)
+- Token minting and distribution (95/5 split verification from customer deposit, 2% DAO minting)
 - Complete task lifecycle from creation to payment
 
 **MVP Features (Post-Simplification):**
@@ -704,7 +704,7 @@ The project underwent **major simplification** to focus on core MVP functionalit
 ✅ First-come, first-served worker claiming
 ✅ Single-stakeholder validation model (10% stake required in ROSE tokens)
 ✅ Simple approval workflow (customer + stakeholder)
-✅ Token minting and distribution (93/5/2 split, task-value-based)
+✅ Token minting and distribution (95/5 split from customer deposit, 2% DAO minting, task-value-based)
 ✅ Token staking for stakeholder elections (deployed but not integrated)
 ✅ Initial DAO treasury funded with 10,000 ROSE on deployment
 ✅ IPFS integration for task data
@@ -895,7 +895,7 @@ rose-token/
 
 ---
 
-**Last Updated**: October 2024 (New Tokenomics Model - 93/5/2)
+**Last Updated**: November 2024 (Fixed Tokenomics Model - 95/5 split from customer deposit, 2% DAO minting)
 **Solidity Version**: 0.8.17
 **Node Version**: 18.x
 **Network**: Sepolia (chainId: 11155111)
