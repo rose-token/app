@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.20;
 
 import "./RoseToken.sol";
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title RoseMarketplace
@@ -10,10 +13,11 @@ import "hardhat/console.sol";
  * validation process and RoseToken minting logic.
  *
  * DISCLAIMER:
- * This code is purely for illustration, not production. 
+ * This code is purely for illustration, not production.
  * Use at your own risk, and always get audits and security reviews.
  */
-contract RoseMarketplace {
+contract RoseMarketplace is ReentrancyGuard {
+    using SafeERC20 for IERC20;
 
     // Reference to the RoseToken contract
     RoseToken public roseToken;
@@ -103,8 +107,8 @@ contract RoseMarketplace {
         require(bytes(_title).length > 0, "Title cannot be empty");
         require(bytes(_detailedDescriptionHash).length > 0, "Detailed description hash is required");
 
-        // Transfer tokens from customer to the contract
-        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount));
+        // Transfer tokens from customer to the contract using SafeERC20
+        IERC20(address(roseToken)).safeTransferFrom(msg.sender, address(this), _tokenAmount);
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
@@ -124,7 +128,7 @@ contract RoseMarketplace {
      * @param _taskId ID of the task to stake on
      * @param _tokenAmount Amount of ROSE tokens to stake (must be exactly 10% of task deposit)
      */
-    function stakeholderStake(uint256 _taskId, uint256 _tokenAmount) external {
+    function stakeholderStake(uint256 _taskId, uint256 _tokenAmount) external nonReentrant {
         Task storage t = tasks[_taskId];
         require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
         require(t.stakeholder == address(0), "Task already has a stakeholder");
@@ -134,9 +138,9 @@ contract RoseMarketplace {
         // Calculate required 10% deposit
         uint256 requiredDeposit = t.deposit / 10;
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
-        
-        // Transfer tokens from stakeholder to the contract
-        require(roseToken.transferFrom(msg.sender, address(this), _tokenAmount));
+
+        // Transfer tokens from stakeholder to the contract using SafeERC20
+        IERC20(address(roseToken)).safeTransferFrom(msg.sender, address(this), _tokenAmount);
         
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
@@ -150,7 +154,7 @@ contract RoseMarketplace {
      * Can be called by either the customer or the stakeholder.
      * @param _taskId ID of the task to cancel
      */
-    function cancelTask(uint256 _taskId) external {
+    function cancelTask(uint256 _taskId) external nonReentrant {
         Task storage t = tasks[_taskId];
 
         // Check task status - only allow cancellation before worker claims
@@ -176,16 +180,16 @@ contract RoseMarketplace {
         if (t.deposit > 0) {
             customerRefund = t.deposit;
             console.log("Refunding customer:", customerRefund);
-            require(roseToken.transfer(t.customer, customerRefund), "Customer refund failed");
-            t.deposit = 0;
+            t.deposit = 0; // Update state before external call
+            IERC20(address(roseToken)).safeTransfer(t.customer, customerRefund);
         }
 
         // Refund stakeholder deposit if they have staked
         if (t.stakeholder != address(0) && t.stakeholderDeposit > 0) {
             stakeholderRefund = t.stakeholderDeposit;
             console.log("Refunding stakeholder:", stakeholderRefund);
-            require(roseToken.transfer(t.stakeholder, stakeholderRefund), "Stakeholder refund failed");
-            t.stakeholderDeposit = 0;
+            t.stakeholderDeposit = 0; // Update state before external call
+            IERC20(address(roseToken)).safeTransfer(t.stakeholder, stakeholderRefund);
         }
 
         // Set task status to Closed
@@ -309,16 +313,16 @@ contract RoseMarketplace {
     }
 
     /**
-     * @dev Worker accepts payment for an approved task. 
+     * @dev Worker accepts payment for an approved task.
      * This allows workers to control when they incur gas fees.
      * @param _taskId ID of the task to accept payment for
      */
-    function acceptPayment(uint256 _taskId) external {
+    function acceptPayment(uint256 _taskId) external nonReentrant {
         Task storage t = tasks[_taskId];
         require(t.worker == msg.sender, "Only assigned worker can accept payment");
         require(t.status == TaskStatus.ApprovedPendingPayment, "Task must be approved and pending payment");
         require(t.customerApproval && t.stakeholderApproval, "Task must be approved by customer and stakeholder");
-        
+
         console.log("Worker accepting payment for task", _taskId);
         _finalizeTask(_taskId, true);
     }
@@ -357,18 +361,21 @@ contract RoseMarketplace {
             console.log("Worker amount:", workerAmount);
             console.log("Stakeholder fee:", stakeholderFee);
 
-            // Transfer to worker (from customer's deposit)
+            // Update state before external calls (checks-effects-interactions pattern)
             t.deposit = 0;
-            require(roseToken.transfer(t.worker, workerAmount), "Transfer to worker failed");
+            uint256 stakeholderDepositCache = t.stakeholderDeposit;
+            t.stakeholderDeposit = 0;
+
+            // Transfer to worker (from customer's deposit) using SafeERC20
+            IERC20(address(roseToken)).safeTransfer(t.worker, workerAmount);
             emit PaymentReleased(_taskId, t.worker, workerAmount);
 
-            // Return stakeholder's stake + their fee
-            uint256 stakeholderTotal = t.stakeholderDeposit + stakeholderFee;
+            // Return stakeholder's stake + their fee using SafeERC20
+            uint256 stakeholderTotal = stakeholderDepositCache + stakeholderFee;
             console.log("Stakeholder total:", stakeholderTotal);
-            console.log("Stake returned:", t.stakeholderDeposit);
+            console.log("Stake returned:", stakeholderDepositCache);
             console.log("Stakeholder fee:", stakeholderFee);
-            t.stakeholderDeposit = 0;
-            require(roseToken.transfer(t.stakeholder, stakeholderTotal), "Transfer to stakeholder failed");
+            IERC20(address(roseToken)).safeTransfer(t.stakeholder, stakeholderTotal);
         }
     }
 
