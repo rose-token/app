@@ -81,7 +81,7 @@ const ProgressTracker = ({ task }) => {
     {
       id: 'payment',
       title: 'Payment Distribution',
-      description: 'Worker accepts payment (93/5/2 split)',
+      description: 'Worker accepts payment (95/5 split)',
       status: getStageStatus('payment')
     }
   ];
@@ -126,7 +126,7 @@ const ProgressTracker = ({ task }) => {
         <div className="mt-4 p-3 bg-blue-50 rounded-lg">
           <h5 className="text-sm font-medium text-blue-800 mb-1">Task Benefits</h5>
           <ul className="text-xs text-blue-700 space-y-1">
-            <li>• Worker-focused: 93% of task value goes to worker</li>
+            <li>• Worker-focused: 95% of task value goes to worker</li>
             <li>• Stakeholder earns 50% ROI on 10% stake (5% fee + stake returned)</li>
             <li>• Sustainable platform: 2% minted to DAO treasury (~2% annual inflation)</li>
             <li>• Dual approval protects quality (customer + stakeholder)</li>
