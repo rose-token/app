@@ -63,15 +63,14 @@ contract RoseMarketplace {
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
     // Total distribution pot = customer payment only (minted tokens go directly to DAO)
-    // Distribution from pot: 93% worker, 5% stakeholder fee, stakeholder gets 10% stake back
+    // Distribution from pot: 95% worker, 5% stakeholder fee, stakeholder gets 10% stake back
 
     // Minting percentage (2% of task value goes to DAO as new tokens)
     uint256 public constant MINT_PERCENTAGE = 2;
 
-    // Distribution percentages from the total pot (customer payment + minted amount)
-    uint256 public constant WORKER_SHARE = 93;      // 93% of pot
+    // Distribution percentages from the total pot (customer payment only)
+    uint256 public constant WORKER_SHARE = 95;      // 95% of pot
     uint256 public constant STAKEHOLDER_SHARE = 5;  // 5% of pot (as fee, plus stake returned)
-    uint256 public constant TREASURY_SHARE = 2;     // 2% of pot (already minted separately)
     uint256 public constant SHARE_DENOMINATOR = 100;
 
     // Burn address (commonly the zero address or a dead address)
@@ -330,7 +329,7 @@ contract RoseMarketplace {
      * New tokenomics:
      * - Mint 2% of task value to DAO (separate, goes directly to DAO)
      * - Total pot = customer payment only (minted tokens not included in pot)
-     * - Distribute from pot: 93% worker, 5% stakeholder (fee), stakeholder gets stake back
+     * - Distribute from pot: 95% worker, 5% stakeholder (fee), stakeholder gets stake back
      */
     function _finalizeTask(uint256 _taskId, bool _payout) internal {
         Task storage t = tasks[_taskId];

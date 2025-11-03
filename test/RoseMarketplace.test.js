@@ -11,11 +11,10 @@ describe("RoseMarketplace", function () {
   let daoTreasury;
   let burnAddress;
 
-  // New tokenomics: 93% worker / 5% stakeholder / 2% DAO
+  // New tokenomics: 95% worker / 5% stakeholder (from customer deposit pot), 2% DAO (minted separately)
   const MINT_PERCENTAGE = 2;
-  const WORKER_SHARE = 93;
+  const WORKER_SHARE = 95;
   const STAKEHOLDER_SHARE = 5;
-  const TREASURY_SHARE = 2;
   const SHARE_DENOMINATOR = 100;
 
   // Test IPFS hash for detailed descriptions
