@@ -61,9 +61,9 @@ contract RoseMarketplace {
     event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
 
     // Tokenomics parameters
-    // On successful task completion, we mint 2% of task value to DAO treasury
-    // Total distribution pot = customer payment + minted tokens (1.02x task value)
-    // Distribution: 93% worker, 5% stakeholder fee, 2% DAO (already minted)
+    // On successful task completion, we mint 2% of task value to DAO treasury (separate)
+    // Total distribution pot = customer payment only (minted tokens go directly to DAO)
+    // Distribution from pot: 93% worker, 5% stakeholder fee, stakeholder gets 10% stake back
 
     // Minting percentage (2% of task value goes to DAO as new tokens)
     uint256 public constant MINT_PERCENTAGE = 2;
@@ -328,9 +328,9 @@ contract RoseMarketplace {
     /**
      * @dev Internally finalize the task if both approvals are met in a non-disputed scenario.
      * New tokenomics:
-     * - Mint 2% of task value to DAO
-     * - Total pot = customer payment + minted amount
-     * - Distribute: 93% worker, 5% stakeholder (fee), stakeholder gets stake back
+     * - Mint 2% of task value to DAO (separate, goes directly to DAO)
+     * - Total pot = customer payment only (minted tokens not included in pot)
+     * - Distribute from pot: 93% worker, 5% stakeholder (fee), stakeholder gets stake back
      */
     function _finalizeTask(uint256 _taskId, bool _payout) internal {
         Task storage t = tasks[_taskId];
@@ -342,12 +342,13 @@ contract RoseMarketplace {
             console.log("Finalizing task with value:", taskValue);
 
             // Mint 2% of task value to DAO treasury (this creates the 2% annual inflation)
+            // This goes directly to DAO, NOT to the distribution pot
             uint256 mintAmount = (taskValue * MINT_PERCENTAGE) / SHARE_DENOMINATOR;
             roseToken.mint(daoTreasury, mintAmount);
             console.log("Minted to DAO:", mintAmount);
 
-            // Total pot = customer deposit + newly minted tokens
-            uint256 totalPot = taskValue + mintAmount;
+            // Total pot = customer deposit ONLY (minted tokens already went to DAO)
+            uint256 totalPot = taskValue;
             console.log("Total distribution pot:", totalPot);
 
             // Calculate distributions from the pot
@@ -357,7 +358,7 @@ contract RoseMarketplace {
             console.log("Worker amount:", workerAmount);
             console.log("Stakeholder fee:", stakeholderFee);
 
-            // Transfer to worker (from customer's deposit + any bonus)
+            // Transfer to worker (from customer's deposit)
             t.deposit = 0;
             require(roseToken.transfer(t.worker, workerAmount), "Transfer to worker failed");
             emit PaymentReleased(_taskId, t.worker, workerAmount);

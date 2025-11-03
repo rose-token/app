@@ -36,8 +36,8 @@ Rose Token is a decentralized Web3 marketplace with a task-value-based token dis
 - **New Tokenomics (as of October 2024)**: 93% worker, 5% stakeholder, 2% DAO
   - Customer pays task value in ROSE tokens (escrowed)
   - Stakeholder stakes 10% of task value (returned on completion)
-  - Platform mints 2% of task value → DAO treasury (creates ~2% annual inflation)
-  - Total distribution pot = customer payment + minted tokens (1.02x task value)
+  - Platform mints 2% of task value → DAO treasury (creates ~2% annual inflation, separate from distribution)
+  - Total distribution pot = customer payment only (minted tokens go directly to DAO, not included in pot)
   - Worker receives 93% of pot, Stakeholder receives 5% fee + stake back (50% ROI on stake)
 
 ### MVP Status (October 2024)
@@ -184,12 +184,12 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 6. **Payment Distribution** (Status: Closed)
    - Worker calls `acceptPayment()` to trigger distribution
-   - Platform mints 2% of task value to DAO treasury
-   - Total distribution pot = customer deposit + minted tokens (1.02x task value)
+   - Platform mints 2% of task value to DAO treasury (separate, not included in distribution pot)
+   - Total distribution pot = customer deposit only (minted tokens already sent to DAO)
    - Distribution occurs from the pot:
-     - **Worker**: 93% of pot (e.g., 9.486 ROSE for 10 ROSE task)
-     - **Stakeholder**: 5% of pot as fee + 10% stake returned (e.g., 1.51 ROSE total for 10 ROSE task)
-     - **DAO Treasury**: 2% minted (e.g., 0.2 ROSE for 10 ROSE task)
+     - **Worker**: 93% of pot (e.g., 9.3 ROSE for 10 ROSE task)
+     - **Stakeholder**: 5% of pot as fee + 10% stake returned (e.g., 1.5 ROSE total for 10 ROSE task)
+     - **DAO Treasury**: 2% minted separately (e.g., 0.2 ROSE for 10 ROSE task)
    - Task status changes to Closed
 
 **Task Cancellation (Alternative Flow):**
@@ -215,10 +215,10 @@ Tasks can be cancelled before a worker claims them. Cancellation is available fr
 **Tokenomics Example (10 ROSE task):**
 - Customer deposits: 10 ROSE (escrowed)
 - Stakeholder stakes: 1 ROSE (10%, escrowed)
-- Platform mints: 0.2 ROSE → DAO
-- Total pot: 10.2 ROSE
-- Worker receives: 9.486 ROSE (93% of 10.2)
-- Stakeholder receives: 1.51 ROSE (1.0 stake + 0.51 fee = 51% ROI on stake)
+- Platform mints: 0.2 ROSE → DAO (separate, not in distribution pot)
+- Total pot: 10 ROSE (customer deposit only)
+- Worker receives: 9.3 ROSE (93% of 10)
+- Stakeholder receives: 1.5 ROSE (1.0 stake + 0.5 fee = 50% ROI on stake)
 - DAO receives: 0.2 ROSE (creates ~2% annual inflation as tasks complete)
 
 **Note**: The task creation is now direct through the marketplace. There is no separate governance proposal workflow in the current MVP.
@@ -639,9 +639,9 @@ The project implemented a **new task-value-based tokenomics model** replacing th
 
 **New Model (current):**
 - Task-value-based distribution (no fixed base reward)
-- Mint only 2% of task value → DAO treasury (creates ~2% annual inflation)
-- Total distribution pot = customer payment + minted tokens (1.02x task value)
-- Split from pot: **93% worker, 5% stakeholder fee, 2% DAO**
+- Mint only 2% of task value → DAO treasury (creates ~2% annual inflation, separate from distribution)
+- Total distribution pot = customer payment only (minted tokens go directly to DAO, not included in pot)
+- Split from pot: **93% worker, 5% stakeholder fee**
 - Stakeholder gets 10% stake returned + 5% fee (50% ROI on stake)
 
 #### Implementation Changes:
@@ -663,21 +663,21 @@ The project implemented a **new task-value-based tokenomics model** replacing th
 - Stakeholder stakes: 1 ROSE (10% of task value, escrowed)
 
 **On Task Completion:**
-- Platform mints: 0.2 ROSE → DAO treasury
-- Total pot: 10.2 ROSE (10 + 0.2)
-- Worker receives: 9.486 ROSE (93% of 10.2)
-- Stakeholder receives: 1.51 ROSE total
+- Platform mints: 0.2 ROSE → DAO treasury (separate, not in distribution pot)
+- Total pot: 10 ROSE (customer deposit only)
+- Worker receives: 9.3 ROSE (93% of 10)
+- Stakeholder receives: 1.5 ROSE total
   - 1.0 ROSE (stake returned)
-  - 0.51 ROSE (5% of 10.2 as fee)
-  - 51% ROI on 1 ROSE stake
-- DAO receives: 0.2 ROSE (2% of task value, already minted)
+  - 0.5 ROSE (5% of 10 as fee)
+  - 50% ROI on 1 ROSE stake
+- DAO receives: 0.2 ROSE (2% of task value, minted separately)
 
 #### Why This Change:
 - **Worker-Focused Economics**: Workers receive 93% of value, up from 60%
 - **Sustainable Inflation**: Only 2% minted per task (vs 100% in old model)
 - **Stakeholder Incentive**: 50% ROI on stake encourages quality validation
 - **Task-Value Scaling**: Distribution scales with actual task value, not fixed amount
-- **Clearer Value Proposition**: $1000 task pays ~$950 to worker (93% of $1020)
+- **Clearer Value Proposition**: $1000 task pays $930 to worker (93% of $1000)
 
 ### October 2024: MVP Simplification (Commit f81f4e3)
 
@@ -875,7 +875,7 @@ rose-token/
 - **Custom Hooks**: 5 React hooks for Web3 integration
 - **ABI Files**: 2 auto-generated from compiled contracts
 - **CI/CD Jobs**: 2 workflows (PR validation + deployment)
-- **Token Economics**: 93% worker, 5% stakeholder, 2% DAO (from 1.02x pot)
+- **Token Economics**: 93% worker, 5% stakeholder (from customer deposit pot), 2% DAO (minted separately)
 - **Token Distribution Model**: Task-value-based (no fixed base reward)
 - **Platform Minting**: 2% of task value → DAO (creates ~2% annual inflation)
 - **Stakeholder Stake Required**: 10% of task value (returned on completion)

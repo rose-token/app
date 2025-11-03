@@ -213,8 +213,9 @@ describe("RoseMarketplace", function () {
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
 
       // Calculate expected worker amount with new tokenomics
+      // Mint goes directly to DAO, not included in distribution pot
       const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
-      const totalPot = taskDeposit + mintAmount;
+      const totalPot = taskDeposit; // Only customer deposit, not including minted amount
       const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
 
       await expect(roseMarketplace.connect(worker).acceptPayment(1))
@@ -244,8 +245,9 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(worker).acceptPayment(1);
 
       // New tokenomics calculations
+      // Mint goes directly to DAO, not included in distribution pot
       const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
-      const totalPot = taskDeposit + mintAmount;
+      const totalPot = taskDeposit; // Only customer deposit, not including minted amount
       const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const stakeholderFee = (totalPot * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const stakeholderStakeRefund = taskDeposit / 10n;
