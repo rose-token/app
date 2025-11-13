@@ -30,7 +30,7 @@ function App() {
     >
       <EthereumProvider>
         <ProfileProvider>
-          <Router basename="/rose-token">
+          <Router basename="/">
             <Layout>
               <Routes>
                 <Route path="/" element={<TasksPage />} />
