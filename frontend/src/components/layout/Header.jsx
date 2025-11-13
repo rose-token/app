@@ -6,7 +6,7 @@ const Header = ({ toggleSidebar }) => {
   const { isConnected, connectWallet, account } = useEthereum();
 
   return (
-    <header className="bg-card border-b border-border py-4 shadow-sm">
+    <header className="bg-background border-b border-border py-4 shadow-sm">
       <div className="container mx-auto flex justify-between items-center px-4">
         <div className="flex items-center">
           {/* Sidebar toggle button */}
