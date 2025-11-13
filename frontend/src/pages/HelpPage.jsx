@@ -248,7 +248,7 @@ const HelpPage = () => {
               <li>Submit work for review</li>
               <li>Participate in dispute resolution if necessary</li>
             </ul>
-            <p><strong>Benefits:</strong> Receive 60% of the new ROSE tokens minted for each completed task.</p>
+            <p><strong>Benefits:</strong> Receive 95% of ROSE tokens deposited for each completed task.</p>
           </div>
             
           <h3 className="text-xl font-semibold">Stakeholders</h3>
@@ -261,7 +261,7 @@ const HelpPage = () => {
               <li>Arbitrate disputes between customers and workers</li>
               <li>Help maintain the integrity of the marketplace</li>
             </ul>
-            <p><strong>Benefits:</strong> Receive 20% of the new ROSE tokens minted for each validated task.</p>
+            <p><strong>Benefits:</strong> Receive 5% of ROSE tokens deposited for each validated task.</p>
           </div>
         </div>
       </CollapsibleSection>
@@ -333,7 +333,7 @@ const HelpPage = () => {
               <li>
                 <p><strong>Await Validation</strong></p>
                 <p>Wait for the customer or a stakeholder to validate your work.</p>
-                <p>If approved, you'll receive 60% of the ROSE tokens minted for this task.</p>
+                <p>If approved, you'll receive 95% of the ROSE tokens deposited for this task.</p>
               </li>
             </ol>
           </div>
@@ -361,7 +361,7 @@ const HelpPage = () => {
               <li>
                 <p><strong>Confirm Transaction</strong></p>
                 <p>Confirm your decision through MetaMask.</p>
-                <p>If you approve the work, you'll receive 20% of the ROSE tokens minted for this task.</p>
+                <p>If you approve the work, you'll receive 5% of the ROSE tokens deposited for this task.</p>
               </li>
             </ol>
           </div>
@@ -412,9 +412,9 @@ const HelpPage = () => {
           </p>
           <div className="my-4 p-4 bg-gray-100 rounded-md">
             <ul className="list-none space-y-2">
-              <li>🔹 <strong>60%</strong> to the Worker who completed the task</li>
-              <li>🔹 <strong>20%</strong> to the Stakeholder who validated the work</li>
-              <li>🔹 <strong>20%</strong> to the DAO Treasury for community governance</li>
+              <li>🔹 <strong>95%</strong> to the Worker who completed the task</li>
+              <li>🔹 <strong>5%</strong> to the Stakeholder who validated the work</li>
+              <li>🔹 <strong>2%</strong> to the DAO Treasury for community governance</li>
             </ul>
           </div>
             
@@ -445,7 +445,7 @@ const HelpPage = () => {
           {[
             {
               q: "How do I earn ROSE tokens?",
-              a: "You can earn ROSE tokens in two primary ways: by completing tasks as a Worker (earning 60% of minted tokens) or by validating work as a Stakeholder (earning 20% of minted tokens)."
+              a: "You can earn ROSE tokens in two primary ways: by completing tasks as a Worker (earning 95% of deposited tokens) or by validating work as a Stakeholder (earning 5% of deposited tokens)."
             },
             {
               q: "What can I do with ROSE tokens?",
@@ -577,15 +577,15 @@ const HelpPage = () => {
             },
             {
               term: "Worker",
-              definition: "A user who claims and completes tasks, earning 60% of minted ROSE tokens upon successful validation."
+              definition: "A user who claims and completes tasks, earning 95% of deposited ROSE tokens upon successful validation."
             },
             {
               term: "Stakeholder",
-              definition: "A user who validates completed work and arbitrates disputes, earning 20% of minted ROSE tokens."
+              definition: "A user who validates completed work and arbitrates disputes, earning 5% of deposited ROSE tokens."
             },
             {
               term: "DAO Treasury",
-              definition: "A community-controlled fund that receives 20% of all minted ROSE tokens for governance and future development."
+              definition: "A community-controlled fund that receives 2% of all deposited ROSE tokens for governance and future development."
             },
             {
               term: "Task",
@@ -605,7 +605,7 @@ const HelpPage = () => {
             },
             {
               term: "Worker Distribution Model",
-              definition: "The economic system whereby value is distributed primarily to workers (60%) rather than capital owners."
+              definition: "The economic system whereby value is distributed primarily to workers (95%) rather than capital owners."
             },
             {
               term: "MetaMask",
