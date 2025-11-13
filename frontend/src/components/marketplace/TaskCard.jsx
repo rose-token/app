@@ -116,7 +116,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
 
   return (
-    <div className="bg-card rounded-lg shadow-md p-6 mb-4 border border-border">
+    <div className="bg-card rounded-lg shadow-md p-6 mb-4 ">
       <div className="flex justify-between items-start mb-4">
         <h3 className="text-lg font-semibold text-foreground">{task.description}</h3>
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
@@ -127,7 +127,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {/* Detailed Description Section */}
       <div className="mb-4">
         {canViewDetails ? (
-          <div className="border border-border rounded-md p-3 bg-muted/20">
+          <div className="rounded-md p-3 bg-muted/20">
             {!showDetails ? (
               <button
                 onClick={loadDetailedDescription}
@@ -158,7 +158,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
                   </button>
                 </div>
                 {detailedContent && (
-                  <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded border border-border">
+                  <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded">
                     {detailedContent.description}
                     {detailedContent.uploadedAt && (
                       <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border">

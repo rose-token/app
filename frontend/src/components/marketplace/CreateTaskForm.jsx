@@ -182,7 +182,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   if (contractsReady && contractsReady.readOnly && !contractsReady.readWrite) {
     return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+      <div className="bg-card rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
         <div className="text-center py-4 text-secondary">
           Wallet connected but waiting for contract initialization. Please wait a moment...
@@ -192,7 +192,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   }
 
   return (
-    <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+    <div className="bg-card rounded-lg shadow-md p-6 mb-6">
       <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
 
       <form onSubmit={handleSubmit}>
