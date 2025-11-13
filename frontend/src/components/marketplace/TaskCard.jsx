@@ -178,24 +178,24 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <p className="text-sm text-muted-foreground">Customer</p>
+          <p className="text-sm text-muted">Customer</p>
           <p className="text-sm font-medium text-foreground truncate">{task.customer}</p>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Deposit</p>
+          <p className="text-sm text-muted">Deposit</p>
           <p className="text-sm font-medium text-foreground">{formatTokens(task.deposit)} ROSE</p>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Worker</p>
+          <p className="text-sm text-muted">Worker</p>
           <p className="text-sm font-medium text-foreground truncate">{task.worker || 'Not assigned'}</p>
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Stakeholder</p>
+          <p className="text-sm text-muted">Stakeholder</p>
           <p className="text-sm font-medium text-foreground truncate">{task.stakeholder || 'Not assigned'}</p>
         </div>
         {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
           <div>
-            <p className="text-sm text-muted-foreground">Stakeholder Deposit</p>
+            <p className="text-sm text-muted">Stakeholder Deposit</p>
             <p className="text-sm font-medium text-foreground">{formatTokens(task.stakeholderDeposit)} ROSE</p>
           </div>
         )}
