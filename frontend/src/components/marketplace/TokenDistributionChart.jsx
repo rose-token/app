@@ -2,7 +2,7 @@ import React from 'react';
 
 const TokenDistributionChart = () => {
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6 border">
+    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">Token Distribution Model</h2>
       <p className="text-sm text-muted mb-4">
         When a task is successfully completed, the platform mints 2% of the task value to the DAO treasury (separate from distribution).
@@ -11,7 +11,7 @@ const TokenDistributionChart = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         {/* Worker Card */}
-        <div className="bg-background border rounded-lg p-4">
+        <div className="bg-background rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
@@ -24,7 +24,7 @@ const TokenDistributionChart = () => {
         </div>
 
         {/* Stakeholder Card */}
-        <div className="bg-background border rounded-lg p-4">
+        <div className="bg-background rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
@@ -37,7 +37,7 @@ const TokenDistributionChart = () => {
         </div>
 
         {/* DAO Treasury Card */}
-        <div className="bg-background border rounded-lg p-4">
+        <div className="bg-background rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
