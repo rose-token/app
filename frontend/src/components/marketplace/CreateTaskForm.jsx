@@ -171,7 +171,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   if (!isConnected) {
     return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6 border-border">
+      <div className="bg-card rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
         <div className="text-center py-4 text-secondary">
           Please connect your wallet to create tasks
