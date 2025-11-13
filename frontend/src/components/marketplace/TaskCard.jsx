@@ -161,7 +161,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
                   <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded">
                     {detailedContent.description}
                     {detailedContent.uploadedAt && (
-                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border">
+                      <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
                         Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
                       </p>
                     )}
