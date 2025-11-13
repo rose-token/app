@@ -4,12 +4,12 @@ const ErrorMessage = ({ message, onDismiss }) => {
   if (!message) return null;
   
   return (
-    <div className="flex justify-between items-center bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+    <div className="flex justify-between items-center bg-red-100 text-red-700 p-4 rounded-md mb-4">
       <div>{message}</div>
       {onDismiss && (
-        <button
-          onClick={onDismiss}
-          className="text-destructive/70 hover:text-destructive ml-4"
+        <button 
+          onClick={onDismiss} 
+          className="text-red-500 hover:text-red-700 ml-4"
         >
           ×
         </button>

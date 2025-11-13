@@ -171,9 +171,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   if (!isConnected) {
     return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-rose-tan">
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
         <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
-        <div className="text-center py-4 text-primary">
+        <div className="text-center py-4 text-amber-600">
           Please connect your wallet to create tasks
         </div>
       </div>
@@ -182,9 +182,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   if (contractsReady && contractsReady.readOnly && !contractsReady.readWrite) {
     return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-rose-tan">
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
         <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
-        <div className="text-center py-4 text-primary">
+        <div className="text-center py-4 text-amber-600">
           Wallet connected but waiting for contract initialization. Please wait a moment...
         </div>
       </div>
@@ -192,12 +192,12 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   }
 
   return (
-    <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-rose-tan">
+    <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
       <h2 className="text-xl font-semibold mb-4">Create New Task</h2>
 
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="title" className="block text-sm font-medium text-foreground mb-1">
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
             Task Title *
           </label>
           <input
@@ -205,36 +205,36 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 border border-rose-tan rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="e.g., Build a responsive landing page"
             required
             maxLength={100}
           />
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-gray-500">
             Public title visible to everyone ({title.length}/100)
           </p>
         </div>
 
         <div className="mb-4">
-          <label htmlFor="detailedDescription" className="block text-sm font-medium text-foreground mb-1">
+          <label htmlFor="detailedDescription" className="block text-sm font-medium text-gray-700 mb-1">
             Detailed Description *
           </label>
           <textarea
             id="detailedDescription"
             value={detailedDescription}
             onChange={(e) => setDetailedDescription(e.target.value)}
-            className="w-full px-3 py-2 border border-rose-tan rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             rows="6"
             placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc. Only visible to task participants."
             required
           />
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-gray-500">
             Private - Only visible to customer, stakeholder, and worker. ({detailedDescription.length} characters)
           </p>
         </div>
 
         <div className="mb-6">
-          <label htmlFor="deposit" className="block text-sm font-medium text-foreground mb-1">
+          <label htmlFor="deposit" className="block text-sm font-medium text-gray-700 mb-1">
             Payment Amount (ROSE Tokens) *
           </label>
           <div className="relative">
@@ -243,23 +243,23 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               type="number"
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
-              className="w-full px-3 py-2 border border-rose-tan rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="e.g., 100"
               step="0.01"
               min="0.01"
               required
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <span className="text-muted-foreground">ROSE</span>
+              <span className="text-gray-500">ROSE</span>
             </div>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-gray-500">
             This amount in ROSE tokens will be paid to the worker upon successful completion
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-md border border-destructive/20">
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
             {error}
           </div>
         )}
@@ -267,10 +267,10 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         <button
           type="submit"
           disabled={isCreating || isApproving || !isConnected}
-          className={`w-full py-2 px-4 rounded-md font-medium ${
+          className={`w-full py-2 px-4 rounded-md font-medium text-white ${
             isCreating || isApproving || !isConnected
-              ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-primary hover:bg-primary/90'
           }`}
         >
           {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}
