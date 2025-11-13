@@ -31,18 +31,18 @@ export const getStatusText = (status) => {
 export const getStatusColor = (status) => {
   switch (parseInt(status)) {
     case TaskStatus.Open:
-      return 'bg-accent/20 text-accent-foreground';
+      return 'bg-blue-100 text-blue-800';
     case TaskStatus.StakeholderRequired:
-      return 'bg-secondary text-secondary-foreground';
+      return 'bg-orange-100 text-orange-800';
     case TaskStatus.InProgress:
-      return 'bg-rose-pink/50 text-rose-mauve';
+      return 'bg-yellow-100 text-yellow-800';
     case TaskStatus.Completed:
-      return 'bg-accent/30 text-accent-foreground';
+      return 'bg-green-100 text-green-800';
     case TaskStatus.Closed:
-      return 'bg-muted text-muted-foreground';
+      return 'bg-gray-100 text-gray-800';
     case TaskStatus.ApprovedPendingPayment:
-      return 'bg-primary/20 text-primary';
+      return 'bg-purple-100 text-purple-800';
     default:
-      return 'bg-muted text-muted-foreground';
+      return 'bg-gray-100 text-gray-800';
   }
 };

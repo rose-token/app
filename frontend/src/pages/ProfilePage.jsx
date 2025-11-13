@@ -76,14 +76,14 @@ const ProfilePage = () => {
       {isLoading && !profile ? (
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="animate-pulse">
-            <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
-            <div className="h-4 bg-muted rounded w-1/2 mb-6"></div>
-            <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-            <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-6"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
           </div>
         </div>
       ) : error ? (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-6">
+        <div className="bg-red-100 text-red-700 p-4 rounded-md mb-6">
           {error}
         </div>
       ) : (
@@ -92,27 +92,27 @@ const ProfilePage = () => {
             <div>
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-2">Wallet Address</h2>
-                <p className="text-foreground break-all">
+                <p className="text-gray-700 break-all">
                   {account}
                 </p>
               </div>
-
+              
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-2">Username</h2>
-                <p className="text-foreground">
-                  {profile?.username || <span className="text-muted-foreground italic">Not set</span>}
+                <p className="text-gray-700">
+                  {profile?.username || <span className="text-gray-400 italic">Not set</span>}
                 </p>
               </div>
-
+              
               <div className="mb-6">
                 <h2 className="text-xl font-semibold mb-2">Bio</h2>
-                <p className="text-foreground whitespace-pre-wrap">
-                  {profile?.bio || <span className="text-muted-foreground italic">Not set</span>}
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {profile?.bio || <span className="text-gray-400 italic">Not set</span>}
                 </p>
               </div>
-
+              
               {updateSuccess && (
-                <div className="mb-4 p-3 bg-accent/10 text-accent rounded-md">
+                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
                   Profile updated successfully!
                 </div>
               )}
@@ -129,7 +129,7 @@ const ProfilePage = () => {
           ) : (
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
-                <label className="block text-foreground text-sm font-bold mb-2" htmlFor="username">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
                   Username
                 </label>
                 <input
@@ -137,36 +137,36 @@ const ProfilePage = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-rose-tan rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Enter your username"
                 />
               </div>
-
+              
               <div className="mb-4">
-                <label className="block text-foreground text-sm font-bold mb-2" htmlFor="bio">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="bio">
                   Bio
                 </label>
                 <textarea
                   id="bio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3 py-2 border border-rose-tan rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   rows="4"
                   placeholder="Tell us about yourself"
                 />
               </div>
-
+              
               {updateError && (
-                <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-md">
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
                   {updateError}
                 </div>
               )}
-
+              
               <div className="flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="bg-muted text-foreground py-2 px-4 rounded-md hover:bg-muted/80"
+                  className="bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400"
                   disabled={isSaving}
                 >
                   Cancel

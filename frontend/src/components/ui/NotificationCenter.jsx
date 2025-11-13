@@ -18,14 +18,14 @@ const NotificationCenter = ({
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'error':
-        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
       case 'warning':
-        return <Clock className="h-4 w-4 text-rose-coral" />;
+        return <Clock className="h-4 w-4 text-orange-500" />;
       case 'success':
-        return <CheckCircle className="h-4 w-4 text-rose-mauve" />;
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'info':
       default:
-        return <Info className="h-4 w-4 text-primary" />;
+        return <Info className="h-4 w-4 text-blue-500" />;
     }
   };
 
@@ -128,7 +128,7 @@ const NotificationCenter = ({
             <CardContent className="p-0">
               <div className="max-h-96 overflow-y-auto">
                 {filteredNotifications.length === 0 ? (
-                  <div className="p-6 text-center text-muted-foreground">
+                  <div className="p-6 text-center text-gray-500">
                     {filter === 'all' ? 'No notifications' : `No ${filter} notifications`}
                   </div>
                 ) : (
@@ -136,8 +136,8 @@ const NotificationCenter = ({
                     {filteredNotifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`p-4 border-b last:border-b-0 hover:bg-muted/20 ${
-                          !notification.read ? 'bg-primary/5' : ''
+                        className={`p-4 border-b last:border-b-0 hover:bg-gray-50 ${
+                          !notification.read ? 'bg-blue-50' : ''
                         }`}
                       >
                         <div className="flex items-start space-x-3">
@@ -149,14 +149,14 @@ const NotificationCenter = ({
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 {notification.title && (
-                                  <p className="text-sm font-medium text-foreground mb-1">
+                                  <p className="text-sm font-medium text-gray-900 mb-1">
                                     {notification.title}
                                   </p>
                                 )}
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-sm text-gray-600">
                                   {notification.message}
                                 </p>
-                                <p className="text-xs text-muted-foreground/60 mt-1">
+                                <p className="text-xs text-gray-400 mt-1">
                                   {formatTimeAgo(notification.timestamp)}
                                 </p>
                               </div>
@@ -203,14 +203,14 @@ const NotificationCenter = ({
                   </div>
                 )}
               </div>
-
+              
               {notifications.length > 0 && (
-                <div className="p-3 border-t bg-muted/20">
+                <div className="p-3 border-t bg-gray-50">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={onClear}
-                    className="w-full text-xs text-muted-foreground"
+                    className="w-full text-xs text-gray-600"
                   >
                     Clear All Notifications
                   </Button>
