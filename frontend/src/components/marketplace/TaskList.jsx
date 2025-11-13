@@ -16,14 +16,14 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
   
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-muted">
         No tasks available. Create a new task to get started!
         {onRefresh && (
           <div className="mt-4">
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh Tasks
@@ -39,7 +39,7 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
       <div className="flex justify-between items-center mb-4">
         <div>
           {isRefreshing && (
-            <div className="bg-blue-50 text-blue-700 p-2 rounded-md text-sm">
+            <div className="bg-primary/10 text-primary p-2 rounded-md text-sm">
               Refreshing tasks...
             </div>
           )}
@@ -48,7 +48,7 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Refresh

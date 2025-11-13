@@ -6,10 +6,10 @@ const WalletNotConnected = () => {
   const [showDetails, setShowDetails] = useState(false);
     
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200 text-center">
+    <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-rose-tan text-center">
       <h2 className="text-xl font-semibold mb-4">Connect Your Wallet</h2>
-        
-      <div className="mb-6 text-gray-600">
+
+      <div className="mb-6 text-muted-foreground">
         <p className="mb-4">
           Connect your wallet to create tasks, claim work, and earn ROSE tokens
         </p>
@@ -27,9 +27,9 @@ const WalletNotConnected = () => {
               className="text-primary hover:underline mb-4"  
             >  
               Learn more about ROSE Token →  
-            </button>  
-          ) : (  
-            <div className="bg-gray-50 p-4 rounded-md mt-3">  
+            </button>
+          ) : (
+            <div className="bg-rose-blush p-4 rounded-md mt-3">
               <h4 className="font-medium mb-2">How Rose Token Works:</h4>  
               <ul className="list-disc pl-5 space-y-2 mb-4">  
                 <li>  

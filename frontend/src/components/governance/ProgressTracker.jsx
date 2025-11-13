@@ -42,9 +42,9 @@ const ProgressTracker = ({ task }) => {
   };
 
   const getStageIcon = (stage, status) => {
-    if (status === 'completed') return <CheckCircle className="h-5 w-5 text-green-600" />;
-    if (status === 'active') return <Clock className="h-5 w-5 text-blue-600" />;
-    return <div className="h-5 w-5 rounded-full border-2 border-gray-300" />;
+    if (status === 'completed') return <CheckCircle className="h-5 w-5 text-accent" />;
+    if (status === 'active') return <Clock className="h-5 w-5 text-primary" />;
+    return <div className="h-5 w-5 rounded-full border-2 border-rose-tan" />;
   };
 
   const stages = [
@@ -102,7 +102,7 @@ const ProgressTracker = ({ task }) => {
                 {getStageIcon(stage.id, stage.status)}
                 {index < stages.length - 1 && (
                   <div className={`w-0.5 h-8 mt-2 ${
-                    stage.status === 'completed' ? 'bg-green-600' : 'bg-gray-300'
+                    stage.status === 'completed' ? 'bg-accent' : 'bg-muted'
                   }`} />
                 )}
               </div>
@@ -117,15 +117,15 @@ const ProgressTracker = ({ task }) => {
                      stage.status === 'active' ? 'Active' : 'Pending'}
                   </Badge>
                 </div>
-                <p className="text-xs text-gray-600 mt-1">{stage.description}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stage.description}</p>
               </div>
             </div>
           ))}
         </div>
-        
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-          <h5 className="text-sm font-medium text-blue-800 mb-1">Task Benefits</h5>
-          <ul className="text-xs text-blue-700 space-y-1">
+
+        <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+          <h5 className="text-sm font-medium text-primary mb-1">Task Benefits</h5>
+          <ul className="text-xs text-primary space-y-1">
             <li>• Worker-focused: 95% of task value goes to worker</li>
             <li>• Stakeholder earns 50% ROI on 10% stake (5% fee + stake returned)</li>
             <li>• Sustainable platform: 2% minted to DAO treasury (~2% annual inflation)</li>

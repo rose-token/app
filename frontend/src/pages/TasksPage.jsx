@@ -410,7 +410,7 @@ const TasksPage = () => {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Rose Token Marketplace</h1>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
           A decentralized task marketplace with a worker token distribution model
         </p>
       </div>
