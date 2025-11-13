@@ -22,52 +22,61 @@ const WalletNotConnected = () => {
           </p>
             
           {!showDetails ? (
-            <button   
-              onClick={() => setShowDetails(true)}  
-              className="text-primary hover:underline mb-4"  
-            >  
-              Learn more about ROSE Token →  
-            </button>  
-          ) : (  
-            <div className="bg-gray-50 p-4 rounded-md mt-3">  
-              <h4 className="font-medium mb-2">How Rose Token Works:</h4>  
-              <ul className="list-disc pl-5 space-y-2 mb-4">  
-                <li>  
-                  <strong>Three Core Roles:</strong>  
-                  <ul className="list-circle pl-5 mt-1">  
-                    <li><strong>Customers:</strong> Create tasks with ETH deposits</li>  
-                    <li><strong>Workers:</strong> Claim and complete tasks</li>  
-                    <li><strong>Stakeholders:</strong> Validate work and arbitrate disputes</li>  
-                  </ul>  
-                </li>  
-                <li>  
-                  <strong>Worker Token Distribution:</strong> When tasks are completed successfully, new ROSE tokens are minted and distributed:  
-                  <ul className="list-circle pl-5 mt-1">  
-                    <li>95% to the worker who completed the task</li>  
-                    <li>5% to the stakeholder who validated the work</li>  
-                    <li>2% minted to a DAO treasury for community governance</li>  
-                  </ul>  
-                </li>  
-                <li>  
-                  <strong>Reputation System:</strong> Earn experience points and unlock minting bonuses as you participate in the ecosystem.  
-                </li>  
-              </ul>  
-                
-              <h4 className="font-medium mb-2">Benefits:</h4>  
-              <ul className="list-disc pl-5 space-y-1 mb-4">  
-                <li>Earn ROSE tokens by contributing your skills and validating work</li>  
-                <li>Fair distribution model that rewards all participants</li>  
-                <li>Community-governed ecosystem through the DAO treasury</li>  
-                <li>Built on Ethereum for security and transparency</li>  
-              </ul>  
-                
-              <button   
-                onClick={() => setShowDetails(false)}  
-                className="text-primary hover:underline mt-2"  
-              >  
-                Show less  
-              </button>  
-            </div>  
+            <button
+              onClick={() => setShowDetails(true)}
+              className="text-primary hover:underline mb-4"
+            >
+              Learn more about ROSE Token →
+            </button>
+          ) : (
+            <div className="bg-gray-50 p-4 rounded-md mt-3">
+              <h4 className="font-medium mb-2">How Rose Token Works:</h4>
+              <ul className="list-disc pl-5 space-y-2 mb-4">
+                <li>
+                  <strong>Three Core Roles:</strong>
+                  <ul className="list-circle pl-5 mt-1 space-y-1">
+                    <li><strong>Customers:</strong> Create tasks by depositing ROSE tokens as payment. Your deposit is held safely in escrow until the work is completed and approved.</li>
+                    <li><strong>Workers:</strong> Browse open tasks, claim work on a first-come first-served basis, complete the task, and earn 95% of the task value in ROSE tokens.</li>
+                    <li><strong>Stakeholders:</strong> Stake 10% of a task's value to enable it, then validate completed work quality. Earn a 5% fee plus your stake back (50% ROI) when the task is successfully completed.</li>
+                  </ul>
+                </li>
+                <li>
+                  <strong>Task Payment Flow:</strong>
+                  <ul className="list-circle pl-5 mt-1">
+                    <li>Customer deposits ROSE tokens (e.g., 10 ROSE for a task)</li>
+                    <li>Stakeholder stakes 10% of task value (e.g., 1 ROSE, returned on completion)</li>
+                    <li>Platform mints 2% to DAO treasury separately (e.g., 0.2 ROSE)</li>
+                  </ul>
+                </li>
+                <li>
+                  <strong>Payment Distribution (on successful completion):</strong>
+                  <ul className="list-circle pl-5 mt-1">
+                    <li><strong>Worker receives 95%</strong> of customer's deposit (e.g., 9.5 ROSE)</li>
+                    <li><strong>Stakeholder receives 5%</strong> fee + 10% stake returned (e.g., 1.5 ROSE total = 50% ROI)</li>
+                    <li><strong>DAO receives 2%</strong> minted separately for governance</li>
+                  </ul>
+                </li>
+                <li>
+                  <strong>Task-Value Based:</strong> All payments scale with the task value - higher value tasks pay more ROSE tokens.
+                </li>
+              </ul>
+
+              <h4 className="font-medium mb-2">Benefits:</h4>
+              <ul className="list-disc pl-5 space-y-1 mb-4">
+                <li>Workers earn 95% of task value in ROSE tokens</li>
+                <li>Stakeholders earn 50% ROI on their stake for validating work</li>
+                <li>Customer deposits held safely in escrow until work is approved</li>
+                <li>Community-governed ecosystem through the DAO treasury</li>
+                <li>Built on Ethereum (Sepolia testnet) for security and transparency</li>
+              </ul>
+
+              <button
+                onClick={() => setShowDetails(false)}
+                className="text-primary hover:underline mt-2"
+              >
+                Show less
+              </button>
+            </div>
           )}  
         </div>  
       </div>  
