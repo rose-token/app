@@ -23,8 +23,8 @@
     --background: 33 58% 91%;
     --foreground: 12 49% 17%;
 
-    /* Card background uses same as main background for consistency */
-    --card: 33 58% 91%;
+    /* Card background uses white to stand out from cream background */
+    --card: 0 0% 100%;
     --card-foreground: 12 49% 17%;
 
     --popover: 33 58% 91%;
@@ -50,7 +50,7 @@
     --destructive-foreground: 33 58% 91%;
 
     --border: 25 25% 38%;
-    --input: 33 58% 91%;
+    --input: 0 0% 100%;
     --ring: 12 58% 43%;
 
     --radius: 0.5rem;
