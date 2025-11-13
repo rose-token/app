@@ -43,9 +43,9 @@ const WalletNotConnected = () => {
                 <li>  
                   <strong>Worker Token Distribution:</strong> When tasks are completed successfully, new ROSE tokens are minted and distributed:  
                   <ul className="list-circle pl-5 mt-1">  
-                    <li>60% to the worker who completed the task</li>  
-                    <li>20% to the stakeholder who validated the work</li>  
-                    <li>20% to a DAO treasury for community governance</li>  
+                    <li>95% to the worker who completed the task</li>  
+                    <li>5% to the stakeholder who validated the work</li>  
+                    <li>2% minted to a DAO treasury for community governance</li>  
                   </ul>  
                 </li>  
                 <li>  
