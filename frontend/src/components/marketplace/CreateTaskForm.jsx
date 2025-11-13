@@ -210,7 +210,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             required
             maxLength={100}
           />
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted">
             Public title visible to everyone ({title.length}/100)
           </p>
         </div>
@@ -228,7 +228,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc. Only visible to task participants."
             required
           />
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted">
             Private - Only visible to customer, stakeholder, and worker. ({detailedDescription.length} characters)
           </p>
         </div>
@@ -253,7 +253,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               <span className="text-muted-foreground">ROSE</span>
             </div>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted">
             This amount in ROSE tokens will be paid to the worker upon successful completion
           </p>
         </div>
