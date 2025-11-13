@@ -116,9 +116,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-4 border border-gray-200">
+    <div className="bg-card rounded-lg shadow-md p-6 mb-4 border border-border">
       <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold">{task.description}</h3>
+        <h3 className="text-lg font-semibold text-foreground">{task.description}</h3>
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
           {getStatusText(task.status)}
         </span>
@@ -127,12 +127,12 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {/* Detailed Description Section */}
       <div className="mb-4">
         {canViewDetails ? (
-          <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
+          <div className="border border-border rounded-md p-3 bg-muted/20">
             {!showDetails ? (
               <button
                 onClick={loadDetailedDescription}
                 disabled={isLoadingDetails}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+                className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
               >
                 {isLoadingDetails ? (
                   <>
@@ -149,19 +149,19 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             ) : (
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-semibold text-sm text-gray-700">Detailed Description</h4>
+                  <h4 className="font-semibold text-sm text-foreground">Detailed Description</h4>
                   <button
                     onClick={() => setShowDetails(false)}
-                    className="text-gray-500 hover:text-gray-700 text-xs"
+                    className="text-muted-foreground hover:text-foreground text-xs"
                   >
                     Hide
                   </button>
                 </div>
                 {detailedContent && (
-                  <div className="text-sm text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border border-gray-200">
+                  <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded border border-border">
                     {detailedContent.description}
                     {detailedContent.uploadedAt && (
-                      <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border">
                         Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
                       </p>
                     )}
@@ -170,7 +170,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
               </div>
             )}
             {detailsError && (
-              <p className="text-xs text-red-600 mt-1">{detailsError}</p>
+              <p className="text-xs text-destructive mt-1">{detailsError}</p>
             )}
           </div>
         ) : null}
@@ -178,38 +178,38 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <p className="text-sm text-gray-500">Customer</p>
-          <p className="text-sm font-medium truncate">{task.customer}</p>
+          <p className="text-sm text-muted-foreground">Customer</p>
+          <p className="text-sm font-medium text-foreground truncate">{task.customer}</p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Deposit</p>
-          <p className="text-sm font-medium">{formatTokens(task.deposit)} ROSE</p>
+          <p className="text-sm text-muted-foreground">Deposit</p>
+          <p className="text-sm font-medium text-foreground">{formatTokens(task.deposit)} ROSE</p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Worker</p>
-          <p className="text-sm font-medium truncate">{task.worker || 'Not assigned'}</p>
+          <p className="text-sm text-muted-foreground">Worker</p>
+          <p className="text-sm font-medium text-foreground truncate">{task.worker || 'Not assigned'}</p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Stakeholder</p>
-          <p className="text-sm font-medium truncate">{task.stakeholder || 'Not assigned'}</p>
+          <p className="text-sm text-muted-foreground">Stakeholder</p>
+          <p className="text-sm font-medium text-foreground truncate">{task.stakeholder || 'Not assigned'}</p>
         </div>
         {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
           <div>
-            <p className="text-sm text-gray-500">Stakeholder Deposit</p>
-            <p className="text-sm font-medium">{formatTokens(task.stakeholderDeposit)} ROSE</p>
+            <p className="text-sm text-muted-foreground">Stakeholder Deposit</p>
+            <p className="text-sm font-medium text-foreground">{formatTokens(task.stakeholderDeposit)} ROSE</p>
           </div>
         )}
       </div>
 
       {/* Display PR URL if task is completed or beyond */}
       {task.prUrl && task.status >= TaskStatus.Completed && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
-          <p className="text-sm text-gray-600 mb-1">Pull Request:</p>
+        <div className="mb-4 p-3 bg-accent/20 rounded-md border border-accent">
+          <p className="text-sm text-muted-foreground mb-1">Pull Request:</p>
           <a
             href={task.prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-blue-600 hover:text-blue-800 underline break-all"
+            className="text-sm text-primary hover:text-primary/80 underline break-all"
           >
             {task.prUrl}
           </a>
@@ -219,12 +219,12 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {task.status === TaskStatus.Completed && (
         <div className="mb-4 flex space-x-4">
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.customerApproval ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-            <span className="text-sm">Customer Approval</span>
+            <span className={`w-3 h-3 rounded-full mr-2 ${task.customerApproval ? 'bg-accent' : 'bg-muted'}`}></span>
+            <span className="text-sm text-foreground">Customer Approval</span>
           </div>
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.stakeholderApproval ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-            <span className="text-sm">Stakeholder Approval</span>
+            <span className={`w-3 h-3 rounded-full mr-2 ${task.stakeholderApproval ? 'bg-accent' : 'bg-muted'}`}></span>
+            <span className="text-sm text-foreground">Stakeholder Approval</span>
           </div>
         </div>
       )}
@@ -233,7 +233,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canStake && (
           <button
             onClick={() => onStake(task.id)}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-stake hover:bg-task-stake/90 text-task-stake-foreground px-4 py-2 rounded-md text-sm font-medium"
           >
             Stake as Stakeholder
           </button>
@@ -242,7 +242,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canClaim && (
           <button
             onClick={() => onClaim(task.id)}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-claim hover:bg-task-claim/90 text-task-claim-foreground px-4 py-2 rounded-md text-sm font-medium"
           >
             Claim Task
           </button>
@@ -251,7 +251,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canUnclaim && (
           <button
             onClick={() => onUnclaim(task.id)}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-unclaim hover:bg-task-unclaim/90 text-task-unclaim-foreground px-4 py-2 rounded-md text-sm font-medium"
             title="Release this task so another worker can claim it"
           >
             Unclaim Task
@@ -261,7 +261,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canComplete && (
           <button
             onClick={handleMarkCompleted}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground px-4 py-2 rounded-md text-sm font-medium"
           >
             Mark Completed
           </button>
@@ -270,7 +270,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canApproveAsCustomer && (
           <button
             onClick={() => onApprove(task.id, 'customer')}
-            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground px-4 py-2 rounded-md text-sm font-medium"
           >
             Approve as Customer
           </button>
@@ -279,7 +279,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canApproveAsStakeholder && (
           <button
             onClick={() => onApprove(task.id, 'stakeholder')}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md border border-indigo-400"
+            className="bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md"
           >
             ✓ Approve as Stakeholder
           </button>
@@ -288,7 +288,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canAcceptPayment && (
           <button
             onClick={() => onAcceptPayment(task.id)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1"
+            className="bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1"
           >
             <span>Accept Payment</span>
             <span className="text-xs">(gas fees apply)</span>
@@ -298,7 +298,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canCancel && (
           <button
             onClick={() => onCancel(task.id)}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="bg-task-cancel hover:bg-task-cancel/90 text-task-cancel-foreground px-4 py-2 rounded-md text-sm font-medium"
           >
             Cancel Task
           </button>
@@ -315,14 +315,14 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {/* PR URL Modal */}
       {showPrUrlModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Mark Task as Completed</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Mark Task as Completed</h3>
+            <p className="text-sm text-muted-foreground mb-4">
               Please provide the GitHub Pull Request URL for the completed work:
             </p>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 GitHub PR URL *
               </label>
               <input
@@ -330,23 +330,23 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
                 value={prUrl}
                 onChange={(e) => setPrUrl(e.target.value)}
                 placeholder="https://github.com/owner/repo/pull/123"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
               />
               {prUrlError && (
-                <p className="text-xs text-red-600 mt-1">{prUrlError}</p>
+                <p className="text-xs text-destructive mt-1">{prUrlError}</p>
               )}
             </div>
 
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowPrUrlModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted/80 rounded-md"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmitCompletion}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-md"
+                className="px-4 py-2 text-sm font-medium bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground rounded-md"
               >
                 Submit
               </button>

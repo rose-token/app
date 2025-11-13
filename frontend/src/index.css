@@ -1,71 +1,146 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
- 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
- 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
- 
-    --primary: 346.8 77.2% 49.8%;
-    --primary-foreground: 355.7 100% 97.3%;
- 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
- 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
- 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
- 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
- 
+    /*
+     * Rose Theme Color Palette
+     *
+     * Core Colors:
+     * - #F6E8D5 (Background) - Soft cream, warm and inviting
+     * - #B1452C (Primary) - Deep rose, main brand color for navbar and primary actions
+     * - #E4A97F (Accent) - Warm peach, positive buttons and highlights
+     * - #421F16 (Destructive) - Dark brown, negative actions and warnings
+     * - #755947 (Secondary) - Medium brown, secondary elements and muted states
+     *
+     * All colors use HSL format for Tailwind CSS compatibility
+     * Modify these variables to change the entire theme
+     */
+
+    /* Base Colors - Rose Theme Palette */
+    /* Standard background: #F6E8D5 */
+    --background: 33 58% 91%;
+    --foreground: 12 49% 17%;
+
+    /* Card background uses same as main background for consistency */
+    --card: 33 58% 91%;
+    --card-foreground: 12 49% 17%;
+
+    --popover: 33 58% 91%;
+    --popover-foreground: 12 49% 17%;
+
+    /* Main color/Left navbar: #B1452C */
+    --primary: 12 58% 43%;
+    --primary-foreground: 33 58% 91%;
+
+    /* Secondary/muted: #755947 */
+    --secondary: 25 25% 38%;
+    --secondary-foreground: 33 58% 91%;
+
+    --muted: 25 25% 38%;
+    --muted-foreground: 33 58% 91%;
+
+    /* Positive buttons/accents: #E4A97F */
+    --accent: 23 65% 69%;
+    --accent-foreground: 12 49% 17%;
+
+    /* Negative buttons/accents: #421F16 */
+    --destructive: 12 49% 17%;
+    --destructive-foreground: 33 58% 91%;
+
+    --border: 25 25% 38%;
+    --input: 33 58% 91%;
+    --ring: 12 58% 43%;
+
     --radius: 0.5rem;
+
+    /* Task-Specific Action Colors */
+    /* Stake action - warm orange tone */
+    --task-stake: 23 65% 69%;
+    --task-stake-foreground: 12 49% 17%;
+
+    /* Claim action - primary rose */
+    --task-claim: 12 58% 43%;
+    --task-claim-foreground: 33 58% 91%;
+
+    /* Unclaim action - muted brown */
+    --task-unclaim: 25 25% 38%;
+    --task-unclaim-foreground: 33 58% 91%;
+
+    /* Complete action - accent orange */
+    --task-complete: 23 65% 69%;
+    --task-complete-foreground: 12 49% 17%;
+
+    /* Approve action - primary rose */
+    --task-approve: 12 58% 43%;
+    --task-approve-foreground: 33 58% 91%;
+
+    /* Cancel action - destructive dark */
+    --task-cancel: 12 49% 17%;
+    --task-cancel-foreground: 33 58% 91%;
+
+    /* Status Badge Colors */
+    /* Open status - inviting accent */
+    --status-open: 23 65% 69%;
+    --status-open-foreground: 12 49% 17%;
+
+    /* Needs stakeholder - warm attention */
+    --status-stakeholder-needed: 23 65% 69%;
+    --status-stakeholder-needed-foreground: 12 49% 17%;
+
+    /* In progress - primary active */
+    --status-in-progress: 12 58% 43%;
+    --status-in-progress-foreground: 33 58% 91%;
+
+    /* Completed - success tone */
+    --status-completed: 23 65% 69%;
+    --status-completed-foreground: 12 49% 17%;
+
+    /* Approved - confirmed state */
+    --status-approved: 12 58% 43%;
+    --status-approved-foreground: 33 58% 91%;
+
+    /* Closed - muted finished */
+    --status-closed: 25 25% 38%;
+    --status-closed-foreground: 33 58% 91%;
   }
- 
+
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
- 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
- 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
- 
-    --primary: 346.8 77.2% 49.8%;
-    --primary-foreground: 355.7 100% 97.3%;
- 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
- 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
- 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Dark mode with rose theme adjustments */
+    --background: 12 49% 17%;
+    --foreground: 33 58% 91%;
+
+    --card: 12 49% 17%;
+    --card-foreground: 33 58% 91%;
+
+    --popover: 12 49% 17%;
+    --popover-foreground: 33 58% 91%;
+
+    --primary: 12 58% 43%;
+    --primary-foreground: 33 58% 91%;
+
+    --secondary: 25 25% 38%;
+    --secondary-foreground: 33 58% 91%;
+
+    --muted: 25 25% 38%;
+    --muted-foreground: 33 58% 91%;
+
+    --accent: 23 65% 69%;
+    --accent-foreground: 12 49% 17%;
+
+    --destructive: 12 49% 17%;
+    --destructive-foreground: 33 58% 91%;
+
+    --border: 25 25% 38%;
+    --input: 25 25% 38%;
+    --ring: 23 65% 69%;
+
+    /* Task-specific colors remain the same in dark mode */
+    /* They will automatically adjust based on background contrast */
   }
 }
- 
+
 @layer base {
   * {
     @apply border-border;

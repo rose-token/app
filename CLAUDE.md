@@ -355,6 +355,108 @@ The frontend uses React 18.2.0 with custom webpack configuration (via react-app-
 - **tailwind.config.js** - Tailwind CSS customization
 - **postcss.config.js** - PostCSS configuration for Tailwind
 
+## Rose Theme Color Palette & Styling
+
+### Color System (November 2024)
+
+The application uses a **soft red rose theme** with centralized CSS variables for easy theme management. All colors are defined in `frontend/src/index.css` using HSL format for Tailwind CSS compatibility.
+
+#### Core Color Palette
+
+| Color | Hex Code | Usage | HSL Value |
+|-------|----------|-------|-----------|
+| **Cream Background** | `#F6E8D5` | Standard background, card backgrounds, input fields | `33 58% 91%` |
+| **Deep Rose** | `#B1452C` | Primary brand color, navbar, primary buttons, active states | `12 58% 43%` |
+| **Warm Peach** | `#E4A97F` | Positive buttons, accents, success indicators, highlights | `23 65% 69%` |
+| **Dark Brown** | `#421F16` | Negative buttons, destructive actions, warnings | `12 49% 17%` |
+| **Medium Brown** | `#755947` | Secondary elements, muted states, borders | `25 25% 38%` |
+
+#### Semantic Color Variables
+
+All colors are defined as CSS variables in `/frontend/src/index.css` and extended in `tailwind.config.js`:
+
+**Base Semantic Colors:**
+- `--background` / `--foreground` - Page background and text
+- `--card` / `--card-foreground` - Card backgrounds and text
+- `--primary` / `--primary-foreground` - Main brand color (deep rose)
+- `--secondary` / `--secondary-foreground` - Secondary UI elements (medium brown)
+- `--accent` / `--accent-foreground` - Positive highlights (warm peach)
+- `--destructive` / `--destructive-foreground` - Negative actions (dark brown)
+- `--muted` / `--muted-foreground` - Muted/disabled states
+- `--border` / `--input` / `--ring` - Form elements and borders
+
+**Task-Specific Action Colors:**
+- `--task-stake` - Stakeholder stake button (warm peach)
+- `--task-claim` - Worker claim button (deep rose)
+- `--task-unclaim` - Worker unclaim button (medium brown)
+- `--task-complete` - Mark completed button (warm peach)
+- `--task-approve` - Approval buttons (deep rose)
+- `--task-cancel` - Cancel task button (dark brown)
+
+**Status Badge Colors:**
+- `--status-open` - Open tasks (warm peach)
+- `--status-stakeholder-needed` - Needs stakeholder (warm peach)
+- `--status-in-progress` - In progress tasks (deep rose)
+- `--status-completed` - Completed tasks (warm peach)
+- `--status-approved` - Approved tasks (deep rose)
+- `--status-closed` - Closed tasks (medium brown)
+
+### Styling Best Practices
+
+**IMPORTANT: All styling must use CSS variables, NOT hardcoded colors**
+
+❌ **NEVER do this:**
+```jsx
+className="bg-blue-500 text-white"
+className="border-gray-300"
+className="text-red-600"
+```
+
+✅ **ALWAYS do this:**
+```jsx
+className="bg-primary text-primary-foreground"
+className="border-border"
+className="text-destructive"
+```
+
+**Component Color Guidelines:**
+
+1. **Backgrounds**: Use `bg-background` or `bg-card`
+2. **Text**: Use `text-foreground` or `text-muted-foreground`
+3. **Borders**: Use `border-border`
+4. **Primary Actions**: Use `bg-primary text-primary-foreground`
+5. **Positive Actions**: Use `bg-accent text-accent-foreground`
+6. **Negative Actions**: Use `bg-destructive text-destructive-foreground`
+7. **Task Actions**: Use `bg-task-{action}` (e.g., `bg-task-claim`, `bg-task-stake`)
+8. **Status Badges**: Use `bg-status-{status}` (e.g., `bg-status-open`, `bg-status-completed`)
+
+**Centralized Theme Management:**
+
+To change the entire theme, modify only `/frontend/src/index.css`:
+- Update the HSL values in the `:root` section
+- All components will automatically reflect the new theme
+- No need to update individual component files
+
+**Dark Mode Support:**
+
+The `.dark` class in `index.css` provides dark mode variants. Components using semantic variables automatically support dark mode.
+
+### File Locations
+
+- **Color Definitions**: `/frontend/src/index.css` (CSS variables in HSL format)
+- **Tailwind Extension**: `/frontend/tailwind.config.js` (extends CSS variables)
+- **Status Colors**: `/frontend/src/utils/taskStatus.js` (uses `status-*` variables)
+- **Component Usage**: All `.jsx` files in `/frontend/src/components/`
+
+### Why This Approach?
+
+1. **Single Source of Truth**: One file (`index.css`) controls all colors
+2. **Easy Theme Changes**: Update HSL values to instantly restyle the entire app
+3. **Consistent Design**: Semantic naming ensures UI consistency
+4. **Dark Mode Ready**: Automatic dark mode support
+5. **Maintainable**: No scattered hardcoded colors across hundreds of files
+6. **Type-Safe**: Tailwind autocomplete works with CSS variables
+
 ## Testing Approach
 
 The project has **4 test suites** covering ~555 lines of test code. Tests use Hardhat and Chai for contract testing.

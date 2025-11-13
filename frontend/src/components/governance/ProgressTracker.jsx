@@ -42,9 +42,9 @@ const ProgressTracker = ({ task }) => {
   };
 
   const getStageIcon = (stage, status) => {
-    if (status === 'completed') return <CheckCircle className="h-5 w-5 text-green-600" />;
-    if (status === 'active') return <Clock className="h-5 w-5 text-blue-600" />;
-    return <div className="h-5 w-5 rounded-full border-2 border-gray-300" />;
+    if (status === 'completed') return <CheckCircle className="h-5 w-5 text-accent" />;
+    if (status === 'active') return <Clock className="h-5 w-5 text-primary" />;
+    return <div className="h-5 w-5 rounded-full border-2 border-muted" />;
   };
 
   const stages = [

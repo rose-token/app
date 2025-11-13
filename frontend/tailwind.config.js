@@ -49,6 +49,56 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Task-specific action colors
+        "task-stake": {
+          DEFAULT: "hsl(var(--task-stake))",
+          foreground: "hsl(var(--task-stake-foreground))",
+        },
+        "task-claim": {
+          DEFAULT: "hsl(var(--task-claim))",
+          foreground: "hsl(var(--task-claim-foreground))",
+        },
+        "task-unclaim": {
+          DEFAULT: "hsl(var(--task-unclaim))",
+          foreground: "hsl(var(--task-unclaim-foreground))",
+        },
+        "task-complete": {
+          DEFAULT: "hsl(var(--task-complete))",
+          foreground: "hsl(var(--task-complete-foreground))",
+        },
+        "task-approve": {
+          DEFAULT: "hsl(var(--task-approve))",
+          foreground: "hsl(var(--task-approve-foreground))",
+        },
+        "task-cancel": {
+          DEFAULT: "hsl(var(--task-cancel))",
+          foreground: "hsl(var(--task-cancel-foreground))",
+        },
+        // Status badge colors
+        "status-open": {
+          DEFAULT: "hsl(var(--status-open))",
+          foreground: "hsl(var(--status-open-foreground))",
+        },
+        "status-stakeholder-needed": {
+          DEFAULT: "hsl(var(--status-stakeholder-needed))",
+          foreground: "hsl(var(--status-stakeholder-needed-foreground))",
+        },
+        "status-in-progress": {
+          DEFAULT: "hsl(var(--status-in-progress))",
+          foreground: "hsl(var(--status-in-progress-foreground))",
+        },
+        "status-completed": {
+          DEFAULT: "hsl(var(--status-completed))",
+          foreground: "hsl(var(--status-completed-foreground))",
+        },
+        "status-approved": {
+          DEFAULT: "hsl(var(--status-approved))",
+          foreground: "hsl(var(--status-approved-foreground))",
+        },
+        "status-closed": {
+          DEFAULT: "hsl(var(--status-closed))",
+          foreground: "hsl(var(--status-closed-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
