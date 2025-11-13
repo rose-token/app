@@ -87,7 +87,7 @@ const ProgressTracker = ({ task }) => {
   ];
 
   return (
-    <Card>
+    <Card className="border">
       <CardHeader>
         <CardTitle className="flex items-center">
           <Award className="h-5 w-5 mr-2" />

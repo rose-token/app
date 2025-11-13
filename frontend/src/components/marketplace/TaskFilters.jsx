@@ -24,13 +24,13 @@ const TaskFilters = ({ filters, setFilters }) => {
     filters.showClosed;
 
   return (
-    <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div className="mb-4 p-4 bg-card rounded-lg">
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-md font-medium">Filter Tasks</h3>
         {usingCustomFilters && (
           <button 
             onClick={resetFilters}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm text-muted hover:text-muted"
           >
             Reset to defaults
           </button>
@@ -42,7 +42,7 @@ const TaskFilters = ({ filters, setFilters }) => {
             type="checkbox" 
             checked={filters.needStakeholder} 
             onChange={() => handleFilterChange('needStakeholder')}
-            className="rounded text-blue-600 focus:ring-blue-500"
+            className="rounded text-muted focus:ring-muted"
           />
           <span className="text-sm">Need Stakeholder</span>
         </label>
@@ -52,7 +52,7 @@ const TaskFilters = ({ filters, setFilters }) => {
             type="checkbox" 
             checked={filters.needWorker} 
             onChange={() => handleFilterChange('needWorker')}
-            className="rounded text-blue-600 focus:ring-blue-500"
+            className="rounded text-muted focus:ring-muted"
           />
           <span className="text-sm">Need Worker</span>
         </label>
@@ -62,7 +62,7 @@ const TaskFilters = ({ filters, setFilters }) => {
             type="checkbox" 
             checked={filters.myTasks} 
             onChange={() => handleFilterChange('myTasks')}
-            className="rounded text-blue-600 focus:ring-blue-500"
+            className="rounded text-muted focus:ring-primary"
           />
           <span className="text-sm">My Tasks</span>
         </label>
@@ -72,7 +72,7 @@ const TaskFilters = ({ filters, setFilters }) => {
             type="checkbox" 
             checked={filters.showClosed} 
             onChange={() => handleFilterChange('showClosed')}
-            className="rounded text-blue-600 focus:ring-blue-500"
+            className="rounded text-bmuted focus:ring-primary"
           />
           <span className="text-sm">Show Closed</span>
         </label>
