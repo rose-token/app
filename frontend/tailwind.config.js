@@ -49,6 +49,15 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Rose theme color palette
+        rose: {
+          cream: '#E0DED6',      // Light beige/cream - cards, backgrounds
+          mauve: '#985D81',      // Mauve/dusty purple - primary actions
+          tan: '#C1B1A4',        // Tan/beige - muted states
+          coral: '#E87D83',      // Coral/salmon - highlights, cancel actions
+          pink: '#F1B1B5',       // Light pink - secondary
+          blush: '#FAE5E6',      // Very light pink - backgrounds
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

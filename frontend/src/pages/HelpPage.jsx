@@ -167,8 +167,8 @@ const HelpPage = () => {
   };
 
   const CollapsibleSection = ({ id, title, children }) => (
-    <div className="mb-6 border rounded-lg overflow-hidden">
-      <button 
+    <div className="mb-6 border border-rose-tan rounded-lg overflow-hidden">
+      <button
         onClick={() => toggleSection(id)}
         className="w-full p-4 text-left font-bold bg-primary text-primary-foreground flex justify-between items-center"
       >
@@ -317,7 +317,7 @@ const HelpPage = () => {
               <li>
                 <p><strong>Claim a Task</strong></p>
                 <p>When you find a task you want to work on, click "Claim Task" and confirm the transaction.</p>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   Once claimed, the task will be reserved for you until the deadline.
                 </p>
               </li>
@@ -410,7 +410,7 @@ const HelpPage = () => {
           <p className="mt-4">
             The token distribution follows this model for each completed and validated task:
           </p>
-          <div className="my-4 p-4 bg-gray-100 rounded-md">
+          <div className="my-4 p-4 bg-muted rounded-md">
             <ul className="list-none space-y-2">
               <li>🔹 <strong>60%</strong> to the Worker who completed the task</li>
               <li>🔹 <strong>20%</strong> to the Stakeholder who validated the work</li>
@@ -472,7 +472,7 @@ const HelpPage = () => {
               a: "The platform itself doesn't charge fees beyond standard Ethereum gas fees for transactions. All value transfers in the system are transparent and follow our worker distribution model."
             }
           ].map((item, index) => (
-            <div key={index} className="border-b pb-4">
+            <div key={index} className="border-b border-rose-tan pb-4">
               <h4 className="font-bold text-lg mb-2">{item.q}</h4>
               <p>{item.a}</p>
             </div>
@@ -485,7 +485,7 @@ const HelpPage = () => {
           <div className="mb-4">
             <h3 className="text-xl font-semibold mb-3">Wallet Connection Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: MetaMask not connecting</h4>
                 <p className="mt-2">Try these steps:</p>
                 <ol className="list-decimal pl-5 mt-2">
@@ -496,8 +496,8 @@ const HelpPage = () => {
                   <li>Try using a different browser</li>
                 </ol>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
+
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: Wrong network showing</h4>
                 <p className="mt-2">Our platform requires the Sepolia testnet. To switch networks:</p>
                 <ol className="list-decimal pl-5 mt-2">
@@ -514,7 +514,7 @@ const HelpPage = () => {
           <div className="mb-4">
             <h3 className="text-xl font-semibold mb-3">Transaction Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: Transaction pending for too long</h4>
                 <ol className="list-decimal pl-5 mt-2">
                   <li>Check Sepolia gas prices and ensure you've set an appropriate gas fee</li>
@@ -522,8 +522,8 @@ const HelpPage = () => {
                   <li>Alternatively, you can cancel the transaction and try again</li>
                 </ol>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
+
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: Transaction failed</h4>
                 <p className="mt-2">Common reasons for failure:</p>
                 <ul className="list-disc pl-5 mt-2">
@@ -539,7 +539,7 @@ const HelpPage = () => {
           <div>
             <h3 className="text-xl font-semibold mb-3">Task-Related Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: Can't claim a task</h4>
                 <p className="mt-2">Possible reasons:</p>
                 <ul className="list-disc pl-5 mt-2">
@@ -549,8 +549,8 @@ const HelpPage = () => {
                   <li>You don't meet task requirements (if implemented)</li>
                 </ul>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
+
+              <div className="p-4 bg-muted rounded-md">
                 <h4 className="font-bold">Problem: Submitted work not being validated</h4>
                 <p className="mt-2">Validation can take time depending on stakeholder availability. If it's been more than 72 hours:</p>
                 <ol className="list-decimal pl-5 mt-2">
@@ -616,7 +616,7 @@ const HelpPage = () => {
               definition: "The Ethereum testnet where the Rose Token platform is currently deployed."
             }
           ].map((item, index) => (
-            <div key={index} className="border-b pb-4">
+            <div key={index} className="border-b border-rose-tan pb-4">
               <h4 className="font-bold text-lg">{item.term}</h4>
               <p>{item.definition}</p>
             </div>
@@ -633,13 +633,13 @@ const HelpPage = () => {
           
           {/* Error and success messages */}
           {bugError && (
-            <div className="p-3 bg-red-100 text-red-700 rounded-md">
+            <div className="p-3 bg-destructive/10 text-destructive rounded-md">
               {bugError}
             </div>
           )}
-          
+
           {bugSuccess && (
-            <div className="p-3 bg-green-100 text-green-700 rounded-md">
+            <div className="p-3 bg-accent/10 text-accent rounded-md">
               {bugSuccess}
             </div>
           )}
@@ -649,40 +649,40 @@ const HelpPage = () => {
             <h3 className="text-xl font-semibold mb-4">Submit a Bug Report</h3>
             <form onSubmit={handleBugSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Title <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
                   value={bugTitle}
                   onChange={(e) => setBugTitle(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
+                  className="w-full p-2 border border-rose-tan rounded-md"
                   placeholder="Brief description of the issue"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Description <span className="text-destructive">*</span>
                 </label>
                 <textarea
                   value={bugDescription}
                   onChange={(e) => setBugDescription(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  className="w-full p-2 border border-rose-tan rounded-md h-24"
                   placeholder="Detailed description of the bug"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Steps to Reproduce
                 </label>
                 <textarea
                   value={bugSteps}
                   onChange={(e) => setBugSteps(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  className="w-full p-2 border border-rose-tan rounded-md h-24"
                   placeholder="1. Go to...&#10;2. Click on...&#10;3. See error..."
                 />
               </div>
@@ -697,7 +697,7 @@ const HelpPage = () => {
             </form>
             
             {submittedCid && (
-              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+              <div className="mt-4 p-3 bg-primary/10 text-primary rounded-md">
                 <p>Your bug report has been stored on IPFS.</p>
                 <p className="text-sm mt-1">
                   <strong>CID:</strong> {submittedCid}
@@ -716,22 +716,22 @@ const HelpPage = () => {
               {/* List of reports */}
               <div className="md:col-span-1 border-r pr-4">
                 {bugReports.length === 0 ? (
-                  <p className="text-gray-500">No bug reports submitted yet.</p>
+                  <p className="text-muted-foreground">No bug reports submitted yet.</p>
                 ) : (
                   <ul className="space-y-2">
                     {bugReports.map((report) => (
-                      <li 
+                      <li
                         key={report.cid}
-                        className={`p-3 rounded-md cursor-pointer hover:bg-gray-50 ${
-                          selectedReport?.cid === report.cid ? 'bg-blue-50 border border-blue-200' : 'border border-gray-200'
+                        className={`p-3 rounded-md cursor-pointer hover:bg-muted/20 ${
+                          selectedReport?.cid === report.cid ? 'bg-primary/10 border border-primary' : 'border border-rose-tan'
                         }`}
                         onClick={() => fetchReportDetails(report.cid)}
                       >
-                        <h4 className="font-medium text-gray-900 truncate">{report.title}</h4>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <h4 className="font-medium text-foreground truncate">{report.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">
                           {formatDate(report.timestamp)}
                         </p>
-                        <p className="text-xs text-gray-400 mt-1 truncate">
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
                           CID: {report.cid}
                         </p>
                       </li>
@@ -749,32 +749,32 @@ const HelpPage = () => {
                 ) : selectedReport ? (
                   <div>
                     <h4 className="text-lg font-semibold">{selectedReport.title}</h4>
-                    <p className="text-sm text-gray-500 mb-4">
+                    <p className="text-sm text-muted-foreground mb-4">
                       Submitted on {formatDate(selectedReport.timestamp)}
                     </p>
-                    
+
                     <div className="mb-4">
-                      <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
-                      <div className="p-3 bg-gray-50 rounded-md">
+                      <h5 className="text-sm font-medium text-foreground mb-1">Description</h5>
+                      <div className="p-3 bg-muted rounded-md">
                         <p className="whitespace-pre-wrap">{selectedReport.description}</p>
                       </div>
                     </div>
-                    
+
                     {selectedReport.steps && (
                       <div className="mb-4">
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
-                        <div className="p-3 bg-gray-50 rounded-md">
+                        <h5 className="text-sm font-medium text-foreground mb-1">Steps to Reproduce</h5>
+                        <div className="p-3 bg-muted rounded-md">
                           <p className="whitespace-pre-wrap">{selectedReport.steps}</p>
                         </div>
                       </div>
                     )}
-                    
-                    <div className="mt-4 text-xs text-gray-500">
+
+                    <div className="mt-4 text-xs text-muted-foreground">
                       <p>IPFS Content Identifier (CID): {selectedReport.cid}</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-center items-center h-40 text-gray-500">
+                  <div className="flex justify-center items-center h-40 text-muted-foreground">
                     <p>Select a report to view details</p>
                   </div>
                 )}
@@ -785,10 +785,10 @@ const HelpPage = () => {
           {/* Look Up Report by CID Section */}
           <div className="border-t pt-6">
             <h3 className="text-xl font-semibold mb-4">Look Up Bug Report by CID</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               If you have a CID from a previously submitted bug report, you can look it up here.
             </p>
-            
+
             <form onSubmit={handleLookupReport} className="mb-6">
               <div className="flex flex-col md:flex-row gap-2">
                 <input
@@ -796,7 +796,7 @@ const HelpPage = () => {
                   value={lookupCid}
                   onChange={(e) => setLookupCid(e.target.value)}
                   placeholder="Enter IPFS Content Identifier (CID)"
-                  className="flex-grow p-2 border border-gray-300 rounded-md"
+                  className="flex-grow p-2 border border-rose-tan rounded-md"
                   required
                 />
                 <button
@@ -814,34 +814,34 @@ const HelpPage = () => {
                 <p>Loading report details...</p>
               </div>
             ) : lookupReport ? (
-              <div className="border border-gray-200 rounded-lg p-4">
+              <div className="border border-rose-tan rounded-lg p-4">
                 <h4 className="text-lg font-semibold">{lookupReport.title}</h4>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Submitted on {formatDate(lookupReport.timestamp)}
                 </p>
-                
+
                 <div className="mb-4">
-                  <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
-                  <div className="p-3 bg-gray-50 rounded-md">
+                  <h5 className="text-sm font-medium text-foreground mb-1">Description</h5>
+                  <div className="p-3 bg-muted rounded-md">
                     <p className="whitespace-pre-wrap">{lookupReport.description}</p>
                   </div>
                 </div>
-                
+
                 {lookupReport.steps && (
                   <div className="mb-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
-                    <div className="p-3 bg-gray-50 rounded-md">
+                    <h5 className="text-sm font-medium text-foreground mb-1">Steps to Reproduce</h5>
+                    <div className="p-3 bg-muted rounded-md">
                       <p className="whitespace-pre-wrap">{lookupReport.steps}</p>
                     </div>
                   </div>
                 )}
-                
-                <div className="mt-4 text-xs text-gray-500">
+
+                <div className="mt-4 text-xs text-muted-foreground">
                   <p>IPFS Content Identifier (CID): {lookupReport.cid}</p>
                 </div>
               </div>
             ) : (
-              <div className="flex justify-center items-center h-40 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+              <div className="flex justify-center items-center h-40 text-muted-foreground border border-dashed border-rose-tan rounded-lg">
                 <p>Enter a CID to look up a bug report</p>
               </div>
             )}
