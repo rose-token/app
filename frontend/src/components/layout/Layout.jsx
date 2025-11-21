@@ -18,8 +18,8 @@ const Layout = ({ children }) => {
         <main className="flex-1 container mx-auto py-8 px-4">
           {children}
         </main>
-        <footer className="py-6 text-center text-sm text-muted-foreground">
-          <p>Rose Token - A Worker-Focused Crypto Token Model</p>
+        <footer className="py-6 text-left text-xs text-mutedd">
+          <p>Copyright © 2025 Rose Labs, Inc. Licensed under the Peer Production License (PPL).</p>
         </footer>
       </div>
     </div>
