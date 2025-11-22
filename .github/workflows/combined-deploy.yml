@@ -150,12 +150,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: 'frontend/package.json'
       
       - name: Install dependencies
-        run: cd frontend && npm install --legacy-peer-deps --force
+        run: cd frontend && npm install
       
       - name: Download Contract Addresses Artifact
         uses: actions/download-artifact@v4
@@ -208,18 +208,18 @@ jobs:
       - name: Build
         run: cd frontend && npm run build
         env:
-          REACT_APP_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
-          REACT_APP_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
-          REACT_APP_REPUTATION_ADDRESS: ${{ env.REPUTATION_ADDRESS }}
-          REACT_APP_GOVERNANCE_ADDRESS: ${{ env.GOVERNANCE_ADDRESS }}
-          REACT_APP_DAO_TREASURY_ADDRESS: ${{ env.DAO_TREASURY_ADDRESS }}
-          REACT_APP_TOKEN_STAKING_ADDRESS: ${{ env.TOKEN_STAKING_ADDRESS }}
-          REACT_APP_STAKEHOLDER_REGISTRY_ADDRESS: ${{ env.STAKEHOLDER_REGISTRY_ADDRESS }}
-          REACT_APP_BID_EVALUATION_MANAGER_ADDRESS: ${{ env.BID_EVALUATION_MANAGER_ADDRESS }}
-          REACT_APP_BUILD_VERSION: ${{ env.BUILD_VERSION }}
-          REACT_APP_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
-          REACT_APP_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
-          REACT_APP_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
+          VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
+          VITE_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
+          VITE_REPUTATION_ADDRESS: ${{ env.REPUTATION_ADDRESS }}
+          VITE_GOVERNANCE_ADDRESS: ${{ env.GOVERNANCE_ADDRESS }}
+          VITE_DAO_TREASURY_ADDRESS: ${{ env.DAO_TREASURY_ADDRESS }}
+          VITE_TOKEN_STAKING_ADDRESS: ${{ env.TOKEN_STAKING_ADDRESS }}
+          VITE_STAKEHOLDER_REGISTRY_ADDRESS: ${{ env.STAKEHOLDER_REGISTRY_ADDRESS }}
+          VITE_BID_EVALUATION_MANAGER_ADDRESS: ${{ env.BID_EVALUATION_MANAGER_ADDRESS }}
+          VITE_BUILD_VERSION: ${{ env.BUILD_VERSION }}
+          VITE_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
+          VITE_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
+          VITE_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
       
       - name: Setup Pages
         uses: actions/configure-pages@v4

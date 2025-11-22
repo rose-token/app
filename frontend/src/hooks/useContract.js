@@ -8,9 +8,9 @@ import RoseTokenABI from '../contracts/RoseTokenABI.json';
 const DEFAULT_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const logInitialAddresses = () => {
-  const marketplaceAddress = process.env.REACT_APP_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
-  const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS || DEFAULT_ADDRESS;
-  const daoTreasuryAddress = process.env.REACT_APP_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
+  const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS || DEFAULT_ADDRESS;
+  const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS || DEFAULT_ADDRESS;
+  const daoTreasuryAddress = import.meta.env.VITE_DAO_TREASURY_ADDRESS || DEFAULT_ADDRESS;
 
   console.log('🌹 Contract Addresses (Initial Config):');
   console.log('Marketplace:', marketplaceAddress);
