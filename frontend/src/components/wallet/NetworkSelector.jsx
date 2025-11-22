@@ -1,21 +1,22 @@
 import React from 'react';
-import { useEthereum } from '../../hooks/useEthereum';
+import { useSwitchChain, useChainId } from 'wagmi';
 
 const NetworkSelector = () => {
-  const { chainId, switchNetwork } = useEthereum();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
   
   const networks = [
-    { id: '0x1', name: 'Ethereum Mainnet' },
-    { id: '0xaa36a7', name: 'Sepolia Testnet' }
+    { id: 1, name: 'Ethereum Mainnet' },
+    { id: 11155111, name: 'Sepolia Testnet' }
   ];
-  
+
   const currentNetwork = networks.find(network => network.id === chainId) || { name: 'Unknown Network' };
-  
+
   return (
     <div className="relative">
       <select
-        value={chainId}
-        onChange={(e) => switchNetwork(e.target.value)}
+        value={chainId || ''}
+        onChange={(e) => switchChain?.({ chainId: parseInt(e.target.value) })}
         className="bg-white text-primary hover:bg-opacity-90 px-4 py-2 rounded-md font-medium appearance-none cursor-pointer pr-8"
       >
         <option value={currentNetwork.id}>{currentNetwork.name}</option>
