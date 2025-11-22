@@ -8,7 +8,7 @@ export const config = getDefaultConfig({
   projectId: '95be0fbf27f06934c74d670d57f44939',
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http('https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161', {
+    [sepolia.id]: http('https://rpc.sepolia.org', {
       batch: {
         wait: 100,
       },
