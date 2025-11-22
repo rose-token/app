@@ -9,6 +9,10 @@ module.exports = function override(config) {
     "url": require.resolve("url"),
     "buffer": require.resolve("buffer"),
     "process": require.resolve("process/browser"),
+    "crypto": false, // Use browser's native crypto
+    "zlib": false,
+    "path": false,
+    "fs": false,
     // Stub out React Native dependencies that aren't needed for web
     "@react-native-async-storage/async-storage": false,
     "react-native": false,
@@ -18,6 +22,16 @@ module.exports = function override(config) {
   // Fix for ESM modules requiring fully specified imports
   config.module.rules.push({
     test: /\.m?js$/,
+    resolve: {
+      fullySpecified: false,
+    },
+  });
+
+  // Handle ESM-only packages like openapi-fetch (used by WalletConnect)
+  config.module.rules.push({
+    test: /\.js$/,
+    include: /node_modules/,
+    type: 'javascript/auto',
     resolve: {
       fullySpecified: false,
     },
@@ -36,6 +50,9 @@ module.exports = function override(config) {
     /Critical dependency: the request of a dependency is an expression/,
     /@react-native-async-storage\/async-storage/,
     /react-native/,
+    /openapi-fetch/,
+    /Can't resolve 'encoding'/,
+    /punycode/,
   ];
 
   config.output.filename = 'static/js/[name].[contenthash:8].[fullhash:8].js';
