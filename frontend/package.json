@@ -19,7 +19,6 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "dompurify": "^3.2.6",
-    "ethers": "^5.7.2",
     "lucide-react": "^0.292.0",
     "openapi-fetch": "0.13.8",
     "openpgp": "^6.1.0",
