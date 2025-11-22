@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useWallet } from '../../hooks/useWallet';
-import { useContract } from '../../hooks/useContract';
+import React, { useState } from 'react';
+import { useAccount, useReadContract } from 'wagmi';
+import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
-  const { account } = useWallet();
-  const { roseMarketplace } = useContract();
+  const { address: account, isConnected, chain } = useAccount();
 
   const [detailedContent, setDetailedContent] = useState(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [canViewDetails, setCanViewDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
 
   // PR URL modal state
   const [showPrUrlModal, setShowPrUrlModal] = useState(false);
   const [prUrl, setPrUrl] = useState('');
   const [prUrlError, setPrUrlError] = useState('');
+
+  const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
 
   const formatTokens = (wei) => {
     return parseFloat(wei) / 10**18;
@@ -29,22 +29,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isStakeholder = account && task.stakeholder && task.stakeholder.toLowerCase() === account.toLowerCase();
   const isParticipant = isCustomer || isWorker || isStakeholder;
 
-  // Check if user can view details
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!account || !roseMarketplace || !task.id) return;
-
-      try {
-        const hasAccess = await roseMarketplace.isTaskParticipant(task.id);
-        setCanViewDetails(hasAccess);
-      } catch (error) {
-        console.error('Error checking access:', error);
-        setCanViewDetails(false);
-      }
-    };
-
-    checkAccess();
-  }, [account, roseMarketplace, task.id]);
+  // Check if user can view details using wagmi's useReadContract
+  const { data: canViewDetails } = useReadContract({
+    address: marketplaceAddress,
+    abi: RoseMarketplaceABI,
+    functionName: 'isTaskParticipant',
+    args: task.id ? [task.id] : undefined,
+    chainId: chain?.id,
+    query: {
+      enabled: !!account && isConnected && !!task.id && !!marketplaceAddress,
+    },
+  });
 
   // Fetch detailed description from IPFS
   const loadDetailedDescription = async () => {

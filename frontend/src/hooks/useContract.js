@@ -84,36 +84,38 @@ export const useContract = () => {
   const contractsInitialized = useMemo(() => ({ readOnly: false, readWrite: false }), []);
   
   useEffect(() => {
-    if (!provider) {
-      console.log('Provider not available for read-only contract initialization');
+    // IMPORTANT: Wait for wallet connection before initializing read-only contracts
+    // This prevents "could not detect network" errors from ethers v5
+    if (!provider || !isConnected) {
+      console.log('Waiting for wallet connection before initializing read-only contracts...');
       return;
     }
-    
+
     if (contractsInitialized.readOnly && roseMarketplace && roseToken) {
       return;
     }
-    
+
     const initReadOnlyContracts = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const validateAddress = (address) => {
           return address && address !== DEFAULT_ADDRESS && ethers.utils.isAddress(address);
         };
-        
+
         if (!validateAddress(contractAddresses.marketplaceAddress)) {
           setError('Invalid marketplace contract address');
           setIsLoading(false);
           return;
         }
-        
+
         if (!validateAddress(contractAddresses.tokenAddress)) {
           setError('Invalid token contract address');
           setIsLoading(false);
           return;
         }
-        
+
         console.log('Initializing read-only contracts with provider:');
         console.log('Marketplace:', contractAddresses.marketplaceAddress);
         console.log('Token:', contractAddresses.tokenAddress);
@@ -123,7 +125,7 @@ export const useContract = () => {
           RoseMarketplaceABI,
           provider
         );
-        
+
         const tokenContract = new ethers.Contract(
           contractAddresses.tokenAddress,
           RoseTokenABI,
@@ -146,7 +148,7 @@ export const useContract = () => {
 
     initReadOnlyContracts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, contractAddresses]);
+  }, [provider, isConnected, contractAddresses]);
   
   useEffect(() => {
     if (!provider || !signer || !isConnected) {
