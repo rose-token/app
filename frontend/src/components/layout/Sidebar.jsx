@@ -1,11 +1,11 @@
-import React from 'react';  
-import { NavLink } from 'react-router-dom';  
-import { useWallet } from '../../hooks/useWallet';  
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import { useAccount } from 'wagmi';
 import TokenBalance from '../wallet/TokenBalance';
 import ExchangeRate from '../wallet/ExchangeRate';
-  
-const Sidebar = ({ isOpen, toggleSidebar }) => {  
-  const { isConnected } = useWallet();
+
+const Sidebar = ({ isOpen, toggleSidebar }) => {
+  const { isConnected } = useAccount();
   
   return (  
     <>  

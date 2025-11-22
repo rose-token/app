@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '../hooks/useWallet';
+import { useAccount } from 'wagmi';
 
 const ProviderDebug = () => {
-  const { isConnected, isConnecting, account, chainId, error } = useWallet();
+  const { address: account, isConnected, isConnecting, chain, status } = useAccount();
+  const chainId = chain?.id;
+  const error = status === 'disconnected' ? 'Disconnected' : null;
   const [providerInfo, setProviderInfo] = useState({});
 
   useEffect(() => {

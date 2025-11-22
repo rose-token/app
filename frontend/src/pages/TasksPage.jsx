@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useWallet } from '../hooks/useWallet';
-import { useContract } from '../hooks/useContract';
+import { useAccount, useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi';
+import { formatUnits, parseUnits } from 'viem';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
@@ -8,46 +8,81 @@ import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
 
+// Import ABIs directly
+import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
+import RoseTokenABI from '../contracts/RoseTokenABI.json';
+
+// Contract addresses from environment
+const MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS;
+const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS;
+
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false); // Add new state for refreshing vs initial load
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [filters, setFilters] = useState({
     needStakeholder: true,
     needWorker: true,
     myTasks: true,
     showClosed: false
   });
-  
-  const { account, isConnected } = useWallet();
-  const { roseMarketplace, roseToken } = useContract();
-  
+
+  const { address: account, isConnected } = useAccount();
+
+  // Read taskCounter from marketplace contract
+  const { data: taskCounter, refetch: refetchTaskCounter } = useReadContract({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    functionName: 'taskCounter',
+    query: {
+      enabled: isConnected && !!MARKETPLACE_ADDRESS,
+    }
+  });
+
+  // Write contract hook for all write operations
+  const { writeContractAsync } = useWriteContract();
+
+  // Fetch individual task details
   const fetchTaskDetails = useCallback(async (taskId) => {
-    if (!roseMarketplace) return null;
+    if (!MARKETPLACE_ADDRESS) return null;
 
-    const task = await roseMarketplace.tasks(taskId);
+    try {
+      // Use direct contract read via wagmi's readContract
+      const { readContract } = await import('wagmi/actions');
+      const { config } = await import('../wagmi.config');
 
-    return {
-      id: taskId,
-      customer: task.customer,
-      worker: task.worker,
-      stakeholder: task.stakeholder,
-      deposit: task.deposit.toString(),
-      stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
-      description: task.title,  // Use 'title' field from contract
-      detailedDescription: task.detailedDescriptionHash,  // IPFS hash
-      prUrl: task.prUrl || '',  // GitHub PR URL
-      status: task.status,
-      customerApproval: task.customerApproval,
-      stakeholderApproval: task.stakeholderApproval
-    };
-  }, [roseMarketplace]);
-  
+      const task = await readContract(config, {
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'tasks',
+        args: [BigInt(taskId)]
+      });
+
+      return {
+        id: taskId,
+        customer: task.customer,
+        worker: task.worker,
+        stakeholder: task.stakeholder,
+        deposit: task.deposit.toString(),
+        stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
+        description: task.title,  // Use 'title' field from contract
+        detailedDescription: task.detailedDescriptionHash,  // IPFS hash
+        prUrl: task.prUrl || '',  // GitHub PR URL
+        status: task.status,
+        customerApproval: task.customerApproval,
+        stakeholderApproval: task.stakeholderApproval
+      };
+    } catch (err) {
+      console.error(`Error fetching task ${taskId}:`, err);
+      return null;
+    }
+  }, []);
+
   const fetchTasks = useCallback(async () => {
-    if (!roseMarketplace) return;
-    
+    if (!MARKETPLACE_ADDRESS || !taskCounter) return;
+
     try {
       if (tasks.length === 0) {
         setIsLoading(true);
@@ -55,14 +90,14 @@ const TasksPage = () => {
         setIsRefreshing(true);
       }
       setError('');
-      
-      const taskCount = await roseMarketplace.taskCounter();
+
+      const taskCount = Number(taskCounter);
       const taskPromises = [];
-      
+
       for (let i = 1; i <= taskCount; i++) {
         taskPromises.push(fetchTaskDetails(i));
       }
-      
+
       const fetchedTasks = await Promise.all(taskPromises);
       setTasks(fetchedTasks.filter(task => task !== null));
     } catch (err) {
@@ -72,23 +107,24 @@ const TasksPage = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [roseMarketplace, fetchTaskDetails, tasks.length, setIsLoading, setIsRefreshing, setError, setTasks]);
-  
+  }, [MARKETPLACE_ADDRESS, taskCounter, fetchTaskDetails, tasks.length]);
+
   const debouncedFetchRef = useRef(null);
 
   const debouncedFetchTasks = useCallback(() => {
     if (debouncedFetchRef.current) {
       clearTimeout(debouncedFetchRef.current);
     }
-    
+
     debouncedFetchRef.current = setTimeout(() => {
+      refetchTaskCounter();
       fetchTasks();
       debouncedFetchRef.current = null;
     }, 300); // 300ms debounce time
-  }, [fetchTasks]);
-  
+  }, [fetchTasks, refetchTaskCounter]);
+
   const handleClaimTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) {
@@ -112,9 +148,15 @@ const TasksPage = () => {
     }
 
     try {
-      const tx = await roseMarketplace.claimTask(taskId);
-      await tx.wait();
-      debouncedFetchTasks(); // Use debounced version
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'claimTask',
+        args: [BigInt(taskId)]
+      });
+
+      console.log('Claim task transaction:', hash);
+      debouncedFetchTasks();
     } catch (err) {
       console.error('Error claiming task:', err);
       const errorMessage = err.message.includes('execution reverted')
@@ -125,11 +167,17 @@ const TasksPage = () => {
   };
 
   const handleUnclaimTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      const tx = await roseMarketplace.unclaimTask(taskId);
-      await tx.wait();
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'unclaimTask',
+        args: [BigInt(taskId)]
+      });
+
+      console.log('Unclaim task transaction:', hash);
       debouncedFetchTasks();
     } catch (err) {
       console.error('Error unclaiming task:', err);
@@ -141,12 +189,18 @@ const TasksPage = () => {
   };
 
   const handleCompleteTask = async (taskId, prUrl) => {
-    if (!isConnected || !roseMarketplace) return;
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      const tx = await roseMarketplace.markTaskCompleted(taskId, prUrl);
-      await tx.wait();
-      debouncedFetchTasks(); // Use debounced version
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'markTaskCompleted',
+        args: [BigInt(taskId), prUrl]
+      });
+
+      console.log('Complete task transaction:', hash);
+      debouncedFetchTasks();
     } catch (err) {
       console.error('Error completing task:', err);
       const errorMessage = err.message.includes('PR URL cannot be empty')
@@ -155,28 +209,35 @@ const TasksPage = () => {
       setError(errorMessage);
     }
   };
-  
+
   const handleApproveTask = async (taskId, role) => {
-    if (!isConnected || !roseMarketplace) return;
-    
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
+
     setIsLoading(true);
     try {
-      let tx;
-      
+      let hash;
+
       if (role === 'customer') {
         console.log("Approving as customer for task:", taskId);
-        tx = await roseMarketplace.approveCompletionByCustomer(taskId);
+        hash = await writeContractAsync({
+          address: MARKETPLACE_ADDRESS,
+          abi: RoseMarketplaceABI,
+          functionName: 'approveCompletionByCustomer',
+          args: [BigInt(taskId)]
+        });
       } else if (role === 'stakeholder') {
         console.log("Approving as stakeholder for task:", taskId);
-        tx = await roseMarketplace.approveCompletionByStakeholder(taskId, {
-          gasLimit: 500000 // Increase gas limit for stakeholder approval (which may trigger payment)
+        hash = await writeContractAsync({
+          address: MARKETPLACE_ADDRESS,
+          abi: RoseMarketplaceABI,
+          functionName: 'approveCompletionByStakeholder',
+          args: [BigInt(taskId)],
+          gas: 500000n // Increase gas limit for stakeholder approval
         });
       }
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Transaction confirmed");
-      
+
+      console.log("Transaction hash:", hash);
+
       await fetchTasks(); // Refresh task list after approval
       await fetchTaskDetails(taskId); // Refresh the specific task details
     } catch (err) {
@@ -186,22 +247,24 @@ const TasksPage = () => {
       setIsLoading(false);
     }
   };
-  
-  
+
+
   const handleAcceptPayment = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
-    
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
+
     setIsLoading(true);
     try {
       console.log("Accepting payment for task:", taskId);
-      const tx = await roseMarketplace.acceptPayment(taskId, {
-        gasLimit: 500000 // Increase gas limit for payment acceptance which includes token transfer and token minting
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'acceptPayment',
+        args: [BigInt(taskId)],
+        gas: 500000n // Increase gas limit for payment acceptance
       });
-      
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Transaction confirmed");
-      
+
+      console.log("Transaction hash:", hash);
+
       await fetchTasks(); // Refresh task list after payment acceptance
     } catch (err) {
       console.error('Error accepting payment:', err);
@@ -210,9 +273,9 @@ const TasksPage = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleStakeTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace || !roseToken) return;
+    if (!isConnected || !MARKETPLACE_ADDRESS || !TOKEN_ADDRESS) return;
 
     try {
       const task = tasks.find(t => t.id === taskId);
@@ -222,33 +285,46 @@ const TasksPage = () => {
       }
 
       // Calculate required stake (10% of task deposit)
-      const depositAmount = window.BigInt(task.deposit) / window.BigInt(10);
+      const depositAmount = BigInt(task.deposit) / 10n;
       console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
 
       // Check user's ROSE token balance
-      const userBalance = await roseToken.balanceOf(account);
-      const userBalanceBigInt = window.BigInt(userBalance.toString());
+      const { readContract } = await import('wagmi/actions');
+      const { config } = await import('../wagmi.config');
 
-      if (userBalanceBigInt < depositAmount) {
-        const shortfall = depositAmount - userBalanceBigInt;
-        const shortfallInRose = Number(shortfall) / 1e18;
+      const userBalance = await readContract(config, {
+        address: TOKEN_ADDRESS,
+        abi: RoseTokenABI,
+        functionName: 'balanceOf',
+        args: [account]
+      });
+
+      if (userBalance < depositAmount) {
+        const shortfall = depositAmount - userBalance;
+        const shortfallInRose = Number(formatUnits(shortfall, 18));
         setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake.`);
         return;
       }
 
       console.log("Approving token transfer...");
-      const approveTx = await roseToken.approve(roseMarketplace.address, depositAmount.toString());
-      await approveTx.wait();
-      console.log("Token approval confirmed");
+      const approveHash = await writeContractAsync({
+        address: TOKEN_ADDRESS,
+        abi: RoseTokenABI,
+        functionName: 'approve',
+        args: [MARKETPLACE_ADDRESS, depositAmount]
+      });
+      console.log("Token approval transaction:", approveHash);
 
       console.log("Staking tokens...");
-      const tx = await roseMarketplace.stakeholderStake(taskId, depositAmount.toString(), {
-        gasLimit: 300000
+      const stakeHash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'stakeholderStake',
+        args: [BigInt(taskId), depositAmount],
+        gas: 300000n
       });
 
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Transaction confirmed");
+      console.log("Stake transaction hash:", stakeHash);
 
       debouncedFetchTasks();
     } catch (err) {
@@ -281,7 +357,7 @@ const TasksPage = () => {
   };
 
   const handleCancelTask = async (taskId) => {
-    if (!isConnected || !roseMarketplace) return;
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
       const task = tasks.find(t => t.id === taskId);
@@ -291,13 +367,15 @@ const TasksPage = () => {
       }
 
       console.log("Cancelling task:", taskId);
-      const tx = await roseMarketplace.cancelTask(taskId, {
-        gasLimit: 300000
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'cancelTask',
+        args: [BigInt(taskId)],
+        gas: 300000n
       });
 
-      console.log("Waiting for transaction:", tx.hash);
-      await tx.wait();
-      console.log("Transaction confirmed - task cancelled");
+      console.log("Cancel transaction hash:", hash);
 
       debouncedFetchTasks();
     } catch (err) {
@@ -321,91 +399,99 @@ const TasksPage = () => {
     }
   };
 
+  // Event listeners using useWatchContractEvent
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'PaymentReleased',
+    onLogs: (logs) => {
+      console.log("Payment released event:", logs);
+      fetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskClosed',
+    onLogs: (logs) => {
+      console.log("Task closed event:", logs);
+      fetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskReadyForPayment',
+    onLogs: (logs) => {
+      console.log("Task ready for payment event:", logs);
+      fetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'StakeholderStaked',
+    onLogs: (logs) => {
+      console.log("Stakeholder staked event:", logs);
+      fetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskCancelled',
+    onLogs: (logs) => {
+      console.log("Task cancelled event:", logs);
+      fetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
   useEffect(() => {
-    if (roseMarketplace) {
+    if (MARKETPLACE_ADDRESS && taskCounter) {
       debouncedFetchTasks();
     }
-  }, [roseMarketplace, debouncedFetchTasks]);
+  }, [MARKETPLACE_ADDRESS, taskCounter, debouncedFetchTasks]);
 
-  useEffect(() => {
-    if (roseMarketplace) {
-      
-      const paymentFilter = roseMarketplace.filters.PaymentReleased();
-      const paymentListener = (taskId, worker, amount) => {
-        console.log("Payment released event:", { taskId, worker, amount });
-        fetchTasks(); // Refresh tasks after payment
-      };
-      roseMarketplace.on(paymentFilter, paymentListener);
-      
-      const closedFilter = roseMarketplace.filters.TaskClosed();
-      const closedListener = (taskId) => {
-        console.log("Task closed event:", taskId);
-        fetchTasks(); // Refresh tasks after closing
-      };
-      roseMarketplace.on(closedFilter, closedListener);
-      
-      const readyForPaymentFilter = roseMarketplace.filters.TaskReadyForPayment();
-      const readyForPaymentListener = (taskId, worker, amount) => {
-        console.log("Task ready for payment event:", { taskId, worker, amount });
-        fetchTasks(); // Refresh tasks after task is ready for payment
-      };
-      roseMarketplace.on(readyForPaymentFilter, readyForPaymentListener);
-      
-      const stakeholderStakedFilter = roseMarketplace.filters.StakeholderStaked();
-      const stakeholderStakedListener = (taskId, stakeholder, stakeholderDeposit) => {
-        console.log("Stakeholder staked event:", { taskId, stakeholder, stakeholderDeposit });
-        fetchTasks(); // Refresh tasks after stakeholder staking
-      };
-      roseMarketplace.on(stakeholderStakedFilter, stakeholderStakedListener);
-
-      const taskCancelledFilter = roseMarketplace.filters.TaskCancelled();
-      const taskCancelledListener = (taskId, cancelledBy, customerRefund, stakeholderRefund) => {
-        console.log("Task cancelled event:", { taskId, cancelledBy, customerRefund, stakeholderRefund });
-        fetchTasks(); // Refresh tasks after cancellation
-      };
-      roseMarketplace.on(taskCancelledFilter, taskCancelledListener);
-
-      return () => {
-        roseMarketplace.off(paymentFilter, paymentListener);
-        roseMarketplace.off(closedFilter, closedListener);
-        roseMarketplace.off(readyForPaymentFilter, readyForPaymentListener);
-        roseMarketplace.off(stakeholderStakedFilter, stakeholderStakedListener);
-        roseMarketplace.off(taskCancelledFilter, taskCancelledListener);
-      };
-    }
-  }, [roseMarketplace, debouncedFetchTasks, fetchTasks]);
-  
   const filteredTasks = tasks.filter(task => {
     if (task.status === TaskStatus.Closed && !filters.showClosed) {
       return false;
     }
-    
+
     if (filters.needStakeholder && task.status === TaskStatus.StakeholderRequired) {
       return true;
     }
-    
+
     if (filters.needWorker && task.status === TaskStatus.Open) {
       return true;
     }
-    
+
     if (filters.myTasks && account) {
-      const isInvolved = 
+      const isInvolved =
         task.customer.toLowerCase() === account.toLowerCase() ||
         task.worker.toLowerCase() === account.toLowerCase() ||
         task.stakeholder.toLowerCase() === account.toLowerCase();
-      
+
       if (isInvolved) {
         return true;
       }
     }
-    
+
     if (!filters.needStakeholder && !filters.needWorker && !filters.myTasks) {
       return true;
     }
-    
+
     return false;
   });
-  
+
   return (
     <div>
       <div className="mb-8">
@@ -414,7 +500,7 @@ const TasksPage = () => {
           A decentralized task marketplace with a worker token distribution model
         </p>
       </div>
-      
+
       {!isConnected ? (
         <WalletNotConnected />
       ) : (
@@ -427,7 +513,7 @@ const TasksPage = () => {
             <h2 className="text-xl font-semibold mb-4">Available Tasks</h2>
 
             <TaskFilters filters={filters} setFilters={setFilters} />
-            
+
             <TaskList
               tasks={filteredTasks}
               onClaim={handleClaimTask}
@@ -441,7 +527,7 @@ const TasksPage = () => {
               isRefreshing={isRefreshing}
               error={error}
               onErrorDismiss={() => setError('')}
-              roseMarketplace={roseMarketplace}
+              roseMarketplace={MARKETPLACE_ADDRESS}
               onRefresh={fetchTasks}
             />
           </div>
