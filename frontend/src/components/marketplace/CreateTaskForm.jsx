@@ -176,11 +176,11 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             onChange={(e) => setDetailedDescription(e.target.value)}
             className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
             rows="6"
-            placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc. Only visible to task participants."
+            placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc."
             required
           />
           <p className="mt-1 text-sm text-muted">
-            Private - Only visible to customer, stakeholder, and worker. ({detailedDescription.length} characters)
+            Visible to everyone. ({detailedDescription.length} characters)
           </p>
         </div>
 
