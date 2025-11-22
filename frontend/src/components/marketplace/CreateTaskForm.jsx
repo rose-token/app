@@ -196,7 +196,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               onChange={(e) => setDeposit(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
               placeholder="e.g., 100"
-              step="1"
+              step="0.01"
               min="0.01"
               required
             />
