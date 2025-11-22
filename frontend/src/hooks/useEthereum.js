@@ -93,16 +93,48 @@ export const EthereumProvider = ({ children }) => {
     window.location.reload();
   }, []);
 
-  // Set up event listeners when provider changes
+  // Set up event listeners for window.ethereum on mobile devices
+  useEffect(() => {
+    const isMobile = isMobileDevice();
+    if (!isMobile || typeof window === 'undefined' || !window.ethereum) return;
+
+    const handleDisconnect = () => {
+      console.log('Wallet disconnected (injected provider)');
+      setAccount(null);
+      setSigner(null);
+      setIsConnected(false);
+      setProvider(null);
+    };
+
+    console.log('Setting up event listeners for injected provider');
+
+    // Add event listeners to window.ethereum
+    window.ethereum.on('accountsChanged', handleAccountsChanged);
+    window.ethereum.on('chainChanged', handleChainChanged);
+    window.ethereum.on('disconnect', handleDisconnect);
+
+    // Clean up event listeners
+    return () => {
+      if (window.ethereum.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum.removeListener('disconnect', handleDisconnect);
+      }
+    };
+  }, [handleAccountsChanged, handleChainChanged]);
+
+  // Set up event listeners when MetaMask SDK provider changes (desktop)
   useEffect(() => {
     if (!metamaskProvider || !connected) return;
 
     const handleDisconnect = () => {
-      console.log('Wallet disconnected');
+      console.log('Wallet disconnected (SDK provider)');
       setAccount(null);
       setSigner(null);
       setIsConnected(false);
     };
+
+    console.log('Setting up event listeners for SDK provider');
 
     // Add event listeners
     metamaskProvider.on('accountsChanged', handleAccountsChanged);
@@ -120,32 +152,69 @@ export const EthereumProvider = ({ children }) => {
   }, [metamaskProvider, connected, handleAccountsChanged, handleChainChanged]);
 
   const connectWallet = useCallback(async () => {
-    if (!sdk || isConnecting) return;
+    if (isConnecting) return;
 
     try {
       console.log('Connecting wallet...');
       setIsConnecting(true);
       setError(null);
-      
+
       const isMobile = isMobileDevice();
       console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
-      
-      console.log('Displaying QR code for wallet connection. Please scan with your wallet app.');
-      
+
       let accounts;
+
+      // On mobile, prioritize window.ethereum (injected by mobile wallet apps)
+      if (isMobile && typeof window !== 'undefined' && window.ethereum) {
+        console.log('Mobile wallet detected, using injected provider');
+        try {
+          // Request account access
+          accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          console.log('Connected via injected provider:', accounts);
+
+          if (!accounts || accounts.length === 0) {
+            throw new Error('No accounts returned from wallet');
+          }
+
+          // Set up the provider and signer immediately
+          const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+          const ethSigner = ethersProvider.getSigner();
+          const network = await ethersProvider.getNetwork();
+
+          setProvider(ethersProvider);
+          setSigner(ethSigner);
+          setChainId('0x' + network.chainId.toString(16));
+          setAccount(accounts[0]);
+          setIsConnected(true);
+
+          console.log('Mobile wallet connection complete');
+          return;
+        } catch (error) {
+          console.error('Failed to connect with injected provider:', error);
+          throw error;
+        }
+      }
+
+      // For desktop or if no injected provider, use MetaMask SDK
+      if (!sdk) {
+        throw new Error('Wallet connection not available. Please install MetaMask or use a wallet browser.');
+      }
+
+      console.log('Using MetaMask SDK for connection');
+
       if (isMobile && metamaskProvider) {
         accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
-        console.log('Mobile connection requested with explicit method');
+        console.log('Mobile connection requested with SDK provider');
       } else {
         accounts = await sdk.connect();
         console.log('Connection requested through SDK');
       }
-      
+
       console.log('Waiting for wallet connection...');
-      
+
       if (!accounts || accounts.length === 0) {
-        console.log('No accounts found initially, waiting for connection...');
-        
+        console.log('No accounts found initially, retrying...');
+
         // Try to get accounts again if initial attempt returned empty
         if (metamaskProvider) {
           accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
@@ -153,13 +222,13 @@ export const EthereumProvider = ({ children }) => {
           accounts = await sdk.connectAndSign();
         }
       }
-      
+
       console.log('MetaMask connected:', accounts);
-      
+
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts found after connection');
       }
-      
+
       setAccount(accounts[0]);
       setIsConnected(true);
       console.log('Wallet connection complete');
@@ -194,8 +263,12 @@ export const EthereumProvider = ({ children }) => {
   const switchNetwork = useCallback(async (targetChainId) => {
     try {
       setError('');
-      if (metamaskProvider) {
-        await metamaskProvider.request({
+
+      // Use window.ethereum if available (mobile), otherwise use SDK provider
+      const providerToUse = (typeof window !== 'undefined' && window.ethereum) ? window.ethereum : metamaskProvider;
+
+      if (providerToUse) {
+        await providerToUse.request({
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: targetChainId }],
         });
