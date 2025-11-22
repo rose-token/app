@@ -10,17 +10,17 @@ const TaskFilters = ({ filters, setFilters }) => {
 
   const resetFilters = () => {
     setFilters({
-      needStakeholder: true,
-      needWorker: true,
-      myTasks: true,
+      needStakeholder: false,
+      needWorker: false,
+      myTasks: false,
       showClosed: false
     });
   };
 
-  const usingCustomFilters = 
-    !filters.needStakeholder || 
-    !filters.needWorker || 
-    !filters.myTasks || 
+  const usingCustomFilters =
+    filters.needStakeholder ||
+    filters.needWorker ||
+    filters.myTasks ||
     filters.showClosed;
 
   return (

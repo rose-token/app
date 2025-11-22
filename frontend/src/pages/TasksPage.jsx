@@ -23,9 +23,9 @@ const TasksPage = () => {
   const [error, setError] = useState('');
 
   const [filters, setFilters] = useState({
-    needStakeholder: true,
-    needWorker: true,
-    myTasks: true,
+    needStakeholder: false,
+    needWorker: false,
+    myTasks: false,
     showClosed: false
   });
 
@@ -96,20 +96,33 @@ const TasksPage = () => {
 
         const task = result.result;
 
+        // Debug: Log the raw task object to see its structure
+        console.log(`🔍 Task ${index + 1} raw data:`, task);
+        console.log(`🔍 Task ${index + 1} status value:`, task.status, 'Type:', typeof task.status);
+
+        // Handle both object (named) and array (indexed) formats from wagmi
+        // Struct fields: customer, worker, stakeholder, deposit, stakeholderDeposit,
+        //                title, detailedDescriptionHash, prUrl, status, customerApproval, stakeholderApproval
+        const isArray = Array.isArray(task);
+
         // Explicit BigInt → appropriate type conversions for V2
         return {
           id: index + 1, // Task IDs start at 1
-          customer: task.customer, // address stays string
-          worker: task.worker,
-          stakeholder: task.stakeholder,
-          deposit: task.deposit ? task.deposit.toString() : '0', // BigInt → string
-          stakeholderDeposit: task.stakeholderDeposit ? task.stakeholderDeposit.toString() : '0',
-          description: task.title || '', // string
-          detailedDescription: task.detailedDescriptionHash || '', // IPFS hash
-          prUrl: task.prUrl || '', // GitHub PR URL
-          status: Number(task.status), // BigInt → number for enum
-          customerApproval: Boolean(task.customerApproval), // Ensure boolean
-          stakeholderApproval: Boolean(task.stakeholderApproval)
+          customer: isArray ? task[0] : task.customer,
+          worker: isArray ? task[1] : task.worker,
+          stakeholder: isArray ? task[2] : task.stakeholder,
+          deposit: isArray
+            ? (task[3] ? task[3].toString() : '0')
+            : (task.deposit ? task.deposit.toString() : '0'),
+          stakeholderDeposit: isArray
+            ? (task[4] ? task[4].toString() : '0')
+            : (task.stakeholderDeposit ? task.stakeholderDeposit.toString() : '0'),
+          description: isArray ? (task[5] || '') : (task.title || ''),
+          detailedDescription: isArray ? (task[6] || '') : (task.detailedDescriptionHash || ''),
+          prUrl: isArray ? (task[7] || '') : (task.prUrl || ''),
+          status: isArray ? Number(task[8]) : Number(task.status),
+          customerApproval: isArray ? Boolean(task[9]) : Boolean(task.customerApproval),
+          stakeholderApproval: isArray ? Boolean(task[10]) : Boolean(task.stakeholderApproval)
         };
       })
       .filter(task => task !== null);
