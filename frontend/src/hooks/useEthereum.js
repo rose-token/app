@@ -151,118 +151,78 @@ export const EthereumProvider = ({ children }) => {
     };
   }, [metamaskProvider, connected, handleAccountsChanged, handleChainChanged]);
 
-  // Helper function to wait for provider injection on mobile
-  const waitForProvider = async (maxAttempts = 20, delayMs = 500) => {
-    for (let i = 0; i < maxAttempts; i++) {
-      if (typeof window !== 'undefined' && window.ethereum) {
-        // Check if provider is actually ready (has required methods)
-        if (window.ethereum.request && typeof window.ethereum.request === 'function') {
-          console.log(`Provider found and ready on attempt ${i + 1}`);
-          // Extra verification: try to check if it's initialized
-          try {
-            // Some wallets need a moment after injection before they're usable
-            if (i < 2) {
-              // Wait a bit longer on first detection to ensure full initialization
-              console.log('Provider detected, waiting for full initialization...');
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            return window.ethereum;
-          } catch (error) {
-            console.log(`Provider exists but not ready yet, attempt ${i + 1}/${maxAttempts}`);
-          }
-        } else {
-          console.log(`Provider exists but missing request method, attempt ${i + 1}/${maxAttempts}`);
-        }
-      } else {
-        console.log(`Waiting for provider... attempt ${i + 1}/${maxAttempts}`);
-      }
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-    console.log('Provider wait timeout - no provider found after all attempts');
-    return null;
-  };
-
   const connectWallet = useCallback(async () => {
     if (isConnecting) return;
 
+    console.log('Connecting wallet...');
+    setIsConnecting(true);
+    setError(null);
+
+    const isMobile = isMobileDevice();
+    console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
+
     try {
-      console.log('Connecting wallet...');
-      setIsConnecting(true);
-      setError(null);
-
-      const isMobile = isMobileDevice();
-      console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
-
       let accounts;
 
       // On mobile, prioritize window.ethereum (injected by mobile wallet apps)
-      if (isMobile) {
-        console.log('Mobile device detected, waiting for wallet provider...');
+      // CRITICAL: Call eth_requestAccounts IMMEDIATELY to preserve user gesture context
+      if (isMobile && typeof window !== 'undefined' && window.ethereum) {
+        console.log('Mobile wallet browser detected');
 
-        // Wait for provider to be injected (mobile wallets inject asynchronously)
-        const injectedProvider = await waitForProvider();
+        try {
+          // IMMEDIATELY call eth_requestAccounts - no delays, no waiting, no state updates first
+          // This preserves the user gesture context that MetaMask Mobile requires
+          console.log('Requesting accounts from mobile wallet (immediate call)...');
+          accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          console.log('Accounts received from mobile wallet:', accounts);
 
-        if (injectedProvider) {
-          console.log('Mobile wallet detected, using injected provider');
-          console.log('Provider details:', {
-            isMetaMask: injectedProvider.isMetaMask,
-            isBraveWallet: injectedProvider.isBraveWallet,
-            isPhantom: injectedProvider.isPhantom,
-            hasRequest: typeof injectedProvider.request === 'function'
+          if (!accounts || accounts.length === 0) {
+            throw new Error('No accounts returned from mobile wallet');
+          }
+
+          // Now set up provider AFTER we have accounts
+          console.log('Setting up ethers provider for mobile...');
+          const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+          const ethSigner = ethersProvider.getSigner();
+          const network = await ethersProvider.getNetwork();
+
+          console.log('Network detected:', network);
+
+          setProvider(ethersProvider);
+          setSigner(ethSigner);
+          setChainId('0x' + network.chainId.toString(16));
+          setAccount(accounts[0]);
+          setIsConnected(true);
+
+          console.log('Mobile wallet connection complete!');
+          console.log('Connected account:', accounts[0]);
+          console.log('Connected network:', network.chainId);
+          setIsConnecting(false);
+          return;
+        } catch (error) {
+          console.error('Mobile wallet connection failed:', error);
+          console.error('Error details:', {
+            code: error.code,
+            message: error.message,
+            data: error.data
           });
 
-          try {
-            console.log('Requesting accounts from mobile wallet...');
-            // Request account access
-            accounts = await injectedProvider.request({ method: 'eth_requestAccounts' });
-            console.log('Accounts received:', accounts);
-
-            if (!accounts || accounts.length === 0) {
-              throw new Error('No accounts returned from wallet');
-            }
-
-            console.log('Setting up ethers provider...');
-            // Set up the provider and signer immediately
-            const ethersProvider = new ethers.providers.Web3Provider(injectedProvider);
-            const ethSigner = ethersProvider.getSigner();
-            const network = await ethersProvider.getNetwork();
-
-            console.log('Network detected:', network);
-
-            setProvider(ethersProvider);
-            setSigner(ethSigner);
-            setChainId('0x' + network.chainId.toString(16));
-            setAccount(accounts[0]);
-            setIsConnected(true);
-
-            console.log('Mobile wallet connection complete!');
-            console.log('Connected account:', accounts[0]);
-            console.log('Connected network:', network.chainId);
-            return;
-          } catch (error) {
-            console.error('Failed to connect with injected provider:', error);
-            console.error('Error details:', {
-              code: error.code,
-              message: error.message,
-              data: error.data
-            });
-            // If user rejected, throw the error; otherwise try SDK fallback
-            if (error.code === 4001 || error.code === 'ACTION_REJECTED') {
-              throw error; // User rejected
-            }
-            console.log('Injected provider failed, trying SDK fallback...');
+          // If user rejected, throw immediately
+          if (error.code === 4001 || error.code === 'ACTION_REJECTED') {
+            throw new Error('Connection rejected by user');
           }
-        } else {
-          console.log('No injected provider found after waiting, trying SDK...');
+
+          // For other errors, try SDK fallback
+          console.log('Mobile wallet failed, trying SDK fallback...');
         }
+      } else if (isMobile && (!window || !window.ethereum)) {
+        // Mobile but no injected provider
+        throw new Error('Please open this page in a wallet browser (MetaMask, Brave, Phantom, Trust Wallet, etc.)');
       }
 
-      // For desktop or if no injected provider, use MetaMask SDK
+      // For desktop or if mobile injected provider failed, use MetaMask SDK
       if (!sdk) {
-        const errorMsg = isMobile
-          ? 'Please open this page in a wallet browser (MetaMask, Brave, Phantom, Trust Wallet, etc.)'
-          : 'Wallet connection not available. Please install MetaMask or use a wallet browser.';
-        throw new Error(errorMsg);
+        throw new Error('Wallet connection not available. Please install MetaMask or use a wallet browser.');
       }
 
       console.log('Using MetaMask SDK for connection');
@@ -350,38 +310,33 @@ export const EthereumProvider = ({ children }) => {
   // Auto-connect for mobile wallet browsers
   useEffect(() => {
     const isMobile = isMobileDevice();
-    if (isMobile && !isConnecting && !isConnected && typeof window !== 'undefined') {
-      console.log('Mobile device detected, checking for wallet browser...');
+    if (isMobile && !isConnecting && !isConnected && typeof window !== 'undefined' && window.ethereum) {
+      console.log('Mobile wallet browser detected, attempting auto-connect...');
 
       const attemptMobileAutoConnect = async () => {
         try {
-          // Wait a moment for page to fully load
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Try to get previously connected accounts (doesn't require user approval)
+          // Use a short delay to let the page fully initialize
+          await new Promise(resolve => setTimeout(resolve, 500));
 
-          // Check if we're in a wallet browser (window.ethereum exists)
-          if (window.ethereum) {
-            console.log('Wallet browser detected, attempting auto-connect...');
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
 
-            // Try to get previously connected accounts first (doesn't require user approval)
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            console.log('Found previously connected accounts, auto-connecting...');
+            // Set up provider with existing accounts
+            const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
+            const ethSigner = ethersProvider.getSigner();
+            const network = await ethersProvider.getNetwork();
 
-            if (accounts && accounts.length > 0) {
-              console.log('Found previously connected accounts, auto-connecting...');
-              // Set up provider with existing accounts
-              const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
-              const ethSigner = ethersProvider.getSigner();
-              const network = await ethersProvider.getNetwork();
+            setProvider(ethersProvider);
+            setSigner(ethSigner);
+            setChainId('0x' + network.chainId.toString(16));
+            setAccount(accounts[0]);
+            setIsConnected(true);
 
-              setProvider(ethersProvider);
-              setSigner(ethSigner);
-              setChainId('0x' + network.chainId.toString(16));
-              setAccount(accounts[0]);
-              setIsConnected(true);
-
-              console.log('Mobile wallet auto-connected successfully!');
-            } else {
-              console.log('No previously connected accounts found');
-            }
+            console.log('Mobile wallet auto-connected successfully!');
+          } else {
+            console.log('No previously connected accounts found');
           }
         } catch (error) {
           // Silent fail for auto-connect
