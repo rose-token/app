@@ -198,6 +198,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               placeholder="e.g., 100"
               step="0.01"
               min="0.01"
+              onWheel={(e) => e.currentTarget.blur()}
               required
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
