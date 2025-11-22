@@ -8,9 +8,9 @@ const ipfsCache = new Map();
 
 export const uploadCommentToIPFS = async (content) => {
   try {
-    const apiKey = process.env.REACT_APP_PINATA_API_KEY;
-    const apiSecret = process.env.REACT_APP_PINATA_SECRET_API_KEY;
-    
+    const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+    const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
     if (!apiKey || !apiSecret) {
       throw new Error('Pinata API keys not configured');
     }
@@ -80,9 +80,9 @@ export const isCID = (str) => {
 
 export const uploadProposalToIPFS = async (proposalData) => {
   try {
-    const apiKey = process.env.REACT_APP_PINATA_API_KEY;
-    const apiSecret = process.env.REACT_APP_PINATA_SECRET_API_KEY;
-    
+    const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+    const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
     if (!apiKey || !apiSecret) {
       throw new Error('Pinata API keys not configured');
     }
@@ -161,8 +161,8 @@ export const uploadTaskDescription = async (detailedDescription, title) => {
     throw new Error('Detailed description is required');
   }
 
-  const apiKey = process.env.REACT_APP_PINATA_API_KEY;
-  const apiSecret = process.env.REACT_APP_PINATA_SECRET_API_KEY;
+  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
 
   if (!apiKey || !apiSecret) {
     throw new Error('Pinata API keys not configured');

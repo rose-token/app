@@ -14,44 +14,32 @@
     "@rainbow-me/rainbowkit": "^2.2.9",
     "@tanstack/query-core": "^5.90.10",
     "@tanstack/react-query": "^5.90.10",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "assert": "^2.1.0",
     "autoprefixer": "^10.4.16",
-    "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "dompurify": "^3.2.6",
     "ethers": "^5.7.2",
-    "https-browserify": "^1.0.0",
     "lucide-react": "^0.292.0",
     "openapi-fetch": "0.13.8",
     "openpgp": "^6.1.0",
-    "os-browserify": "^0.3.0",
     "postcss": "^8.4.31",
-    "process": "^0.11.10",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "react-scripts": "5.0.1",
     "recharts": "^2.15.3",
-    "stream-browserify": "^3.0.0",
-    "stream-http": "^3.2.0",
     "tailwind-merge": "^2.0.0",
     "tailwindcss": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
-    "url": "^0.11.4",
     "viem": "^2.39.3",
-    "wagmi": "^2.19.5",
-    "web-vitals": "^2.1.4"
+    "wagmi": "^2.19.5"
   },
   "scripts": {
-    "start": "react-app-rewired start",
-    "build": "react-app-rewired build",
-    "test": "react-app-rewired test",
-    "eject": "react-scripts eject"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "eslintConfig": {
     "extends": [
@@ -72,10 +60,15 @@
     ]
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/ui": "^4.0.13",
     "ajv": "^8.17.1",
-    "react-app-rewired": "^2.2.1",
+    "jsdom": "^27.2.0",
     "typescript": "^5.9.3",
-    "webpack": "^5.99.8"
+    "vite": "^7.2.4",
+    "vitest": "^4.0.13"
   },
   "overrides": {
     "openapi-fetch": "0.13.8"
