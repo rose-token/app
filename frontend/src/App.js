@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
+import ProviderDebug from './components/ProviderDebug';
 import { MetaMaskProvider } from '@metamask/sdk-react';
 import { EthereumProvider } from './hooks/useEthereum';
 import { ProfileProvider } from './hooks/useProfile';
@@ -29,6 +30,7 @@ function App() {
       }}
     >
       <EthereumProvider>
+        <ProviderDebug />
         <ProfileProvider>
           <Router basename="/">
             <Layout>

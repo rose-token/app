@@ -202,112 +202,64 @@ export const EthereumProvider = ({ children }) => {
   const connectWallet = useCallback(async () => {
     if (isConnecting) return;
 
-    console.log('Connecting wallet...');
-    setIsConnecting(true);
-    setError(null);
-
-    const isMobile = isMobileDevice();
-    console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
-
     try {
+      console.log('Connecting wallet...');
+      setIsConnecting(true);
+      setError(null);
+
+      // Try injected provider first (works for both desktop extensions and mobile in-app browsers)
+      const injected = getInjectedProvider();
+
+      if (injected) {
+        console.log('Using injected provider');
+        console.log('Injected provider flags:', {
+          isMetaMask: injected.isMetaMask,
+          isBraveWallet: injected.isBraveWallet,
+          isCoinbaseWallet: injected.isCoinbaseWallet,
+          isPhantom: injected.isPhantom,
+        });
+
+        // CRITICAL: Call eth_requestAccounts IMMEDIATELY to preserve user gesture context
+        const accounts = await injected.request({ method: 'eth_requestAccounts' });
+        console.log('Accounts received from injected provider:', accounts);
+
+        if (!accounts || accounts.length === 0) {
+          throw new Error('No accounts returned from wallet');
+        }
+
+        const ethersProvider = new ethers.providers.Web3Provider(injected);
+        const ethSigner = ethersProvider.getSigner();
+        const network = await ethersProvider.getNetwork();
+
+        setProvider(ethersProvider);
+        setSigner(ethSigner);
+        setChainId('0x' + network.chainId.toString(16));
+        setAccount(accounts[0]);
+        setIsConnected(true);
+
+        console.log('Injected wallet connection complete');
+        console.log('Connected account:', accounts[0]);
+        console.log('Connected network:', network.chainId);
+        return;
+      }
+
+      // Fall back to MetaMask SDK if no injected provider
+      if (!sdk) {
+        throw new Error(
+          'Wallet connection not available. Install MetaMask or open this page in a wallet browser.'
+        );
+      }
+
+      console.log('No injected provider found, using MetaMask SDK');
       let accounts;
 
-      // On mobile, prioritize injected provider (mobile wallet apps)
-      // CRITICAL: Call eth_requestAccounts IMMEDIATELY to preserve user gesture context
-      if (isMobile) {
-        const injectedProvider = getInjectedProvider();
-
-        if (injectedProvider) {
-          console.log('Mobile wallet browser detected');
-          console.log('Provider details:', {
-            isMetaMask: injectedProvider.isMetaMask,
-            isBraveWallet: injectedProvider.isBraveWallet,
-            isCoinbaseWallet: injectedProvider.isCoinbaseWallet,
-            isPhantom: injectedProvider.isPhantom,
-            hasRequest: typeof injectedProvider.request === 'function',
-          });
-
-          try {
-            // IMMEDIATELY call eth_requestAccounts - no delays, no waiting, no state updates first
-            // This preserves the user gesture context that MetaMask Mobile requires
-            console.log('Requesting accounts from mobile wallet (immediate call)...');
-            accounts = await injectedProvider.request({ method: 'eth_requestAccounts' });
-            console.log('Accounts received from mobile wallet:', accounts);
-
-            if (!accounts || accounts.length === 0) {
-              throw new Error('No accounts returned from mobile wallet');
-            }
-
-            // Now set up provider AFTER we have accounts
-            console.log('Setting up ethers provider for mobile...');
-            const ethersProvider = new ethers.providers.Web3Provider(injectedProvider);
-            const ethSigner = ethersProvider.getSigner();
-            const network = await ethersProvider.getNetwork();
-
-            console.log('Network detected:', network);
-
-            setProvider(ethersProvider);
-            setSigner(ethSigner);
-            setChainId('0x' + network.chainId.toString(16));
-            setAccount(accounts[0]);
-            setIsConnected(true);
-
-            console.log('Mobile wallet connection complete!');
-            console.log('Connected account:', accounts[0]);
-            console.log('Connected network:', network.chainId);
-            setIsConnecting(false);
-            return;
-          } catch (error) {
-            console.error('Mobile wallet connection failed:', error);
-            console.error('Error details:', {
-              code: error.code,
-              message: error.message,
-              data: error.data
-            });
-
-            // If user rejected, throw immediately
-            if (error.code === 4001 || error.code === 'ACTION_REJECTED') {
-              throw new Error('Connection rejected by user');
-            }
-
-            // For other errors, try SDK fallback
-            console.log('Mobile wallet failed, trying SDK fallback...');
-          }
-        } else {
-          // Mobile but no injected provider
-          console.log('No injected provider found on mobile');
-        }
-      }
-
-      // For desktop or if mobile injected provider failed, use MetaMask SDK
-      if (!sdk) {
-        throw new Error('Wallet connection not available. Please install MetaMask or use a wallet browser.');
-      }
-
-      console.log('Using MetaMask SDK for connection');
-
-      if (isMobile && metamaskProvider) {
+      if (metamaskProvider) {
         accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
-        console.log('Mobile connection requested with SDK provider');
+        console.log('SDK provider requested accounts');
       } else {
         accounts = await sdk.connect();
-        console.log('Connection requested through SDK');
+        console.log('SDK connect called');
       }
-
-      console.log('Waiting for wallet connection...');
-
-      if (!accounts || accounts.length === 0) {
-        console.log('No accounts found initially, retrying...');
-
-        // Try to get accounts again if initial attempt returned empty
-        if (metamaskProvider) {
-          accounts = await metamaskProvider.request({ method: 'eth_requestAccounts' });
-        } else {
-          accounts = await sdk.connectAndSign();
-        }
-      }
-
-      console.log('MetaMask connected:', accounts);
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts found after connection');
@@ -315,7 +267,7 @@ export const EthereumProvider = ({ children }) => {
 
       setAccount(accounts[0]);
       setIsConnected(true);
-      console.log('Wallet connection complete');
+      console.log('Wallet connection complete via SDK');
     } catch (error) {
       console.error('Error connecting wallet:', error);
       setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
