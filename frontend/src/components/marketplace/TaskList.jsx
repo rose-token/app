@@ -23,7 +23,7 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh Tasks
@@ -48,7 +48,7 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Refresh

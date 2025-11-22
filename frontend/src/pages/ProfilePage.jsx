@@ -120,7 +120,7 @@ const ProfilePage = () => {
               <div className="flex justify-end">
                 <button
                   onClick={handleEdit}
-                  className="bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90"
+                  className="bg-primary text-white py-2 px-4 rounded-md hover:bg-primary"
                 >
                   Edit Profile
                 </button>
@@ -174,7 +174,7 @@ const ProfilePage = () => {
                 <button
                   type="submit"
                   className={`bg-primary text-white py-2 px-4 rounded-md ${
-                    isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary/90'
+                    isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary'
                   }`}
                   disabled={isSaving}
                 >

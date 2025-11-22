@@ -270,7 +270,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           className={`w-full py-2 px-4 rounded-md font-medium ${
             isCreating || isApproving || !isConnected
               ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-primary text-primary-foreground hover:bg-primary'
           }`}
         >
           {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}

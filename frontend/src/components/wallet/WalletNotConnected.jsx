@@ -83,7 +83,7 @@ const WalletNotConnected = () => {
         
       <button  
         onClick={connectWallet}  
-        className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-md font-medium"  
+        className="bg-primary hover:bg-primary text-white px-6 py-3 rounded-md font-medium"  
       >  
         Connect Wallet  
       </button>  
