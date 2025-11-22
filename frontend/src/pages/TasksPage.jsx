@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
@@ -47,44 +47,83 @@ const TasksPage = () => {
   // Write contract hook for all write operations
   const { writeContractAsync } = useWriteContract();
 
-  // Fetch individual task details
-  const fetchTaskDetails = useCallback(async (taskId) => {
-    if (!MARKETPLACE_ADDRESS) return null;
+  // Batch fetch all tasks using useReadContracts (V2-compatible)
+  const taskCount = useMemo(() => {
+    if (!taskCounter) return 0;
+    const count = Number(taskCounter); // Explicit BigInt → number conversion
+    console.log('📊 Task counter:', count);
+    return count;
+  }, [taskCounter]);
 
-    try {
-      // Use direct contract read via wagmi's readContract
-      const { readContract } = await import('wagmi/actions');
-      const { config } = await import('../wagmi.config');
+  // Generate contract calls for all tasks
+  const taskContracts = useMemo(() => {
+    if (!MARKETPLACE_ADDRESS || taskCount === 0) return [];
 
-      const task = await readContract(config, {
-        address: MARKETPLACE_ADDRESS,
-        abi: RoseMarketplaceABI,
-        functionName: 'tasks',
-        args: [BigInt(taskId)]
-      });
+    const contracts = Array.from({ length: taskCount }, (_, i) => ({
+      address: MARKETPLACE_ADDRESS,
+      abi: RoseMarketplaceABI,
+      functionName: 'tasks',
+      args: [BigInt(i + 1)] // Task IDs start at 1
+    }));
 
-      return {
-        id: taskId,
-        customer: task.customer,
-        worker: task.worker,
-        stakeholder: task.stakeholder,
-        deposit: task.deposit.toString(),
-        stakeholderDeposit: task.stakeholderDeposit?.toString() || '0',
-        description: task.title,  // Use 'title' field from contract
-        detailedDescription: task.detailedDescriptionHash,  // IPFS hash
-        prUrl: task.prUrl || '',  // GitHub PR URL
-        status: task.status,
-        customerApproval: task.customerApproval,
-        stakeholderApproval: task.stakeholderApproval
-      };
-    } catch (err) {
-      console.error(`Error fetching task ${taskId}:`, err);
-      return null;
+    console.log('📋 Generated contract calls for', contracts.length, 'tasks');
+    return contracts;
+  }, [MARKETPLACE_ADDRESS, taskCount]);
+
+  // Batch read all tasks at once (V2-compatible)
+  const { data: tasksData, refetch: refetchTasks, isLoading: isLoadingTasks } = useReadContracts({
+    contracts: taskContracts,
+    query: {
+      enabled: isConnected && taskContracts.length > 0,
     }
-  }, []);
+  });
 
+  // Process task data with explicit BigInt handling
+  const processedTasks = useMemo(() => {
+    if (!tasksData) {
+      console.log('⏳ No tasks data yet');
+      return [];
+    }
+
+    console.log('🔄 Processing', tasksData.length, 'tasks');
+
+    const processed = tasksData
+      .map((result, index) => {
+        if (result.status !== 'success' || !result.result) {
+          console.warn(`⚠️ Task ${index + 1} failed to load:`, result.error);
+          return null;
+        }
+
+        const task = result.result;
+
+        // Explicit BigInt → appropriate type conversions for V2
+        return {
+          id: index + 1, // Task IDs start at 1
+          customer: task.customer, // address stays string
+          worker: task.worker,
+          stakeholder: task.stakeholder,
+          deposit: task.deposit ? task.deposit.toString() : '0', // BigInt → string
+          stakeholderDeposit: task.stakeholderDeposit ? task.stakeholderDeposit.toString() : '0',
+          description: task.title || '', // string
+          detailedDescription: task.detailedDescriptionHash || '', // IPFS hash
+          prUrl: task.prUrl || '', // GitHub PR URL
+          status: Number(task.status), // BigInt → number for enum
+          customerApproval: Boolean(task.customerApproval), // Ensure boolean
+          stakeholderApproval: Boolean(task.stakeholderApproval)
+        };
+      })
+      .filter(task => task !== null);
+
+    console.log('✅ Processed valid tasks:', processed.length);
+    return processed;
+  }, [tasksData]);
+
+  // Simplified fetchTasks - just triggers refetch and updates state
   const fetchTasks = useCallback(async () => {
-    if (!MARKETPLACE_ADDRESS || !taskCounter) return;
+    if (!MARKETPLACE_ADDRESS || !taskCounter) {
+      console.log('🚫 fetchTasks skipped: missing address or counter');
+      return;
+    }
 
     try {
       // Use ref to check if this is the initial load
@@ -95,26 +134,19 @@ const TasksPage = () => {
       }
       setError('');
 
-      const taskCount = Number(taskCounter);
-      const taskPromises = [];
-
-      for (let i = 1; i <= taskCount; i++) {
-        taskPromises.push(fetchTaskDetails(i));
-      }
-
-      const fetchedTasks = await Promise.all(taskPromises);
-      setTasks(fetchedTasks.filter(task => task !== null));
+      console.log('🔄 Triggering task refetch');
+      await refetchTasks();
 
       // Mark initial load as complete
       isInitialLoadRef.current = false;
     } catch (err) {
-      console.error('Error fetching tasks:', err);
-      setError('Failed to load tasks');
+      console.error('❌ Error fetching tasks:', err);
+      setError('Failed to load tasks: ' + err.message);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [MARKETPLACE_ADDRESS, taskCounter, fetchTaskDetails]);
+  }, [MARKETPLACE_ADDRESS, taskCounter, refetchTasks]);
 
   const debouncedFetchRef = useRef(null);
 
@@ -274,6 +306,17 @@ const TasksPage = () => {
     }
   };
 
+  // Add a hook to read user's token balance (V2-compatible)
+  const { data: userBalance } = useReadContract({
+    address: TOKEN_ADDRESS,
+    abi: RoseTokenABI,
+    functionName: 'balanceOf',
+    args: [account],
+    query: {
+      enabled: isConnected && !!account && !!TOKEN_ADDRESS,
+    }
+  });
+
   const handleStakeTask = async (taskId) => {
     if (!isConnected || !MARKETPLACE_ADDRESS || !TOKEN_ADDRESS) return;
 
@@ -284,38 +327,32 @@ const TasksPage = () => {
         return;
       }
 
-      // Calculate required stake (10% of task deposit)
-      const depositAmount = BigInt(task.deposit) / 10n;
-      console.log("Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
+      // Calculate required stake (10% of task deposit) - explicit BigInt handling
+      const taskDepositBigInt = BigInt(task.deposit);
+      const depositAmount = taskDepositBigInt / 10n;
+      console.log("💰 Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
 
-      // Check user's ROSE token balance
-      const { readContract } = await import('wagmi/actions');
-      const { config } = await import('../wagmi.config');
+      // Check user's ROSE token balance (explicit BigInt handling)
+      const userBalanceBigInt = userBalance ? BigInt(userBalance.toString()) : 0n;
+      console.log("👛 User balance:", userBalanceBigInt.toString(), "ROSE");
 
-      const userBalance = await readContract(config, {
-        address: TOKEN_ADDRESS,
-        abi: RoseTokenABI,
-        functionName: 'balanceOf',
-        args: [account]
-      });
-
-      if (userBalance < depositAmount) {
-        const shortfall = depositAmount - userBalance;
+      if (userBalanceBigInt < depositAmount) {
+        const shortfall = depositAmount - userBalanceBigInt;
         const shortfallInRose = Number(formatUnits(shortfall, 18));
         setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake.`);
         return;
       }
 
-      console.log("Approving token transfer...");
+      console.log("✅ Approving token transfer...");
       const approveHash = await writeContractAsync({
         address: TOKEN_ADDRESS,
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount]
       });
-      console.log("Token approval transaction:", approveHash);
+      console.log("📝 Token approval transaction:", approveHash);
 
-      console.log("Staking tokens...");
+      console.log("🔒 Staking tokens...");
       const stakeHash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -324,11 +361,11 @@ const TasksPage = () => {
         gas: 300000n
       });
 
-      console.log("Stake transaction hash:", stakeHash);
+      console.log("✅ Stake transaction hash:", stakeHash);
 
       debouncedFetchTasks();
     } catch (err) {
-      console.error('Error staking as stakeholder:', err);
+      console.error('❌ Error staking as stakeholder:', err);
 
       // Provide more helpful error messages
       let errorMessage = 'Failed to stake as stakeholder';
@@ -455,6 +492,14 @@ const TasksPage = () => {
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
 
+  // Sync processedTasks to tasks state
+  useEffect(() => {
+    if (processedTasks.length > 0 || tasksData) {
+      console.log('🔄 Updating tasks state with', processedTasks.length, 'tasks');
+      setTasks(processedTasks);
+    }
+  }, [processedTasks, tasksData]);
+
   // Initial load and taskCounter changes
   useEffect(() => {
     if (MARKETPLACE_ADDRESS && taskCounter) {
@@ -533,7 +578,7 @@ const TasksPage = () => {
               onAcceptPayment={handleAcceptPayment}
               onStake={handleStakeTask}
               onCancel={handleCancelTask}
-              isLoading={isLoading}
+              isLoading={isLoading || isLoadingTasks}
               isRefreshing={isRefreshing}
               error={error}
               onErrorDismiss={() => setError('')}

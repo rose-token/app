@@ -34,7 +34,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     address: marketplaceAddress,
     abi: RoseMarketplaceABI,
     functionName: 'isTaskParticipant',
-    args: task.id ? [task.id] : undefined,
+    args: task.id ? [BigInt(task.id)] : undefined, // Explicit BigInt conversion for V2
     chainId: chain?.id,
     query: {
       enabled: !!account && isConnected && !!task.id && !!marketplaceAddress,
