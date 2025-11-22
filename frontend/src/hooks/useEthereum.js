@@ -394,6 +394,62 @@ export const EthereumProvider = ({ children }) => {
     }
   }, [metamaskProvider, setChainId, setError]);
 
+  // Validate connection state periodically (every 3 seconds)
+  // This catches cases where wallet disconnected but event didn't fire
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const validateConnection = async () => {
+      try {
+        const injected = getInjectedProvider();
+        if (!injected) {
+          console.log('Connection validation: No provider found, disconnecting');
+          setIsConnected(false);
+          setAccount(null);
+          setSigner(null);
+          setProvider(null);
+          return;
+        }
+
+        // Check if we still have accounts
+        const accounts = await injected.request({ method: 'eth_accounts' });
+
+        if (!accounts || accounts.length === 0) {
+          console.log('Connection validation: No accounts found, disconnecting');
+          setIsConnected(false);
+          setAccount(null);
+          setSigner(null);
+          setProvider(null);
+          return;
+        }
+
+        // Check if account changed
+        if (accounts[0].toLowerCase() !== account?.toLowerCase()) {
+          console.log('Connection validation: Account changed from', account, 'to', accounts[0]);
+          setAccount(accounts[0]);
+          // Refresh provider with new account
+          const ethersProvider = new ethers.providers.Web3Provider(injected);
+          const ethSigner = ethersProvider.getSigner();
+          setProvider(ethersProvider);
+          setSigner(ethSigner);
+        }
+      } catch (error) {
+        console.error('Connection validation error:', error);
+        // If validation fails, disconnect
+        setIsConnected(false);
+        setAccount(null);
+        setSigner(null);
+        setProvider(null);
+      }
+    };
+
+    // Validate immediately on mount, then every 3 seconds
+    validateConnection();
+    const interval = setInterval(validateConnection, 3000);
+
+    return () => clearInterval(interval);
+  }, [isConnected, account]);
+
   // Auto-connect for mobile wallet browsers
   useEffect(() => {
     const isMobile = isMobileDevice();
@@ -407,22 +463,39 @@ export const EthereumProvider = ({ children }) => {
           if (injected) {
             console.log('Mobile wallet browser detected, attempting auto-connect...');
 
+            // Use eth_accounts (doesn't require user approval, only returns previously connected accounts)
             const accounts = await injected.request({ method: 'eth_accounts' });
 
             if (accounts && accounts.length > 0) {
               console.log('Found previously connected accounts, auto-connecting...');
-              // Set up provider with existing accounts
+
+              // Validate account is still accessible
               const ethersProvider = new ethers.providers.Web3Provider(injected);
-              const ethSigner = ethersProvider.getSigner();
-              const network = await ethersProvider.getNetwork();
 
-              setProvider(ethersProvider);
-              setSigner(ethSigner);
-              setChainId('0x' + network.chainId.toString(16));
-              setAccount(accounts[0]);
-              setIsConnected(true);
+              try {
+                const ethSigner = ethersProvider.getSigner();
+                const signerAddress = await ethSigner.getAddress();
 
-              console.log('Mobile wallet auto-connected successfully!');
+                // Verify the signer address matches the account
+                if (signerAddress.toLowerCase() !== accounts[0].toLowerCase()) {
+                  console.log('Signer mismatch, skipping auto-connect');
+                  return;
+                }
+
+                const network = await ethersProvider.getNetwork();
+
+                setProvider(ethersProvider);
+                setSigner(ethSigner);
+                setChainId('0x' + network.chainId.toString(16));
+                setAccount(accounts[0]);
+                setIsConnected(true);
+
+                console.log('Mobile wallet auto-connected successfully!');
+                console.log('Account:', accounts[0]);
+                console.log('Network:', network.chainId);
+              } catch (signerError) {
+                console.log('Failed to get signer, skipping auto-connect:', signerError.message);
+              }
             } else {
               console.log('No previously connected accounts found');
             }
