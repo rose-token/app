@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useEthereum } from '../../hooks/useEthereum';
+import { useWallet } from '../../hooks/useWallet';
 import { useContract } from '../../hooks/useContract';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
-  const { account } = useEthereum();
+  const { account } = useWallet();
   const { roseMarketplace } = useContract();
 
   const [detailedContent, setDetailedContent] = useState(null);

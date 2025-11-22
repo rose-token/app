@@ -31,7 +31,7 @@
     --popover-foreground: 12 49% 17%;
 
     /* Main color/Left navbar: #B1452C */
-    --primary: 356, 55%, 65%;
+    --primary: 12 58% 43%;
     --primary-foreground: 33 58% 91%;
 
     /* Secondary/muted: #755947 */
@@ -148,4 +148,38 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* RainbowKit Custom Styling - Rose Theme */
+@layer components {
+  /* Style the main Connect Wallet button to match Rose theme */
+  button[data-testid="rk-connect-button"],
+  button[class*="ConnectButton"] {
+    @apply bg-primary text-primary-foreground hover:opacity-90 transition-opacity;
+    font-weight: 500 !important;
+    border-radius: 0.375rem !important;
+  }
+
+  /* Style the account button when connected */
+  button[data-testid="rk-account-button"] {
+    @apply bg-primary text-primary-foreground hover:opacity-90 transition-opacity;
+    font-weight: 500 !important;
+  }
+
+  /* Style the chain/network button */
+  button[data-testid="rk-chain-button"] {
+    @apply border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-all;
+  }
+}
+
+/* Override RainbowKit modal styles to match Rose theme */
+div[data-rk] {
+  --rk-colors-accentColor: hsl(var(--primary)) !important;
+  --rk-colors-accentColorForeground: hsl(var(--primary-foreground)) !important;
+  --rk-colors-modalBackground: hsl(var(--card)) !important;
+  --rk-colors-modalBorder: hsl(var(--border)) !important;
+  --rk-colors-modalText: hsl(var(--foreground)) !important;
+  --rk-colors-modalTextSecondary: hsl(var(--muted-foreground)) !important;
+  --rk-radii-modal: 0.5rem !important;
+  --rk-radii-actionButton: 0.375rem !important;
 }

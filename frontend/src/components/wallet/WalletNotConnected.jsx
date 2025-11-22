@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useEthereum } from '../../hooks/useEthereum';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const WalletNotConnected = () => {
-  const { connectWallet } = useEthereum();
   const [showDetails, setShowDetails] = useState(false);
     
   return (
@@ -81,12 +80,9 @@ const WalletNotConnected = () => {
         </div>  
       </div>  
         
-      <button  
-        onClick={connectWallet}  
-        className="bg-primary hover:bg-primary text-white px-6 py-3 rounded-md font-medium"  
-      >  
-        Connect Wallet  
-      </button>  
+      <div className="flex justify-center">
+        <ConnectButton />
+      </div>  
     </div>  
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useEthereum } from '../hooks/useEthereum';
+import { useWallet } from '../hooks/useWallet';
 import { useContract } from '../hooks/useContract';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
@@ -21,7 +21,7 @@ const TasksPage = () => {
     showClosed: false
   });
   
-  const { account, isConnected } = useEthereum();
+  const { account, isConnected } = useWallet();
   const { roseMarketplace, roseToken } = useContract();
   
   const fetchTaskDetails = useCallback(async (taskId) => {

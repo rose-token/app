@@ -12,6 +12,14 @@ module.exports = function override(config) {
   });
   config.resolve.fallback = fallback;
 
+  // Fix for ESM modules requiring fully specified imports
+  config.module.rules.push({
+    test: /\.m?js$/,
+    resolve: {
+      fullySpecified: false,
+    },
+  });
+
   config.plugins = (config.plugins || []).concat([
     new (require('webpack')).ProvidePlugin({
       process: 'process/browser',
