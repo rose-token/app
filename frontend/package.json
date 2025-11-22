@@ -8,7 +8,6 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@metamask/sdk-react": "^0.32.1",
     "@pinata/sdk": "^2.1.0",
     "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-slot": "^1.2.2",
