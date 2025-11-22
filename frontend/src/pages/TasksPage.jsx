@@ -100,29 +100,48 @@ const TasksPage = () => {
         console.log(`🔍 Task ${index + 1} raw data:`, task);
         console.log(`🔍 Task ${index + 1} status value:`, task.status, 'Type:', typeof task.status);
 
-        // Handle both object (named) and array (indexed) formats from wagmi
+        // Defensive parsing — works with both object (old) and tuple array (wagmi v2)
         // Struct fields: customer, worker, stakeholder, deposit, stakeholderDeposit,
         //                title, detailedDescriptionHash, prUrl, status, customerApproval, stakeholderApproval
-        const isArray = Array.isArray(task);
+        const [
+          customer,
+          worker,
+          stakeholder,
+          depositBig,
+          stakeholderDepositBig,
+          title,
+          detailedDescriptionHash,
+          prUrl,
+          statusRaw,
+          customerApproval,
+          stakeholderApproval
+        ] = Array.isArray(task) ? task : [
+          task.customer,
+          task.worker,
+          task.stakeholder,
+          task.deposit,
+          task.stakeholderDeposit ?? 0n,
+          task.title,
+          task.detailedDescriptionHash,
+          task.prUrl,
+          task.status,
+          task.customerApproval,
+          task.stakeholderApproval
+        ];
 
-        // Explicit BigInt → appropriate type conversions for V2
         return {
-          id: index + 1, // Task IDs start at 1
-          customer: isArray ? task[0] : task.customer,
-          worker: isArray ? task[1] : task.worker,
-          stakeholder: isArray ? task[2] : task.stakeholder,
-          deposit: isArray
-            ? (task[3] ? task[3].toString() : '0')
-            : (task.deposit ? task.deposit.toString() : '0'),
-          stakeholderDeposit: isArray
-            ? (task[4] ? task[4].toString() : '0')
-            : (task.stakeholderDeposit ? task.stakeholderDeposit.toString() : '0'),
-          description: isArray ? (task[5] || '') : (task.title || ''),
-          detailedDescription: isArray ? (task[6] || '') : (task.detailedDescriptionHash || ''),
-          prUrl: isArray ? (task[7] || '') : (task.prUrl || ''),
-          status: isArray ? Number(task[8]) : Number(task.status),
-          customerApproval: isArray ? Boolean(task[9]) : Boolean(task.customerApproval),
-          stakeholderApproval: isArray ? Boolean(task[10]) : Boolean(task.stakeholderApproval)
+          id: index + 1,
+          customer,
+          worker,
+          stakeholder,
+          deposit: depositBig.toString(),
+          stakeholderDeposit: stakeholderDepositBig.toString(),
+          description: title || '',
+          detailedDescription: detailedDescriptionHash || '',
+          prUrl: prUrl || '',
+          status: Number(statusRaw),          // ← critical — forces number for your enum
+          customerApproval,
+          stakeholderApproval
         };
       })
       .filter(task => task !== null);
