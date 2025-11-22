@@ -12,7 +12,7 @@ export const uploadProfileToIPFS = async (profileData, address) => {
     
     const cid = await uploadCommentToIPFS(fullProfileData);
     
-    localStorage.setItem(`${PROFILE_CID_KEY}-${address.toLowerCase()}`, cid);
+    localStorage.setItem(`${PROFILE_CID_KEY}-${address}`, cid);
     
     return cid;
   } catch (error) {
@@ -23,7 +23,7 @@ export const uploadProfileToIPFS = async (profileData, address) => {
 
 export const fetchProfileFromIPFS = async (address) => {
   try {
-    const cid = localStorage.getItem(`${PROFILE_CID_KEY}-${address.toLowerCase()}`);
+    const cid = localStorage.getItem(`${PROFILE_CID_KEY}-${address}`);
     
     if (!cid) {
       return null; // No profile found

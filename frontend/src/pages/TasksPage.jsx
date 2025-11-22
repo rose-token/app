@@ -531,9 +531,9 @@ const TasksPage = () => {
 
     if (filters.myTasks && account) {
       const isInvolved =
-        task.customer.toLowerCase() === account.toLowerCase() ||
-        task.worker.toLowerCase() === account.toLowerCase() ||
-        task.stakeholder.toLowerCase() === account.toLowerCase();
+        task.customer === account ||
+        task.worker === account ||
+        task.stakeholder === account;
 
       if (isInvolved) {
         return true;
