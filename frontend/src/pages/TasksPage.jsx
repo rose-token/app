@@ -301,8 +301,7 @@ const TasksPage = () => {
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
-          args: [BigInt(taskId)],
-          gas: 500000n // Increase gas limit for stakeholder approval
+          args: [BigInt(taskId)]
         });
       }
 
@@ -325,8 +324,7 @@ const TasksPage = () => {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
-        args: [BigInt(taskId)],
-        gas: 500000n // Increase gas limit for payment acceptance
+        args: [BigInt(taskId)]
       });
 
       console.log("Transaction hash:", hash);
@@ -389,8 +387,7 @@ const TasksPage = () => {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
-        args: [BigInt(taskId), depositAmount],
-        gas: 300000n
+        args: [BigInt(taskId), depositAmount]
       });
 
       console.log("✅ Stake transaction hash:", stakeHash);
@@ -440,8 +437,7 @@ const TasksPage = () => {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
-        args: [BigInt(taskId)],
-        gas: 300000n
+        args: [BigInt(taskId)]
       });
 
       console.log("Cancel transaction hash:", hash);
