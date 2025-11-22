@@ -1,6 +1,6 @@
 export const NETWORK_IDS = {
-  MAINNET: '0x1',
-  SEPOLIA: '0xaa36a7'
+  MAINNET: 1,
+  SEPOLIA: 11155111
 };
 
 export const NETWORK_NAMES = {
