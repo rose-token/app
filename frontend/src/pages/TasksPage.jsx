@@ -23,9 +23,9 @@ const TasksPage = () => {
   const [error, setError] = useState('');
 
   const [filters, setFilters] = useState({
-    needStakeholder: true,
-    needWorker: true,
-    myTasks: true,
+    needStakeholder: false,
+    needWorker: false,
+    myTasks: false,
     showClosed: false
   });
 
