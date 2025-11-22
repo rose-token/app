@@ -71,8 +71,12 @@
     ]
   },
   "devDependencies": {
+    "ajv": "^8.17.1",
     "react-app-rewired": "^2.2.1",
     "typescript": "^5.9.3",
     "webpack": "^5.99.8"
+  },
+  "overrides": {
+    "openapi-fetch": "0.12.2"
   }
 }
