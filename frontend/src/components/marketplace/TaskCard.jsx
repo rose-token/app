@@ -29,25 +29,8 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isStakeholder = account && task.stakeholder && task.stakeholder === account;
   const isParticipant = isCustomer || isWorker || isStakeholder;
 
-  // Check if user can view details using wagmi's useReadContract
-  const { data: canViewDetails } = useReadContract({
-    address: marketplaceAddress,
-    abi: RoseMarketplaceABI,
-    functionName: 'isTaskParticipant',
-    args: task.id ? [BigInt(task.id)] : undefined, // Explicit BigInt conversion for V2
-    chainId: chain?.id,
-    query: {
-      enabled: !!account && isConnected && !!task.id && !!marketplaceAddress,
-    },
-  });
-
   // Fetch detailed description from IPFS
   const loadDetailedDescription = async () => {
-    if (!canViewDetails) {
-      setDetailsError('You must be a task participant to view details');
-      return;
-    }
-
     if (!task.detailedDescription || task.detailedDescription.length === 0) {
       setDetailsError('No detailed description available');
       return;
@@ -121,54 +104,52 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       {/* Detailed Description Section */}
       <div className="mb-4">
-        {canViewDetails ? (
-          <div className="rounded-md p-3 bg-muted/20">
-            {!showDetails ? (
-              <button
-                onClick={loadDetailedDescription}
-                disabled={isLoadingDetails}
-                className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
-              >
-                {isLoadingDetails ? (
-                  <>
-                    <span className="animate-spin mr-2">⏳</span>
-                    Loading details...
-                  </>
-                ) : (
-                  <>
-                    <span className="mr-2">📄</span>
-                    View Detailed Description
-                  </>
-                )}
-              </button>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-semibold text-sm text-foreground">Detailed Description</h4>
-                  <button
-                    onClick={() => setShowDetails(false)}
-                    className="text-muted-foreground hover:text-foreground text-xs"
-                  >
-                    Hide
-                  </button>
-                </div>
-                {detailedContent && (
-                  <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded">
-                    {detailedContent.description}
-                    {detailedContent.uploadedAt && (
-                      <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
-                        Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                )}
+        <div className="rounded-md p-3 bg-muted/20">
+          {!showDetails ? (
+            <button
+              onClick={loadDetailedDescription}
+              disabled={isLoadingDetails}
+              className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
+            >
+              {isLoadingDetails ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  Loading details...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">📄</span>
+                  View Detailed Description
+                </>
+              )}
+            </button>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-semibold text-sm text-foreground">Detailed Description</h4>
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                >
+                  Hide
+                </button>
               </div>
-            )}
-            {detailsError && (
-              <p className="text-xs text-destructive mt-1">{detailsError}</p>
-            )}
-          </div>
-        ) : null}
+              {detailedContent && (
+                <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded">
+                  {detailedContent.description}
+                  {detailedContent.uploadedAt && (
+                    <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
+                      Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {detailsError && (
+            <p className="text-xs text-destructive mt-1">{detailsError}</p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
