@@ -80,11 +80,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
 
-    if (chainId !== NETWORK_IDS.SEPOLIA) {
-      setError(`Please switch to ${NETWORK_NAMES[NETWORK_IDS.SEPOLIA]} to create tasks`);
-      return;
-    }
-
     if (!title || title.trim().length === 0) {
       setError('Task title is required');
       return;
