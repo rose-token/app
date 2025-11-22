@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useProfile } from '../hooks/useProfile';
-import { useEthereum } from '../hooks/useEthereum';
+import { useWallet } from '../hooks/useWallet';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 
 const ProfilePage = () => {
   const { profile, isLoading, error, updateProfile } = useProfile();
-  const { account, isConnected } = useEthereum();
+  const { account, isConnected } = useWallet();
   
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');

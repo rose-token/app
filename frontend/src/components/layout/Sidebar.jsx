@@ -1,11 +1,11 @@
 import React from 'react';  
 import { NavLink } from 'react-router-dom';  
-import { useEthereum } from '../../hooks/useEthereum';  
+import { useWallet } from '../../hooks/useWallet';  
 import TokenBalance from '../wallet/TokenBalance';
 import ExchangeRate from '../wallet/ExchangeRate';
   
 const Sidebar = ({ isOpen, toggleSidebar }) => {  
-  const { isConnected } = useEthereum();
+  const { isConnected } = useWallet();
   
   return (  
     <>  

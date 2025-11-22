@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useEthereum } from '../hooks/useEthereum';
+import { useWallet } from '../hooks/useWallet';
 
 const ProviderDebug = () => {
-  const { isConnected, isConnecting, account, chainId, error } = useEthereum();
+  const { isConnected, isConnecting, account, chainId, error } = useWallet();
   const [providerInfo, setProviderInfo] = useState({});
 
   useEffect(() => {

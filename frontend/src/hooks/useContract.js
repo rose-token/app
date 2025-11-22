@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
-import { useEthereum } from './useEthereum';
+import { useWallet } from './useWallet';
 
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
@@ -27,7 +27,7 @@ const logInitialAddresses = () => {
 const initialAddresses = logInitialAddresses();
 
 export const useContract = () => {
-  const { provider, signer, isConnected, account } = useEthereum();
+  const { provider, signer, isConnected, account } = useWallet();
   const [roseMarketplace, setRoseMarketplace] = useState(null);
   const [roseToken, setRoseToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);

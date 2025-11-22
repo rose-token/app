@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useEthereum } from '../../hooks/useEthereum';
+import { useWallet } from '../../hooks/useWallet';
 import { useContract } from '../../hooks/useContract';
 
 const TokenBalance = () => {
   const [balance, setBalance] = useState('0');
-  const { account } = useEthereum();
+  const { account } = useWallet();
   const { roseToken } = useContract();
 
   useEffect(() => {

@@ -9,8 +9,19 @@ module.exports = function override(config) {
     "url": require.resolve("url"),
     "buffer": require.resolve("buffer"),
     "process": require.resolve("process/browser"),
+    // Stub out React Native dependencies that aren't needed for web
+    "@react-native-async-storage/async-storage": false,
+    "react-native": false,
   });
   config.resolve.fallback = fallback;
+
+  // Fix for ESM modules requiring fully specified imports
+  config.module.rules.push({
+    test: /\.m?js$/,
+    resolve: {
+      fullySpecified: false,
+    },
+  });
 
   config.plugins = (config.plugins || []).concat([
     new (require('webpack')).ProvidePlugin({
@@ -18,6 +29,14 @@ module.exports = function override(config) {
       Buffer: ['buffer', 'Buffer']
     })
   ]);
+
+  // Ignore warnings for optional dependencies and React Native modules
+  config.ignoreWarnings = [
+    /Failed to parse source map/,
+    /Critical dependency: the request of a dependency is an expression/,
+    /@react-native-async-storage\/async-storage/,
+    /react-native/,
+  ];
 
   config.output.filename = 'static/js/[name].[contenthash:8].[fullhash:8].js';
   config.output.chunkFilename = 'static/js/[name].[contenthash:8].[fullhash:8].chunk.js';

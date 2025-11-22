@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useEthereum } from './useEthereum';
+import { useWallet } from './useWallet';
 import { uploadProfileToIPFS, fetchProfileFromIPFS } from '../utils/ipfs/profileService';
 
 const ProfileContext = createContext();
 
 export const ProfileProvider = ({ children }) => {
-  const { account, isConnected } = useEthereum();
+  const { account, isConnected } = useWallet();
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);

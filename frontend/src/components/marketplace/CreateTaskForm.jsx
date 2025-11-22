@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import { useEthereum } from '../../hooks/useEthereum';
+import { useWallet } from '../../hooks/useWallet';
 import { useContract } from '../../hooks/useContract';
 import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
@@ -14,7 +14,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [error, setError] = useState('');
   const [localContractsReady, setLocalContractsReady] = useState(false);
 
-  const { isConnected, chainId } = useEthereum();
+  const { isConnected, chainId } = useWallet();
   const {
     roseMarketplace,
     roseToken,
