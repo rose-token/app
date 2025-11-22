@@ -31,6 +31,9 @@ const TasksPage = () => {
 
   const { address: account, isConnected } = useAccount();
 
+  // Track if this is the initial load
+  const isInitialLoadRef = useRef(true);
+
   // Read taskCounter from marketplace contract
   const { data: taskCounter, refetch: refetchTaskCounter } = useReadContract({
     address: MARKETPLACE_ADDRESS,
@@ -84,7 +87,8 @@ const TasksPage = () => {
     if (!MARKETPLACE_ADDRESS || !taskCounter) return;
 
     try {
-      if (tasks.length === 0) {
+      // Use ref to check if this is the initial load
+      if (isInitialLoadRef.current) {
         setIsLoading(true);
       } else {
         setIsRefreshing(true);
@@ -100,6 +104,9 @@ const TasksPage = () => {
 
       const fetchedTasks = await Promise.all(taskPromises);
       setTasks(fetchedTasks.filter(task => task !== null));
+
+      // Mark initial load as complete
+      isInitialLoadRef.current = false;
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setError('Failed to load tasks');
@@ -107,7 +114,7 @@ const TasksPage = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [MARKETPLACE_ADDRESS, taskCounter, fetchTaskDetails, tasks.length]);
+  }, [MARKETPLACE_ADDRESS, taskCounter, fetchTaskDetails]);
 
   const debouncedFetchRef = useRef(null);
 
@@ -213,7 +220,6 @@ const TasksPage = () => {
   const handleApproveTask = async (taskId, role) => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
-    setIsLoading(true);
     try {
       let hash;
 
@@ -238,13 +244,10 @@ const TasksPage = () => {
 
       console.log("Transaction hash:", hash);
 
-      await fetchTasks(); // Refresh task list after approval
-      await fetchTaskDetails(taskId); // Refresh the specific task details
+      debouncedFetchTasks(); // Refresh task list after approval
     } catch (err) {
       console.error('Error approving task:', err);
       setError(`Failed to approve task as ${role}: ${err.message || "Transaction failed"}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -252,7 +255,6 @@ const TasksPage = () => {
   const handleAcceptPayment = async (taskId) => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
-    setIsLoading(true);
     try {
       console.log("Accepting payment for task:", taskId);
       const hash = await writeContractAsync({
@@ -265,12 +267,10 @@ const TasksPage = () => {
 
       console.log("Transaction hash:", hash);
 
-      await fetchTasks(); // Refresh task list after payment acceptance
+      debouncedFetchTasks(); // Refresh task list after payment acceptance
     } catch (err) {
       console.error('Error accepting payment:', err);
       setError(`Failed to accept payment: ${err.message || "Transaction failed"}`);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -406,7 +406,7 @@ const TasksPage = () => {
     eventName: 'PaymentReleased',
     onLogs: (logs) => {
       console.log("Payment released event:", logs);
-      fetchTasks();
+      debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
@@ -417,7 +417,7 @@ const TasksPage = () => {
     eventName: 'TaskClosed',
     onLogs: (logs) => {
       console.log("Task closed event:", logs);
-      fetchTasks();
+      debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
@@ -428,7 +428,7 @@ const TasksPage = () => {
     eventName: 'TaskReadyForPayment',
     onLogs: (logs) => {
       console.log("Task ready for payment event:", logs);
-      fetchTasks();
+      debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
@@ -439,7 +439,7 @@ const TasksPage = () => {
     eventName: 'StakeholderStaked',
     onLogs: (logs) => {
       console.log("Stakeholder staked event:", logs);
-      fetchTasks();
+      debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
@@ -450,16 +450,26 @@ const TasksPage = () => {
     eventName: 'TaskCancelled',
     onLogs: (logs) => {
       console.log("Task cancelled event:", logs);
-      fetchTasks();
+      debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
 
+  // Initial load and taskCounter changes
   useEffect(() => {
     if (MARKETPLACE_ADDRESS && taskCounter) {
-      debouncedFetchTasks();
+      fetchTasks();
     }
-  }, [MARKETPLACE_ADDRESS, taskCounter, debouncedFetchTasks]);
+  }, [MARKETPLACE_ADDRESS, taskCounter, fetchTasks]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debouncedFetchRef.current) {
+        clearTimeout(debouncedFetchRef.current);
+      }
+    };
+  }, []);
 
   const filteredTasks = tasks.filter(task => {
     if (task.status === TaskStatus.Closed && !filters.showClosed) {
