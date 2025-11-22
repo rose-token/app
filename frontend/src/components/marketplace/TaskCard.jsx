@@ -24,9 +24,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     return parseFloat(wei) / 10**18;
   };
 
-  const isCustomer = account && task.customer.toLowerCase() === account.toLowerCase();
-  const isWorker = account && task.worker && task.worker.toLowerCase() === account.toLowerCase();
-  const isStakeholder = account && task.stakeholder && task.stakeholder.toLowerCase() === account.toLowerCase();
+  const isCustomer = account && task.customer === account;
+  const isWorker = account && task.worker && task.worker === account;
+  const isStakeholder = account && task.stakeholder && task.stakeholder === account;
   const isParticipant = isCustomer || isWorker || isStakeholder;
 
   // Check if user can view details using wagmi's useReadContract
