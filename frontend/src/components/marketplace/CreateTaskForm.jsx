@@ -1,52 +1,76 @@
 import React, { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import { useWallet } from '../../hooks/useWallet';
-import { useContract } from '../../hooks/useContract';
+import { parseEther } from 'viem';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
+import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
+import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState('');
-  const [localContractsReady, setLocalContractsReady] = useState(false);
+  const [ipfsHash, setIpfsHash] = useState('');
 
-  const { isConnected, chainId } = useWallet();
+  const { address: account, isConnected, chain } = useAccount();
+  const chainId = chain?.id;
+
+  const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
+  const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
+
+  // Wagmi write hooks
   const {
-    roseMarketplace,
-    roseToken,
-    isLoading,
-    error: contractError,
-    contractMethods,
-    contractsReady
-  } = useContract();
+    data: approveHash,
+    writeContract: approveToken,
+    isPending: isApproving,
+  } = useWriteContract();
 
+  const {
+    data: createTaskHash,
+    writeContract: createTask,
+    isPending: isCreating,
+  } = useWriteContract();
+
+  // Wait for approve transaction
+  const { isLoading: isApproveTxPending, isSuccess: isApproveSuccess } =
+    useWaitForTransactionReceipt({
+      hash: approveHash,
+    });
+
+  // Wait for create task transaction
+  const { isLoading: isCreateTxPending, isSuccess: isCreateSuccess } =
+    useWaitForTransactionReceipt({
+      hash: createTaskHash,
+    });
+
+  // When approve succeeds, call createTask
   useEffect(() => {
-    if (!isConnected) {
-      setLocalContractsReady(false);
-      return;
-    }
+    if (isApproveSuccess && ipfsHash && deposit) {
+      const tokenAmount = parseEther(deposit);
 
-    if (!isLoading && roseMarketplace && roseToken) {
-      if (contractMethods.initialized && contractMethods.valid && contractsReady.readWrite) {
-        setLocalContractsReady(true);
-        setError('');
-      } else if (contractMethods.initialized && !contractMethods.valid) {
-        console.error('Contract methods validation failed');
-        setLocalContractsReady(false);
-        setError('Contract initialization error: createTask function not available');
-      } else if (contractsReady.readOnly && !contractsReady.readWrite) {
-        setLocalContractsReady(false);
-        setError('Please connect your wallet to create tasks');
-      }
-    } else if (contractError) {
-      setLocalContractsReady(false);
-      setError(`Contract error: ${contractError}`);
+      createTask({
+        address: marketplaceAddress,
+        abi: RoseMarketplaceABI,
+        functionName: 'createTask',
+        args: [title, tokenAmount, ipfsHash],
+      });
     }
-  }, [roseMarketplace, roseToken, isLoading, contractError, contractMethods, contractsReady, isConnected]);
+  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, createTask]);
+
+  // When createTask succeeds, reset form
+  useEffect(() => {
+    if (isCreateSuccess) {
+      setTitle('');
+      setDetailedDescription('');
+      setDeposit('');
+      setIpfsHash('');
+
+      if (onTaskCreated) {
+        onTaskCreated();
+      }
+    }
+  }, [isCreateSuccess, onTaskCreated]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,82 +100,32 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       return;
     }
 
-    if (!localContractsReady) {
-      if (!isConnected) {
-        setError('Please connect your wallet to create tasks');
-      } else if (contractsReady.readOnly && !contractsReady.readWrite) {
-        setError('Wallet connected but contracts not initialized for write operations. Please wait a moment.');
-      } else {
-        setError('Contracts not properly initialized. Please refresh the page or reconnect your wallet.');
-      }
-      console.error('Contract state:', {
-        marketplaceExists: !!roseMarketplace,
-        tokenExists: !!roseToken,
-        isLoading,
-        localContractsReady,
-        contractsReady
-      });
-      return;
-    }
-
     try {
       setError('');
 
       // Step 1: Upload detailed description to IPFS
-      setIsCreating(true);
       console.log('Uploading detailed description to IPFS...');
-      const ipfsHash = await uploadTaskDescription(detailedDescription, title);
-      console.log('Uploaded to IPFS:', ipfsHash);
+      const hash = await uploadTaskDescription(detailedDescription, title);
+      console.log('Uploaded to IPFS:', hash);
+      setIpfsHash(hash);
 
-      const tokenAmount = ethers.utils.parseEther(deposit);
+      const tokenAmount = parseEther(deposit);
 
-      console.log('Using contracts:', {
-        marketplaceAddress: roseMarketplace.address,
-        tokenAddress: roseToken.address
+      console.log('Approving token transfer...');
+      // Step 2: Approve token transfer (wagmi hook)
+      approveToken({
+        address: tokenAddress,
+        abi: RoseTokenABI,
+        functionName: 'approve',
+        args: [marketplaceAddress, tokenAmount],
       });
 
-      // Step 2: Approve token transfer
-      setIsApproving(true);
-      setIsCreating(false);
-      const approveTx = await roseToken.approve(roseMarketplace.address, tokenAmount);
-      await approveTx.wait();
-      setIsApproving(false);
-
-      // Step 3: Create task with IPFS hash
-      setIsCreating(true);
-      const tx = await roseMarketplace.createTask(
-        title,
-        tokenAmount,
-        ipfsHash
-      );
-
-      await tx.wait();
-
-      // Reset form
-      setTitle('');
-      setDetailedDescription('');
-      setDeposit('');
-
-      if (onTaskCreated) {
-        onTaskCreated();
-      }
+      // Step 3 happens automatically in useEffect when approve succeeds
     } catch (err) {
       console.error('Error creating task:', err);
 
       if (err.message && err.message.includes('Pinata')) {
         setError('Failed to upload task description to IPFS. Please check your Pinata configuration.');
-      } else if (err.code === 'INVALID_ARGUMENT') {
-        setError('Invalid argument to createTask function. Check parameter types.');
-      } else if (err.message && err.message.includes('not a function')) {
-        setError('Contract method not found. Please refresh the page or reconnect your wallet.');
-
-        console.error('Contract state when error occurred:', {
-          marketplaceExists: !!roseMarketplace,
-          tokenExists: !!roseToken,
-          isLoading,
-          contractsReady,
-          contractMethods: contractMethods || 'N/A'
-        });
       } else if (err.message && err.message.includes('user rejected')) {
         setError('Transaction rejected. Please try again.');
       } else if (err.message && err.message.includes('insufficient funds')) {
@@ -159,15 +133,8 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       } else {
         setError(err.message || 'Failed to create task');
       }
-    } finally {
-      setIsApproving(false);
-      setIsCreating(false);
     }
   };
-
-  if (isLoading) {
-    return <div className="text-center py-4">Loading contracts...</div>;
-  }
 
   if (!isConnected) {
     return (
@@ -175,17 +142,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
         <div className="text-center py-4 text-secondary">
           Please connect your wallet to create tasks
-        </div>
-      </div>
-    );
-  }
-
-  if (contractsReady && contractsReady.readOnly && !contractsReady.readWrite) {
-    return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
-        <div className="text-center py-4 text-secondary">
-          Wallet connected but waiting for contract initialization. Please wait a moment...
         </div>
       </div>
     );
@@ -266,14 +222,18 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
         <button
           type="submit"
-          disabled={isCreating || isApproving || !isConnected}
+          disabled={isApproving || isApproveTxPending || isCreating || isCreateTxPending || !isConnected}
           className={`w-full py-2 px-4 rounded-md font-medium ${
-            isCreating || isApproving || !isConnected
+            isApproving || isApproveTxPending || isCreating || isCreateTxPending || !isConnected
               ? 'bg-muted text-muted-foreground cursor-not-allowed'
               : 'bg-primary text-primary-foreground hover:bg-primary'
           }`}
         >
-          {isApproving ? 'Approving ROSE Tokens...' : isCreating ? 'Creating Task...' : 'Create Task'}
+          {isApproving || isApproveTxPending
+            ? 'Approving ROSE Tokens...'
+            : isCreating || isCreateTxPending
+            ? 'Creating Task...'
+            : 'Create Task'}
         </button>
 
       </form>
