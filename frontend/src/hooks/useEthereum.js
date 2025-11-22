@@ -207,6 +207,8 @@ export const EthereumProvider = ({ children }) => {
       setIsConnecting(true);
       setError(null);
 
+      const SEPOLIA_CHAIN_ID = '0xaa36a7'; // Sepolia testnet
+
       // Try injected provider first (works for both desktop extensions and mobile in-app browsers)
       const injected = getInjectedProvider();
 
@@ -227,19 +229,69 @@ export const EthereumProvider = ({ children }) => {
           throw new Error('No accounts returned from wallet');
         }
 
+        // Check and switch to Sepolia if needed
         const ethersProvider = new ethers.providers.Web3Provider(injected);
-        const ethSigner = ethersProvider.getSigner();
         const network = await ethersProvider.getNetwork();
+        const currentChainId = '0x' + network.chainId.toString(16);
 
-        setProvider(ethersProvider);
+        console.log('Current network:', network.chainId, '(', currentChainId, ')');
+        console.log('Required network: Sepolia (11155111 / 0xaa36a7)');
+
+        if (currentChainId !== SEPOLIA_CHAIN_ID) {
+          console.log('Wrong network detected, requesting switch to Sepolia...');
+          try {
+            await injected.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: SEPOLIA_CHAIN_ID }],
+            });
+            console.log('Network switched to Sepolia');
+          } catch (switchError) {
+            // This error code indicates that the chain has not been added to MetaMask
+            if (switchError.code === 4902) {
+              console.log('Sepolia not in wallet, attempting to add it...');
+              try {
+                await injected.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [
+                    {
+                      chainId: SEPOLIA_CHAIN_ID,
+                      chainName: 'Sepolia Testnet',
+                      nativeCurrency: {
+                        name: 'Sepolia ETH',
+                        symbol: 'ETH',
+                        decimals: 18,
+                      },
+                      rpcUrls: ['https://sepolia.infura.io/v3/'],
+                      blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                    },
+                  ],
+                });
+                console.log('Sepolia network added and switched');
+              } catch (addError) {
+                console.error('Failed to add Sepolia network:', addError);
+                throw new Error('Please add Sepolia network to your wallet and try again');
+              }
+            } else {
+              console.error('Failed to switch network:', switchError);
+              throw new Error('Please switch to Sepolia network in your wallet');
+            }
+          }
+        }
+
+        // Get fresh provider after potential network switch
+        const finalProvider = new ethers.providers.Web3Provider(injected);
+        const ethSigner = finalProvider.getSigner();
+        const finalNetwork = await finalProvider.getNetwork();
+
+        setProvider(finalProvider);
         setSigner(ethSigner);
-        setChainId('0x' + network.chainId.toString(16));
+        setChainId('0x' + finalNetwork.chainId.toString(16));
         setAccount(accounts[0]);
         setIsConnected(true);
 
         console.log('Injected wallet connection complete');
         console.log('Connected account:', accounts[0]);
-        console.log('Connected network:', network.chainId);
+        console.log('Connected network:', finalNetwork.chainId);
         return;
       }
 
