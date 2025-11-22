@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
 import { useProfile } from '../hooks/useProfile';
-import { useWallet } from '../hooks/useWallet';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 
 const ProfilePage = () => {
   const { profile, isLoading, error, updateProfile } = useProfile();
-  const { account, isConnected } = useWallet();
+  const { address: account, isConnected } = useAccount();
   
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
