@@ -19,12 +19,14 @@ const getInjectedProvider = () => {
   const eth = window.ethereum;
   if (!eth) return null;
 
-  // If the main ethereum object already looks like a wallet, prefer it
-  if (eth.isMetaMask || eth.isBraveWallet || eth.isCoinbaseWallet || eth.isPhantom) {
-    return eth;
-  }
+  console.log('getInjectedProvider: Analyzing window.ethereum');
+  console.log('  isMetaMask:', eth.isMetaMask);
+  console.log('  isBraveWallet:', eth.isBraveWallet);
+  console.log('  isCoinbaseWallet:', eth.isCoinbaseWallet);
+  console.log('  isPhantom:', eth.isPhantom);
+  console.log('  providers array:', eth.providers?.length || 0);
 
-  // If multiple providers exist, pick in order of preference
+  // If multiple providers exist, pick from the array
   if (Array.isArray(eth.providers) && eth.providers.length > 0) {
     console.log('Multiple providers detected:', eth.providers.length);
     eth.providers.forEach((p, idx) => {
@@ -36,14 +38,15 @@ const getInjectedProvider = () => {
       });
     });
 
+    // Check for specific wallets first (before MetaMask, since many wallets set isMetaMask for compat)
     const preferred =
-      eth.providers.find(p => p.isMetaMask) ||
-      eth.providers.find(p => p.isBraveWallet) ||
-      eth.providers.find(p => p.isCoinbaseWallet) ||
-      eth.providers.find(p => p.isPhantom) ||
-      eth.providers[0];
+      eth.providers.find(p => p.isBraveWallet && !p.isPhantom) ||  // Brave (not Phantom pretending)
+      eth.providers.find(p => p.isCoinbaseWallet) ||                // Coinbase
+      eth.providers.find(p => p.isPhantom) ||                       // Phantom (even if isMetaMask also true)
+      eth.providers.find(p => p.isMetaMask && !p.isPhantom && !p.isBraveWallet && !p.isCoinbaseWallet) || // Real MetaMask
+      eth.providers[0];                                              // Fallback to first
 
-    console.log('Selected injected provider flags:', {
+    console.log('Selected provider from array:', {
       isMetaMask: preferred?.isMetaMask,
       isBraveWallet: preferred?.isBraveWallet,
       isCoinbaseWallet: preferred?.isCoinbaseWallet,
@@ -53,7 +56,27 @@ const getInjectedProvider = () => {
     return preferred;
   }
 
-  // Fallback
+  // Single provider: Check for specific wallet identifiers first
+  // Note: Phantom sets isMetaMask=true for compatibility, so check isPhantom first
+  if (eth.isPhantom) {
+    console.log('Detected: Phantom wallet (may also show isMetaMask for compat)');
+    return eth;
+  }
+  if (eth.isBraveWallet) {
+    console.log('Detected: Brave Wallet');
+    return eth;
+  }
+  if (eth.isCoinbaseWallet) {
+    console.log('Detected: Coinbase Wallet');
+    return eth;
+  }
+  if (eth.isMetaMask) {
+    console.log('Detected: MetaMask (or wallet claiming to be MetaMask)');
+    return eth;
+  }
+
+  // Fallback: return whatever window.ethereum is
+  console.log('Using fallback: window.ethereum with no specific wallet flags');
   return eth;
 };
 
