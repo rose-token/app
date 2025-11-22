@@ -151,6 +151,19 @@ export const EthereumProvider = ({ children }) => {
     };
   }, [metamaskProvider, connected, handleAccountsChanged, handleChainChanged]);
 
+  // Helper function to wait for provider injection on mobile
+  const waitForProvider = async (maxAttempts = 10, delayMs = 300) => {
+    for (let i = 0; i < maxAttempts; i++) {
+      if (typeof window !== 'undefined' && window.ethereum) {
+        console.log(`Provider found on attempt ${i + 1}`);
+        return window.ethereum;
+      }
+      console.log(`Waiting for provider... attempt ${i + 1}/${maxAttempts}`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    return null;
+  };
+
   const connectWallet = useCallback(async () => {
     if (isConnecting) return;
 
@@ -165,39 +178,55 @@ export const EthereumProvider = ({ children }) => {
       let accounts;
 
       // On mobile, prioritize window.ethereum (injected by mobile wallet apps)
-      if (isMobile && typeof window !== 'undefined' && window.ethereum) {
-        console.log('Mobile wallet detected, using injected provider');
-        try {
-          // Request account access
-          accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          console.log('Connected via injected provider:', accounts);
+      if (isMobile) {
+        console.log('Mobile device detected, waiting for wallet provider...');
 
-          if (!accounts || accounts.length === 0) {
-            throw new Error('No accounts returned from wallet');
+        // Wait for provider to be injected (mobile wallets inject asynchronously)
+        const injectedProvider = await waitForProvider();
+
+        if (injectedProvider) {
+          console.log('Mobile wallet detected, using injected provider');
+          try {
+            // Request account access
+            accounts = await injectedProvider.request({ method: 'eth_requestAccounts' });
+            console.log('Connected via injected provider:', accounts);
+
+            if (!accounts || accounts.length === 0) {
+              throw new Error('No accounts returned from wallet');
+            }
+
+            // Set up the provider and signer immediately
+            const ethersProvider = new ethers.providers.Web3Provider(injectedProvider);
+            const ethSigner = ethersProvider.getSigner();
+            const network = await ethersProvider.getNetwork();
+
+            setProvider(ethersProvider);
+            setSigner(ethSigner);
+            setChainId('0x' + network.chainId.toString(16));
+            setAccount(accounts[0]);
+            setIsConnected(true);
+
+            console.log('Mobile wallet connection complete');
+            return;
+          } catch (error) {
+            console.error('Failed to connect with injected provider:', error);
+            // If user rejected, throw the error; otherwise try SDK fallback
+            if (error.code === 4001) {
+              throw error; // User rejected
+            }
+            console.log('Injected provider failed, trying SDK fallback...');
           }
-
-          // Set up the provider and signer immediately
-          const ethersProvider = new ethers.providers.Web3Provider(window.ethereum);
-          const ethSigner = ethersProvider.getSigner();
-          const network = await ethersProvider.getNetwork();
-
-          setProvider(ethersProvider);
-          setSigner(ethSigner);
-          setChainId('0x' + network.chainId.toString(16));
-          setAccount(accounts[0]);
-          setIsConnected(true);
-
-          console.log('Mobile wallet connection complete');
-          return;
-        } catch (error) {
-          console.error('Failed to connect with injected provider:', error);
-          throw error;
+        } else {
+          console.log('No injected provider found after waiting, trying SDK...');
         }
       }
 
       // For desktop or if no injected provider, use MetaMask SDK
       if (!sdk) {
-        throw new Error('Wallet connection not available. Please install MetaMask or use a wallet browser.');
+        const errorMsg = isMobile
+          ? 'Please open this page in a wallet browser (MetaMask, Brave, Phantom, Trust Wallet, etc.)'
+          : 'Wallet connection not available. Please install MetaMask or use a wallet browser.';
+        throw new Error(errorMsg);
       }
 
       console.log('Using MetaMask SDK for connection');
