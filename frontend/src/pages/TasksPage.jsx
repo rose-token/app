@@ -152,7 +152,7 @@ const TasksPage = () => {
 
   // Simplified fetchTasks - just triggers refetch and updates state
   const fetchTasks = useCallback(async () => {
-    if (!MARKETPLACE_ADDRESS || !taskCounter) {
+    if (!MARKETPLACE_ADDRESS || taskCounter === undefined || taskCounter === null) {
       console.log('🚫 fetchTasks skipped: missing address or counter');
       return;
     }
@@ -534,7 +534,7 @@ const TasksPage = () => {
 
   // Initial load and taskCounter changes
   useEffect(() => {
-    if (MARKETPLACE_ADDRESS && taskCounter) {
+    if (MARKETPLACE_ADDRESS && taskCounter !== undefined && taskCounter !== null) {
       fetchTasks();
     }
   }, [MARKETPLACE_ADDRESS, taskCounter, fetchTasks]);
