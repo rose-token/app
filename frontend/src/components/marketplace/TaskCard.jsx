@@ -338,7 +338,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
                 Approving...
               </>
             ) : (
-              '✓ Approve as Stakeholder'
+              'Approve as Stakeholder'
             )}
           </button>
         )}
@@ -361,7 +361,6 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             ) : (
               <>
                 <span>Accept Payment</span>
-                <span className="text-xs">(gas fees apply)</span>
               </>
             )}
           </button>
