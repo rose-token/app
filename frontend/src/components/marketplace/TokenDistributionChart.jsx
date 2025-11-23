@@ -46,8 +46,8 @@ const TokenDistributionChart = () => {
           <p>• Customer deposits: <span className="font-semibold">100 ROSE</span> (escrowed in contract)</p>
           <p>• Stakeholder stakes: <span className="font-semibold">10 ROSE</span> (10% of deposit, returned on completion)</p>
           <p>• Worker completes task: Receives <span className="font-semibold">95 ROSE</span> </p>
-          <p>• Stakeholder receives: <span className="font-semibold">15 ROSE</span> (Returned stake + 5% of deposit)</p>
-          <p>• Platform mints: <span className="font-semibold">2 ROSE</span> → DAO treasury (2% of deposit)</p>
+          <p>• Stakeholder verifies: Receives <span className="font-semibold">15 ROSE</span> (Returned stake + 5% of deposit)</p>
+          <p>• Platform mints: DAO receives <span className="font-semibold">2 ROSE</span> (2% of deposit)</p>
         </div>
       </div>
     </div>
