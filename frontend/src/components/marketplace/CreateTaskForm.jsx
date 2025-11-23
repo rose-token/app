@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { parseEther } from 'viem';
+import { parseEther, parseGwei } from 'viem';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
-import { useGasEstimation } from '../../hooks/useGasEstimation';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -23,9 +22,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
-
-  // Gas estimation hook
-  const { estimateAndWrite } = useGasEstimation();
 
   // Wagmi write hooks
   const {
@@ -70,16 +66,18 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           const tokenAmount = parseEther(deposit);
 
           try {
-            console.log('⛽ Creating task with gas estimation...');
-            await estimateAndWrite(createTask, {
+            console.log('⛽ Creating task with hardcoded 2 gwei gas...');
+            await createTask({
               address: marketplaceAddress,
               abi: RoseMarketplaceABI,
               functionName: 'createTask',
               args: [title, tokenAmount, ipfsHash],
-              account,
+              gasPrice: parseGwei('2'),
+              maxFeePerGas: parseGwei('2'),
+              maxPriorityFeePerGas: parseGwei('2'),
             });
           } catch (err) {
-            console.error('❌ Error creating task with gas estimation:', err);
+            console.error('❌ Error creating task:', err);
             createTaskCalledRef.current = false; // Reset on error so user can retry
           }
         }
@@ -142,14 +140,16 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
       const tokenAmount = parseEther(deposit);
 
-      console.log('⛽ Approving token transfer with gas estimation...');
-      // Step 2: Approve token transfer with gas estimation
-      await estimateAndWrite(approveToken, {
+      console.log('⛽ Approving token transfer with hardcoded 2 gwei gas...');
+      // Step 2: Approve token transfer with hardcoded gas
+      await approveToken({
         address: tokenAddress,
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [marketplaceAddress, tokenAmount],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       // Step 3 happens automatically in useEffect when approve succeeds

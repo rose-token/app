@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
-import { formatUnits, parseUnits } from 'viem';
+import { formatUnits, parseUnits, parseGwei } from 'viem';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
-import { useGasEstimation } from '../hooks/useGasEstimation';
 
 // Import ABIs directly
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
@@ -34,9 +33,6 @@ const TasksPage = () => {
 
   // Track if this is the initial load
   const isInitialLoadRef = useRef(true);
-
-  // Gas estimation hook
-  const { estimateAndWrite } = useGasEstimation();
 
   // Read taskCounter from marketplace contract
   const { data: taskCounter, refetch: refetchTaskCounter } = useReadContract({
@@ -223,13 +219,15 @@ const TasksPage = () => {
     }
 
     try {
-      console.log('⛽ Claiming task with gas estimation...');
-      const hash = await estimateAndWrite(writeContractAsync, {
+      console.log('⛽ Claiming task with hardcoded 2 gwei gas...');
+      const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
         args: [BigInt(taskId)],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log('✅ Claim task transaction:', hash);
@@ -247,13 +245,15 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      console.log('⛽ Unclaiming task with gas estimation...');
-      const hash = await estimateAndWrite(writeContractAsync, {
+      console.log('⛽ Unclaiming task with hardcoded 2 gwei gas...');
+      const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
         args: [BigInt(taskId)],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log('✅ Unclaim task transaction:', hash);
@@ -271,13 +271,15 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      console.log('⛽ Completing task with gas estimation...');
-      const hash = await estimateAndWrite(writeContractAsync, {
+      console.log('⛽ Completing task with hardcoded 2 gwei gas...');
+      const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
         args: [BigInt(taskId), prUrl],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log('✅ Complete task transaction:', hash);
@@ -299,21 +301,25 @@ const TasksPage = () => {
 
       if (role === 'customer') {
         console.log("⛽ Approving as customer for task:", taskId);
-        hash = await estimateAndWrite(writeContractAsync, {
+        hash = await writeContractAsync({
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByCustomer',
           args: [BigInt(taskId)],
-          account,
+          gasPrice: parseGwei('2'),
+          maxFeePerGas: parseGwei('2'),
+          maxPriorityFeePerGas: parseGwei('2'),
         });
       } else if (role === 'stakeholder') {
         console.log("⛽ Approving as stakeholder for task:", taskId);
-        hash = await estimateAndWrite(writeContractAsync, {
+        hash = await writeContractAsync({
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
           args: [BigInt(taskId)],
-          account,
+          gasPrice: parseGwei('2'),
+          maxFeePerGas: parseGwei('2'),
+          maxPriorityFeePerGas: parseGwei('2'),
         });
       }
 
@@ -332,12 +338,14 @@ const TasksPage = () => {
 
     try {
       console.log("⛽ Accepting payment for task:", taskId);
-      const hash = await estimateAndWrite(writeContractAsync, {
+      const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
         args: [BigInt(taskId)],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log("✅ Transaction hash:", hash);
@@ -386,23 +394,27 @@ const TasksPage = () => {
         return;
       }
 
-      console.log("⛽ Approving token transfer with gas estimation...");
-      const approveHash = await estimateAndWrite(writeContractAsync, {
+      console.log("⛽ Approving token transfer with hardcoded 2 gwei gas...");
+      const approveHash = await writeContractAsync({
         address: TOKEN_ADDRESS,
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
       console.log("✅ Token approval transaction:", approveHash);
 
-      console.log("⛽ Staking tokens with gas estimation...");
-      const stakeHash = await estimateAndWrite(writeContractAsync, {
+      console.log("⛽ Staking tokens with hardcoded 2 gwei gas...");
+      const stakeHash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
         args: [BigInt(taskId), depositAmount],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log("✅ Stake transaction hash:", stakeHash);
@@ -447,13 +459,15 @@ const TasksPage = () => {
         return;
       }
 
-      console.log("⛽ Cancelling task with gas estimation:", taskId);
-      const hash = await estimateAndWrite(writeContractAsync, {
+      console.log("⛽ Cancelling task with hardcoded 2 gwei gas:", taskId);
+      const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
         args: [BigInt(taskId)],
-        account,
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
       });
 
       console.log("✅ Cancel transaction hash:", hash);
