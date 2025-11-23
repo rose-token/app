@@ -41,13 +41,13 @@ const TokenDistributionChart = () => {
       </div>
 
       <div className="mt-4 p-4 bg-card rounded-lg text-sm text-muted">
-        <p className="font-medium mb-2">How it works (10 ROSE task example):</p>
+        <p className="font-medium mb-2">How it works (100 ROSE task example):</p>
         <div className="space-y-1 text-xs">
-          <p>• Customer deposits: <span className="font-semibold">10 ROSE</span> (escrowed in contract)</p>
-          <p>• Stakeholder stakes: <span className="font-semibold">1 ROSE</span> (10% of deposit, returned on completion)</p>
-          <p>• Worker completes task: Receives <span className="font-semibold">9.5 ROSE</span> </p>
-          <p>• Stakeholder receives: <span className="font-semibold">1.5 ROSE</span> (Returned stake + 5% of deposit)</p>
-          <p>• Platform mints: <span className="font-semibold">0.2 ROSE</span> → DAO treasury (2% of deposit)</p>
+          <p>• Customer deposits: <span className="font-semibold">100 ROSE</span> (escrowed in contract)</p>
+          <p>• Stakeholder stakes: <span className="font-semibold">10 ROSE</span> (10% of deposit, returned on completion)</p>
+          <p>• Worker completes task: Receives <span className="font-semibold">95 ROSE</span> </p>
+          <p>• Stakeholder receives: <span className="font-semibold">15 ROSE</span> (Returned stake + 5% of deposit)</p>
+          <p>• Platform mints: <span className="font-semibold">2 ROSE</span> → DAO treasury (2% of deposit)</p>
         </div>
       </div>
     </div>
