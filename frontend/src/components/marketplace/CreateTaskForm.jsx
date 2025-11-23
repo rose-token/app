@@ -227,7 +227,14 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               : 'bg-primary text-primary-foreground hover:bg-primary'
           }`}
         >
-          {isSubmitting ? 'Creating Task...' : 'Create Task'}
+          {isSubmitting ? (
+            <>
+              <span className="animate-spin inline-block mr-2">⏳</span>
+              Creating Task...
+            </>
+          ) : (
+            'Create Task'
+          )}
         </button>
 
       </form>
