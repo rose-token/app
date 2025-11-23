@@ -74,6 +74,11 @@ module.exports = {
           DEFAULT: "hsl(var(--task-cancel))",
           foreground: "hsl(var(--task-cancel-foreground))",
         },
+        // Approval/Success indicator
+        "approval-success": {
+          DEFAULT: "hsl(var(--approval-success))",
+          foreground: "hsl(var(--approval-success-foreground))",
+        },
         // Status badge colors
         "status-open": {
           DEFAULT: "hsl(var(--status-open))",

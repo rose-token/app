@@ -80,6 +80,10 @@
     --task-cancel: 12 49% 17%;
     --task-cancel-foreground: 33 58% 91%;
 
+    /* Approval/Success indicator - soft green */
+    --approval-success: 142 52% 48%;
+    --approval-success-foreground: 0 0% 100%;
+
     /* Status Badge Colors */
     /* Open status - inviting accent */
     --status-open: 23 65% 69%;
