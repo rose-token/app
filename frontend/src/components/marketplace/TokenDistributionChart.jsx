@@ -19,9 +19,7 @@ const TokenDistributionChart = () => {
             </div>
             <span className="text-2xl font-bold text-muted">95%</span>
           </div>
-          <p className="text-xs text-muted">of distribution pot</p>
-          <p className="text-xs text-muted font-medium mt-1">9.5 ROSE (for 10 ROSE task)</p>
-        </div>
+       </div>
 
         {/* Stakeholder Card */}
         <div className="bg-background rounded-lg p-4">
@@ -32,8 +30,6 @@ const TokenDistributionChart = () => {
             </div>
             <span className="text-2xl font-bold text-muted">5%</span>
           </div>
-          <p className="text-xs text-muted">fee + 10% stake back</p>
-          <p className="text-xs text-muted font-medium mt-1">1.5 ROSE total (50% ROI)</p>
         </div>
 
         {/* DAO Treasury Card */}
@@ -45,8 +41,6 @@ const TokenDistributionChart = () => {
             </div>
             <span className="text-2xl font-bold text-muted">2%</span>
           </div>
-          <p className="text-xs text-muted">minted tokens</p>
-          <p className="text-xs text-muted font-medium mt-1">0.2 ROSE (creates inflation)</p>
         </div>
       </div>
 
