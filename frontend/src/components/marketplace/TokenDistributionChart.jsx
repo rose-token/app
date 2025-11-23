@@ -11,7 +11,7 @@ const TokenDistributionChart = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
-              <p className="text-sm font-semibold text-muted">Worker</p>
+              <p className="text-lg font-semibold text-muted">Worker</p>
             </div>
             <span className="text-2xl font-bold text-muted">95%</span>
           </div>
@@ -22,7 +22,7 @@ const TokenDistributionChart = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
-              <p className="text-sm font-semibold text-muted">Stakeholder</p>
+              <p className="text-lg font-semibold text-muted">Stakeholder</p>
             </div>
             <span className="text-2xl font-bold text-muted">5%</span>
           </div>
@@ -33,7 +33,7 @@ const TokenDistributionChart = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
-              <p className="text-sm font-semibold text-muted">DAO Treasury</p>
+              <p className="text-lg font-semibold text-muted">DAO Treasury</p>
             </div>
             <span className="text-2xl font-bold text-muted">2%</span>
           </div>
