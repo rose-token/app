@@ -11,7 +11,7 @@ export const useGasEstimation = () => {
   const publicClient = usePublicClient();
 
   /**
-   * Estimate gas for a contract function call with optimized overrides
+   * Estimate gas for a contract function call with hardcoded 2 gwei gas price
    *
    * @param {Object} params - Contract call parameters
    * @param {string} params.address - Contract address
@@ -46,12 +46,12 @@ export const useGasEstimation = () => {
       // Apply 20% buffer to estimated gas
       const gasWithBuffer = (estimatedGas * 120n) / 100n;
 
-      // Optimized gas parameters for Sepolia testnet
-      // Current Sepolia base fee is typically 1-2 Gwei
+      // HARDCODED gas price at 2 gwei to reduce staking costs
       const overrides = {
         gas: gasWithBuffer,
-        maxFeePerGas: parseGwei('2'), // 2 Gwei max fee
-        maxPriorityFeePerGas: parseGwei('0.5'), // 0.5 Gwei priority fee
+        gasPrice: parseGwei('2'), // Hardcoded 2 Gwei gas price (legacy)
+        maxFeePerGas: parseGwei('2'), // 2 Gwei max fee (EIP-1559)
+        maxPriorityFeePerGas: parseGwei('2'), // 2 Gwei priority fee (EIP-1559)
       };
 
       // Only add value if it's non-zero
@@ -59,8 +59,9 @@ export const useGasEstimation = () => {
         overrides.value = value;
       }
 
-      console.log('⛽ Gas overrides:', {
+      console.log('⛽ Gas overrides (HARDCODED 2 GWEI):', {
         gas: overrides.gas.toString(),
+        gasPrice: overrides.gasPrice.toString(),
         maxFeePerGas: overrides.maxFeePerGas.toString(),
         maxPriorityFeePerGas: overrides.maxPriorityFeePerGas.toString(),
       });
@@ -69,10 +70,11 @@ export const useGasEstimation = () => {
     } catch (error) {
       console.error(`❌ Gas estimation failed for ${functionName}:`, error);
 
-      // Return default overrides if estimation fails
+      // Return default overrides with hardcoded 2 gwei if estimation fails
       return {
+        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('0.5'),
+        maxPriorityFeePerGas: parseGwei('2'),
       };
     }
   };
