@@ -229,7 +229,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         >
           {isSubmitting ? (
             <>
-              <span className="animate-spin inline-block mr-2">⏳</span>
+              <span className="animate-pulse inline-block mr-2">✨</span>
               Creating Task...
             </>
           ) : (

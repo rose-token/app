@@ -228,7 +228,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isStaking ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Staking...
               </>
             ) : (
@@ -249,7 +249,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isClaiming ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Claiming...
               </>
             ) : (
@@ -271,7 +271,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isUnclaiming ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Unclaiming...
               </>
             ) : (
@@ -292,7 +292,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isCompleting ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Marking Complete...
               </>
             ) : (
@@ -313,7 +313,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isApprovingCustomer ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Approving...
               </>
             ) : (
@@ -334,7 +334,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isApprovingStakeholder ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Approving...
               </>
             ) : (
@@ -355,7 +355,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isAcceptingPayment ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 <span>Accepting Payment...</span>
               </>
             ) : (
@@ -379,7 +379,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isCancelling ? (
               <>
-                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span className="animate-pulse inline-block mr-2">✨</span>
                 Cancelling...
               </>
             ) : (
