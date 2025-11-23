@@ -541,6 +541,18 @@ const TasksPage = () => {
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
 
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskCreated',
+    onLogs: (logs) => {
+      console.log("Task created event:", logs);
+      refetchTaskCounter();
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
   // Sync processedTasks to tasks state
   useEffect(() => {
     console.log('Updating UI tasks →', processedTasks.length);
