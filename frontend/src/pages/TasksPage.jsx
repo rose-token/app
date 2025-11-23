@@ -380,7 +380,6 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByCustomer',
           args: [BigInt(taskId)],
-          gasPrice: parseGwei('2'),
           ...SEPOLIA_GAS_SETTINGS,
         });
       } else if (role === 'stakeholder') {
