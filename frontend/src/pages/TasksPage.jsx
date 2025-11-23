@@ -28,6 +28,11 @@ const TasksPage = () => {
     myTasks: false,
     showClosed: false
   });
+  const SEPOLIA_GAS_SETTINGS = {
+    gas: 500_000n,                  // plenty for stakeholderStake, acceptPayment, etc.
+    maxFeePerGas: parseGwei('0.1'), // Sepolia base fee is usually ~0.001–0.02 gwei
+    maxPriorityFeePerGas: parseGwei('0.05'),
+  };
 
   const { address: account, isConnected } = useAccount();
 
@@ -225,8 +230,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
         args: [BigInt(taskId)],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Claim task transaction:', hash);
@@ -250,8 +254,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
         args: [BigInt(taskId)],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Unclaim task transaction:', hash);
@@ -275,8 +278,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
         args: [BigInt(taskId), prUrl],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Complete task transaction:', hash);
@@ -304,8 +306,7 @@ const TasksPage = () => {
           functionName: 'approveCompletionByCustomer',
           args: [BigInt(taskId)],
           gasPrice: parseGwei('2'),
-          maxFeePerGas: parseGwei('2'),
-          maxPriorityFeePerGas: parseGwei('2'),
+          ...SEPOLIA_GAS_SETTINGS,
         });
       } else if (role === 'stakeholder') {
         console.log("⛽ Approving as stakeholder for task:", taskId);
@@ -314,9 +315,7 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
           args: [BigInt(taskId)],
-          gasPrice: parseGwei('2'),
-          maxFeePerGas: parseGwei('2'),
-          maxPriorityFeePerGas: parseGwei('2'),
+          ...SEPOLIA_GAS_SETTINGS,
         });
       }
 
@@ -340,8 +339,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
         args: [BigInt(taskId)],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Transaction hash:", hash);
@@ -396,8 +394,7 @@ const TasksPage = () => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
       console.log("✅ Token approval transaction:", approveHash);
 
@@ -407,8 +404,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
         args: [BigInt(taskId), depositAmount],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Stake transaction hash:", stakeHash);
@@ -459,8 +455,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
         args: [BigInt(taskId)],
-        maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Cancel transaction hash:", hash);

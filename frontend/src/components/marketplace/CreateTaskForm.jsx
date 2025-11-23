@@ -79,14 +79,18 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       // Step 3: Create task
       console.log('⛽ Creating task with hardcoded 2 gwei gas...');
       console.log('💡 Please confirm the create task transaction in MetaMask');
-
+      const SEPOLIA_GAS_SETTINGS = {
+        gas: 500_000n,                  // plenty for stakeholderStake, acceptPayment, etc.
+        maxFeePerGas: parseGwei('0.1'), // Sepolia base fee is usually ~0.001–0.02 gwei
+        maxPriorityFeePerGas: parseGwei('0.05'),
+      };
       const createTaskHash = await writeContractAsync({
         address: marketplaceAddress,
         abi: RoseMarketplaceABI,
         functionName: 'createTask',
         args: [title, tokenAmount, hash],
         maxFeePerGas: parseGwei('2'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);
