@@ -595,7 +595,7 @@ The project follows a **"Progressive Enhancement"** approach:
 
 ## License
 
-This project is licensed under the Polyform Perimeter License (PPL).
+This project is licensed under the Peer Production License (PPL).
 
 ## Support
 
