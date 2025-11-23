@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent } from 'wagmi';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits, parseGwei } from 'viem';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
@@ -22,6 +22,18 @@ const TasksPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
 
+  // Loading states for each button type
+  const [loadingStates, setLoadingStates] = useState({
+    stake: {},
+    claim: {},
+    unclaim: {},
+    complete: {},
+    approveCustomer: {},
+    approveStakeholder: {},
+    acceptPayment: {},
+    cancel: {}
+  });
+
   const [filters, setFilters] = useState({
     needStakeholder: false,
     needWorker: false,
@@ -35,6 +47,7 @@ const TasksPage = () => {
   };
 
   const { address: account, isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
   // Track if this is the initial load
   const isInitialLoadRef = useRef(true);
@@ -229,7 +242,11 @@ const TasksPage = () => {
     }
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, claim: { ...prev.claim, [taskId]: true } }));
+
       console.log('⛽ Claiming task with hardcoded 2 gwei gas...');
+      console.log('💡 Please confirm the claim transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -238,12 +255,25 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log('✅ Claim task transaction:', hash);
+      console.log('✅ Claim task transaction sent:', hash);
+      console.log('⏳ Waiting for transaction confirmation...');
+
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task claimed successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, claim: { ...prev.claim, [taskId]: false } }));
       debouncedFetchTasks();
     } catch (err) {
       console.error('❌ Error claiming task:', err);
+      setLoadingStates(prev => ({ ...prev, claim: { ...prev.claim, [taskId]: false } }));
       const errorMessage = err.message.includes('execution reverted')
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to claim task'
+        : err.message.includes('User rejected') || err.message.includes('user rejected')
+        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
         : 'Failed to claim task';
       setError(errorMessage);
     }
@@ -253,7 +283,11 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, unclaim: { ...prev.unclaim, [taskId]: true } }));
+
       console.log('⛽ Unclaiming task with hardcoded 2 gwei gas...');
+      console.log('💡 Please confirm the unclaim transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -262,12 +296,25 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log('✅ Unclaim task transaction:', hash);
+      console.log('✅ Unclaim task transaction sent:', hash);
+      console.log('⏳ Waiting for transaction confirmation...');
+
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task unclaimed successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, unclaim: { ...prev.unclaim, [taskId]: false } }));
       debouncedFetchTasks();
     } catch (err) {
       console.error('❌ Error unclaiming task:', err);
+      setLoadingStates(prev => ({ ...prev, unclaim: { ...prev.unclaim, [taskId]: false } }));
       const errorMessage = err.message.includes('execution reverted')
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to unclaim task'
+        : err.message.includes('User rejected') || err.message.includes('user rejected')
+        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
         : 'Failed to unclaim task';
       setError(errorMessage);
     }
@@ -277,7 +324,11 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, complete: { ...prev.complete, [taskId]: true } }));
+
       console.log('⛽ Completing task with hardcoded 2 gwei gas...');
+      console.log('💡 Please confirm the mark completed transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -286,12 +337,25 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log('✅ Complete task transaction:', hash);
+      console.log('✅ Complete task transaction sent:', hash);
+      console.log('⏳ Waiting for transaction confirmation...');
+
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task marked as completed successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, complete: { ...prev.complete, [taskId]: false } }));
       debouncedFetchTasks();
     } catch (err) {
       console.error('❌ Error completing task:', err);
+      setLoadingStates(prev => ({ ...prev, complete: { ...prev.complete, [taskId]: false } }));
       const errorMessage = err.message.includes('PR URL cannot be empty')
         ? 'PR URL is required to mark task as completed'
+        : err.message.includes('User rejected') || err.message.includes('user rejected')
+        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
         : 'Failed to mark task as completed';
       setError(errorMessage);
     }
@@ -300,11 +364,17 @@ const TasksPage = () => {
   const handleApproveTask = async (taskId, role) => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
+    const loadingKey = role === 'customer' ? 'approveCustomer' : 'approveStakeholder';
+
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, [loadingKey]: { ...prev[loadingKey], [taskId]: true } }));
+
       let hash;
 
       if (role === 'customer') {
         console.log("⛽ Approving as customer for task:", taskId);
+        console.log('💡 Please confirm the customer approval transaction in MetaMask');
         hash = await writeContractAsync({
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
@@ -315,6 +385,7 @@ const TasksPage = () => {
         });
       } else if (role === 'stakeholder') {
         console.log("⛽ Approving as stakeholder for task:", taskId);
+        console.log('💡 Please confirm the stakeholder approval transaction in MetaMask');
         hash = await writeContractAsync({
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
@@ -324,12 +395,25 @@ const TasksPage = () => {
         });
       }
 
-      console.log("✅ Transaction hash:", hash);
+      console.log("✅ Approval transaction sent:", hash);
+      console.log('⏳ Waiting for transaction confirmation...');
 
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task approved successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, [loadingKey]: { ...prev[loadingKey], [taskId]: false } }));
       debouncedFetchTasks(); // Refresh task list after approval
     } catch (err) {
       console.error('❌ Error approving task:', err);
-      setError(`Failed to approve task as ${role}: ${err.message || "Transaction failed"}`);
+      setLoadingStates(prev => ({ ...prev, [loadingKey]: { ...prev[loadingKey], [taskId]: false } }));
+      const errorMessage = err.message.includes('User rejected') || err.message.includes('user rejected')
+        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
+        : `Failed to approve task as ${role}`;
+      setError(errorMessage);
     }
   };
 
@@ -338,7 +422,11 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, acceptPayment: { ...prev.acceptPayment, [taskId]: true } }));
+
       console.log("⛽ Accepting payment for task:", taskId);
+      console.log('💡 Please confirm the accept payment transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -347,12 +435,25 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log("✅ Transaction hash:", hash);
+      console.log("✅ Accept payment transaction sent:", hash);
+      console.log('⏳ Waiting for transaction confirmation...');
 
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Payment accepted successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, acceptPayment: { ...prev.acceptPayment, [taskId]: false } }));
       debouncedFetchTasks(); // Refresh task list after payment acceptance
     } catch (err) {
       console.error('❌ Error accepting payment:', err);
-      setError(`Failed to accept payment: ${err.message || "Transaction failed"}`);
+      setLoadingStates(prev => ({ ...prev, acceptPayment: { ...prev.acceptPayment, [taskId]: false } }));
+      const errorMessage = err.message.includes('User rejected') || err.message.includes('user rejected')
+        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
+        : 'Failed to accept payment';
+      setError(errorMessage);
     }
   };
 
@@ -371,8 +472,12 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS || !TOKEN_ADDRESS) return;
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: true } }));
+
       const task = tasks.find(t => t.id === taskId);
       if (!task) {
+        setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
         setError('Task not found');
         return;
       }
@@ -389,11 +494,14 @@ const TasksPage = () => {
       if (userBalanceBigInt < depositAmount) {
         const shortfall = depositAmount - userBalanceBigInt;
         const shortfallInRose = Number(formatUnits(shortfall, 18));
+        setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
         setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake.`);
         return;
       }
 
+      // Step 1: Approve token transfer
       console.log("⛽ Approving token transfer with hardcoded 2 gwei gas...");
+      console.log('💡 Please confirm the approval transaction in MetaMask');
       const approveHash = await writeContractAsync({
         address: TOKEN_ADDRESS,
         abi: RoseTokenABI,
@@ -401,9 +509,20 @@ const TasksPage = () => {
         args: [MARKETPLACE_ADDRESS, depositAmount],
         ...SEPOLIA_GAS_SETTINGS,
       });
-      console.log("✅ Token approval transaction:", approveHash);
+      console.log("✅ Token approval transaction sent:", approveHash);
+      console.log('⏳ Waiting for approval confirmation...');
 
+      // Wait for approval confirmation
+      await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1
+      });
+
+      console.log('✅ Token approval confirmed on blockchain!');
+
+      // Step 2: Stake tokens
       console.log("⛽ Staking tokens with hardcoded 2 gwei gas...");
+      console.log('💡 Please confirm the stake transaction in MetaMask');
       const stakeHash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -412,11 +531,21 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log("✅ Stake transaction hash:", stakeHash);
+      console.log("✅ Stake transaction sent:", stakeHash);
+      console.log('⏳ Waiting for stake confirmation...');
 
+      // Wait for stake confirmation
+      await publicClient.waitForTransactionReceipt({
+        hash: stakeHash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Staked successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
       debouncedFetchTasks();
     } catch (err) {
       console.error('❌ Error staking as stakeholder:', err);
+      setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
 
       // Provide more helpful error messages
       let errorMessage = 'Failed to stake as stakeholder';
@@ -433,6 +562,8 @@ const TasksPage = () => {
         errorMessage = 'This task already has a stakeholder.';
       } else if (err.message.includes('Must deposit exactly 10%')) {
         errorMessage = 'Stake amount must be exactly 10% of the task deposit.';
+      } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+        errorMessage = 'Transaction rejected. Please approve the transaction in MetaMask to continue.';
       } else if (err.message.includes('execution reverted')) {
         const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
         if (revertReason) {
@@ -448,13 +579,18 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, cancel: { ...prev.cancel, [taskId]: true } }));
+
       const task = tasks.find(t => t.id === taskId);
       if (!task) {
+        setLoadingStates(prev => ({ ...prev, cancel: { ...prev.cancel, [taskId]: false } }));
         setError('Task not found');
         return;
       }
 
       console.log("⛽ Cancelling task with hardcoded 2 gwei gas:", taskId);
+      console.log('💡 Please confirm the cancel transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
@@ -463,11 +599,21 @@ const TasksPage = () => {
         ...SEPOLIA_GAS_SETTINGS,
       });
 
-      console.log("✅ Cancel transaction hash:", hash);
+      console.log("✅ Cancel transaction sent:", hash);
+      console.log('⏳ Waiting for transaction confirmation...');
 
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task cancelled successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, cancel: { ...prev.cancel, [taskId]: false } }));
       debouncedFetchTasks();
     } catch (err) {
       console.error('Error cancelling task:', err);
+      setLoadingStates(prev => ({ ...prev, cancel: { ...prev.cancel, [taskId]: false } }));
 
       // Provide more helpful error messages
       let errorMessage = 'Failed to cancel task';
@@ -476,6 +622,8 @@ const TasksPage = () => {
         errorMessage = 'Task cannot be cancelled at this stage. Only tasks in StakeholderRequired or Open status can be cancelled.';
       } else if (err.message.includes('Only customer or stakeholder can cancel task')) {
         errorMessage = 'You are not authorized to cancel this task. Only the customer or stakeholder can cancel.';
+      } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+        errorMessage = 'Transaction rejected. Please approve the transaction in MetaMask to continue.';
       } else if (err.message.includes('execution reverted')) {
         const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
         if (revertReason) {
@@ -678,6 +826,7 @@ const TasksPage = () => {
               onErrorDismiss={() => setError('')}
               roseMarketplace={MARKETPLACE_ADDRESS}
               onRefresh={fetchTasks}
+              loadingStates={loadingStates}
             />
           </div>
         </>

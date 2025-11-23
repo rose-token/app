@@ -5,7 +5,7 @@ import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatu
 import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 
-const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel }) => {
+const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
 
   const [detailedContent, setDetailedContent] = useState(null);
@@ -90,6 +90,16 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   // Task can be cancelled by customer or stakeholder before worker claims
   const canCancel = (isCustomer || isStakeholder) &&
     (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open);
+
+  // Check loading states for each button type
+  const isStaking = loadingStates.stake?.[task.id] || false;
+  const isClaiming = loadingStates.claim?.[task.id] || false;
+  const isUnclaiming = loadingStates.unclaim?.[task.id] || false;
+  const isCompleting = loadingStates.complete?.[task.id] || false;
+  const isApprovingCustomer = loadingStates.approveCustomer?.[task.id] || false;
+  const isApprovingStakeholder = loadingStates.approveStakeholder?.[task.id] || false;
+  const isAcceptingPayment = loadingStates.acceptPayment?.[task.id] || false;
+  const isCancelling = loadingStates.cancel?.[task.id] || false;
 
   console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
 
@@ -209,74 +219,172 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         {canStake && (
           <button
             onClick={() => onStake(task.id)}
-            className="bg-task-stake hover:bg-task-stake/90 text-task-stake-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isStaking}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isStaking
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-stake hover:bg-task-stake/90 text-task-stake-foreground'
+            }`}
           >
-            Stake as Stakeholder
+            {isStaking ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Staking...
+              </>
+            ) : (
+              'Stake as Stakeholder'
+            )}
           </button>
         )}
 
         {canClaim && (
           <button
             onClick={() => onClaim(task.id)}
-            className="bg-task-claim hover:bg-task-claim/90 text-task-claim-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isClaiming}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isClaiming
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-claim hover:bg-task-claim/90 text-task-claim-foreground'
+            }`}
           >
-            Claim Task
+            {isClaiming ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Claiming...
+              </>
+            ) : (
+              'Claim Task'
+            )}
           </button>
         )}
 
         {canUnclaim && (
           <button
             onClick={() => onUnclaim(task.id)}
-            className="bg-task-unclaim hover:bg-task-unclaim/90 text-task-unclaim-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isUnclaiming}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isUnclaiming
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-unclaim hover:bg-task-unclaim/90 text-task-unclaim-foreground'
+            }`}
             title="Release this task so another worker can claim it"
           >
-            Unclaim Task
+            {isUnclaiming ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Unclaiming...
+              </>
+            ) : (
+              'Unclaim Task'
+            )}
           </button>
         )}
 
         {canComplete && (
           <button
             onClick={handleMarkCompleted}
-            className="bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isCompleting}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isCompleting
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground'
+            }`}
           >
-            Mark Completed
+            {isCompleting ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Marking Complete...
+              </>
+            ) : (
+              'Mark Completed'
+            )}
           </button>
         )}
 
         {canApproveAsCustomer && (
           <button
             onClick={() => onApprove(task.id, 'customer')}
-            className="bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isApprovingCustomer}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isApprovingCustomer
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground'
+            }`}
           >
-            Approve as Customer
+            {isApprovingCustomer ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Approving...
+              </>
+            ) : (
+              'Approve as Customer'
+            )}
           </button>
         )}
 
         {canApproveAsStakeholder && (
           <button
             onClick={() => onApprove(task.id, 'stakeholder')}
-            className="bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md"
+            disabled={isApprovingStakeholder}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md ${
+              isApprovingStakeholder
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground'
+            }`}
           >
-            ✓ Approve as Stakeholder
+            {isApprovingStakeholder ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Approving...
+              </>
+            ) : (
+              '✓ Approve as Stakeholder'
+            )}
           </button>
         )}
 
         {canAcceptPayment && (
           <button
             onClick={() => onAcceptPayment(task.id)}
-            className="bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1"
+            disabled={isAcceptingPayment}
+            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1 ${
+              isAcceptingPayment
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground'
+            }`}
           >
-            <span>Accept Payment</span>
-            <span className="text-xs">(gas fees apply)</span>
+            {isAcceptingPayment ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                <span>Accepting Payment...</span>
+              </>
+            ) : (
+              <>
+                <span>Accept Payment</span>
+                <span className="text-xs">(gas fees apply)</span>
+              </>
+            )}
           </button>
         )}
 
         {canCancel && (
           <button
             onClick={() => onCancel(task.id)}
-            className="bg-task-cancel hover:bg-task-cancel/90 text-task-cancel-foreground px-4 py-2 rounded-md text-sm font-medium"
+            disabled={isCancelling}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              isCancelling
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-task-cancel hover:bg-task-cancel/90 text-task-cancel-foreground'
+            }`}
           >
-            Cancel Task
+            {isCancelling ? (
+              <>
+                <span className="animate-spin inline-block mr-2">⏳</span>
+                Cancelling...
+              </>
+            ) : (
+              'Cancel Task'
+            )}
           </button>
         )}
       </div>
