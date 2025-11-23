@@ -123,16 +123,7 @@ const ProgressTracker = ({ task }) => {
           ))}
         </div>
         
-        <div className="mt-4 p-3 bg-background rounded-lg">
-          <h5 className="text-sm font-medium text-muted mb-1">Task Benefits</h5>
-          <ul className="text-xs text-muted space-y-1">
-            <li>• Worker-focused: 95% of task value goes to worker</li>
-            <li>• Stakeholder earns 50% ROI on 10% stake (5% fee + stake returned)</li>
-            <li>• Sustainable platform: 2% minted to DAO treasury (~2% annual inflation)</li>
-            <li>• Dual approval protects quality (customer + stakeholder)</li>
-            <li>• Simple first-come, first-served worker assignment</li>
-          </ul>
-        </div>
+        
       </CardContent>
     </Card>
   );
