@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { parseEther, parseGwei } from 'viem';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
@@ -13,6 +13,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
@@ -94,7 +95,15 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);
-      console.log('🎉 Task created successfully!');
+      console.log('⏳ Waiting for transaction confirmation...');
+
+      // Wait for transaction to be confirmed
+      await publicClient.waitForTransactionReceipt({
+        hash: createTaskHash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Task created successfully and confirmed on blockchain!');
 
       // Reset form
       setTitle('');
