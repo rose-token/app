@@ -78,6 +78,9 @@ const TasksPage = () => {
   // Batch read all tasks at once (V2-compatible)
   const { data: tasksData, refetch: refetchTasks, isLoading: isLoadingTasks } = useReadContracts({
     contracts: taskContracts,
+    allowSparse: true,   // ← This is the REAL fix
+    cacheTime: 1_000,    // optional: keep cache for 1 second (default is 5min anyway)
+    staleTime: 0,        // optional: consider data stale immediately (good for real-time)
     query: {
       enabled: isConnected && taskContracts.length > 0,
     }
@@ -540,11 +543,9 @@ const TasksPage = () => {
 
   // Sync processedTasks to tasks state
   useEffect(() => {
-    if (processedTasks.length > 0 || tasksData) {
-      console.log('🔄 Updating tasks state with', processedTasks.length, 'tasks');
-      setTasks(processedTasks);
-    }
-  }, [processedTasks, tasksData]);
+    console.log('Updating UI tasks →', processedTasks.length);
+    setTasks(processedTasks);
+  }, [processedTasks]);
 
   // Initial load and taskCounter changes
   useEffect(() => {
