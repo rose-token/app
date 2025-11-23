@@ -205,11 +205,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       {task.status === TaskStatus.Completed && (
         <div className="mb-4 flex space-x-4">
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.customerApproval ? 'bg-accent' : 'bg-muted'}`}></span>
+            <span className={`w-3 h-3 rounded-full mr-2 ${task.customerApproval ? 'bg-approval-success' : 'bg-muted'}`}></span>
             <span className="text-sm text-foreground">Customer Approval</span>
           </div>
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.stakeholderApproval ? 'bg-accent' : 'bg-muted'}`}></span>
+            <span className={`w-3 h-3 rounded-full mr-2 ${task.stakeholderApproval ? 'bg-approval-success' : 'bg-muted'}`}></span>
             <span className="text-sm text-foreground">Stakeholder Approval</span>
           </div>
         </div>
