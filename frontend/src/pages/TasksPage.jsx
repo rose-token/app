@@ -174,7 +174,9 @@ const TasksPage = () => {
       }
       setError('');
 
-      console.log('🔄 Triggering task refetch');
+      console.log('🔄 Triggering task counter and task refetch');
+      // Refetch task counter first to ensure we get the latest count
+      await refetchTaskCounter();
       await refetchTasks();
 
       // Mark initial load as complete
@@ -186,7 +188,7 @@ const TasksPage = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [MARKETPLACE_ADDRESS, taskCounter, refetchTasks]);
+  }, [MARKETPLACE_ADDRESS, taskCounter, refetchTasks, refetchTaskCounter]);
 
   const debouncedFetchRef = useRef(null);
 
@@ -536,6 +538,18 @@ const TasksPage = () => {
     eventName: 'TaskCancelled',
     onLogs: (logs) => {
       console.log("Task cancelled event:", logs);
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskCreated',
+    onLogs: (logs) => {
+      console.log("Task created event:", logs);
+      refetchTaskCounter();
       debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
