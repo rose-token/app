@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { parseEther } from 'viem';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
@@ -13,6 +13,10 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [deposit, setDeposit] = useState('');
   const [error, setError] = useState('');
   const [ipfsHash, setIpfsHash] = useState('');
+
+  // Ref to track if we've already called createTask for this approval
+  const createTaskCalledRef = useRef(false);
+  const lastApproveHashRef = useRef(null);
 
   const { address: account, isConnected, chain } = useAccount();
   const chainId = chain?.id;
@@ -49,33 +53,42 @@ const CreateTaskForm = ({ onTaskCreated }) => {
     });
 
   // When approve succeeds, call createTask with gas estimation
+  // Use ref to prevent infinite loop
   useEffect(() => {
-    if (isApproveSuccess && ipfsHash && deposit && account) {
-      const tokenAmount = parseEther(deposit);
-
-      (async () => {
-        try {
-          console.log('🔄 Creating task with gas estimation...');
-          await estimateAndWrite(createTask, {
-            address: marketplaceAddress,
-            abi: RoseMarketplaceABI,
-            functionName: 'createTask',
-            args: [title, tokenAmount, ipfsHash],
-            account,
-          });
-        } catch (err) {
-          console.error('Error creating task with gas estimation:', err);
-          // Fallback to normal write if estimation fails
-          createTask({
-            address: marketplaceAddress,
-            abi: RoseMarketplaceABI,
-            functionName: 'createTask',
-            args: [title, tokenAmount, ipfsHash],
-          });
+    const executeCreateTask = async () => {
+      // Check if this is a new approval (hash changed) or first time
+      if (isApproveSuccess && ipfsHash && deposit && account) {
+        // Reset flag if we have a new approval hash
+        if (approveHash !== lastApproveHashRef.current) {
+          createTaskCalledRef.current = false;
+          lastApproveHashRef.current = approveHash;
         }
-      })();
-    }
-  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, createTask, account, estimateAndWrite]);
+
+        // Only call createTask once per approval
+        if (!createTaskCalledRef.current) {
+          createTaskCalledRef.current = true;
+          const tokenAmount = parseEther(deposit);
+
+          try {
+            console.log('⛽ Creating task with gas estimation...');
+            await estimateAndWrite(createTask, {
+              address: marketplaceAddress,
+              abi: RoseMarketplaceABI,
+              functionName: 'createTask',
+              args: [title, tokenAmount, ipfsHash],
+              account,
+            });
+          } catch (err) {
+            console.error('❌ Error creating task with gas estimation:', err);
+            createTaskCalledRef.current = false; // Reset on error so user can retry
+          }
+        }
+      }
+    };
+
+    executeCreateTask();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, account, approveHash]);
 
   // When createTask succeeds, reset form
   useEffect(() => {
@@ -84,6 +97,10 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setDetailedDescription('');
       setDeposit('');
       setIpfsHash('');
+
+      // Reset refs for next task creation
+      createTaskCalledRef.current = false;
+      lastApproveHashRef.current = null;
 
       if (onTaskCreated) {
         onTaskCreated();
