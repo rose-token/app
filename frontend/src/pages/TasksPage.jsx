@@ -7,6 +7,7 @@ import TokenDistributionChart from '../components/marketplace/TokenDistributionC
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
+import { useGasEstimation } from '../hooks/useGasEstimation';
 
 // Import ABIs directly
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
@@ -33,6 +34,9 @@ const TasksPage = () => {
 
   // Track if this is the initial load
   const isInitialLoadRef = useRef(true);
+
+  // Gas estimation hook
+  const { estimateAndWrite } = useGasEstimation();
 
   // Read taskCounter from marketplace contract
   const { data: taskCounter, refetch: refetchTaskCounter } = useReadContract({
@@ -219,17 +223,19 @@ const TasksPage = () => {
     }
 
     try {
-      const hash = await writeContractAsync({
+      console.log('⛽ Claiming task with gas estimation...');
+      const hash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
-        args: [BigInt(taskId)]
+        args: [BigInt(taskId)],
+        account,
       });
 
-      console.log('Claim task transaction:', hash);
+      console.log('✅ Claim task transaction:', hash);
       debouncedFetchTasks();
     } catch (err) {
-      console.error('Error claiming task:', err);
+      console.error('❌ Error claiming task:', err);
       const errorMessage = err.message.includes('execution reverted')
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to claim task'
         : 'Failed to claim task';
@@ -241,17 +247,19 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      const hash = await writeContractAsync({
+      console.log('⛽ Unclaiming task with gas estimation...');
+      const hash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
-        args: [BigInt(taskId)]
+        args: [BigInt(taskId)],
+        account,
       });
 
-      console.log('Unclaim task transaction:', hash);
+      console.log('✅ Unclaim task transaction:', hash);
       debouncedFetchTasks();
     } catch (err) {
-      console.error('Error unclaiming task:', err);
+      console.error('❌ Error unclaiming task:', err);
       const errorMessage = err.message.includes('execution reverted')
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to unclaim task'
         : 'Failed to unclaim task';
@@ -263,17 +271,19 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      const hash = await writeContractAsync({
+      console.log('⛽ Completing task with gas estimation...');
+      const hash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
-        args: [BigInt(taskId), prUrl]
+        args: [BigInt(taskId), prUrl],
+        account,
       });
 
-      console.log('Complete task transaction:', hash);
+      console.log('✅ Complete task transaction:', hash);
       debouncedFetchTasks();
     } catch (err) {
-      console.error('Error completing task:', err);
+      console.error('❌ Error completing task:', err);
       const errorMessage = err.message.includes('PR URL cannot be empty')
         ? 'PR URL is required to mark task as completed'
         : 'Failed to mark task as completed';
@@ -288,28 +298,30 @@ const TasksPage = () => {
       let hash;
 
       if (role === 'customer') {
-        console.log("Approving as customer for task:", taskId);
-        hash = await writeContractAsync({
+        console.log("⛽ Approving as customer for task:", taskId);
+        hash = await estimateAndWrite(writeContractAsync, {
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByCustomer',
-          args: [BigInt(taskId)]
+          args: [BigInt(taskId)],
+          account,
         });
       } else if (role === 'stakeholder') {
-        console.log("Approving as stakeholder for task:", taskId);
-        hash = await writeContractAsync({
+        console.log("⛽ Approving as stakeholder for task:", taskId);
+        hash = await estimateAndWrite(writeContractAsync, {
           address: MARKETPLACE_ADDRESS,
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
-          args: [BigInt(taskId)]
+          args: [BigInt(taskId)],
+          account,
         });
       }
 
-      console.log("Transaction hash:", hash);
+      console.log("✅ Transaction hash:", hash);
 
       debouncedFetchTasks(); // Refresh task list after approval
     } catch (err) {
-      console.error('Error approving task:', err);
+      console.error('❌ Error approving task:', err);
       setError(`Failed to approve task as ${role}: ${err.message || "Transaction failed"}`);
     }
   };
@@ -319,19 +331,20 @@ const TasksPage = () => {
     if (!isConnected || !MARKETPLACE_ADDRESS) return;
 
     try {
-      console.log("Accepting payment for task:", taskId);
-      const hash = await writeContractAsync({
+      console.log("⛽ Accepting payment for task:", taskId);
+      const hash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
-        args: [BigInt(taskId)]
+        args: [BigInt(taskId)],
+        account,
       });
 
-      console.log("Transaction hash:", hash);
+      console.log("✅ Transaction hash:", hash);
 
       debouncedFetchTasks(); // Refresh task list after payment acceptance
     } catch (err) {
-      console.error('Error accepting payment:', err);
+      console.error('❌ Error accepting payment:', err);
       setError(`Failed to accept payment: ${err.message || "Transaction failed"}`);
     }
   };
@@ -373,21 +386,23 @@ const TasksPage = () => {
         return;
       }
 
-      console.log("✅ Approving token transfer...");
-      const approveHash = await writeContractAsync({
+      console.log("⛽ Approving token transfer with gas estimation...");
+      const approveHash = await estimateAndWrite(writeContractAsync, {
         address: TOKEN_ADDRESS,
         abi: RoseTokenABI,
         functionName: 'approve',
-        args: [MARKETPLACE_ADDRESS, depositAmount]
+        args: [MARKETPLACE_ADDRESS, depositAmount],
+        account,
       });
-      console.log("📝 Token approval transaction:", approveHash);
+      console.log("✅ Token approval transaction:", approveHash);
 
-      console.log("🔒 Staking tokens...");
-      const stakeHash = await writeContractAsync({
+      console.log("⛽ Staking tokens with gas estimation...");
+      const stakeHash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
-        args: [BigInt(taskId), depositAmount]
+        args: [BigInt(taskId), depositAmount],
+        account,
       });
 
       console.log("✅ Stake transaction hash:", stakeHash);
@@ -432,15 +447,16 @@ const TasksPage = () => {
         return;
       }
 
-      console.log("Cancelling task:", taskId);
-      const hash = await writeContractAsync({
+      console.log("⛽ Cancelling task with gas estimation:", taskId);
+      const hash = await estimateAndWrite(writeContractAsync, {
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
-        args: [BigInt(taskId)]
+        args: [BigInt(taskId)],
+        account,
       });
 
-      console.log("Cancel transaction hash:", hash);
+      console.log("✅ Cancel transaction hash:", hash);
 
       debouncedFetchTasks();
     } catch (err) {

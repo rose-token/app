@@ -5,6 +5,7 @@ import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+import { useGasEstimation } from '../../hooks/useGasEstimation';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -18,6 +19,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
+
+  // Gas estimation hook
+  const { estimateAndWrite } = useGasEstimation();
 
   // Wagmi write hooks
   const {
@@ -44,19 +48,34 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       hash: createTaskHash,
     });
 
-  // When approve succeeds, call createTask
+  // When approve succeeds, call createTask with gas estimation
   useEffect(() => {
-    if (isApproveSuccess && ipfsHash && deposit) {
+    if (isApproveSuccess && ipfsHash && deposit && account) {
       const tokenAmount = parseEther(deposit);
 
-      createTask({
-        address: marketplaceAddress,
-        abi: RoseMarketplaceABI,
-        functionName: 'createTask',
-        args: [title, tokenAmount, ipfsHash],
-      });
+      (async () => {
+        try {
+          console.log('🔄 Creating task with gas estimation...');
+          await estimateAndWrite(createTask, {
+            address: marketplaceAddress,
+            abi: RoseMarketplaceABI,
+            functionName: 'createTask',
+            args: [title, tokenAmount, ipfsHash],
+            account,
+          });
+        } catch (err) {
+          console.error('Error creating task with gas estimation:', err);
+          // Fallback to normal write if estimation fails
+          createTask({
+            address: marketplaceAddress,
+            abi: RoseMarketplaceABI,
+            functionName: 'createTask',
+            args: [title, tokenAmount, ipfsHash],
+          });
+        }
+      })();
     }
-  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, createTask]);
+  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, createTask, account, estimateAndWrite]);
 
   // When createTask succeeds, reset form
   useEffect(() => {
@@ -106,13 +125,14 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
       const tokenAmount = parseEther(deposit);
 
-      console.log('Approving token transfer...');
-      // Step 2: Approve token transfer (wagmi hook)
-      approveToken({
+      console.log('⛽ Approving token transfer with gas estimation...');
+      // Step 2: Approve token transfer with gas estimation
+      await estimateAndWrite(approveToken, {
         address: tokenAddress,
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [marketplaceAddress, tokenAmount],
+        account,
       });
 
       // Step 3 happens automatically in useEffect when approve succeeds
