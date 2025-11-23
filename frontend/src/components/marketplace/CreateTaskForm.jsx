@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { parseEther, parseGwei } from 'viem';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { NETWORK_IDS, NETWORK_NAMES } from '../../constants/networks';
+import { useAccount, useWriteContract } from 'wagmi';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
@@ -11,103 +10,24 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
   const [error, setError] = useState('');
-  const [ipfsHash, setIpfsHash] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Ref to track if we've already called createTask for this approval
-  const createTaskCalledRef = useRef(false);
-  const lastApproveHashRef = useRef(null);
-
-  const { address: account, isConnected, chain } = useAccount();
-  const chainId = chain?.id;
+  const { isConnected } = useAccount();
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
 
-  // Wagmi write hooks
-  const {
-    data: approveHash,
-    writeContract: approveToken,
-    isPending: isApproving,
-  } = useWriteContract();
-
-  const {
-    data: createTaskHash,
-    writeContract: createTask,
-    isPending: isCreating,
-  } = useWriteContract();
-
-  // Wait for approve transaction
-  const { isLoading: isApproveTxPending, isSuccess: isApproveSuccess } =
-    useWaitForTransactionReceipt({
-      hash: approveHash,
-    });
-
-  // Wait for create task transaction
-  const { isLoading: isCreateTxPending, isSuccess: isCreateSuccess } =
-    useWaitForTransactionReceipt({
-      hash: createTaskHash,
-    });
-
-  // When approve succeeds, call createTask with gas estimation
-  // Use ref to prevent infinite loop
-  useEffect(() => {
-    const executeCreateTask = async () => {
-      // Check if this is a new approval (hash changed) or first time
-      if (isApproveSuccess && ipfsHash && deposit && account) {
-        // Reset flag if we have a new approval hash
-        if (approveHash !== lastApproveHashRef.current) {
-          createTaskCalledRef.current = false;
-          lastApproveHashRef.current = approveHash;
-        }
-
-        // Only call createTask once per approval
-        if (!createTaskCalledRef.current) {
-          createTaskCalledRef.current = true;
-          const tokenAmount = parseEther(deposit);
-
-          try {
-            console.log('⛽ Creating task with hardcoded 2 gwei gas...');
-            await createTask({
-              address: marketplaceAddress,
-              abi: RoseMarketplaceABI,
-              functionName: 'createTask',
-              args: [title, tokenAmount, ipfsHash],
-              gasPrice: parseGwei('2'),
-              maxFeePerGas: parseGwei('2'),
-              maxPriorityFeePerGas: parseGwei('2'),
-            });
-          } catch (err) {
-            console.error('❌ Error creating task:', err);
-            createTaskCalledRef.current = false; // Reset on error so user can retry
-          }
-        }
-      }
-    };
-
-    executeCreateTask();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isApproveSuccess, ipfsHash, deposit, title, marketplaceAddress, account, approveHash]);
-
-  // When createTask succeeds, reset form
-  useEffect(() => {
-    if (isCreateSuccess) {
-      setTitle('');
-      setDetailedDescription('');
-      setDeposit('');
-      setIpfsHash('');
-
-      // Reset refs for next task creation
-      createTaskCalledRef.current = false;
-      lastApproveHashRef.current = null;
-
-      if (onTaskCreated) {
-        onTaskCreated();
-      }
-    }
-  }, [isCreateSuccess, onTaskCreated]);
+  // Use writeContractAsync for promise-based flow
+  const { writeContractAsync } = useWriteContract();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Prevent double submission
+    if (isSubmitting) {
+      console.log('⚠️ Already submitting, ignoring duplicate submission');
+      return;
+    }
 
     if (!isConnected) {
       setError('Please connect your wallet first');
@@ -131,18 +51,20 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
     try {
       setError('');
+      setIsSubmitting(true);
 
       // Step 1: Upload detailed description to IPFS
-      console.log('Uploading detailed description to IPFS...');
+      console.log('📤 Uploading detailed description to IPFS...');
       const hash = await uploadTaskDescription(detailedDescription, title);
-      console.log('Uploaded to IPFS:', hash);
-      setIpfsHash(hash);
+      console.log('✅ Uploaded to IPFS:', hash);
 
       const tokenAmount = parseEther(deposit);
 
+      // Step 2: Approve token transfer
       console.log('⛽ Approving token transfer with hardcoded 2 gwei gas...');
-      // Step 2: Approve token transfer with hardcoded gas
-      await approveToken({
+      console.log('💡 Please confirm the approval transaction in MetaMask');
+
+      const approveHash = await writeContractAsync({
         address: tokenAddress,
         abi: RoseTokenABI,
         functionName: 'approve',
@@ -152,18 +74,50 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         maxPriorityFeePerGas: parseGwei('2'),
       });
 
-      // Step 3 happens automatically in useEffect when approve succeeds
-    } catch (err) {
-      console.error('Error creating task:', err);
+      console.log('✅ Approval transaction sent:', approveHash);
+      console.log('⏳ Waiting for approval confirmation...');
 
+      // Step 3: Create task
+      console.log('⛽ Creating task with hardcoded 2 gwei gas...');
+      console.log('💡 Please confirm the create task transaction in MetaMask');
+
+      const createTaskHash = await writeContractAsync({
+        address: marketplaceAddress,
+        abi: RoseMarketplaceABI,
+        functionName: 'createTask',
+        args: [title, tokenAmount, hash],
+        gasPrice: parseGwei('2'),
+        maxFeePerGas: parseGwei('2'),
+        maxPriorityFeePerGas: parseGwei('2'),
+      });
+
+      console.log('✅ Task creation transaction sent:', createTaskHash);
+      console.log('🎉 Task created successfully!');
+
+      // Reset form
+      setTitle('');
+      setDetailedDescription('');
+      setDeposit('');
+      setIsSubmitting(false);
+
+      if (onTaskCreated) {
+        onTaskCreated();
+      }
+    } catch (err) {
+      console.error('❌ Error creating task:', err);
+      setIsSubmitting(false);
+
+      // Handle different error types
       if (err.message && err.message.includes('Pinata')) {
         setError('Failed to upload task description to IPFS. Please check your Pinata configuration.');
-      } else if (err.message && err.message.includes('user rejected')) {
-        setError('Transaction rejected. Please try again.');
+      } else if (err.message && (err.message.includes('User rejected') || err.message.includes('user rejected'))) {
+        setError('Transaction rejected. Please approve the transaction in MetaMask to continue.');
       } else if (err.message && err.message.includes('insufficient funds')) {
-        setError('Insufficient funds for transaction. Please check your balance.');
+        setError('Insufficient funds for transaction. Please check your ETH and ROSE token balances.');
+      } else if (err.message && err.message.includes('ERC20: insufficient allowance')) {
+        setError('Insufficient token allowance. Please try again.');
       } else {
-        setError(err.message || 'Failed to create task');
+        setError(err.message || 'Failed to create task. Please try again.');
       }
     }
   };
@@ -255,18 +209,14 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
         <button
           type="submit"
-          disabled={isApproving || isApproveTxPending || isCreating || isCreateTxPending || !isConnected}
+          disabled={isSubmitting || !isConnected}
           className={`w-full py-2 px-4 rounded-md font-medium ${
-            isApproving || isApproveTxPending || isCreating || isCreateTxPending || !isConnected
+            isSubmitting || !isConnected
               ? 'bg-muted text-muted-foreground cursor-not-allowed'
               : 'bg-primary text-primary-foreground hover:bg-primary'
           }`}
         >
-          {isApproving || isApproveTxPending
-            ? 'Approving ROSE Tokens...'
-            : isCreating || isCreateTxPending
-            ? 'Creating Task...'
-            : 'Create Task'}
+          {isSubmitting ? 'Creating Task...' : 'Create Task'}
         </button>
 
       </form>
