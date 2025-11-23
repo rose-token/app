@@ -54,12 +54,10 @@ const TokenDistributionChart = () => {
         <p className="font-medium mb-2">How it works (10 ROSE task example):</p>
         <div className="space-y-1 text-xs">
           <p>• Customer deposits: <span className="font-semibold">10 ROSE</span> (escrowed in contract)</p>
-          <p>• Stakeholder stakes: <span className="font-semibold">1 ROSE</span> (10% of task value, returned on completion)</p>
-          <p>• Platform mints: <span className="font-semibold">0.2 ROSE</span> → DAO treasury (separate from distribution)</p>
-          <p>• Total distribution pot: <span className="font-semibold">10 ROSE</span> (customer deposit only)</p>
-          <p className="pt-2 mt-2">
-            The pot is distributed 95/5, with stakeholder also receiving their stake back for a 50% ROI.
-          </p>
+          <p>• Stakeholder stakes: <span className="font-semibold">1 ROSE</span> (10% of deposit, returned on completion)</p>
+          <p>• Worker completes task: Receives <span className="font-semibold">9.5 ROSE</span> </p>
+          <p>• Stakeholder receives: <span className="font-semibold">1.5 ROSE</span> (Returned stake + 5% of deposit)</p>
+          <p>• Platform mints: <span className="font-semibold">0.2 ROSE</span> → DAO treasury (2% of deposit)</p>
         </div>
       </div>
     </div>
