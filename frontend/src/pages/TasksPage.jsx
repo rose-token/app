@@ -225,7 +225,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
         args: [BigInt(taskId)],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -251,7 +250,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
         args: [BigInt(taskId)],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -277,7 +275,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
         args: [BigInt(taskId), prUrl],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -343,7 +340,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
         args: [BigInt(taskId)],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -400,7 +396,6 @@ const TasksPage = () => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -412,7 +407,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
         args: [BigInt(taskId), depositAmount],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
@@ -465,7 +459,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
         args: [BigInt(taskId)],
-        gasPrice: parseGwei('2'),
         maxFeePerGas: parseGwei('2'),
         maxPriorityFeePerGas: parseGwei('2'),
       });
