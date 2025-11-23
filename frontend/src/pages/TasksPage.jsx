@@ -546,6 +546,39 @@ const TasksPage = () => {
   useWatchContractEvent({
     address: MARKETPLACE_ADDRESS,
     abi: RoseMarketplaceABI,
+    eventName: 'TaskClaimed',
+    onLogs: (logs) => {
+      console.log("Task claimed event:", logs);
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskUnclaimed',
+    onLogs: (logs) => {
+      console.log("Task unclaimed event:", logs);
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'TaskCompleted',
+    onLogs: (logs) => {
+      console.log("Task completed event:", logs);
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
     eventName: 'TaskCreated',
     onLogs: (logs) => {
       console.log("Task created event:", logs);
