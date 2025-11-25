@@ -55,11 +55,8 @@ const RedeemCard = ({
     return Number(formatUnits(usdcToReceive, 6)).toFixed(2);
   }, [usdcToReceive]);
 
-  // Check if approval is needed
-  const needsApproval = useMemo(() => {
-    if (!roseAllowanceRaw || amountInWei <= 0n) return false;
-    return roseAllowanceRaw < amountInWei;
-  }, [roseAllowanceRaw, amountInWei]);
+  // Always require approval for redemptions (simpler and more reliable)
+  const needsApproval = amountInWei > 0n;
 
   // Validation
   const validationError = useMemo(() => {
