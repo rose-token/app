@@ -79,7 +79,12 @@ async function main() {
     await mockUsdc.waitForDeployment();
     addresses.usdc = await mockUsdc.getAddress();
     console.log("Mock USDC deployed to:", addresses.usdc);
-    
+
+    // Mint 10k USDC to deployer for treasury seeding
+    const mintAmount = hre.ethers.parseUnits("10000", 6); // 10,000 USDC
+    await mockUsdc.mint(deployer.address, mintAmount);
+    console.log("Minted 10,000 USDC to deployer ✓");
+
     // Deploy mock WBTC if needed
     if (!addresses.wbtc) {
       const mockWbtc = await MockToken.deploy("Mock WBTC", "WBTC", 8);
