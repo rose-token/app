@@ -124,11 +124,12 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     function deposit(uint256 usdcAmount) external nonReentrant {
         if (usdcAmount == 0) revert ZeroAmount();
 
+        // Calculate ROSE to mint BEFORE transferring USDC
+        // This ensures price is based on vault value before the deposit
+        uint256 roseToMint = calculateRoseForDeposit(usdcAmount);
+
         // Transfer USDC from user
         usdc.safeTransferFrom(msg.sender, address(this), usdcAmount);
-
-        // Calculate ROSE to mint
-        uint256 roseToMint = calculateRoseForDeposit(usdcAmount);
 
         // Mint ROSE to user
         IRoseToken(address(roseToken)).mint(msg.sender, roseToMint);
