@@ -68,11 +68,8 @@ const DepositCard = ({
     return Number(formatUnits(roseToReceive, 18)).toFixed(4);
   }, [roseToReceive]);
 
-  // Check if approval is needed
-  const needsApproval = useMemo(() => {
-    if (!usdcAllowanceRaw || amountInWei <= 0n) return false;
-    return usdcAllowanceRaw < amountInWei;
-  }, [usdcAllowanceRaw, amountInWei]);
+  // Always require approval for deposits (simpler and more reliable)
+  const needsApproval = amountInWei > 0n;
 
   // Validation
   const validationError = useMemo(() => {
