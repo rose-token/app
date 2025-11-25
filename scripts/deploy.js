@@ -6,7 +6,7 @@ const fs = require("fs");
 const MAINNET = {
   usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   wbtc: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-  weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  reth: "0xae78736Cd615f374D3085123A210448E74Fc6393", // Rocket Pool ETH
   paxg: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
   btcUsdFeed: "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
   ethUsdFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
@@ -18,7 +18,7 @@ const MAINNET = {
 // NOTE: For testnet, we run in USDC-only mode (no RWA diversification)
 const SEPOLIA = {
   usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle's Sepolia USDC
-  weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", // Sepolia WETH
+  reth: null, // Will deploy mock (no official rETH on Sepolia)
   // These don't exist on Sepolia - we'll deploy mocks or skip
   wbtc: null, // Will deploy mock
   paxg: null, // Will deploy mock
@@ -70,9 +70,9 @@ async function main() {
   // ============ Step 0: Deploy Mock Tokens (Testnet Only) ============
   if (isTestnet) {
     console.log("\n--- Step 0: Deploying Mock Tokens (Testnet) ---");
-    
+
     const MockToken = await hre.ethers.getContractFactory("MockERC20");
-    
+
     // Deploy mock USDC for testnet (so we can mint for testing)
     // Circle's USDC exists but doesn't have public mint
     const mockUsdc = await MockToken.deploy("Mock USDC", "USDC", 6);
@@ -92,7 +92,15 @@ async function main() {
       addresses.wbtc = await mockWbtc.getAddress();
       console.log("Mock WBTC deployed to:", addresses.wbtc);
     }
-    
+
+    // Deploy mock rETH (Rocket Pool ETH)
+    if (!addresses.reth) {
+      const mockReth = await MockToken.deploy("Mock Rocket Pool ETH", "rETH", 18);
+      await mockReth.waitForDeployment();
+      addresses.reth = await mockReth.getAddress();
+      console.log("Mock rETH deployed to:", addresses.reth);
+    }
+
     // Deploy mock PAXG if needed
     if (!addresses.paxg) {
       const mockPaxg = await MockToken.deploy("Mock PAXG", "PAXG", 18);
@@ -118,7 +126,7 @@ async function main() {
     roseTokenAddress,
     addresses.usdc,
     addresses.wbtc,
-    addresses.weth,
+    addresses.reth,
     addresses.paxg,
     addresses.btcUsdFeed,
     addresses.ethUsdFeed,
