@@ -152,7 +152,7 @@ const RedeemCard = ({
       <div className="space-y-4">
         {/* Amount Input */}
         <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             ROSE Amount
           </label>
           <div className="relative">
@@ -173,7 +173,7 @@ const RedeemCard = ({
             </button>
           </div>
           {roseBalance !== null && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-foreground mt-1">
               Balance: {roseBalance.toLocaleString()} ROSE
             </p>
           )}
@@ -182,10 +182,10 @@ const RedeemCard = ({
         {/* Preview */}
         {amountInWei > 0n && (
           <div className="bg-muted/20 rounded-md p-3">
-            <p className="text-sm text-muted-foreground">You will receive:</p>
+            <p className="text-sm text-foreground">You will receive:</p>
             <p className="text-lg font-semibold text-foreground">{usdcToReceiveFormatted} USDC</p>
             {rosePrice && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-foreground mt-1">
                 Exchange rate: 1 ROSE = ${rosePrice.toFixed(4)}
               </p>
             )}
@@ -213,7 +213,7 @@ const RedeemCard = ({
               className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
                 canApprove
                   ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-muted text-foreground cursor-not-allowed'
               }`}
             >
               {isApproving ? (
@@ -233,7 +233,7 @@ const RedeemCard = ({
             className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
               canRedeem
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-muted text-foreground cursor-not-allowed'
             }`}
           >
             {isRedeeming ? (

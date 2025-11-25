@@ -36,8 +36,8 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
       return (
         <div className="bg-card border border-border rounded-lg shadow-lg p-3">
           <p className="font-semibold text-foreground">{data.name}</p>
-          <p className="text-muted-foreground">{formatUSD(data.value)}</p>
-          <p className="text-muted-foreground">{data.percentage.toFixed(1)}%</p>
+          <p className="text-foreground">{formatUSD(data.value)}</p>
+          <p className="text-foreground">{data.percentage.toFixed(1)}%</p>
         </div>
       );
     }
@@ -54,7 +54,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
           />
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">{entry.name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-foreground">
               {entry.percentage.toFixed(1)}% ({formatUSD(entry.value)})
             </p>
           </div>
@@ -84,7 +84,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">Vault Allocation</h2>
-        <div className="text-center py-8 text-muted-foreground">
+        <div className="text-center py-8 text-foreground">
           <p>No assets in vault yet.</p>
           <p className="text-sm mt-2">Deposit USDC to get started.</p>
         </div>
@@ -127,7 +127,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
 
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex justify-between items-center">
-              <p className="text-sm font-medium text-muted-foreground">Total Vault Value</p>
+              <p className="text-sm font-medium text-foreground">Total Vault Value</p>
               <p className="text-lg font-bold text-foreground">{formatUSD(breakdown.total)}</p>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { Skeleton } from '../ui/skeleton';
 
 const StatCard = ({ label, value, isLoading, prefix = '', suffix = '' }) => (
   <div className="bg-card rounded-lg shadow-sm p-4">
-    <p className="text-sm text-muted-foreground mb-1">{label}</p>
+    <p className="text-sm text-foreground mb-1">{label}</p>
     {isLoading ? (
       <Skeleton className="h-8 w-24" />
     ) : (

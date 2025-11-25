@@ -107,11 +107,11 @@ const TransactionHistory = ({ treasuryAddress }) => {
           ))}
         </div>
       ) : error ? (
-        <div className="text-center py-4 text-muted-foreground">
+        <div className="text-center py-4 text-foreground">
           <p>{error}</p>
         </div>
       ) : transactions.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
+        <div className="text-center py-8 text-foreground">
           <p>No transactions yet.</p>
           <p className="text-sm mt-1">Your deposit and redemption history will appear here.</p>
         </div>
@@ -153,7 +153,7 @@ const TransactionHistory = ({ treasuryAddress }) => {
 
                 <div>
                   <p className="text-sm font-medium text-foreground">{tx.type}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-foreground">
                     {tx.type === 'Deposit'
                       ? `${tx.usdcAmount.toFixed(2)} USDC → ${tx.roseAmount.toFixed(4)} ROSE`
                       : `${tx.roseAmount.toFixed(4)} ROSE → ${tx.usdcAmount.toFixed(2)} USDC`}

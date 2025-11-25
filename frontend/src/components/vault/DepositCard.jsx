@@ -163,7 +163,7 @@ const DepositCard = ({
       <div className="space-y-4">
         {/* Amount Input */}
         <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             USDC Amount
           </label>
           <div className="relative">
@@ -184,7 +184,7 @@ const DepositCard = ({
             </button>
           </div>
           {usdcBalance !== null && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-foreground mt-1">
               Balance: {usdcBalance.toLocaleString()} USDC
             </p>
           )}
@@ -193,10 +193,10 @@ const DepositCard = ({
         {/* Preview */}
         {amountInWei > 0n && (
           <div className="bg-muted/20 rounded-md p-3">
-            <p className="text-sm text-muted-foreground">You will receive:</p>
+            <p className="text-sm text-foreground">You will receive:</p>
             <p className="text-lg font-semibold text-foreground">{roseToReceiveFormatted} ROSE</p>
             {rosePrice && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-foreground mt-1">
                 Exchange rate: 1 ROSE = ${rosePrice.toFixed(4)}
               </p>
             )}
@@ -224,7 +224,7 @@ const DepositCard = ({
               className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
                 canApprove
                   ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-muted text-foreground cursor-not-allowed'
               }`}
             >
               {isApproving ? (
@@ -244,7 +244,7 @@ const DepositCard = ({
             className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
               canDeposit
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-muted text-foreground cursor-not-allowed'
             }`}
           >
             {isDepositing ? (
