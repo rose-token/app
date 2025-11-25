@@ -9,7 +9,8 @@ async function main() {
   const initialBalance = await hre.ethers.provider.getBalance(deployer.address);
   console.log("Deployer's Sepolia ETH balance:", hre.ethers.formatEther(initialBalance), "ETH");
 
-  const daoTreasury = process.env.DAO_TREASURY_ADDRESS || deployer.address;
+  const DaoTreasury = await hre.ethers.getContractFactory("RoseTreasury");
+  const daoTreasury = await DaoTreasury.deploy(deployer.address);
   console.log("DAO Treasury address:", daoTreasury);
 
   const RoseMarketplace = await hre.ethers.getContractFactory("RoseMarketplace");

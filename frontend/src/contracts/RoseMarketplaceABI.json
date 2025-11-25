@@ -11,23 +11,20 @@
     "type": "constructor"
   },
   {
-    "anonymous": false,
+    "inputs": [],
+    "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
-        "indexed": true,
         "internalType": "address",
-        "name": "to",
+        "name": "token",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
       }
     ],
-    "name": "FaucetTokensClaimed",
-    "type": "event"
+    "name": "SafeERC20FailedOperation",
+    "type": "error"
   },
   {
     "anonymous": false,
@@ -303,19 +300,6 @@
   },
   {
     "inputs": [],
-    "name": "TREASURY_SHARE",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "WORKER_SHARE",
     "outputs": [
       {
@@ -375,19 +359,6 @@
       }
     ],
     "name": "cancelTask",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "claimFaucetTokens",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

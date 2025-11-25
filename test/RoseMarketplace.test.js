@@ -40,8 +40,8 @@ describe("RoseMarketplace", function () {
       expect(await roseMarketplace.daoTreasury()).to.equal(daoTreasury.address);
     });
 
-    it("Should deploy RoseToken with marketplace as minter", async function () {
-      expect(await roseToken.minter()).to.equal(await roseMarketplace.getAddress());
+    it("Should deploy RoseToken with marketplace as authorized", async function () {
+      expect(await roseToken.authorized(await roseMarketplace.getAddress())).to.equal(true);
     });
 
     it("Should start with zero task counter", async function () {
