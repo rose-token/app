@@ -108,6 +108,33 @@ async function main() {
       addresses.paxg = await mockPaxg.getAddress();
       console.log("Mock PAXG deployed to:", addresses.paxg);
     }
+
+    // Deploy MockUniswapV3Router for testnet (real Uniswap has no liquidity for mock tokens)
+    console.log("\nDeploying MockUniswapV3Router for testnet...");
+    const MockRouter = await hre.ethers.getContractFactory("MockUniswapV3Router");
+    const mockRouter = await MockRouter.deploy();
+    await mockRouter.waitForDeployment();
+    addresses.swapRouter = await mockRouter.getAddress();
+    console.log("MockUniswapV3Router deployed to:", addresses.swapRouter);
+
+    // Configure token decimals on the mock router
+    await mockRouter.setTokenDecimals(addresses.usdc, 6);
+    await mockRouter.setTokenDecimals(addresses.wbtc, 8);
+    await mockRouter.setTokenDecimals(addresses.reth, 18);
+    await mockRouter.setTokenDecimals(addresses.paxg, 18);
+    console.log("Token decimals configured on mock router ✓");
+
+    // Fund the mock router with tokens for swaps
+    const mockUsdc = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
+    const mockWbtc = await hre.ethers.getContractAt("MockERC20", addresses.wbtc);
+    const mockReth = await hre.ethers.getContractAt("MockERC20", addresses.reth);
+    const mockPaxg = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
+
+    await mockWbtc.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8));
+    await mockReth.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
+    await mockPaxg.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
+    await mockUsdc.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6));
+    console.log("Mock router funded with liquidity ✓");
   }
 
   // ============ Step 1: Deploy RoseToken ============
@@ -167,12 +194,12 @@ async function main() {
   await setMarketplaceTx.wait();
   console.log("Marketplace set in Treasury ✓");
 
-  // For testnet, set allocation to 100% USDC (no DEX swaps needed)
+  // For testnet, set allocation to diversified RWA using mock router
   if (isTestnet) {
-    console.log("Setting testnet allocation (100% USDC)...");
-    const setAllocTx = await roseTreasury.setAllocation(4000, 0, 4000, 2000); // 0% BTC, 0% ETH, 0% Gold, 100% USDC
+    console.log("Setting testnet allocation (40% BTC, 40% Gold, 20% USDC)...");
+    const setAllocTx = await roseTreasury.setAllocation(4000, 0, 4000, 2000); // 40% BTC, 0% ETH, 40% Gold, 20% USDC
     await setAllocTx.wait();
-    console.log("Testnet allocation set to 100% USDC ✓");
+    console.log("Testnet allocation set to 40% BTC, 40% Gold, 20% USDC ✓");
   }
 
   // ============ Summary ============
