@@ -89,6 +89,12 @@ const DepositCard = ({
   const handleDeposit = async () => {
     if (!usdcAddress || !treasuryAddress || amountInWei <= 0n) return;
 
+    // Validate balance before submitting transaction
+    if (usdcBalanceRaw !== undefined && amountInWei > usdcBalanceRaw) {
+      setError('Insufficient USDC balance');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -138,6 +144,8 @@ const DepositCard = ({
       console.error('❌ Deposit error:', err);
       if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
+      } else if (err.message.includes('InsufficientBalance')) {
+        setError('Insufficient USDC balance');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Deposit failed');
@@ -165,7 +173,10 @@ const DepositCard = ({
             <input
               type="number"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setError('');
+              }}
               placeholder="0.00"
               disabled={isSubmitting}
               className="w-full px-3 py-2 pr-16 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground disabled:opacity-50"
