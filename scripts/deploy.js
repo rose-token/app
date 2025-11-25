@@ -162,13 +162,6 @@ async function main() {
     console.log("Testnet allocation set to 100% USDC ✓");
   }
 
-  // ============ Step 5: Initial mint to Treasury ============
-  console.log("\n--- Step 5: Initial ROSE mint to Treasury ---");
-  const initialMint = hre.ethers.parseEther("10000"); // 10,000 ROSE
-  const mintTx = await roseToken.mint(treasuryAddress, initialMint);
-  await mintTx.wait();
-  console.log("Minted 10,000 ROSE to Treasury ✓");
-
   // ============ Summary ============
   console.log("\n========================================");
   console.log("        DEPLOYMENT COMPLETE");
