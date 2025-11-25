@@ -7,7 +7,7 @@ describe("RoseMarketplace", function () {
   let roseTreasury;
   let usdc;
   let wbtc;
-  let weth;
+  let reth;
   let paxg;
   let btcFeed;
   let ethFeed;
@@ -46,7 +46,7 @@ describe("RoseMarketplace", function () {
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     usdc = await MockERC20.deploy("USD Coin", "USDC", 6);
     wbtc = await MockERC20.deploy("Wrapped BTC", "WBTC", 8);
-    weth = await MockERC20.deploy("Wrapped ETH", "WETH", 18);
+    reth = await MockERC20.deploy("Rocket Pool ETH", "rETH", 18);
     paxg = await MockERC20.deploy("Pax Gold", "PAXG", 18);
 
     // 2. Deploy RoseToken (owner is initial authorized)
@@ -66,7 +66,7 @@ describe("RoseMarketplace", function () {
     // 5. Set token decimals on router
     await swapRouter.setTokenDecimals(await usdc.getAddress(), 6);
     await swapRouter.setTokenDecimals(await wbtc.getAddress(), 8);
-    await swapRouter.setTokenDecimals(await weth.getAddress(), 18);
+    await swapRouter.setTokenDecimals(await reth.getAddress(), 18);
     await swapRouter.setTokenDecimals(await paxg.getAddress(), 18);
 
     // 6. Set exchange rates on router (based on mock prices)
@@ -74,16 +74,16 @@ describe("RoseMarketplace", function () {
     // BTC = $43,000: For 1 USDC (1e6), we want 1/43000 BTC (in 8 dec) = 1e8/43000 ≈ 2326
     // rate = 2326 * 1e18 / 1e6 = 2.326e15
     await swapRouter.setExchangeRate(await usdc.getAddress(), await wbtc.getAddress(), 2326n * 10n**12n);
-    // ETH = $2,300: For 1 USDC (1e6), we want 1/2300 ETH (in 18 dec) = 1e18/2300 ≈ 4.35e14
+    // ETH = $2,300: For 1 USDC (1e6), we want 1/2300 rETH (in 18 dec) = 1e18/2300 ≈ 4.35e14
     // rate = 4.35e14 * 1e18 / 1e6 = 4.35e26
-    await swapRouter.setExchangeRate(await usdc.getAddress(), await weth.getAddress(), 435n * 10n**24n);
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await reth.getAddress(), 435n * 10n**24n);
     // Gold = $2,000: For 1 USDC (1e6), we want 1/2000 PAXG (in 18 dec) = 1e18/2000 = 5e14
     // rate = 5e14 * 1e18 / 1e6 = 5e26
     await swapRouter.setExchangeRate(await usdc.getAddress(), await paxg.getAddress(), 5n * 10n**26n);
 
     // 7. Fund router with tokens for swaps (plenty of liquidity)
     await wbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
-    await weth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
+    await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
     // 7. Deploy RoseTreasury
@@ -92,7 +92,7 @@ describe("RoseMarketplace", function () {
       await roseToken.getAddress(),
       await usdc.getAddress(),
       await wbtc.getAddress(),
-      await weth.getAddress(),
+      await reth.getAddress(),
       await paxg.getAddress(),
       await btcFeed.getAddress(),
       await ethFeed.getAddress(),

@@ -37,7 +37,7 @@ npm test                  # Run Vitest tests
 |----------|-------|---------|
 | RoseToken.sol | 167 | ERC20 with authorized mint/burn (multiple authorized addresses) |
 | RoseMarketplace.sol | 362 | Task lifecycle, escrow, payment distribution |
-| RoseTreasury.sol | 589 | RWA-backed treasury (BTC/ETH/Gold/USDC via Chainlink + Uniswap) |
+| RoseTreasury.sol | 589 | RWA-backed treasury (BTC/rETH/Gold/USDC via Chainlink + Uniswap) |
 | mocks/MockERC20.sol | 38 | ERC20 test utility with public mint |
 | mocks/MockV3Aggregator.sol | 50 | Chainlink price feed mock for testing |
 | mocks/MockUniswapV3Router.sol | 70 | Uniswap V3 swap router mock for testing |
@@ -95,7 +95,7 @@ Tests use mock contracts to simulate external dependencies:
 
 - **MockV3Aggregator**: Simulates Chainlink price feeds (BTC/USD, ETH/USD, XAU/USD)
 - **MockUniswapV3Router**: Simulates Uniswap V3 swaps with configurable exchange rates
-- **MockERC20**: Standard ERC20 with public mint for USDC, WBTC, WETH, PAXG
+- **MockERC20**: Standard ERC20 with public mint for USDC, WBTC, rETH, PAXG
 
 **Token acquisition in tests:** Tests obtain ROSE tokens via Treasury deposit flow (not direct minting):
 1. Mint USDC to user

@@ -89,7 +89,7 @@ jobs:
           # Get external addresses for constructor args
           USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
           WBTC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.wbtc')
-          WETH_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.weth')
+          RETH_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.reth')
           PAXG_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.paxg')
           BTC_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.btcUsdFeed')
           ETH_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.ethUsdFeed')
@@ -105,12 +105,12 @@ jobs:
           # Verify RoseToken (constructor: address _initialAuthorized)
           npx hardhat verify --network sepolia $TOKEN_ADDRESS $DEPLOYER || echo "Token verification failed or already verified"
           
-          # Verify RoseTreasury (constructor: roseToken, usdc, wbtc, weth, paxg, btcFeed, ethFeed, xauFeed, swapRouter)
+          # Verify RoseTreasury (constructor: roseToken, usdc, wbtc, reth, paxg, btcFeed, ethFeed, xauFeed, swapRouter)
           npx hardhat verify --network sepolia $TREASURY_ADDRESS \
             $TOKEN_ADDRESS \
             $USDC_ADDRESS \
             $WBTC_ADDRESS \
-            $WETH_ADDRESS \
+            $RETH_ADDRESS \
             $PAXG_ADDRESS \
             $BTC_FEED \
             $ETH_FEED \
