@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
+import VaultPage from './pages/VaultPage';
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -45,6 +46,7 @@ function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<TasksPage />} />
+                  <Route path="/vault" element={<VaultPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/help" element={<HelpPage />} />
                 </Routes>
