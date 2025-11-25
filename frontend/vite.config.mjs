@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/rose-token-v2/',
   define: {
     global: 'globalThis',
   },
