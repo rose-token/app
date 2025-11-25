@@ -55,11 +55,16 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     // ============ Slippage Protection ============
     uint256 public maxSlippageBps = 100; // 1% default
 
+    // ============ Marketplace Integration ============
+    address public marketplace;
+
     // ============ Events ============
     event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted);
     event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut);
     event Rebalanced(uint256 btcValue, uint256 ethValue, uint256 goldValue, uint256 usdcValue);
     event AllocationUpdated(uint256 btc, uint256 eth, uint256 gold, uint256 usdc);
+    event RoseSpent(address indexed to, uint256 amount, string reason);
+    event MarketplaceUpdated(address indexed newMarketplace);
 
     // ============ Errors ============
     error InvalidPrice();
@@ -67,6 +72,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     error SlippageExceeded();
     error InvalidAllocation();
     error ZeroAmount();
+    error ZeroAddress();
 
     constructor(
         address _roseToken,
@@ -178,16 +184,37 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
 
     /**
      * @dev Get current ROSE price in USD (6 decimals)
+     * Uses circulating supply (excludes treasury-held ROSE)
      */
     function rosePrice() public view returns (uint256) {
-        uint256 totalSupply = roseToken.totalSupply();
-        if (totalSupply == 0) {
+        uint256 circulating = circulatingSupply();
+        if (circulating == 0) {
             return 1e6; // $1.00 initial price
         }
         
-        // vaultValueUSD is 6 decimals, totalSupply is 18 decimals
+        // vaultValueUSD is 6 decimals, circulating is 18 decimals
         // Result should be 6 decimals
-        return (vaultValueUSD() * 1e18) / totalSupply;
+        return (vaultValueUSD() * 1e18) / circulating;
+    }
+
+    /**
+     * @dev Get circulating supply (total supply minus treasury-held ROSE)
+     */
+    function circulatingSupply() public view returns (uint256) {
+        uint256 total = roseToken.totalSupply();
+        uint256 treasuryHeld = roseToken.balanceOf(address(this));
+        
+        // Safety check: if treasury somehow holds more than total (shouldn't happen)
+        if (treasuryHeld >= total) return 1; // Avoid division by zero
+        
+        return total - treasuryHeld;
+    }
+
+    /**
+     * @dev Get treasury's ROSE balance
+     */
+    function treasuryRoseBalance() public view returns (uint256) {
+        return roseToken.balanceOf(address(this));
     }
 
     /**
@@ -371,6 +398,35 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     // ============ Admin Functions ============
 
     /**
+     * @dev Set marketplace address for task posting
+     */
+    function setMarketplace(address _marketplace) external onlyOwner {
+        if (_marketplace == address(0)) revert ZeroAddress();
+        marketplace = _marketplace;
+        
+        // Approve marketplace to pull ROSE for task creation
+        roseToken.approve(_marketplace, type(uint256).max);
+        
+        emit MarketplaceUpdated(_marketplace);
+    }
+
+    /**
+     * @dev Spend treasury ROSE (e.g., to post tasks on marketplace)
+     * @param _to Recipient address
+     * @param _amount Amount of ROSE to send
+     * @param _reason Description of spend (for logging)
+     */
+    function spendRose(address _to, uint256 _amount, string calldata _reason) external onlyOwner {
+        if (_to == address(0)) revert ZeroAddress();
+        uint256 balance = roseToken.balanceOf(address(this));
+        if (balance < _amount) revert InsufficientLiquidity();
+        
+        roseToken.transfer(_to, _amount);
+        
+        emit RoseSpent(_to, _amount, _reason);
+    }
+
+    /**
      * @dev Update allocation percentages (must sum to 10000)
      */
     function setAllocation(
@@ -466,13 +522,17 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
         uint256 ethValue,
         uint256 goldValue,
         uint256 usdcValue,
-        uint256 totalValue
+        uint256 totalValue,
+        uint256 treasuryRose,
+        uint256 currentRosePrice
     ) {
         btcValue = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
         ethValue = _getAssetValueUSD(weth.balanceOf(address(this)), getETHPrice(), WETH_DECIMALS);
         goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
         usdcValue = usdc.balanceOf(address(this));
         totalValue = btcValue + ethValue + goldValue + usdcValue;
+        treasuryRose = roseToken.balanceOf(address(this));
+        currentRosePrice = rosePrice();
     }
 }
 
