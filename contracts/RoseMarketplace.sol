@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./RoseToken.sol";
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -12,15 +10,13 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @dev A feature-rich MVP combining escrowed tasks with a stakeholder-based
  * validation process and RoseToken minting logic.
  *
- * DISCLAIMER:
- * This code is purely for illustration, not production.
- * Use at your own risk, and always get audits and security reviews.
+ * Updated to accept an existing RoseToken address rather than deploying its own.
  */
 contract RoseMarketplace is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    // Reference to the RoseToken contract
-    RoseToken public roseToken;
+    // Reference to the RoseToken contract (external, not deployed by this contract)
+    IERC20 public immutable roseToken;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
@@ -81,19 +77,16 @@ contract RoseMarketplace is ReentrancyGuard {
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /**
-     * @dev Constructor sets up the RoseToken contract and DAO treasury address.
-     * In a production design, you'd likely manage these addresses with Ownable logic.
-     * @param _daoTreasury The address where part of minted tokens go
+     * @dev Constructor accepts existing RoseToken and DAO treasury addresses.
+     * @param _roseToken The address of the deployed RoseToken contract
+     * @param _daoTreasury The address where part of minted tokens go (RoseTreasury)
      */
-    constructor(address _daoTreasury) {
-        require(_daoTreasury != address(0));
+    constructor(address _roseToken, address _daoTreasury) {
+        require(_roseToken != address(0), "RoseToken cannot be zero address");
+        require(_daoTreasury != address(0), "Treasury cannot be zero address");
+        
+        roseToken = IERC20(_roseToken);
         daoTreasury = _daoTreasury;
-
-        // Deploy the RoseToken, designating this marketplace as its minter
-        roseToken = new RoseToken(address(this));
-
-        // Mint initial 10,000 ROSE tokens to DAO treasury
-        roseToken.mint(_daoTreasury, 10000 ether);
     }
 
     /**
@@ -108,7 +101,7 @@ contract RoseMarketplace is ReentrancyGuard {
         require(bytes(_detailedDescriptionHash).length > 0, "Detailed description hash is required");
 
         // Transfer tokens from customer to the contract using SafeERC20
-        IERC20(address(roseToken)).safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        roseToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
 
         taskCounter++;
         Task storage newTask = tasks[taskCounter];
@@ -140,7 +133,7 @@ contract RoseMarketplace is ReentrancyGuard {
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
 
         // Transfer tokens from stakeholder to the contract using SafeERC20
-        IERC20(address(roseToken)).safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        roseToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
         
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
@@ -169,9 +162,6 @@ contract RoseMarketplace is ReentrancyGuard {
             "Only customer or stakeholder can cancel task"
         );
 
-        console.log("Cancelling task:", _taskId);
-        console.log("Cancelled by:", msg.sender);
-
         // Initialize refund amounts
         uint256 customerRefund = 0;
         uint256 stakeholderRefund = 0;
@@ -179,41 +169,31 @@ contract RoseMarketplace is ReentrancyGuard {
         // Refund customer deposit
         if (t.deposit > 0) {
             customerRefund = t.deposit;
-            console.log("Refunding customer:", customerRefund);
-            t.deposit = 0; // Update state before external call
-            IERC20(address(roseToken)).safeTransfer(t.customer, customerRefund);
+            uint256 depositCache = t.deposit;
+            t.deposit = 0;
+            roseToken.safeTransfer(t.customer, depositCache);
         }
 
-        // Refund stakeholder deposit if they have staked
-        if (t.stakeholder != address(0) && t.stakeholderDeposit > 0) {
+        // Refund stakeholder deposit if they staked
+        if (t.stakeholderDeposit > 0) {
             stakeholderRefund = t.stakeholderDeposit;
-            console.log("Refunding stakeholder:", stakeholderRefund);
-            t.stakeholderDeposit = 0; // Update state before external call
-            IERC20(address(roseToken)).safeTransfer(t.stakeholder, stakeholderRefund);
+            uint256 stakeCache = t.stakeholderDeposit;
+            t.stakeholderDeposit = 0;
+            roseToken.safeTransfer(t.stakeholder, stakeCache);
         }
 
-        // Set task status to Closed
+        // Mark task as closed
         t.status = TaskStatus.Closed;
 
-        // Emit event
         emit TaskCancelled(_taskId, msg.sender, customerRefund, stakeholderRefund);
     }
 
-
-
-
-
-
-
-
-
     /**
-     * @dev Worker claims an open task
-     * @param _taskId ID of the task to be claimed
+     * @dev Worker claims an open task, assigns themselves as the worker, and marks it in progress.
+     * @param _taskId ID of the task to claim
      */
     function claimTask(uint256 _taskId) external {
         Task storage t = tasks[_taskId];
-        // Check specific conditions first to ensure proper error messages
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
         require(t.stakeholder != msg.sender, "Stakeholder cannot claim task they are validating");
@@ -275,13 +255,8 @@ contract RoseMarketplace is ReentrancyGuard {
         require(t.status == TaskStatus.Completed, "Task must be completed first");
         t.customerApproval = true;
         
-        // Add debug logging
-        console.log("Customer approved task:", _taskId);
-        console.log("Stakeholder approval status:", t.stakeholderApproval);
-        
         // Once both approvals are in, mark task as ready for worker to accept payment
         if (t.stakeholderApproval) {
-            console.log("Both approvals received, marking task ready for payment acceptance");
             t.status = TaskStatus.ApprovedPendingPayment;
             emit TaskReadyForPayment(_taskId, t.worker, t.deposit);
         }
@@ -300,13 +275,8 @@ contract RoseMarketplace is ReentrancyGuard {
         // Record stakeholder approval
         t.stakeholderApproval = true;
         
-        // Add debug logging
-        console.log("Stakeholder approved task:", _taskId);
-        console.log("Customer approval status:", t.customerApproval);
-        
         // Check if both customer and stakeholder have approved
         if (t.customerApproval) {
-            console.log("Both customer and stakeholder approved, marking task ready for payment acceptance");
             t.status = TaskStatus.ApprovedPendingPayment;
             emit TaskReadyForPayment(_taskId, t.worker, t.deposit);
         }
@@ -323,7 +293,6 @@ contract RoseMarketplace is ReentrancyGuard {
         require(t.status == TaskStatus.ApprovedPendingPayment, "Task must be approved and pending payment");
         require(t.customerApproval && t.stakeholderApproval, "Task must be approved by customer and stakeholder");
 
-        console.log("Worker accepting payment for task", _taskId);
         _finalizeTask(_taskId, true);
     }
 
@@ -342,24 +311,19 @@ contract RoseMarketplace is ReentrancyGuard {
 
         if (_payout) {
             uint256 taskValue = t.deposit;
-            console.log("Finalizing task with value:", taskValue);
 
-            // Mint 2% of task value to DAO treasury (this creates the 2% annual inflation)
+            // Mint 2% of task value to DAO treasury (this creates the 2% growth)
             // This goes directly to DAO, NOT to the distribution pot
             uint256 mintAmount = (taskValue * MINT_PERCENTAGE) / SHARE_DENOMINATOR;
-            roseToken.mint(daoTreasury, mintAmount);
-            console.log("Minted to DAO:", mintAmount);
+            IRoseToken(address(roseToken)).mint(daoTreasury, mintAmount);
+            emit TokensMinted(daoTreasury, mintAmount);
 
             // Total pot = customer deposit ONLY (minted tokens already went to DAO)
             uint256 totalPot = taskValue;
-            console.log("Total distribution pot:", totalPot);
 
             // Calculate distributions from the pot
             uint256 workerAmount = (totalPot * WORKER_SHARE) / SHARE_DENOMINATOR;
             uint256 stakeholderFee = (totalPot * STAKEHOLDER_SHARE) / SHARE_DENOMINATOR;
-
-            console.log("Worker amount:", workerAmount);
-            console.log("Stakeholder fee:", stakeholderFee);
 
             // Update state before external calls (checks-effects-interactions pattern)
             t.deposit = 0;
@@ -367,15 +331,12 @@ contract RoseMarketplace is ReentrancyGuard {
             t.stakeholderDeposit = 0;
 
             // Transfer to worker (from customer's deposit) using SafeERC20
-            IERC20(address(roseToken)).safeTransfer(t.worker, workerAmount);
+            roseToken.safeTransfer(t.worker, workerAmount);
             emit PaymentReleased(_taskId, t.worker, workerAmount);
 
             // Return stakeholder's stake + their fee using SafeERC20
             uint256 stakeholderTotal = stakeholderDepositCache + stakeholderFee;
-            console.log("Stakeholder total:", stakeholderTotal);
-            console.log("Stake returned:", stakeholderDepositCache);
-            console.log("Stakeholder fee:", stakeholderFee);
-            IERC20(address(roseToken)).safeTransfer(t.stakeholder, stakeholderTotal);
+            roseToken.safeTransfer(t.stakeholder, stakeholderTotal);
         }
     }
 
@@ -393,6 +354,9 @@ contract RoseMarketplace is ReentrancyGuard {
             t.stakeholder == msg.sender
         );
     }
+}
 
-
+// ============ Interface for RoseToken mint ============
+interface IRoseToken {
+    function mint(address to, uint256 amount) external;
 }

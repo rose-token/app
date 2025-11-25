@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 /**
@@ -55,24 +55,35 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     // ============ Slippage Protection ============
     uint256 public maxSlippageBps = 100; // 1% default
 
+    // ============ Oracle Staleness ============
+    uint256 public constant MAX_ORACLE_STALENESS = 1 hours;
+
     // ============ Marketplace Integration ============
     address public marketplace;
 
     // ============ Events ============
     event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted);
     event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut);
-    event Rebalanced(uint256 btcValue, uint256 ethValue, uint256 goldValue, uint256 usdcValue);
+    event Rebalanced(
+        uint256 btcValue,
+        uint256 ethValue,
+        uint256 goldValue,
+        uint256 usdcValue,
+        uint256 treasuryRoseBalance
+    );
     event AllocationUpdated(uint256 btc, uint256 eth, uint256 gold, uint256 usdc);
     event RoseSpent(address indexed to, uint256 amount, string reason);
     event MarketplaceUpdated(address indexed newMarketplace);
 
     // ============ Errors ============
     error InvalidPrice();
+    error StaleOracle();
     error InsufficientLiquidity();
     error SlippageExceeded();
     error InvalidAllocation();
     error ZeroAmount();
     error ZeroAddress();
+    error InsufficientBuffer();
 
     constructor(
         address _roseToken,
@@ -240,20 +251,23 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     // ============ Price Feed Functions ============
 
     function getBTCPrice() public view returns (uint256) {
-        (, int256 price,,,) = btcUsdFeed.latestRoundData();
+        (, int256 price, , uint256 updatedAt, ) = btcUsdFeed.latestRoundData();
         if (price <= 0) revert InvalidPrice();
+        if (block.timestamp - updatedAt > MAX_ORACLE_STALENESS) revert StaleOracle();
         return uint256(price);
     }
 
     function getETHPrice() public view returns (uint256) {
-        (, int256 price,,,) = ethUsdFeed.latestRoundData();
+        (, int256 price, , uint256 updatedAt, ) = ethUsdFeed.latestRoundData();
         if (price <= 0) revert InvalidPrice();
+        if (block.timestamp - updatedAt > MAX_ORACLE_STALENESS) revert StaleOracle();
         return uint256(price);
     }
 
     function getGoldPrice() public view returns (uint256) {
-        (, int256 price,,,) = xauUsdFeed.latestRoundData();
+        (, int256 price, , uint256 updatedAt, ) = xauUsdFeed.latestRoundData();
         if (price <= 0) revert InvalidPrice();
+        if (block.timestamp - updatedAt > MAX_ORACLE_STALENESS) revert StaleOracle();
         return uint256(price);
     }
 
@@ -261,14 +275,27 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
 
     /**
      * @dev Convert asset balance to USD value (6 decimals)
+     * Uses intermediate scaling to prevent overflow on large balances
      */
     function _getAssetValueUSD(
         uint256 balance,
         uint256 priceUSD, // 8 decimals from Chainlink
         uint8 assetDecimals
     ) internal pure returns (uint256) {
-        // balance (assetDecimals) * price (8 decimals) / 10^(assetDecimals + 8 - 6)
-        return (balance * priceUSD) / (10 ** (assetDecimals + CHAINLINK_DECIMALS - USDC_DECIMALS));
+        // Scale down large balances first to prevent overflow
+        // Max safe value before overflow: 2^256 / (balance * price)
+        
+        if (assetDecimals >= 18) {
+            // For 18 decimal assets (ETH, PAXG): scale down first
+            // balance (18 dec) / 1e12 = balance (6 dec)
+            // then multiply by price (8 dec), divide by 1e8
+            uint256 scaledBalance = balance / 1e12;
+            return (scaledBalance * priceUSD) / (10 ** CHAINLINK_DECIMALS);
+        } else {
+            // For 8 decimal assets (WBTC): direct calculation is safe
+            // balance (8 dec) * price (8 dec) / 1e10 = value (6 dec)
+            return (balance * priceUSD) / (10 ** (assetDecimals + CHAINLINK_DECIMALS - USDC_DECIMALS));
+        }
     }
 
     /**
@@ -421,7 +448,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
         uint256 balance = roseToken.balanceOf(address(this));
         if (balance < _amount) revert InsufficientLiquidity();
         
-        roseToken.transfer(_to, _amount);
+        roseToken.safeTransfer(_to, _amount);
         
         emit RoseSpent(_to, _amount, _reason);
     }
@@ -461,46 +488,63 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
         uint256 targetBTC = (vaultTotal * allocBTC) / ALLOC_DENOMINATOR;
         uint256 targetETH = (vaultTotal * allocETH) / ALLOC_DENOMINATOR;
         uint256 targetGold = (vaultTotal * allocGold) / ALLOC_DENOMINATOR;
+        uint256 targetUSDC = (vaultTotal * allocUSDC) / ALLOC_DENOMINATOR;
         
         uint256 currentBTC = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
         uint256 currentETH = _getAssetValueUSD(weth.balanceOf(address(this)), getETHPrice(), WETH_DECIMALS);
         uint256 currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
 
-        // Sell overweight assets
+        // Phase 1: Sell overweight assets to USDC
         if (currentBTC > targetBTC) {
             uint256 diff = currentBTC - targetBTC;
             uint256 btcToSell = (wbtc.balanceOf(address(this)) * diff) / currentBTC;
-            _swapAssetToUSDC(address(wbtc), btcToSell);
+            if (btcToSell > 0) _swapAssetToUSDC(address(wbtc), btcToSell);
         }
         if (currentETH > targetETH) {
             uint256 diff = currentETH - targetETH;
             uint256 ethToSell = (weth.balanceOf(address(this)) * diff) / currentETH;
-            _swapAssetToUSDC(address(weth), ethToSell);
+            if (ethToSell > 0) _swapAssetToUSDC(address(weth), ethToSell);
         }
         if (currentGold > targetGold) {
             uint256 diff = currentGold - targetGold;
             uint256 goldToSell = (paxg.balanceOf(address(this)) * diff) / currentGold;
-            _swapAssetToUSDC(address(paxg), goldToSell);
+            if (goldToSell > 0) _swapAssetToUSDC(address(paxg), goldToSell);
         }
 
-        // Buy underweight assets
+        // Phase 2: Buy underweight assets (only if USDC buffer is sufficient)
         uint256 usdcBalance = usdc.balanceOf(address(this));
-        uint256 targetUSDC = (vaultTotal * allocUSDC) / ALLOC_DENOMINATOR;
+        uint256 minBuffer = (vaultTotal * 500) / ALLOC_DENOMINATOR; // 5% minimum buffer
         
-        if (usdcBalance > targetUSDC) {
+        if (usdcBalance > targetUSDC && usdcBalance > minBuffer) {
             uint256 excess = usdcBalance - targetUSDC;
             
-            if (currentBTC < targetBTC) {
-                uint256 buyAmount = (excess * (targetBTC - currentBTC)) / (targetBTC + targetETH + targetGold - currentBTC - currentETH - currentGold);
-                if (buyAmount > 0) _swapUSDCToAsset(address(wbtc), buyAmount);
-            }
-            if (currentETH < targetETH) {
-                uint256 buyAmount = (excess * (targetETH - currentETH)) / (targetBTC + targetETH + targetGold - currentBTC - currentETH - currentGold);
-                if (buyAmount > 0) _swapUSDCToAsset(address(weth), buyAmount);
-            }
-            if (currentGold < targetGold) {
-                uint256 buyAmount = (excess * (targetGold - currentGold)) / (targetBTC + targetETH + targetGold - currentBTC - currentETH - currentGold);
-                if (buyAmount > 0) _swapUSDCToAsset(address(paxg), buyAmount);
+            // Recalculate current values after sells
+            currentBTC = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+            currentETH = _getAssetValueUSD(weth.balanceOf(address(this)), getETHPrice(), WETH_DECIMALS);
+            currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
+            
+            uint256 totalUnderweight = 0;
+            if (currentBTC < targetBTC) totalUnderweight += targetBTC - currentBTC;
+            if (currentETH < targetETH) totalUnderweight += targetETH - currentETH;
+            if (currentGold < targetGold) totalUnderweight += targetGold - currentGold;
+            
+            if (totalUnderweight > 0) {
+                // Cap excess to not go below minimum buffer
+                uint256 maxSpend = usdcBalance - minBuffer;
+                if (excess > maxSpend) excess = maxSpend;
+                
+                if (currentBTC < targetBTC) {
+                    uint256 buyAmount = (excess * (targetBTC - currentBTC)) / totalUnderweight;
+                    if (buyAmount > 0) _swapUSDCToAsset(address(wbtc), buyAmount);
+                }
+                if (currentETH < targetETH) {
+                    uint256 buyAmount = (excess * (targetETH - currentETH)) / totalUnderweight;
+                    if (buyAmount > 0) _swapUSDCToAsset(address(weth), buyAmount);
+                }
+                if (currentGold < targetGold) {
+                    uint256 buyAmount = (excess * (targetGold - currentGold)) / totalUnderweight;
+                    if (buyAmount > 0) _swapUSDCToAsset(address(paxg), buyAmount);
+                }
             }
         }
 
@@ -508,7 +552,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
             _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS),
             _getAssetValueUSD(weth.balanceOf(address(this)), getETHPrice(), WETH_DECIMALS),
             _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS),
-            usdc.balanceOf(address(this))
+            usdc.balanceOf(address(this)),
+            roseToken.balanceOf(address(this))
         );
     }
 
