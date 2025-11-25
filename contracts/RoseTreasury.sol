@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 /**
@@ -213,11 +213,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      */
     function circulatingSupply() public view returns (uint256) {
         uint256 total = roseToken.totalSupply();
+
+        // If no tokens exist, return 0 to trigger initial price in rosePrice()
+        if (total == 0) return 0;
+
         uint256 treasuryHeld = roseToken.balanceOf(address(this));
-        
+
         // Safety check: if treasury somehow holds more than total (shouldn't happen)
         if (treasuryHeld >= total) return 1; // Avoid division by zero
-        
+
         return total - treasuryHeld;
     }
 
