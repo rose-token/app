@@ -84,6 +84,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     error ZeroAmount();
     error ZeroAddress();
     error InsufficientBuffer();
+    error InsufficientBalance();
 
     constructor(
         address _roseToken,
@@ -123,6 +124,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      */
     function deposit(uint256 usdcAmount) external nonReentrant {
         if (usdcAmount == 0) revert ZeroAmount();
+        if (usdc.balanceOf(msg.sender) < usdcAmount) revert InsufficientBalance();
 
         // Calculate ROSE to mint BEFORE transferring USDC
         // This ensures price is based on vault value before the deposit

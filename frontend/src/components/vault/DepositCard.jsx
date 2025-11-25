@@ -89,6 +89,12 @@ const DepositCard = ({
   const handleDeposit = async () => {
     if (!usdcAddress || !treasuryAddress || amountInWei <= 0n) return;
 
+    // Validate balance before submitting transaction
+    if (usdcBalanceRaw !== undefined && amountInWei > usdcBalanceRaw) {
+      setError('Insufficient USDC balance');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -138,6 +144,8 @@ const DepositCard = ({
       console.error('❌ Deposit error:', err);
       if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
+      } else if (err.message.includes('InsufficientBalance')) {
+        setError('Insufficient USDC balance');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Deposit failed');
