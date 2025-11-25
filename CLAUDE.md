@@ -31,14 +31,16 @@ npm test                  # Run Vitest tests
 
 ## Contract Architecture
 
-**3 core contracts + 1 mock (in contracts/):**
+**3 core contracts + 3 mocks (in contracts/):**
 
 | Contract | Lines | Purpose |
 |----------|-------|---------|
 | RoseToken.sol | 167 | ERC20 with authorized mint/burn (multiple authorized addresses) |
 | RoseMarketplace.sol | 362 | Task lifecycle, escrow, payment distribution |
 | RoseTreasury.sol | 589 | RWA-backed treasury (BTC/ETH/Gold/USDC via Chainlink + Uniswap) |
-| MockERC20.sol | 38 | Test utility |
+| mocks/MockERC20.sol | 38 | ERC20 test utility with public mint |
+| mocks/MockV3Aggregator.sol | 50 | Chainlink price feed mock for testing |
+| mocks/MockUniswapV3Router.sol | 70 | Uniswap V3 swap router mock for testing |
 
 **Key architectural decisions:**
 - RoseMarketplace accepts existing RoseToken address (not self-deployed)
@@ -50,6 +52,7 @@ npm test                  # Run Vitest tests
 2. Deploy RoseTreasury with RoseToken address
 3. Deploy RoseMarketplace with RoseToken and Treasury addresses
 4. Authorize Treasury on RoseToken via `setAuthorized()`
+5. Authorize Marketplace on RoseToken via `setAuthorized()`
 
 ## Task Status Flow
 
@@ -85,6 +88,20 @@ test/TaskLifecycleEdgeCases.test.js  # 167 lines - Edge cases, error conditions
 test/DetailedDescription.test.js     # 100 lines - IPFS integration
 ```
 
+## Test Infrastructure
+
+Tests use mock contracts to simulate external dependencies:
+
+- **MockV3Aggregator**: Simulates Chainlink price feeds (BTC/USD, ETH/USD, XAU/USD)
+- **MockUniswapV3Router**: Simulates Uniswap V3 swaps with configurable exchange rates
+- **MockERC20**: Standard ERC20 with public mint for USDC, WBTC, WETH, PAXG
+
+**Token acquisition in tests:** Tests obtain ROSE tokens via Treasury deposit flow (not direct minting):
+1. Mint USDC to user
+2. Approve Treasury to spend USDC
+3. Call `roseTreasury.deposit(usdcAmount)`
+4. Treasury diversifies into RWA and mints equivalent ROSE
+
 ## CI/CD Workflows
 
 **pr-build.yml:** Runs on PRs (parallel jobs)
@@ -116,6 +133,7 @@ VITE_PINATA_JWT=...
 ## Key Technical Details
 
 - **Solidity version:** 0.8.20 (contracts use OpenZeppelin v5)
+- **Chainlink contracts:** v1.5.0 (import path: `@chainlink/contracts/src/v0.8/shared/interfaces/`)
 - **Optimizer:** enabled with 1 run + viaIR
 - **Network:** Sepolia testnet (chainId: 11155111)
 - **Frontend bundler:** Vite 7.x (not webpack/CRA)
@@ -131,3 +149,10 @@ git push -u origin feature/description
 gh pr create --title "feat: ..." --body "..."
 gh pr checks --watch  # Monitor CI
 ```
+
+## Bug Fixes Applied
+
+**RoseTreasury.circulatingSupply() initial state bug (fixed):**
+- Issue: When total supply is 0, function returned 1 instead of 0
+- Impact: Caused `rosePrice()` to return 0 instead of initial $1 price
+- Fix: Added `if (total == 0) return 0;` check at start of function
