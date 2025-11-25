@@ -148,6 +148,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      */
     function redeem(uint256 roseAmount) external nonReentrant {
         if (roseAmount == 0) revert ZeroAmount();
+        if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
 
         // Calculate USDC owed
         uint256 usdcOwed = calculateUsdcForRedemption(roseAmount);

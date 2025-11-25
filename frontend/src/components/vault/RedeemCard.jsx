@@ -76,6 +76,12 @@ const RedeemCard = ({
   const handleRedeem = async () => {
     if (!tokenAddress || !treasuryAddress || amountInWei <= 0n) return;
 
+    // Validate balance before submitting transaction
+    if (roseBalanceRaw !== undefined && amountInWei > roseBalanceRaw) {
+      setError('Insufficient ROSE balance');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -125,11 +131,13 @@ const RedeemCard = ({
       console.error('❌ Redeem error:', err);
       if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
+      } else if (err.message.includes('InsufficientBalance')) {
+        setError('Insufficient ROSE balance');
+      } else if (err.message.includes('InsufficientLiquidity')) {
+        setError('Insufficient liquidity in vault');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Redemption failed');
-      } else if (err.message.includes('InsufficientLiquidity')) {
-        setError('Insufficient liquidity in vault');
       } else {
         setError('Redemption failed. Please try again.');
       }
