@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
@@ -38,8 +38,7 @@ const DepositCard = ({
   const { writeContractAsync } = useWriteContract();
 
   const [amount, setAmount] = useState('');
-  const [isApproving, setIsApproving] = useState(false);
-  const [isDepositing, setIsDepositing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   // Calculate ROSE amount to receive
@@ -90,47 +89,36 @@ const DepositCard = ({
     }
   };
 
-  const handleApprove = async () => {
-    if (!usdcAddress || !treasuryAddress) return;
-
-    setIsApproving(true);
-    setError('');
-
-    try {
-      const hash = await writeContractAsync({
-        address: usdcAddress,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [treasuryAddress, amountInWei],
-        ...SEPOLIA_GAS_SETTINGS,
-      });
-
-      await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      console.error('Approval error:', err);
-      if (err.message.includes('User rejected')) {
-        setError('Transaction rejected');
-      } else {
-        setError('Approval failed. Please try again.');
-      }
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
   const handleDeposit = async () => {
-    if (!treasuryAddress || amountInWei <= 0n) return;
+    if (!usdcAddress || !treasuryAddress || amountInWei <= 0n) return;
 
-    setIsDepositing(true);
+    setIsSubmitting(true);
     setError('');
 
     try {
-      const hash = await writeContractAsync({
+      // Step 1: Approve if needed
+      if (needsApproval) {
+        console.log('⛽ Approving USDC transfer...');
+        const approveHash = await writeContractAsync({
+          address: usdcAddress,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [treasuryAddress, amountInWei],
+          ...SEPOLIA_GAS_SETTINGS,
+        });
+
+        console.log('✅ Approval transaction sent:', approveHash);
+        console.log('⏳ Waiting for approval confirmation...');
+
+        await publicClient.waitForTransactionReceipt({
+          hash: approveHash,
+          confirmations: 1,
+        });
+      }
+
+      // Step 2: Deposit
+      console.log('⛽ Depositing USDC...');
+      const depositHash = await writeContractAsync({
         address: treasuryAddress,
         abi: RoseTreasuryABI,
         functionName: 'deposit',
@@ -138,17 +126,21 @@ const DepositCard = ({
         ...SEPOLIA_GAS_SETTINGS,
       });
 
+      console.log('✅ Deposit transaction sent:', depositHash);
+      console.log('⏳ Waiting for deposit confirmation...');
+
       await publicClient.waitForTransactionReceipt({
-        hash,
+        hash: depositHash,
         confirmations: 1,
       });
 
+      console.log('🎉 Deposit completed successfully!');
       setAmount('');
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error('Deposit error:', err);
-      if (err.message.includes('User rejected')) {
-        setError('Transaction rejected');
+      console.error('❌ Deposit error:', err);
+      if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+        setError('Transaction rejected. Please approve the transaction to continue.');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Deposit failed');
@@ -156,13 +148,11 @@ const DepositCard = ({
         setError('Deposit failed. Please try again.');
       }
     } finally {
-      setIsDepositing(false);
+      setIsSubmitting(false);
     }
   };
 
-  const isLoading = isApproving || isDepositing;
-  const canDeposit = amountInWei > 0n && !validationError && !needsApproval && !isLoading;
-  const canApprove = amountInWei > 0n && !validationError && needsApproval && !isLoading;
+  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -180,12 +170,12 @@ const DepositCard = ({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full px-3 py-2 pr-16 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground disabled:opacity-50"
             />
             <button
               onClick={handleMaxClick}
-              disabled={isLoading || !usdcBalance}
+              disabled={isSubmitting || !usdcBalance}
               className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
             >
               MAX
@@ -223,50 +213,25 @@ const DepositCard = ({
           </div>
         )}
 
-        {/* Buttons */}
-        <div className="space-y-2">
-          {needsApproval && (
-            <button
-              onClick={handleApprove}
-              disabled={!canApprove}
-              className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-                canApprove
-                  ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90'
-                  : 'bg-muted text-foreground cursor-not-allowed'
-              }`}
-            >
-              {isApproving ? (
-                <span className="flex items-center justify-center">
-                  <span className="animate-pulse mr-2">...</span>
-                  Approving USDC
-                </span>
-              ) : (
-                'Approve USDC'
-              )}
-            </button>
+        {/* Button */}
+        <button
+          onClick={handleDeposit}
+          disabled={!canDeposit}
+          className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
+            canDeposit
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-muted text-foreground cursor-not-allowed'
+          }`}
+        >
+          {isSubmitting ? (
+            <span className="flex items-center justify-center">
+              <span className="animate-pulse mr-2">...</span>
+              {needsApproval ? 'Approving & Depositing...' : 'Depositing...'}
+            </span>
+          ) : (
+            'Deposit'
           )}
-
-          <button
-            onClick={handleDeposit}
-            disabled={!canDeposit}
-            className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-              canDeposit
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'bg-muted text-foreground cursor-not-allowed'
-            }`}
-          >
-            {isDepositing ? (
-              <span className="flex items-center justify-center">
-                <span className="animate-pulse mr-2">...</span>
-                Depositing
-              </span>
-            ) : needsApproval ? (
-              'Deposit (Approval Required)'
-            ) : (
-              'Deposit'
-            )}
-          </button>
-        </div>
+        </button>
       </div>
     </div>
   );
