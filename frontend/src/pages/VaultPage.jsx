@@ -44,7 +44,7 @@ const VaultPage = () => {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground">Vault</h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-foreground mt-1">
           Deposit USDC to mint ROSE. Redeem ROSE for USDC. Real asset backing.
         </p>
       </div>
@@ -103,7 +103,7 @@ const VaultPage = () => {
       {/* How it works section */}
       <div className="mt-6 bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold text-foreground mb-3">How it works</h3>
-        <div className="space-y-2 text-sm text-muted-foreground">
+        <div className="space-y-2 text-sm text-foreground">
           <p>
             <span className="font-medium text-foreground">Deposit:</span> Send USDC to the vault and receive ROSE tokens at the current exchange rate. The vault automatically diversifies your deposit into BTC, ETH, Gold, and USDC.
           </p>

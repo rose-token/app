@@ -81,7 +81,7 @@ async function main() {
     console.log("Mock USDC deployed to:", addresses.usdc);
 
     // Mint 10k USDC to deployer for treasury seeding
-    const mintAmount = hre.ethers.parseUnits("10000", 6); // 10,000 USDC
+    const mintAmount = hre.ethers.parseUnits("20000", 6); // 10,000 USDC
     await mockUsdc.mint(deployer.address, mintAmount);
     console.log("Minted 10,000 USDC to deployer ✓");
 
