@@ -4,11 +4,19 @@ const { ethers } = require("hardhat");
 describe("RoseMarketplace", function () {
   let roseMarketplace;
   let roseToken;
+  let roseTreasury;
+  let usdc;
+  let wbtc;
+  let weth;
+  let paxg;
+  let btcFeed;
+  let ethFeed;
+  let xauFeed;
+  let swapRouter;
   let owner;
   let customer;
   let worker;
   let stakeholder;
-  let daoTreasury;
   let burnAddress;
 
   // New tokenomics: 95% worker / 5% stakeholder (from customer deposit pot), 2% DAO (minted separately)
@@ -23,24 +31,100 @@ describe("RoseMarketplace", function () {
   // Test GitHub PR URL
   const testPrUrl = "https://github.com/test/repo/pull/123";
 
+  // Helper function to get ROSE tokens via Treasury deposit
+  async function getRoseTokens(user, usdcAmount) {
+    await usdc.mint(user.address, usdcAmount);
+    await usdc.connect(user).approve(await roseTreasury.getAddress(), usdcAmount);
+    await roseTreasury.connect(user).deposit(usdcAmount);
+  }
+
   beforeEach(async function () {
-    [owner, customer, worker, stakeholder, daoTreasury] = await ethers.getSigners();
+    [owner, customer, worker, stakeholder] = await ethers.getSigners();
     burnAddress = "0x000000000000000000000000000000000000dEaD";
 
-    const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
-    roseMarketplace = await RoseMarketplace.deploy(daoTreasury.address);
-    await roseMarketplace.waitForDeployment();
+    // 1. Deploy mock tokens
+    const MockERC20 = await ethers.getContractFactory("MockERC20");
+    usdc = await MockERC20.deploy("USD Coin", "USDC", 6);
+    wbtc = await MockERC20.deploy("Wrapped BTC", "WBTC", 8);
+    weth = await MockERC20.deploy("Wrapped ETH", "WETH", 18);
+    paxg = await MockERC20.deploy("Pax Gold", "PAXG", 18);
 
-    const roseTokenAddress = await roseMarketplace.roseToken();
-    roseToken = await ethers.getContractAt("RoseToken", roseTokenAddress);
+    // 2. Deploy RoseToken (owner is initial authorized)
+    const RoseToken = await ethers.getContractFactory("RoseToken");
+    roseToken = await RoseToken.deploy(owner.address);
+
+    // 3. Deploy mock Chainlink price feeds (8 decimals)
+    const MockV3Aggregator = await ethers.getContractFactory("MockV3Aggregator");
+    btcFeed = await MockV3Aggregator.deploy(8, 4300000000000n);  // $43,000
+    ethFeed = await MockV3Aggregator.deploy(8, 230000000000n);   // $2,300
+    xauFeed = await MockV3Aggregator.deploy(8, 200000000000n);   // $2,000
+
+    // 4. Deploy mock Uniswap router
+    const MockUniswapV3Router = await ethers.getContractFactory("MockUniswapV3Router");
+    swapRouter = await MockUniswapV3Router.deploy();
+
+    // 5. Set token decimals on router
+    await swapRouter.setTokenDecimals(await usdc.getAddress(), 6);
+    await swapRouter.setTokenDecimals(await wbtc.getAddress(), 8);
+    await swapRouter.setTokenDecimals(await weth.getAddress(), 18);
+    await swapRouter.setTokenDecimals(await paxg.getAddress(), 18);
+
+    // 6. Set exchange rates on router (based on mock prices)
+    // Formula: amountOut = (amountIn * rate) / 1e18
+    // BTC = $43,000: For 1 USDC (1e6), we want 1/43000 BTC (in 8 dec) = 1e8/43000 ≈ 2326
+    // rate = 2326 * 1e18 / 1e6 = 2.326e15
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await wbtc.getAddress(), 2326n * 10n**12n);
+    // ETH = $2,300: For 1 USDC (1e6), we want 1/2300 ETH (in 18 dec) = 1e18/2300 ≈ 4.35e14
+    // rate = 4.35e14 * 1e18 / 1e6 = 4.35e26
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await weth.getAddress(), 435n * 10n**24n);
+    // Gold = $2,000: For 1 USDC (1e6), we want 1/2000 PAXG (in 18 dec) = 1e18/2000 = 5e14
+    // rate = 5e14 * 1e18 / 1e6 = 5e26
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await paxg.getAddress(), 5n * 10n**26n);
+
+    // 7. Fund router with tokens for swaps (plenty of liquidity)
+    await wbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
+    await weth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
+    await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
+
+    // 7. Deploy RoseTreasury
+    const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
+    roseTreasury = await RoseTreasury.deploy(
+      await roseToken.getAddress(),
+      await usdc.getAddress(),
+      await wbtc.getAddress(),
+      await weth.getAddress(),
+      await paxg.getAddress(),
+      await btcFeed.getAddress(),
+      await ethFeed.getAddress(),
+      await xauFeed.getAddress(),
+      await swapRouter.getAddress()
+    );
+
+    // 8. Deploy RoseMarketplace (Treasury is the DAO treasury)
+    const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
+    roseMarketplace = await RoseMarketplace.deploy(
+      await roseToken.getAddress(),
+      await roseTreasury.getAddress()
+    );
+
+    // 9. Authorize Treasury and Marketplace on RoseToken
+    await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
+    await roseToken.setAuthorized(await roseMarketplace.getAddress(), true);
+
+    // 10. Get ROSE tokens via Treasury deposit
+    // Deposit enough USDC to get plenty of ROSE for tests
+    // Initial price is $1, so 100,000 USDC -> 100,000 ROSE
+    const depositAmount = ethers.parseUnits("100000", 6); // 100,000 USDC
+    await getRoseTokens(customer, depositAmount);
+    await getRoseTokens(stakeholder, depositAmount);
   });
 
   describe("Deployment", function () {
     it("Should set the correct DAO treasury address", async function () {
-      expect(await roseMarketplace.daoTreasury()).to.equal(daoTreasury.address);
+      expect(await roseMarketplace.daoTreasury()).to.equal(await roseTreasury.getAddress());
     });
 
-    it("Should deploy RoseToken with marketplace as authorized", async function () {
+    it("Should have marketplace authorized on RoseToken", async function () {
       expect(await roseToken.authorized(await roseMarketplace.getAddress())).to.equal(true);
     });
 
@@ -54,9 +138,6 @@ describe("RoseMarketplace", function () {
     const taskDeposit = ethers.parseEther("1");
 
     it("Should allow customers to create tasks", async function () {
-      // Transfer tokens from DAO treasury (which received 10,000 ROSE on deployment)
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
 
       await expect(
@@ -79,8 +160,6 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should revert if deposit is zero", async function () {
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
 
       await expect(
@@ -89,8 +168,6 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should revert if title is empty", async function () {
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
 
       await expect(
@@ -99,8 +176,6 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should revert if detailed description hash is empty", async function () {
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
 
       await expect(
@@ -115,12 +190,9 @@ describe("RoseMarketplace", function () {
     const taskDeposit = ethers.parseEther("1");
 
     beforeEach(async function () {
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
-      
+
       const stakeholderDeposit = taskDeposit / 10n;
       await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
@@ -165,7 +237,7 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
-      
+
       let task = await roseMarketplace.tasks(1);
       expect(task.customerApproval).to.equal(true);
       expect(task.status).to.equal(3); // Still Completed, not Closed yet
@@ -179,13 +251,13 @@ describe("RoseMarketplace", function () {
       expect(task.status).to.equal(5); // TaskStatus.ApprovedPendingPayment
       expect(task.deposit).to.equal(taskDeposit); // Deposit should still be in contract
     });
-    
+
     it("Should allow stakeholder and customer approvals and mark task ready for payment (stakeholder first)", async function () {
       await roseMarketplace.connect(worker).claimTask(1);
       await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
-      
+
       let task = await roseMarketplace.tasks(1);
       expect(task.stakeholderApproval).to.equal(true);
       expect(task.status).to.equal(3); // Still Completed, not ready for payment yet
@@ -237,7 +309,7 @@ describe("RoseMarketplace", function () {
 
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
       const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
-      const treasuryBalanceBefore = await roseToken.balanceOf(daoTreasury.address);
+      const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
 
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
       await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
@@ -255,7 +327,7 @@ describe("RoseMarketplace", function () {
       // Verify distributions
       expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + workerAmount);
       expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderBalanceBefore + stakeholderTotal);
-      expect(await roseToken.balanceOf(daoTreasury.address)).to.equal(treasuryBalanceBefore + mintAmount);
+      expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
     });
 
     it("Should allow worker to unclaim a task", async function () {
@@ -277,7 +349,7 @@ describe("RoseMarketplace", function () {
     });
 
     it("Should allow another worker to claim after unclaim", async function () {
-      const [, , , , , otherWorker] = await ethers.getSigners();
+      const [, , , , otherWorker] = await ethers.getSigners();
 
       // First worker claims
       await roseMarketplace.connect(worker).claimTask(1);
@@ -346,7 +418,6 @@ describe("RoseMarketplace", function () {
 
     it("Should allow customer to cancel task in StakeholderRequired status", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -369,9 +440,6 @@ describe("RoseMarketplace", function () {
 
     it("Should allow customer to cancel task in Open status (after stakeholder stakes)", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -403,9 +471,6 @@ describe("RoseMarketplace", function () {
 
     it("Should allow stakeholder to cancel task in Open status", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -435,7 +500,6 @@ describe("RoseMarketplace", function () {
 
     it("Should refund customer deposit when cancelled", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -451,9 +515,6 @@ describe("RoseMarketplace", function () {
 
     it("Should refund both customer and stakeholder when cancelled after staking", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -477,9 +538,6 @@ describe("RoseMarketplace", function () {
 
     it("Should NOT allow cancellation if worker has claimed", async function () {
       // Setup task with stakeholder
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -502,7 +560,6 @@ describe("RoseMarketplace", function () {
 
     it("Should NOT allow cancellation by random address", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -514,7 +571,6 @@ describe("RoseMarketplace", function () {
 
     it("Should NOT allow cancellation if task is already closed", async function () {
       // Customer creates a task
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -529,7 +585,6 @@ describe("RoseMarketplace", function () {
 
     it("Should emit TaskCancelled event with correct parameters", async function () {
       // Test 1: Cancellation before stakeholder stakes
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
@@ -538,9 +593,6 @@ describe("RoseMarketplace", function () {
         .withArgs(1, customer.address, taskDeposit, 0);
 
       // Test 2: Cancellation after stakeholder stakes
-      await roseToken.connect(daoTreasury).transfer(customer.address, taskDeposit * 10n);
-      await roseToken.connect(daoTreasury).transfer(stakeholder.address, taskDeposit);
-
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
 
