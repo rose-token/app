@@ -23,8 +23,8 @@ describe("RoseToken", function () {
       expect(await roseToken.decimals()).to.equal(18);
     });
 
-    it("Should set the correct minter", async function () {
-      expect(await roseToken.minter()).to.equal(minter.address);
+    it("Should set the correct authorized address", async function () {
+      expect(await roseToken.authorized(minter.address)).to.equal(true);
     });
 
     it("Should start with zero total supply", async function () {
@@ -42,20 +42,20 @@ describe("RoseToken", function () {
       expect(await roseToken.balanceOf(user1.address)).to.equal(mintAmount);
     });
 
-    it("Should revert if non-minter tries to mint tokens", async function () {
+    it("Should revert if non-authorized address tries to mint tokens", async function () {
       const mintAmount = ethers.parseEther("100");
-      
+
       await expect(
         roseToken.connect(user1).mint(user2.address, mintAmount)
-      ).to.be.revertedWith("Not authorized to mint");
+      ).to.be.revertedWithCustomError(roseToken, "NotAuthorized");
     });
 
     it("Should revert if minting to zero address", async function () {
       const mintAmount = ethers.parseEther("100");
-      
+
       await expect(
         roseToken.connect(minter).mint(ethers.ZeroAddress, mintAmount)
-      ).to.be.revertedWith("Cannot mint to zero address");
+      ).to.be.revertedWithCustomError(roseToken, "ZeroAddress");
     });
   });
 
@@ -76,18 +76,18 @@ describe("RoseToken", function () {
 
     it("Should revert if transferring more than balance", async function () {
       const transferAmount = ethers.parseEther("150"); // More than user1 has
-      
+
       await expect(
         roseToken.connect(user1).transfer(user2.address, transferAmount)
-      ).to.be.revertedWith("Insufficient balance");
+      ).to.be.revertedWithCustomError(roseToken, "InsufficientBalance");
     });
 
     it("Should revert if transferring to zero address", async function () {
       const transferAmount = ethers.parseEther("50");
-      
+
       await expect(
         roseToken.connect(user1).transfer(ethers.ZeroAddress, transferAmount)
-      ).to.be.revertedWith("Cannot transfer to zero address");
+      ).to.be.revertedWithCustomError(roseToken, "ZeroAddress");
     });
   });
 
@@ -119,12 +119,12 @@ describe("RoseToken", function () {
     it("Should revert transferFrom with insufficient allowance", async function () {
       const approveAmount = ethers.parseEther("50");
       const transferAmount = ethers.parseEther("60");
-      
+
       await roseToken.connect(user1).approve(user2.address, approveAmount);
-      
+
       await expect(
         roseToken.connect(user2).transferFrom(user1.address, user2.address, transferAmount)
-      ).to.be.revertedWith("Insufficient allowance");
+      ).to.be.revertedWithCustomError(roseToken, "InsufficientAllowance");
     });
   });
 });

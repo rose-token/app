@@ -52,10 +52,10 @@ describe("Task Lifecycle Edge Cases", function () {
     ).to.be.reverted; // Token transfer will fail  
   });  
   
-  it("Should not allow a non-minter to mint tokens", async function() {  
-    await expect(  
-      roseToken.connect(customer).mint(customer.address, ethers.parseEther("1"))  
-    ).to.be.revertedWith("Not authorized to mint");  
+  it("Should not allow a non-authorized address to mint tokens", async function() {
+    await expect(
+      roseToken.connect(customer).mint(customer.address, ethers.parseEther("1"))
+    ).to.be.revertedWithCustomError(roseToken, "NotAuthorized");
   });  
   
   it("Should not allow customer to claim their own task", async function() {
