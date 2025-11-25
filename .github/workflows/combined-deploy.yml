@@ -9,6 +9,10 @@ on:
         description: 'Deploy to Sepolia and GitHub Pages'
         required: true
         default: 'true'
+      seed_amount:
+        description: 'USDC amount to seed treasury (testnet only)'
+        required: false
+        default: '1'
 
 # Add permissions for both contract deployment and GitHub Pages
 permissions:
@@ -55,6 +59,14 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: npx hardhat run scripts/deploy.js --network sepolia
       
+      - name: Seed Treasury
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        env:
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          SEED_AMOUNT: ${{ github.event.inputs.seed_amount || '10000' }}
+        run: npx hardhat run scripts/seed-treasury.js --network sepolia
+      
       # Add a delay to ensure contracts are propagated before verification
       - name: Wait for contract propagation
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -70,63 +82,67 @@ jobs:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: |
           # Get contract addresses from deployment output
-          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
           TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
-          REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
-          GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
-          DAO_TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.daoTreasuryAddress')
+          TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.treasuryAddress')
+          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
           
-          # Verify contracts on Etherscan (continue on error for each)
-          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS $DAO_TREASURY_ADDRESS || echo "Marketplace verification failed or already verified"
-          npx hardhat verify --network sepolia $TOKEN_ADDRESS $MARKETPLACE_ADDRESS || echo "Token verification failed or already verified"
-          npx hardhat verify --network sepolia $REPUTATION_ADDRESS || echo "Reputation verification failed or already verified"
-          npx hardhat verify --network sepolia $GOVERNANCE_ADDRESS $TOKEN_ADDRESS $REPUTATION_ADDRESS $MARKETPLACE_ADDRESS "10000000000000000000" || echo "Governance verification failed or already verified"
+          # Get external addresses for constructor args
+          USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
+          WBTC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.wbtc')
+          WETH_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.weth')
+          PAXG_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.paxg')
+          BTC_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.btcUsdFeed')
+          ETH_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.ethUsdFeed')
+          XAU_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.xauUsdFeed')
+          SWAP_ROUTER=$(cat deployment-output.json | jq -r '.externalAddresses.swapRouter')
+          DEPLOYER=$(cat deployment-output.json | jq -r '.deployer')
           
-          # Get additional contract addresses for verification
-          TOKEN_STAKING_ADDRESS=$(cat deployment-output.json | jq -r '.tokenStakingAddress')
-          STAKEHOLDER_REGISTRY_ADDRESS=$(cat deployment-output.json | jq -r '.stakeholderRegistryAddress')
-          BID_EVALUATION_MANAGER_ADDRESS=$(cat deployment-output.json | jq -r '.bidEvaluationManagerAddress')
+          echo "Verifying contracts..."
+          echo "Token: $TOKEN_ADDRESS"
+          echo "Treasury: $TREASURY_ADDRESS"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
           
-          # Verify additional contracts (continue on error for each)
-          npx hardhat verify --network sepolia $STAKEHOLDER_REGISTRY_ADDRESS $TOKEN_ADDRESS $REPUTATION_ADDRESS || echo "StakeholderRegistry verification failed or already verified"
-          npx hardhat verify --network sepolia $TOKEN_STAKING_ADDRESS $TOKEN_ADDRESS $STAKEHOLDER_REGISTRY_ADDRESS $DAO_TREASURY_ADDRESS || echo "TokenStaking verification failed or already verified"
-          npx hardhat verify --network sepolia $BID_EVALUATION_MANAGER_ADDRESS $TOKEN_STAKING_ADDRESS $MARKETPLACE_ADDRESS || echo "BidEvaluationManager verification failed or already verified"
+          # Verify RoseToken (constructor: address _initialAuthorized)
+          npx hardhat verify --network sepolia $TOKEN_ADDRESS $DEPLOYER || echo "Token verification failed or already verified"
+          
+          # Verify RoseTreasury (constructor: roseToken, usdc, wbtc, weth, paxg, btcFeed, ethFeed, xauFeed, swapRouter)
+          npx hardhat verify --network sepolia $TREASURY_ADDRESS \
+            $TOKEN_ADDRESS \
+            $USDC_ADDRESS \
+            $WBTC_ADDRESS \
+            $WETH_ADDRESS \
+            $PAXG_ADDRESS \
+            $BTC_FEED \
+            $ETH_FEED \
+            $XAU_FEED \
+            $SWAP_ROUTER || echo "Treasury verification failed or already verified"
+          
+          # Verify RoseMarketplace (constructor: roseToken, daoTreasury)
+          npx hardhat verify --network sepolia $MARKETPLACE_ADDRESS $TOKEN_ADDRESS $TREASURY_ADDRESS || echo "Marketplace verification failed or already verified"
       
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         run: |
           # Get contract addresses from deployment output
-          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
           TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
-          REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
-          GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
-          DAO_TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.daoTreasuryAddress')
-          TOKEN_STAKING_ADDRESS=$(cat deployment-output.json | jq -r '.tokenStakingAddress')
-          STAKEHOLDER_REGISTRY_ADDRESS=$(cat deployment-output.json | jq -r '.stakeholderRegistryAddress')
-          BID_EVALUATION_MANAGER_ADDRESS=$(cat deployment-output.json | jq -r '.bidEvaluationManagerAddress')
+          TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.treasuryAddress')
+          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
+          USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
           
           echo "Saving contract addresses for frontend deployment"
-          echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Token: $TOKEN_ADDRESS"
-          echo "Reputation: $REPUTATION_ADDRESS"
-          echo "Governance: $GOVERNANCE_ADDRESS"
-          echo "DAO Treasury: $DAO_TREASURY_ADDRESS"
-          echo "Token Staking: $TOKEN_STAKING_ADDRESS"
-          echo "Stakeholder Registry: $STAKEHOLDER_REGISTRY_ADDRESS"
-          echo "Bid Evaluation Manager: $BID_EVALUATION_MANAGER_ADDRESS"
+          echo "Treasury: $TREASURY_ADDRESS"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
+          echo "USDC: $USDC_ADDRESS"
           
           # Save as environment variables for the next job
-          echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
           echo "TOKEN_ADDRESS=$TOKEN_ADDRESS" >> $GITHUB_ENV
-          echo "REPUTATION_ADDRESS=$REPUTATION_ADDRESS" >> $GITHUB_ENV
-          echo "GOVERNANCE_ADDRESS=$GOVERNANCE_ADDRESS" >> $GITHUB_ENV
-          echo "DAO_TREASURY_ADDRESS=$DAO_TREASURY_ADDRESS" >> $GITHUB_ENV
-          echo "TOKEN_STAKING_ADDRESS=$TOKEN_STAKING_ADDRESS" >> $GITHUB_ENV
-          echo "STAKEHOLDER_REGISTRY_ADDRESS=$STAKEHOLDER_REGISTRY_ADDRESS" >> $GITHUB_ENV
-          echo "BID_EVALUATION_MANAGER_ADDRESS=$BID_EVALUATION_MANAGER_ADDRESS" >> $GITHUB_ENV
+          echo "TREASURY_ADDRESS=$TREASURY_ADDRESS" >> $GITHUB_ENV
+          echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
+          echo "USDC_ADDRESS=$USDC_ADDRESS" >> $GITHUB_ENV
           
           # Create a JSON file with contract addresses for artifact passing
-          echo "{\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"tokenAddress\":\"$TOKEN_ADDRESS\",\"reputationAddress\":\"$REPUTATION_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"daoTreasuryAddress\":\"$DAO_TREASURY_ADDRESS\",\"tokenStakingAddress\":\"$TOKEN_STAKING_ADDRESS\",\"stakeholderRegistryAddress\":\"$STAKEHOLDER_REGISTRY_ADDRESS\",\"bidEvaluationManagerAddress\":\"$BID_EVALUATION_MANAGER_ADDRESS\"}" > contract-addresses.json
+          echo "{\"tokenAddress\":\"$TOKEN_ADDRESS\",\"treasuryAddress\":\"$TREASURY_ADDRESS\",\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"usdcAddress\":\"$USDC_ADDRESS\"}" > contract-addresses.json
       
       - name: Upload Contract Addresses Artifact
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -135,6 +151,14 @@ jobs:
           name: contract-addresses
           path: contract-addresses.json
           retention-days: 1
+      
+      - name: Upload Deployment Output
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-output
+          path: deployment-output.json
+          retention-days: 30
 
   # Second job: Deploy frontend to GitHub Pages
   deploy-frontend:
@@ -167,34 +191,22 @@ jobs:
         id: extract_addresses
         run: |
           # Read contract addresses from artifact
-          MARKETPLACE_ADDRESS=$(cat contract-addresses.json | jq -r '.marketplaceAddress')
           TOKEN_ADDRESS=$(cat contract-addresses.json | jq -r '.tokenAddress')
-          REPUTATION_ADDRESS=$(cat contract-addresses.json | jq -r '.reputationAddress')
-          GOVERNANCE_ADDRESS=$(cat contract-addresses.json | jq -r '.governanceAddress')
-          DAO_TREASURY_ADDRESS=$(cat contract-addresses.json | jq -r '.daoTreasuryAddress')
-          TOKEN_STAKING_ADDRESS=$(cat contract-addresses.json | jq -r '.tokenStakingAddress')
-          STAKEHOLDER_REGISTRY_ADDRESS=$(cat contract-addresses.json | jq -r '.stakeholderRegistryAddress')
-          BID_EVALUATION_MANAGER_ADDRESS=$(cat contract-addresses.json | jq -r '.bidEvaluationManagerAddress')
+          TREASURY_ADDRESS=$(cat contract-addresses.json | jq -r '.treasuryAddress')
+          MARKETPLACE_ADDRESS=$(cat contract-addresses.json | jq -r '.marketplaceAddress')
+          USDC_ADDRESS=$(cat contract-addresses.json | jq -r '.usdcAddress')
           
           # Set outputs for use in next steps
-          echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
           echo "TOKEN_ADDRESS=$TOKEN_ADDRESS" >> $GITHUB_ENV
-          echo "REPUTATION_ADDRESS=$REPUTATION_ADDRESS" >> $GITHUB_ENV
-          echo "GOVERNANCE_ADDRESS=$GOVERNANCE_ADDRESS" >> $GITHUB_ENV
-          echo "DAO_TREASURY_ADDRESS=$DAO_TREASURY_ADDRESS" >> $GITHUB_ENV
-          echo "TOKEN_STAKING_ADDRESS=$TOKEN_STAKING_ADDRESS" >> $GITHUB_ENV
-          echo "STAKEHOLDER_REGISTRY_ADDRESS=$STAKEHOLDER_REGISTRY_ADDRESS" >> $GITHUB_ENV
-          echo "BID_EVALUATION_MANAGER_ADDRESS=$BID_EVALUATION_MANAGER_ADDRESS" >> $GITHUB_ENV
+          echo "TREASURY_ADDRESS=$TREASURY_ADDRESS" >> $GITHUB_ENV
+          echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
+          echo "USDC_ADDRESS=$USDC_ADDRESS" >> $GITHUB_ENV
           
           echo "Using contract addresses from artifact:"
-          echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Token: $TOKEN_ADDRESS"
-          echo "Reputation: $REPUTATION_ADDRESS"
-          echo "Governance: $GOVERNANCE_ADDRESS"
-          echo "DAO Treasury: $DAO_TREASURY_ADDRESS"
-          echo "Token Staking: $TOKEN_STAKING_ADDRESS"
-          echo "Stakeholder Registry: $STAKEHOLDER_REGISTRY_ADDRESS"
-          echo "Bid Evaluation Manager: $BID_EVALUATION_MANAGER_ADDRESS"
+          echo "Treasury: $TREASURY_ADDRESS"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
+          echo "USDC: $USDC_ADDRESS"
       
       - name: Set Build Version
         run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
@@ -209,14 +221,10 @@ jobs:
         run: cd frontend && npm run build
         env:
           SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
-          VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
           VITE_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
-          VITE_REPUTATION_ADDRESS: ${{ env.REPUTATION_ADDRESS }}
-          VITE_GOVERNANCE_ADDRESS: ${{ env.GOVERNANCE_ADDRESS }}
-          VITE_DAO_TREASURY_ADDRESS: ${{ env.DAO_TREASURY_ADDRESS }}
-          VITE_TOKEN_STAKING_ADDRESS: ${{ env.TOKEN_STAKING_ADDRESS }}
-          VITE_STAKEHOLDER_REGISTRY_ADDRESS: ${{ env.STAKEHOLDER_REGISTRY_ADDRESS }}
-          VITE_BID_EVALUATION_MANAGER_ADDRESS: ${{ env.BID_EVALUATION_MANAGER_ADDRESS }}
+          VITE_TREASURY_ADDRESS: ${{ env.TREASURY_ADDRESS }}
+          VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
+          VITE_USDC_ADDRESS: ${{ env.USDC_ADDRESS }}
           VITE_BUILD_VERSION: ${{ env.BUILD_VERSION }}
           VITE_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
           VITE_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}

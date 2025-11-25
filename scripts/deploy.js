@@ -14,19 +14,28 @@ const MAINNET = {
   swapRouter: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
 };
 
-// Sepolia testnet addresses (some may need mocks)
+// Sepolia testnet addresses
+// NOTE: For testnet, we run in USDC-only mode (no RWA diversification)
 const SEPOLIA = {
-  // Sepolia has limited token deployments - these are examples/mocks
   usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle's Sepolia USDC
-  wbtc: "0x0000000000000000000000000000000000000000", // Need mock
   weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", // Sepolia WETH
-  paxg: "0x0000000000000000000000000000000000000000", // Need mock
+  // These don't exist on Sepolia - we'll deploy mocks or skip
+  wbtc: null, // Will deploy mock
+  paxg: null, // Will deploy mock
   // Chainlink Sepolia feeds
   btcUsdFeed: "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
   ethUsdFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",
   xauUsdFeed: "0xC5981F461d74c46eB4b0CF3f4Ec79f025573B0Ea", // XAU/USD Sepolia
   swapRouter: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Uniswap V3 Sepolia
 };
+
+// Simple mock ERC20 for testnet
+const MOCK_TOKEN_ABI = [
+  "constructor(string name, string symbol, uint8 decimals)",
+  "function mint(address to, uint256 amount) external",
+  "function balanceOf(address) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+];
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
@@ -43,15 +52,49 @@ async function main() {
 
   // Select addresses based on network
   let addresses;
+  let isTestnet = false;
+  
   if (chainId === 1) {
     addresses = MAINNET;
     console.log("Using MAINNET addresses");
   } else if (chainId === 11155111) {
-    addresses = SEPOLIA;
-    console.log("Using SEPOLIA addresses");
+    addresses = { ...SEPOLIA };
+    isTestnet = true;
+    console.log("Using SEPOLIA addresses (testnet mode)");
   } else {
-    console.log("Unknown network - using SEPOLIA addresses as default");
-    addresses = SEPOLIA;
+    addresses = { ...SEPOLIA };
+    isTestnet = true;
+    console.log("Unknown network - using SEPOLIA addresses as default (testnet mode)");
+  }
+
+  // ============ Step 0: Deploy Mock Tokens (Testnet Only) ============
+  if (isTestnet) {
+    console.log("\n--- Step 0: Deploying Mock Tokens (Testnet) ---");
+    
+    const MockToken = await hre.ethers.getContractFactory("MockERC20");
+    
+    // Deploy mock USDC for testnet (so we can mint for testing)
+    // Circle's USDC exists but doesn't have public mint
+    const mockUsdc = await MockToken.deploy("Mock USDC", "USDC", 6);
+    await mockUsdc.waitForDeployment();
+    addresses.usdc = await mockUsdc.getAddress();
+    console.log("Mock USDC deployed to:", addresses.usdc);
+    
+    // Deploy mock WBTC if needed
+    if (!addresses.wbtc) {
+      const mockWbtc = await MockToken.deploy("Mock WBTC", "WBTC", 8);
+      await mockWbtc.waitForDeployment();
+      addresses.wbtc = await mockWbtc.getAddress();
+      console.log("Mock WBTC deployed to:", addresses.wbtc);
+    }
+    
+    // Deploy mock PAXG if needed
+    if (!addresses.paxg) {
+      const mockPaxg = await MockToken.deploy("Mock PAXG", "PAXG", 18);
+      await mockPaxg.waitForDeployment();
+      addresses.paxg = await mockPaxg.getAddress();
+      console.log("Mock PAXG deployed to:", addresses.paxg);
+    }
   }
 
   // ============ Step 1: Deploy RoseToken ============
@@ -111,6 +154,14 @@ async function main() {
   await setMarketplaceTx.wait();
   console.log("Marketplace set in Treasury ✓");
 
+  // For testnet, set allocation to 100% USDC (no DEX swaps needed)
+  if (isTestnet) {
+    console.log("Setting testnet allocation (100% USDC)...");
+    const setAllocTx = await roseTreasury.setAllocation(0, 0, 0, 10000); // 0% BTC, 0% ETH, 0% Gold, 100% USDC
+    await setAllocTx.wait();
+    console.log("Testnet allocation set to 100% USDC ✓");
+  }
+
   // ============ Step 5: Initial mint to Treasury ============
   console.log("\n--- Step 5: Initial ROSE mint to Treasury ---");
   const initialMint = hre.ethers.parseEther("10000"); // 10,000 ROSE
@@ -138,12 +189,17 @@ async function main() {
   const deploymentOutput = {
     network: network.name,
     chainId: chainId,
+    isTestnet: isTestnet,
     deployer: deployer.address,
     contracts: {
       roseToken: roseTokenAddress,
       roseTreasury: treasuryAddress,
       roseMarketplace: marketplaceAddress,
     },
+    // Legacy field names for backward compatibility with frontend
+    tokenAddress: roseTokenAddress,
+    treasuryAddress: treasuryAddress,
+    marketplaceAddress: marketplaceAddress,
     externalAddresses: addresses,
     timestamp: new Date().toISOString(),
   };
