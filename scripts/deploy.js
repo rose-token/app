@@ -170,7 +170,7 @@ async function main() {
   // For testnet, set allocation to 100% USDC (no DEX swaps needed)
   if (isTestnet) {
     console.log("Setting testnet allocation (100% USDC)...");
-    const setAllocTx = await roseTreasury.setAllocation(0, 0, 0, 10000); // 0% BTC, 0% ETH, 0% Gold, 100% USDC
+    const setAllocTx = await roseTreasury.setAllocation(4000, 0, 4000, 2000); // 0% BTC, 0% ETH, 0% Gold, 100% USDC
     await setAllocTx.wait();
     console.log("Testnet allocation set to 100% USDC ✓");
   }
