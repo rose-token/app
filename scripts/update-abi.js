@@ -3,7 +3,7 @@ const path = require('path');
 
 const marketplaceArtifact = require('../artifacts/contracts/RoseMarketplace.sol/RoseMarketplace.json');
 const tokenArtifact = require('../artifacts/contracts/RoseToken.sol/RoseToken.json');
-const treasuryArtifact = require('../artifacts/contracts/RoseToken.sol/RoseTreasury.json');
+const treasuryArtifact = require('../artifacts/contracts/RoseTreasury.sol/RoseTreasury.json');
 
 const targetDir = path.join(__dirname, '../frontend/src/contracts');
 
