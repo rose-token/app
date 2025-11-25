@@ -139,6 +139,7 @@ const DepositCard = ({
 
       console.log('🎉 Deposit completed successfully!');
       setAmount('');
+      setIsSubmitting(false);
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error('❌ Deposit error:', err);
