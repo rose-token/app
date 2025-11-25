@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 
 // Standard ERC20 ABI for approve
@@ -16,6 +16,12 @@ const ERC20_ABI = [
     type: 'function',
   },
 ];
+
+const SEPOLIA_GAS_SETTINGS = {
+  gas: 500_000n,
+  maxFeePerGas: parseGwei('0.1'),
+  maxPriorityFeePerGas: parseGwei('0.05'),
+};
 
 const DepositCard = ({
   usdcBalance,
@@ -96,6 +102,7 @@ const DepositCard = ({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [treasuryAddress, amountInWei],
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -128,6 +135,7 @@ const DepositCard = ({
         abi: RoseTreasuryABI,
         functionName: 'deposit',
         args: [amountInWei],
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({

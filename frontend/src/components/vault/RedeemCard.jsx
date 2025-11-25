@@ -1,8 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+
+const SEPOLIA_GAS_SETTINGS = {
+  gas: 500_000n,
+  maxFeePerGas: parseGwei('0.1'),
+  maxPriorityFeePerGas: parseGwei('0.05'),
+};
 
 const RedeemCard = ({
   roseBalance,
@@ -83,6 +89,7 @@ const RedeemCard = ({
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [treasuryAddress, amountInWei],
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -115,6 +122,7 @@ const RedeemCard = ({
         abi: RoseTreasuryABI,
         functionName: 'redeem',
         args: [amountInWei],
+        ...SEPOLIA_GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
