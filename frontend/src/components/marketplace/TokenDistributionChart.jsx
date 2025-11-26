@@ -59,7 +59,7 @@ const TokenDistributionChart = () => {
       <div
         className="p-5 rounded-xl"
         style={{
-          background: 'rgba(251, 191, 36, 0.08)',
+          background: 'rgba(212, 175, 140, 0.05)',
           border: '1px solid rgba(251, 191, 36, 0.25)'
         }}
       >
