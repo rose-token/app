@@ -148,12 +148,12 @@ async function main() {
 
     // Set exchange rates to match mock aggregator prices
     // Formula: amountOut = (amountIn * rate) / 1e18
-    // BTC @ $60,000: For 1 USDC (1e6), get 1/60000 BTC (8 dec) → rate = 1667 * 10^12
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1667n * 10n**12n);
-    // ETH @ $3,000: For 1 USDC (1e6), get 1/3000 rETH (18 dec) → rate = 333 * 10^24
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333n * 10n**24n);
-    // Gold @ $2,000: For 1 USDC (1e6), get 1/2000 PAXG (18 dec) → rate = 5 * 10^26
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 5n * 10n**26n);
+    // BTC @ $60,000: 1e8 / 60000 * 1e12 = 1666666666666666
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1666666666666666n);
+    // ETH @ $3,000: 1e18 / 3000 * 1e6 = 333333333333333333333
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333333333333333333333n);
+    // Gold @ $2,000: 1e18 / 2000 * 1e6 = 500000000000000000000
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000n);
     console.log("Exchange rates configured on mock router ✓");
 
     // Fund the mock router with tokens for swaps
