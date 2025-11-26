@@ -5,7 +5,7 @@ import TasksPage from './pages/TasksPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
 import VaultPage from './pages/VaultPage';
-import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmi.config';
@@ -34,11 +34,12 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
           modalSize="compact"
-          theme={lightTheme({
-            accentColor: '#B1452C', // Deep Rose from theme
-            accentColorForeground: '#F6E8D5', // Cream from theme
+          theme={darkTheme({
+            accentColor: '#d4af8c',
+            accentColorForeground: '#1a1a1f',
             borderRadius: 'medium',
             fontStack: 'system',
+            overlayBlur: 'small',
           })}
         >
           <ProfileProvider>

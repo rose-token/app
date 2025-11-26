@@ -126,10 +126,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-5 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-5 task-card-hover"
       style={{
         background: 'var(--bg-card)',
-        border: '1px solid var(--border-subtle)',
         boxShadow: 'var(--shadow-card)'
       }}
     >
@@ -147,69 +146,74 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       {/* Detailed Description Section */}
       <div className="mb-5">
-        <div
-          className="rounded-xl p-4"
-          style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)' }}
-        >
-          {!showDetails ? (
-            <button
-              onClick={loadDetailedDescription}
-              disabled={isLoadingDetails}
-              className="text-sm font-medium flex items-center transition-colors"
-              style={{ color: 'var(--rose-pink)' }}
-            >
-              {isLoadingDetails ? (
-                <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Loading details...
-                </>
-              ) : (
-                <>
-                  <span className="mr-2">📄</span>
-                  View Detailed Description
-                </>
-              )}
-            </button>
-          ) : (
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Detailed Description</h4>
-                <button
-                  onClick={() => setShowDetails(false)}
-                  className="text-xs transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Hide
-                </button>
-              </div>
-              {detailedContent && (
-                <div
-                  className="text-sm whitespace-pre-wrap p-4 rounded-lg"
-                  style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
-                >
-                  {detailedContent.description}
-                  {detailedContent.uploadedAt && (
-                    <p
-                      className="text-xs mt-3 pt-3"
-                      style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
-                    >
-                      Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              )}
+        {!showDetails ? (
+          <button
+            onClick={loadDetailedDescription}
+            disabled={isLoadingDetails}
+            className="flex items-center gap-2 text-sm font-medium transition-all duration-200 hover:bg-[rgba(212,165,165,0.2)] hover:border-[var(--rose-pink)]"
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--rose-pink-muted)',
+              border: '1px solid rgba(212, 165, 165, 0.2)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--rose-pink-light)',
+              cursor: isLoadingDetails ? 'wait' : 'pointer'
+            }}
+          >
+            {isLoadingDetails ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                Loading details...
+              </>
+            ) : (
+              <>
+                <span>📄</span>
+                View Detailed Description
+              </>
+            )}
+          </button>
+        ) : (
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)' }}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Detailed Description</h4>
+              <button
+                onClick={() => setShowDetails(false)}
+                className="text-xs transition-colors hover:text-[var(--rose-pink)]"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Hide
+              </button>
             </div>
-          )}
-          {detailsError && (
-            <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>{detailsError}</p>
-          )}
-        </div>
+            {detailedContent && (
+              <div
+                className="text-sm whitespace-pre-wrap p-4 rounded-lg"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+              >
+                {detailedContent.description}
+                {detailedContent.uploadedAt && (
+                  <p
+                    className="text-xs mt-3 pt-3"
+                    style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                  >
+                    Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {detailsError && (
+          <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>{detailsError}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-5 mb-5">
         <div>
           <p style={labelStyle}>Customer</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: 'var(--text-primary)' }}>{task.customer}</p>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: 'var(--text-secondary)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>{task.customer}</p>
         </div>
         <div>
           <p style={labelStyle}>Deposit</p>
@@ -217,13 +221,13 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         </div>
         <div>
           <p style={labelStyle}>Worker</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: task.worker ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: task.worker ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>
             {task.worker || 'Not assigned'}
           </p>
         </div>
         <div>
           <p style={labelStyle}>Stakeholder</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: task.stakeholder ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: task.stakeholder ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>
             {task.stakeholder || 'Not assigned'}
           </p>
         </div>

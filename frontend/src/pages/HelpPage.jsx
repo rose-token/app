@@ -167,16 +167,26 @@ const HelpPage = () => {
   };
 
   const CollapsibleSection = ({ id, title, children }) => (
-    <div className="mb-6 border rounded-lg overflow-hidden">
-      <button 
+    <div
+      className="mb-6 rounded-[20px] overflow-hidden"
+      style={{
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <button
         onClick={() => toggleSection(id)}
-        className="w-full p-4 text-left font-bold bg-primary text-primary-foreground flex justify-between items-center"
+        className="w-full p-4 text-left font-bold flex justify-between items-center transition-all duration-200"
+        style={{
+          background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+          color: 'var(--bg-primary)'
+        }}
       >
         {title}
         <span>{expandedSections[id] ? '−' : '+'}</span>
       </button>
       {expandedSections[id] && (
-        <div className="p-4 bg-white">
+        <div className="p-4" style={{ background: 'var(--bg-card)' }}>
           {children}
         </div>
       )}
@@ -410,11 +420,11 @@ const HelpPage = () => {
           <p className="mt-4">
             The token distribution follows this model for each completed and validated task:
           </p>
-          <div className="my-4 p-4 bg-gray-100 rounded-md">
-            <ul className="list-none space-y-2">
-              <li>🔹 <strong>95%</strong> to the Worker who completed the task</li>
-              <li>🔹 <strong>5%</strong> to the Stakeholder who validated the work</li>
-              <li>🔹 <strong>2%</strong> to the DAO Treasury for community governance</li>
+          <div className="my-4 p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+            <ul className="list-none space-y-2" style={{ color: 'var(--text-secondary)' }}>
+              <li>🔹 <strong style={{ color: 'var(--text-primary)' }}>95%</strong> to the Worker who completed the task</li>
+              <li>🔹 <strong style={{ color: 'var(--text-primary)' }}>5%</strong> to the Stakeholder who validated the work</li>
+              <li>🔹 <strong style={{ color: 'var(--text-primary)' }}>2%</strong> to the DAO Treasury for community governance</li>
             </ul>
           </div>
             
@@ -485,10 +495,10 @@ const HelpPage = () => {
           <div className="mb-4">
             <h3 className="text-xl font-semibold mb-3">Wallet Connection Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: MetaMask not connecting</h4>
-                <p className="mt-2">Try these steps:</p>
-                <ol className="list-decimal pl-5 mt-2">
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: MetaMask not connecting</h4>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Try these steps:</p>
+                <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Ensure MetaMask is installed and unlocked</li>
                   <li>Refresh the page and try connecting again</li>
                   <li>Check if you're on the correct network (Hoodi or Sepolia)</li>
@@ -496,11 +506,11 @@ const HelpPage = () => {
                   <li>Try using a different browser</li>
                 </ol>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: Wrong network showing</h4>
-                <p className="mt-2">Our platform supports Hoodi (recommended) and Sepolia testnets. To switch networks:</p>
-                <ol className="list-decimal pl-5 mt-2">
+
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Wrong network showing</h4>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform supports Hoodi (recommended) and Sepolia testnets. To switch networks:</p>
+                <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Click the network dropdown in MetaMask</li>
                   <li>Select "Hoodi Testnet" or "Sepolia Test Network"</li>
                   <li>If not visible, go to MetaMask Settings {'->'} Networks {'->'} Add Network</li>
@@ -514,24 +524,24 @@ const HelpPage = () => {
           <div className="mb-4">
             <h3 className="text-xl font-semibold mb-3">Transaction Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: Transaction pending for too long</h4>
-                <ol className="list-decimal pl-5 mt-2">
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Transaction pending for too long</h4>
+                <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Check Sepolia gas prices and ensure you've set an appropriate gas fee</li>
                   <li>In MetaMask, you can speed up the transaction by clicking on the pending transaction and selecting "Speed Up"</li>
                   <li>Alternatively, you can cancel the transaction and try again</li>
                 </ol>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: Transaction failed</h4>
-                <p className="mt-2">Common reasons for failure:</p>
-                <ul className="list-disc pl-5 mt-2">
+
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Transaction failed</h4>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Common reasons for failure:</p>
+                <ul className="list-disc pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Insufficient ETH for gas</li>
                   <li>Contract error (check the specific error message)</li>
                   <li>Network congestion</li>
                 </ul>
-                <p className="mt-2">Try increasing your gas limit or waiting for network conditions to improve.</p>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Try increasing your gas limit or waiting for network conditions to improve.</p>
               </div>
             </div>
           </div>
@@ -539,21 +549,21 @@ const HelpPage = () => {
           <div>
             <h3 className="text-xl font-semibold mb-3">Task-Related Issues</h3>
             <div className="space-y-4">
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: Can't claim a task</h4>
-                <p className="mt-2">Possible reasons:</p>
-                <ul className="list-disc pl-5 mt-2">
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Can't claim a task</h4>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Possible reasons:</p>
+                <ul className="list-disc pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>The task has already been claimed by another worker</li>
                   <li>The task deadline has passed</li>
                   <li>You're already working on too many tasks</li>
                   <li>You don't meet task requirements (if implemented)</li>
                 </ul>
               </div>
-                
-              <div className="p-4 bg-gray-100 rounded-md">
-                <h4 className="font-bold">Problem: Submitted work not being validated</h4>
-                <p className="mt-2">Validation can take time depending on stakeholder availability. If it's been more than 72 hours:</p>
-                <ol className="list-decimal pl-5 mt-2">
+
+              <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Submitted work not being validated</h4>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Validation can take time depending on stakeholder availability. If it's been more than 72 hours:</p>
+                <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Check if there are any comments from stakeholders requesting additional information</li>
                   <li>Reach out on our community channels for assistance</li>
                   <li>If persistent, a dispute resolution process can be initiated</li>
@@ -637,76 +647,84 @@ const HelpPage = () => {
           
           {/* Error and success messages */}
           {bugError && (
-            <div className="p-3 bg-red-100 text-red-700 rounded-md">
+            <div className="p-3 rounded-xl" style={{ background: 'var(--error-bg)', border: '1px solid rgba(248, 113, 113, 0.3)', color: 'var(--error)' }}>
               {bugError}
             </div>
           )}
-          
+
           {bugSuccess && (
-            <div className="p-3 bg-green-100 text-green-700 rounded-md">
+            <div className="p-3 rounded-xl" style={{ background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)', color: 'var(--success)' }}>
               {bugSuccess}
             </div>
           )}
           
           {/* Submit Bug Report Section */}
-          <div className="border-t pt-6">
+          <div className="pt-6" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <h3 className="text-xl font-semibold mb-4">Submit a Bug Report</h3>
             <form onSubmit={handleBugSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title <span className="text-red-500">*</span>
+                <label className="block text-xs uppercase tracking-widest font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Title <span style={{ color: 'var(--error)' }}>*</span>
                 </label>
                 <input
                   type="text"
                   value={bugTitle}
                   onChange={(e) => setBugTitle(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md"
+                  className="w-full p-3 rounded-xl"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   placeholder="Brief description of the issue"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description <span className="text-red-500">*</span>
+                <label className="block text-xs uppercase tracking-widest font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Description <span style={{ color: 'var(--error)' }}>*</span>
                 </label>
                 <textarea
                   value={bugDescription}
                   onChange={(e) => setBugDescription(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  className="w-full p-3 rounded-xl h-24"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   placeholder="Detailed description of the bug"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs uppercase tracking-widest font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
                   Steps to Reproduce
                 </label>
                 <textarea
                   value={bugSteps}
                   onChange={(e) => setBugSteps(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md h-24"
+                  className="w-full p-3 rounded-xl h-24"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   placeholder="1. Go to...&#10;2. Click on...&#10;3. See error..."
                 />
               </div>
-              
+
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-primary text-white py-2 px-4 rounded-md hover:bg-opacity-90 disabled:opacity-50"
+                className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50"
+                style={{
+                  background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                  color: 'var(--bg-primary)',
+                  boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                }}
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Bug Report'}
               </button>
             </form>
-            
+
             {submittedCid && (
-              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+              <div className="mt-4 p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid rgba(96, 165, 250, 0.3)', color: 'var(--info)' }}>
                 <p>Your bug report has been stored on IPFS.</p>
                 <p className="text-sm mt-1">
                   <strong>CID:</strong> {submittedCid}
                 </p>
-                <p className="text-xs mt-2">
+                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
                   Save this CID to reference your bug report later.
                 </p>
               </div>
@@ -714,28 +732,30 @@ const HelpPage = () => {
           </div>
           
           {/* View Submitted Reports Section */}
-          <div className="border-t pt-6">
+          <div className="pt-6" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <h3 className="text-xl font-semibold mb-4">Your Submitted Bug Reports</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* List of reports */}
-              <div className="md:col-span-1 border-r pr-4">
+              <div className="md:col-span-1 pr-4" style={{ borderRight: '1px solid var(--border-subtle)' }}>
                 {bugReports.length === 0 ? (
-                  <p className="text-gray-500">No bug reports submitted yet.</p>
+                  <p style={{ color: 'var(--text-muted)' }}>No bug reports submitted yet.</p>
                 ) : (
                   <ul className="space-y-2">
                     {bugReports.map((report) => (
-                      <li 
+                      <li
                         key={report.cid}
-                        className={`p-3 rounded-md cursor-pointer hover:bg-gray-50 ${
-                          selectedReport?.cid === report.cid ? 'bg-blue-50 border border-blue-200' : 'border border-gray-200'
-                        }`}
+                        className="p-3 rounded-xl cursor-pointer transition-all duration-200"
+                        style={{
+                          background: selectedReport?.cid === report.cid ? 'var(--info-bg)' : 'rgba(255, 255, 255, 0.02)',
+                          border: selectedReport?.cid === report.cid ? '1px solid rgba(96, 165, 250, 0.3)' : '1px solid var(--border-subtle)'
+                        }}
                         onClick={() => fetchReportDetails(report.cid)}
                       >
-                        <h4 className="font-medium text-gray-900 truncate">{report.title}</h4>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <h4 className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{report.title}</h4>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                           {formatDate(report.timestamp)}
                         </p>
-                        <p className="text-xs text-gray-400 mt-1 truncate">
+                        <p className="text-xs mt-1 truncate" style={{ color: 'var(--text-muted)' }}>
                           CID: {report.cid}
                         </p>
                       </li>
@@ -743,42 +763,42 @@ const HelpPage = () => {
                   </ul>
                 )}
               </div>
-              
+
               {/* Report details */}
               <div className="md:col-span-2 pl-4">
                 {isLoadingReport ? (
                   <div className="flex justify-center items-center h-40">
-                    <p>Loading report details...</p>
+                    <p style={{ color: 'var(--text-secondary)' }}>Loading report details...</p>
                   </div>
                 ) : selectedReport ? (
                   <div>
-                    <h4 className="text-lg font-semibold">{selectedReport.title}</h4>
-                    <p className="text-sm text-gray-500 mb-4">
+                    <h4 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedReport.title}</h4>
+                    <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
                       Submitted on {formatDate(selectedReport.timestamp)}
                     </p>
-                    
+
                     <div className="mb-4">
-                      <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
-                      <div className="p-3 bg-gray-50 rounded-md">
-                        <p className="whitespace-pre-wrap">{selectedReport.description}</p>
+                      <h5 className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Description</h5>
+                      <div className="p-3 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                        <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{selectedReport.description}</p>
                       </div>
                     </div>
-                    
+
                     {selectedReport.steps && (
                       <div className="mb-4">
-                        <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
-                        <div className="p-3 bg-gray-50 rounded-md">
-                          <p className="whitespace-pre-wrap">{selectedReport.steps}</p>
+                        <h5 className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Steps to Reproduce</h5>
+                        <div className="p-3 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                          <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{selectedReport.steps}</p>
                         </div>
                       </div>
                     )}
-                    
-                    <div className="mt-4 text-xs text-gray-500">
+
+                    <div className="mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
                       <p>IPFS Content Identifier (CID): {selectedReport.cid}</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-center items-center h-40 text-gray-500">
+                  <div className="flex justify-center items-center h-40" style={{ color: 'var(--text-muted)' }}>
                     <p>Select a report to view details</p>
                   </div>
                 )}
@@ -787,12 +807,12 @@ const HelpPage = () => {
           </div>
           
           {/* Look Up Report by CID Section */}
-          <div className="border-t pt-6">
+          <div className="pt-6" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <h3 className="text-xl font-semibold mb-4">Look Up Bug Report by CID</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
               If you have a CID from a previously submitted bug report, you can look it up here.
             </p>
-            
+
             <form onSubmit={handleLookupReport} className="mb-6">
               <div className="flex flex-col md:flex-row gap-2">
                 <input
@@ -800,52 +820,58 @@ const HelpPage = () => {
                   value={lookupCid}
                   onChange={(e) => setLookupCid(e.target.value)}
                   placeholder="Enter IPFS Content Identifier (CID)"
-                  className="flex-grow p-2 border border-gray-300 rounded-md"
+                  className="flex-grow p-3 rounded-xl"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={isLookingUp}
-                  className="bg-primary text-white py-2 px-4 rounded-md hover:bg-opacity-90 disabled:opacity-50"
+                  className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                    color: 'var(--bg-primary)',
+                    boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                  }}
                 >
                   {isLookingUp ? 'Looking up...' : 'Look Up Report'}
                 </button>
               </div>
             </form>
-            
+
             {isLookingUp ? (
               <div className="flex justify-center items-center h-40">
-                <p>Loading report details...</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Loading report details...</p>
               </div>
             ) : lookupReport ? (
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h4 className="text-lg font-semibold">{lookupReport.title}</h4>
-                <p className="text-sm text-gray-500 mb-4">
+              <div className="rounded-xl p-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                <h4 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{lookupReport.title}</h4>
+                <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
                   Submitted on {formatDate(lookupReport.timestamp)}
                 </p>
-                
+
                 <div className="mb-4">
-                  <h5 className="text-sm font-medium text-gray-700 mb-1">Description</h5>
-                  <div className="p-3 bg-gray-50 rounded-md">
-                    <p className="whitespace-pre-wrap">{lookupReport.description}</p>
+                  <h5 className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Description</h5>
+                  <div className="p-3 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                    <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{lookupReport.description}</p>
                   </div>
                 </div>
-                
+
                 {lookupReport.steps && (
                   <div className="mb-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-1">Steps to Reproduce</h5>
-                    <div className="p-3 bg-gray-50 rounded-md">
-                      <p className="whitespace-pre-wrap">{lookupReport.steps}</p>
+                    <h5 className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Steps to Reproduce</h5>
+                    <div className="p-3 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
+                      <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{lookupReport.steps}</p>
                     </div>
                   </div>
                 )}
-                
-                <div className="mt-4 text-xs text-gray-500">
+
+                <div className="mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
                   <p>IPFS Content Identifier (CID): {lookupReport.cid}</p>
                 </div>
               </div>
             ) : (
-              <div className="flex justify-center items-center h-40 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+              <div className="flex justify-center items-center h-40 rounded-xl" style={{ color: 'var(--text-muted)', border: '1px dashed var(--border-subtle)' }}>
                 <p>Enter a CID to look up a bug report</p>
               </div>
             )}

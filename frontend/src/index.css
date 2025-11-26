@@ -291,8 +291,31 @@ div[data-rk] {
   --rk-colors-modalBorder: var(--border-subtle) !important;
   --rk-colors-modalText: var(--text-primary) !important;
   --rk-colors-modalTextSecondary: var(--text-secondary) !important;
+  --rk-colors-connectButtonBackground: var(--bg-card-solid) !important;
+  --rk-colors-menuItemBackground: var(--bg-card-solid) !important;
+  --rk-colors-modalBackdrop: rgba(0, 0, 0, 0.6) !important;
   --rk-radii-modal: var(--radius-lg) !important;
   --rk-radii-actionButton: var(--radius-md) !important;
+}
+
+/* Ensure RainbowKit dropdown menu has dark background */
+[data-rk] [role="menu"],
+[data-rk] [role="dialog"],
+[data-rk] [data-testid="rk-account-modal"],
+[data-rk] [data-testid="rk-chain-modal"] {
+  background: var(--bg-card-solid) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+
+[data-rk] [role="menuitem"],
+[data-rk] button[role="menuitem"] {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+[data-rk] [role="menuitem"]:hover,
+[data-rk] button[role="menuitem"]:hover {
+  background: var(--bg-card-hover) !important;
 }
 
 /* Utility classes for the new design system */
@@ -304,6 +327,16 @@ div[data-rk] {
   }
 
   .glass:hover {
+    border-color: var(--border-accent);
+  }
+
+  /* Task card with proper hover border effect */
+  .task-card-hover {
+    border: 1px solid var(--border-subtle);
+    transition: border-color 0.3s ease;
+  }
+
+  .task-card-hover:hover {
     border-color: var(--border-accent);
   }
 

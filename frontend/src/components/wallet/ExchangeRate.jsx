@@ -1,37 +1,29 @@
 import React, { useMemo } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
-import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 
 const ExchangeRate = () => {
   const { address, isConnected, chain } = useAccount();
 
-  const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
+  const treasuryAddress = import.meta.env.VITE_TREASURY_ADDRESS;
 
-  const { data: totalSupply, isError } = useReadContract({
-    address: tokenAddress,
-    abi: RoseTokenABI,
-    functionName: 'totalSupply',
+  const { data: rosePrice, isError } = useReadContract({
+    address: treasuryAddress,
+    abi: RoseTreasuryABI,
+    functionName: 'rosePrice',
     chainId: chain?.id,
     query: {
-      enabled: isConnected && !!tokenAddress,
+      enabled: isConnected && !!treasuryAddress,
       refetchInterval: 10000, // Refetch every 10 seconds
     },
   });
 
-  // Calculate exchange rate
+  // Format exchange rate from contract (6 decimals for USD)
   const exchangeRate = useMemo(() => {
-    if (!totalSupply) return '0.0000';
-
-    const totalSupplyEth = Number(formatUnits(totalSupply, 18));
-
-    if (totalSupplyEth > 0) {
-      const rate = 10000 / totalSupplyEth;
-      return rate.toFixed(4);
-    }
-
-    return '0.0000';
-  }, [totalSupply]);
+    if (!rosePrice) return '1.0000'; // Default to $1.00 initial price
+    return Number(formatUnits(rosePrice, 6)).toFixed(4);
+  }, [rosePrice]);
 
   // Don't show if wallet not connected
   if (!isConnected || !address) return null;

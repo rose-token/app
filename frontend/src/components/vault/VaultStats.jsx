@@ -20,7 +20,7 @@ const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight
     ) : (
       <p
         className="font-display text-2xl font-semibold"
-        style={{ color: highlight ? 'var(--rose-pink-light)' : 'var(--text-primary)', letterSpacing: '-0.02em' }}
+        style={{ color: 'var(--rose-pink-light)', letterSpacing: '-0.02em' }}
       >
         {prefix}{value !== null ? value : '--'}{suffix}
       </p>
@@ -67,13 +67,6 @@ const VaultStats = ({
           prefix="$"
           isLoading={isLoading}
           highlight={true}
-        />
-
-        <StatCard
-          label="Total Vault Value"
-          value={formatUSD(vaultValueUSD)}
-          prefix="$"
-          isLoading={isLoading}
         />
 
         <StatCard

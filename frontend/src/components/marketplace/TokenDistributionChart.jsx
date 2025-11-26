@@ -2,9 +2,9 @@ import React from 'react';
 
 const TokenDistributionChart = () => {
   const distributions = [
-    { label: 'Worker', percentage: '95%', color: 'var(--info)', bgColor: 'var(--info-bg)' },
-    { label: 'Stakeholder', percentage: '5%', color: 'var(--warning)', bgColor: 'var(--warning-bg)' },
-    { label: 'DAO Treasury', percentage: '2%', color: 'var(--rose-pink)', bgColor: 'var(--rose-pink-muted)' }
+    { label: 'Worker', percentage: '95%', isWorker: true },
+    { label: 'Stakeholder', percentage: '5%', isWorker: false },
+    { label: 'DAO Treasury', percentage: '2%', isWorker: false }
   ];
 
   return (
@@ -17,28 +17,38 @@ const TokenDistributionChart = () => {
       }}
     >
       <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-        Token Distribution
+        Token Distribution Model
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
         {distributions.map((item) => (
           <div
             key={item.label}
-            className="rounded-xl p-5 flex items-center justify-between"
-            style={{ background: item.bgColor, border: `1px solid ${item.color}30` }}
+            className="rounded-xl p-5 text-center transition-all duration-200 hover:border-[rgba(212,175,140,0.35)] hover:bg-[rgba(255,255,255,0.04)]"
+            style={{
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid var(--border-subtle)'
+            }}
           >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: item.color }}
-              />
-              <span className="font-medium text-[0.9375rem]" style={{ color: item.color }}>
-                {item.label}
-              </span>
+            <div
+              className="text-xs uppercase tracking-widest mb-2"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {item.label}
             </div>
             <span
-              className="font-display text-2xl font-semibold"
-              style={{ color: item.color }}
+              className="font-display text-[2rem] font-semibold"
+              style={item.isWorker ? {
+                background: 'linear-gradient(135deg, var(--success) 0%, #22c55e 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              } : {
+                background: 'linear-gradient(135deg, var(--rose-pink-light) 0%, var(--rose-pink) 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}
             >
               {item.percentage}
             </span>
@@ -49,12 +59,12 @@ const TokenDistributionChart = () => {
       <div
         className="p-5 rounded-xl"
         style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid var(--border-subtle)'
+          background: 'rgba(251, 191, 36, 0.08)',
+          border: '1px solid rgba(251, 191, 36, 0.25)'
         }}
       >
-        <p className="font-medium mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
-          100 ROSE task example:
+        <p className="font-semibold mb-3 text-sm" style={{ color: 'var(--rose-gold-light)' }}>
+          How it works (100 ROSE task):
         </p>
         <div className="space-y-2">
           {[
