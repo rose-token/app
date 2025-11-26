@@ -7,6 +7,7 @@
     "compile": "hardhat compile",
     "update-abi": "hardhat compile && node scripts/update-abi.js",
     "deploy:sepolia": "hardhat run scripts/update-deploy.js --network sepolia",
+    "deploy:hoodi": "hardhat run scripts/deploy.js --network hoodi",
     "build": "cd frontend && npm install && npm run build"
   },
   "keywords": [],
