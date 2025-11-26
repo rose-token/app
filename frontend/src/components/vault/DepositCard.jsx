@@ -114,7 +114,7 @@ const DepositCard = ({
         console.log('⏳ Waiting for approval confirmation...');
 
         await new Promise(resolve => setTimeout(resolve, 800));
-
+      }
       // Step 2: Deposit
       console.log('⛽ Depositing USDC...');
       const depositHash = await writeContractAsync({
