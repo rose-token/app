@@ -38,7 +38,9 @@ module.exports = {
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155111
+      chainId: 11155111,
+      maxFeePerGas: 4000000000,         // 4 gwei
+      maxPriorityFeePerGas: 2000000000, // 2 gwei
     }
   },
   paths: {
