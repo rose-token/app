@@ -109,6 +109,28 @@ async function main() {
       console.log("Mock PAXG deployed to:", addresses.paxg);
     }
 
+    // Deploy MockV3Aggregator for price feeds (real Chainlink feeds may be stale on testnet)
+    console.log("\nDeploying MockV3Aggregators for testnet price feeds...");
+    const MockAggregator = await hre.ethers.getContractFactory("MockV3Aggregator");
+
+    // Deploy mock BTC/USD feed (~$60,000 with 8 decimals)
+    const mockBtcFeed = await MockAggregator.deploy(8, 6000000000000n);
+    await mockBtcFeed.waitForDeployment();
+    addresses.btcUsdFeed = await mockBtcFeed.getAddress();
+    console.log("Mock BTC/USD feed deployed to:", addresses.btcUsdFeed, "(price: $60,000)");
+
+    // Deploy mock ETH/USD feed (~$3,000 with 8 decimals)
+    const mockEthFeed = await MockAggregator.deploy(8, 300000000000n);
+    await mockEthFeed.waitForDeployment();
+    addresses.ethUsdFeed = await mockEthFeed.getAddress();
+    console.log("Mock ETH/USD feed deployed to:", addresses.ethUsdFeed, "(price: $3,000)");
+
+    // Deploy mock XAU/USD feed (~$2,000 with 8 decimals)
+    const mockXauFeed = await MockAggregator.deploy(8, 200000000000n);
+    await mockXauFeed.waitForDeployment();
+    addresses.xauUsdFeed = await mockXauFeed.getAddress();
+    console.log("Mock XAU/USD feed deployed to:", addresses.xauUsdFeed, "(price: $2,000)");
+
     // Deploy MockUniswapV3Router for testnet (real Uniswap has no liquidity for mock tokens)
     console.log("\nDeploying MockUniswapV3Router for testnet...");
     const MockRouter = await hre.ethers.getContractFactory("MockUniswapV3Router");
@@ -123,6 +145,16 @@ async function main() {
     await mockRouter.setTokenDecimals(addresses.reth, 18);
     await mockRouter.setTokenDecimals(addresses.paxg, 18);
     console.log("Token decimals configured on mock router ✓");
+
+    // Set exchange rates to match mock aggregator prices
+    // Formula: amountOut = (amountIn * rate) / 1e18
+    // BTC @ $60,000: For 1 USDC (1e6), get 1/60000 BTC (8 dec) → rate = 1667 * 10^12
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1667n * 10n**12n);
+    // ETH @ $3,000: For 1 USDC (1e6), get 1/3000 rETH (18 dec) → rate = 333 * 10^24
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333n * 10n**24n);
+    // Gold @ $2,000: For 1 USDC (1e6), get 1/2000 PAXG (18 dec) → rate = 5 * 10^26
+    await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 5n * 10n**26n);
+    console.log("Exchange rates configured on mock router ✓");
 
     // Fund the mock router with tokens for swaps
     const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
