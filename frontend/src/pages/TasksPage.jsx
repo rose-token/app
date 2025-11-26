@@ -42,8 +42,8 @@ const TasksPage = () => {
   });
   const SEPOLIA_GAS_SETTINGS = {
     gas: 500_000n,
-    maxFeePerGas: parseGwei('3'),
-    maxPriorityFeePerGas: parseGwei('1'),
+    maxFeePerGas: parseGwei('4'),
+    maxPriorityFeePerGas: parseGwei('2'),
   };
 
   const { address: account, isConnected } = useAccount();
