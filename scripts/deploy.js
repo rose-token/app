@@ -125,15 +125,15 @@ async function main() {
     console.log("Token decimals configured on mock router ✓");
 
     // Fund the mock router with tokens for swaps
-    const mockUsdc = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
-    const mockWbtc = await hre.ethers.getContractAt("MockERC20", addresses.wbtc);
-    const mockReth = await hre.ethers.getContractAt("MockERC20", addresses.reth);
-    const mockPaxg = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
+    const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
+    const mockWbtc_router = await hre.ethers.getContractAt("MockERC20", addresses.wbtc);
+    const mockReth_router = await hre.ethers.getContractAt("MockERC20", addresses.reth);
+    const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
 
-    await mockWbtc.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8));
-    await mockReth.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
-    await mockPaxg.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
-    await mockUsdc.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6));
+    await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8));
+    await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
+    await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
+    await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6));
     console.log("Mock router funded with liquidity ✓");
   }
 
