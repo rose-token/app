@@ -98,7 +98,7 @@ async function main() {
 
     // Mint 10k USDC to deployer for treasury seeding
     const mintAmount = hre.ethers.parseUnits("20000", 6); // 10,000 USDC
-    await mockUsdc.mint(deployer.address, mintAmount);
+    await (await mockUsdc.mint(deployer.address, mintAmount)).wait();
     console.log("Minted 10,000 USDC to deployer ✓");
 
     // Deploy mock WBTC if needed
@@ -156,10 +156,10 @@ async function main() {
     console.log("MockUniswapV3Router deployed to:", addresses.swapRouter);
 
     // Configure token decimals on the mock router
-    await mockRouter.setTokenDecimals(addresses.usdc, 6);
-    await mockRouter.setTokenDecimals(addresses.wbtc, 8);
-    await mockRouter.setTokenDecimals(addresses.reth, 18);
-    await mockRouter.setTokenDecimals(addresses.paxg, 18);
+    await (await mockRouter.setTokenDecimals(addresses.usdc, 6)).wait();
+    await (await mockRouter.setTokenDecimals(addresses.wbtc, 8)).wait();
+    await (await mockRouter.setTokenDecimals(addresses.reth, 18)).wait();
+    await (await mockRouter.setTokenDecimals(addresses.paxg, 18)).wait();
     console.log("Token decimals configured on mock router ✓");
 
     // Set exchange rates to match mock aggregator prices
@@ -167,11 +167,11 @@ async function main() {
     // For USDC (6 dec) -> Asset swaps: rate = (assetAmount per $1) * 1e18 / 1e6
     //
     // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1666666666666666n);
+    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1666666666666666n)).wait();
     // ETH @ $3,000: (1e18 / 3000) * 1e18 / 1e6 = 3.33e26
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333333333333333333333333333n);
+    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333333333333333333333333333n)).wait();
     // Gold @ $2,000: (1e18 / 2000) * 1e18 / 1e6 = 5e26
-    await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n);
+    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n)).wait();
     console.log("Exchange rates configured on mock router ✓");
 
     // Fund the mock router with tokens for swaps
@@ -180,10 +180,10 @@ async function main() {
     const mockReth_router = await hre.ethers.getContractAt("MockERC20", addresses.reth);
     const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
 
-    await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8));
-    await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
-    await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18));
-    await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6));
+    await (await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8))).wait();
+    await (await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
+    await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
+    await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6))).wait();
     console.log("Mock router funded with liquidity ✓");
   }
 
