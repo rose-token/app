@@ -229,10 +229,10 @@ const DepositCard = ({
         {amountInWei > 0n && (
           <div
             className="rounded-xl p-4"
-            style={{ background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)' }}
+            style={{ background: 'var(--rose-pink-muted)', border: '1px solid rgba(212, 165, 165, 0.3)' }}
           >
             <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>You will receive:</p>
-            <p className="font-display text-xl font-semibold" style={{ color: 'var(--success)' }}>{roseToReceiveFormatted} ROSE</p>
+            <p className="font-display text-xl font-semibold" style={{ color: 'var(--rose-pink-light)' }}>{roseToReceiveFormatted} ROSE</p>
             {rosePrice && (
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 Exchange rate: 1 ROSE = ${rosePrice.toFixed(4)}
