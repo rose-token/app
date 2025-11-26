@@ -172,7 +172,19 @@ async function main() {
     await (await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333333333333333333333333333n)).wait();
     // Gold @ $2,000: (1e18 / 2000) * 1e18 / 1e6 = 5e26
     await (await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n)).wait();
-    console.log("Exchange rates configured on mock router ✓");
+    console.log("Forward exchange rates (USDC → Asset) configured ✓");
+
+    // Reverse rates: Asset -> USDC (for redemption liquidation)
+    // Formula: amountOut = (amountIn * rate) / 1e18
+    // For Asset -> USDC swaps: rate = price * 1e6 * 1e18 / 10^assetDecimals
+    //
+    // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e23
+    await (await mockRouter.setExchangeRate(addresses.wbtc, addresses.usdc, 600000000000000000000000n)).wait();
+    // ETH @ $3,000: 3000 * 1e6 * 1e18 / 1e18 = 3e9
+    await (await mockRouter.setExchangeRate(addresses.reth, addresses.usdc, 3000000000n)).wait();
+    // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e18 = 2e9
+    await (await mockRouter.setExchangeRate(addresses.paxg, addresses.usdc, 2000000000n)).wait();
+    console.log("Reverse exchange rates (Asset → USDC) configured ✓");
 
     // Fund the mock router with tokens for swaps
     const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
@@ -180,11 +192,12 @@ async function main() {
     const mockReth_router = await hre.ethers.getContractAt("MockERC20", addresses.reth);
     const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
 
-    await (await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000", 8))).wait();
-    await (await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
-    await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
-    await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000000", 6))).wait();
-    console.log("Mock router funded with liquidity ✓");
+    // Fund with massive liquidity for stress testing redemptions
+    await (await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
+    await (await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M rETH
+    await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M PAXG
+    await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
+    console.log("Mock router funded with liquidity (1B USDC, 10k BTC, 1M rETH, 1M PAXG) ✓");
   }
 
   // ============ Step 1: Deploy RoseToken ============

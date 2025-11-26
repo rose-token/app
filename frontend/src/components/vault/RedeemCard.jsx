@@ -216,14 +216,14 @@ const RedeemCard = ({
           disabled={!canRedeem}
           className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
             canRedeem
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-muted text-foreground cursor-not-allowed'
+              ? 'bg-primary text-primary-foreground hover:bg-primary'
+              : 'bg-primary text-primary-foreground hover:bg-primary cursor-not-allowed'
           }`}
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
-              <span className="animate-pulse mr-2">...</span>
-              {needsApproval ? 'Approving & Redeeming...' : 'Redeeming...'}
+              <span className="animate-pulse mr-2">✨</span>
+              {needsApproval ? 'Redeeming...' : 'Redeeming...'}
             </span>
           ) : (
             'Redeem'

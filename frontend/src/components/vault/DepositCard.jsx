@@ -228,14 +228,14 @@ const DepositCard = ({
           disabled={!canDeposit}
           className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
             canDeposit
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-muted text-foreground cursor-not-allowed'
+              ? 'bg-primary text-primary-foreground hover:bg-primary'
+              : 'bg-primary text-primary-foreground hover:bg-primary cursor-not-allowed'
           }`}
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
-              <span className="animate-pulse mr-2">...</span>
-              {needsApproval ? 'Approving & Depositing...' : 'Depositing...'}
+              <span className="animate-pulse mr-2">✨</span>
+              {needsApproval ? 'Depositing...' : 'Depositing...'}
             </span>
           ) : (
             'Deposit'
