@@ -19,8 +19,8 @@ const ERC20_ABI = [
 
 const SEPOLIA_GAS_SETTINGS = {
   gas: 500_000n,
-  maxFeePerGas: parseGwei('0.1'),
-  maxPriorityFeePerGas: parseGwei('0.05'),
+  maxFeePerGas: parseGwei('3'),
+  maxPriorityFeePerGas: parseGwei('1'),
 };
 
 const DepositCard = ({
