@@ -512,8 +512,15 @@ const TasksPage = () => {
       console.log('⏳ Waiting for approval confirmation...');
 
       // Wait for approval confirmation
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1
+      });
 
+      await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1
+      });
       console.log('✅ Token approval confirmed on blockchain!');
 
       // Step 2: Stake tokens

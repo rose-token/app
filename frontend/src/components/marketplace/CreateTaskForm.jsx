@@ -77,6 +77,10 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       console.log('✅ Approval transaction sent:', approveHash);
       console.log('⏳ Waiting for approval confirmation...');
 
+      await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1
+      });
       // Step 3: Create task
       console.log('⛽ Creating task...');
       console.log('💡 Please confirm the create task transaction in MetaMask');

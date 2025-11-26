@@ -100,7 +100,10 @@ const RedeemCard = ({
         console.log('✅ Approval transaction sent:', approveHash);
         console.log('⏳ Waiting for approval confirmation...');
 
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1
+        });
       }
 
       // Step 2: Redeem
