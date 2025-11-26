@@ -41,9 +41,9 @@ const TasksPage = () => {
     showClosed: false
   });
   const SEPOLIA_GAS_SETTINGS = {
-    gas: 500_000n,                  // plenty for stakeholderStake, acceptPayment, etc.
-    maxFeePerGas: parseGwei('0.1'), // Sepolia base fee is usually ~0.001–0.02 gwei
-    maxPriorityFeePerGas: parseGwei('0.05'),
+    gas: 500_000n,
+    maxFeePerGas: parseGwei('3'),
+    maxPriorityFeePerGas: parseGwei('1'),
   };
 
   const { address: account, isConnected } = useAccount();
