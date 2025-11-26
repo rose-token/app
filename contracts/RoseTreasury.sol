@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
@@ -18,7 +19,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
  *
  * ROSE price = total vault USD value / ROSE supply
  */
-contract RoseTreasury is ReentrancyGuard, Ownable {
+contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
 
     // ============ Tokens ============
@@ -125,7 +126,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      * @dev Deposit USDC, receive ROSE at current vault price
      * @param usdcAmount Amount of USDC to deposit (6 decimals)
      */
-    function deposit(uint256 usdcAmount) external nonReentrant {
+    function deposit(uint256 usdcAmount) external nonReentrant whenNotPaused {
         if (usdcAmount == 0) revert ZeroAmount();
         if (usdc.balanceOf(msg.sender) < usdcAmount) revert InsufficientBalance();
 
@@ -149,7 +150,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      * @dev Redeem ROSE for USDC at current vault price
      * @param roseAmount Amount of ROSE to redeem (18 decimals)
      */
-    function redeem(uint256 roseAmount) external nonReentrant {
+    function redeem(uint256 roseAmount) external nonReentrant whenNotPaused {
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
 
@@ -538,7 +539,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
      * @param _amount Amount of ROSE to send
      * @param _reason Description of spend (for logging)
      */
-    function spendRose(address _to, uint256 _amount, string calldata _reason) external onlyOwner {
+    function spendRose(address _to, uint256 _amount, string calldata _reason) external onlyOwner whenNotPaused {
         if (_to == address(0)) revert ZeroAddress();
         uint256 balance = roseToken.balanceOf(address(this));
         if (balance < _amount) revert InsufficientLiquidity();
@@ -575,9 +576,23 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Pause the contract. Only owner can call.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev Unpause the contract. Only owner can call.
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
      * @dev Manually rebalance vault to target allocations
      */
-    function rebalance() external onlyOwner {
+    function rebalance() external onlyOwner whenNotPaused {
         uint256 vaultTotal = vaultValueUSD();
 
         uint256 targetBTC = (vaultTotal * allocBTC) / ALLOC_DENOMINATOR;

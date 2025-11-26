@@ -304,4 +304,110 @@ describe("RoseTreasury Smart Deposits", function () {
       expect(finalPcts.gold).to.be.greaterThan(pctsAfterDrain.gold);
     });
   });
+
+  describe("Pausable", function () {
+    it("Should allow owner to pause and unpause", async function () {
+      expect(await roseTreasury.paused()).to.be.false;
+
+      await roseTreasury.connect(owner).pause();
+      expect(await roseTreasury.paused()).to.be.true;
+
+      await roseTreasury.connect(owner).unpause();
+      expect(await roseTreasury.paused()).to.be.false;
+    });
+
+    it("Should not allow non-owner to pause", async function () {
+      await expect(
+        roseTreasury.connect(user).pause()
+      ).to.be.revertedWithCustomError(roseTreasury, "OwnableUnauthorizedAccount");
+    });
+
+    it("Should not allow non-owner to unpause", async function () {
+      await roseTreasury.connect(owner).pause();
+
+      await expect(
+        roseTreasury.connect(user).unpause()
+      ).to.be.revertedWithCustomError(roseTreasury, "OwnableUnauthorizedAccount");
+    });
+
+    it("Should block deposit when paused", async function () {
+      await roseTreasury.connect(owner).pause();
+
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount)
+      ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
+    });
+
+    it("Should block redeem when paused", async function () {
+      // First deposit while unpaused
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await deposit(user, depositAmount);
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+      expect(roseBalance).to.be.greaterThan(0);
+
+      // Pause and try to redeem
+      await roseTreasury.connect(owner).pause();
+
+      await expect(
+        roseTreasury.connect(user).redeem(roseBalance)
+      ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
+    });
+
+    it("Should block rebalance when paused", async function () {
+      await roseTreasury.connect(owner).pause();
+
+      await expect(
+        roseTreasury.connect(owner).rebalance()
+      ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
+    });
+
+    it("Should block spendRose when paused", async function () {
+      // First deposit to get some ROSE in treasury
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await deposit(user, depositAmount);
+
+      // Mint ROSE to treasury directly for testing
+      await roseToken.mint(await roseTreasury.getAddress(), ethers.parseUnits("100", 18));
+
+      await roseTreasury.connect(owner).pause();
+
+      await expect(
+        roseTreasury.connect(owner).spendRose(user.address, ethers.parseUnits("10", 18), "test spend")
+      ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
+    });
+
+    it("Should allow operations after unpause", async function () {
+      // Pause then unpause
+      await roseTreasury.connect(owner).pause();
+      await roseTreasury.connect(owner).unpause();
+
+      // Deposit should work again
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount)
+      ).to.not.be.reverted;
+    });
+
+    it("Should allow config changes while paused", async function () {
+      await roseTreasury.connect(owner).pause();
+
+      // setAllocation should still work while paused
+      await expect(
+        roseTreasury.connect(owner).setAllocation(3000, 3000, 2000, 2000)
+      ).to.not.be.reverted;
+
+      // setMaxSlippage should still work while paused
+      await expect(
+        roseTreasury.connect(owner).setMaxSlippage(200)
+      ).to.not.be.reverted;
+    });
+  });
 });
