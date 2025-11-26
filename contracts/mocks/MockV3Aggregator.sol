@@ -42,8 +42,8 @@ contract MockV3Aggregator {
         return (
             latestRound,
             latestAnswer,
-            latestTimestamp,
-            latestTimestamp,
+            block.timestamp,  // Always fresh for testnet use
+            block.timestamp,  // Always fresh for testnet use
             latestRound
         );
     }
