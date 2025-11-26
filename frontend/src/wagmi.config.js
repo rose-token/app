@@ -3,7 +3,7 @@ import { sepolia } from 'wagmi/chains';
 import { http } from 'wagmi';
 
 const sepoliaRpcUrl = process.env.RPC_SEPOLIA_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
-const hoodiRpcUrl = process.env.RPC_HOODI_URL || 'https://rpc.hoodi.ethpandaops.io';
+const hoodiRpcUrl = process.env.RPC_HOODI_URL || 'https://ethereum-hoodi-rpc.publicnode.com';
 
 // Define Hoodi testnet chain (not yet in wagmi/chains)
 const hoodi = {
@@ -15,7 +15,7 @@ const hoodi = {
     symbol: 'ETH',
   },
   rpcUrls: {
-    default: { http: ['https://rpc.hoodi.ethpandaops.io'] },
+    default: { http: ['https://ethereum-hoodi-rpc.publicnode.com'] },
   },
   blockExplorers: {
     default: { name: 'Etherscan', url: 'https://hoodi.etherscan.io' },

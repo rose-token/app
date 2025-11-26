@@ -43,7 +43,7 @@ module.exports = {
       maxPriorityFeePerGas: 2000000000, // 2 gwei
     },
     hoodi: {
-      url: process.env.HOODI_RPC_URL || "https://rpc.hoodi.ethpandaops.io",
+      url: process.env.HOODI_RPC_URL || "https://ethereum-hoodi-rpc.publicnode.com",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 560048,
       gasPrice: "auto"
