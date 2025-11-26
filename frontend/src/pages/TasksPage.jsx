@@ -799,7 +799,7 @@ const TasksPage = () => {
           Worker-Owned <span className="gradient-text">Marketplace</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
-          Decentralized task coordination where workers earn 95%
+          Decentralized task coordination owned by workers
         </p>
       </div>
 
