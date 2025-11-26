@@ -101,6 +101,7 @@ const RedeemCard = ({
         console.log('⏳ Waiting for approval confirmation...');
 
         await new Promise(resolve => setTimeout(resolve, 800));
+      }
 
       // Step 2: Redeem
       console.log('⛽ Redeeming ROSE...');
