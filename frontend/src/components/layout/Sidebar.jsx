@@ -31,7 +31,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     <>
       {/* Overlay for mobile when sidebar is open */}
       <div
-        className={`fixed inset-0 bg-black/60 z-20 transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 bg-black/60 z-50 transition-opacity duration-300 md:hidden ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={toggleSidebar}
@@ -39,7 +39,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full w-64 z-30 transform transition-transform duration-300 ease-in-out flex flex-col backdrop-blur-[20px] ${
+        className={`fixed top-0 left-0 h-full w-64 z-[60] transform transition-transform duration-300 ease-in-out flex flex-col backdrop-blur-[20px] ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
         style={{
