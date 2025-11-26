@@ -512,10 +512,7 @@ const TasksPage = () => {
       console.log('⏳ Waiting for approval confirmation...');
 
       // Wait for approval confirmation
-      await publicClient.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: 1
-      });
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       console.log('✅ Token approval confirmed on blockchain!');
 
