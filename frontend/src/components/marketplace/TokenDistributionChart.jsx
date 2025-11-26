@@ -59,12 +59,12 @@ const TokenDistributionChart = () => {
       <div
         className="p-5 rounded-xl"
         style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid var(--border-subtle)'
+          background: 'rgba(251, 191, 36, 0.08)',
+          border: '1px solid rgba(251, 191, 36, 0.25)'
         }}
       >
-        <p className="font-medium mb-3 text-sm" style={{ color: 'var(--text-primary)' }}>
-          100 ROSE task example:
+        <p className="font-semibold mb-3 text-sm" style={{ color: 'var(--rose-gold-light)' }}>
+          How it works (100 ROSE task):
         </p>
         <div className="space-y-2">
           {[

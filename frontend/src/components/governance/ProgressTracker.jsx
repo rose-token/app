@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
 import { CheckCircle, Clock, Award } from 'lucide-react';
 
 const ProgressTracker = ({ task }) => {
@@ -43,23 +41,31 @@ const ProgressTracker = ({ task }) => {
 
   const getStageIcon = (stage, status) => {
     if (status === 'completed') {
-      return <CheckCircle className="h-5 w-5" style={{ color: 'var(--success)' }} />;
+      return (
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ background: 'var(--success)' }}
+        >
+          <CheckCircle className="h-3.5 w-3.5" style={{ color: 'var(--bg-primary)' }} />
+        </div>
+      );
     }
     if (status === 'active') {
-      return <Clock className="h-5 w-5" style={{ color: 'var(--rose-pink)' }} />;
+      return (
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ background: 'var(--rose-pink)' }}
+        >
+          <Clock className="h-3.5 w-3.5" style={{ color: 'var(--bg-primary)' }} />
+        </div>
+      );
     }
     return (
       <div
-        className="h-5 w-5 rounded-full"
-        style={{ border: '2px solid var(--border-subtle)' }}
+        className="w-6 h-6 rounded-full flex-shrink-0"
+        style={{ border: '2px solid var(--border-subtle)', background: 'transparent' }}
       />
     );
-  };
-
-  const getBadgeVariant = (status) => {
-    if (status === 'completed') return 'success';
-    if (status === 'active') return 'inProgress';
-    return 'default';
   };
 
   const stages = [
@@ -102,49 +108,60 @@ const ProgressTracker = ({ task }) => {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Award className="h-5 w-5 mr-2" style={{ color: 'var(--rose-gold)' }} />
+    <div
+      className="rounded-xl p-5 mt-4"
+      style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Award className="h-[18px] w-[18px]" style={{ color: 'var(--rose-pink)' }} />
+        <span className="font-semibold text-[0.9375rem]" style={{ color: 'var(--text-primary)' }}>
           Task Progress
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {stages.map((stage, index) => (
-            <div key={stage.id} className="flex items-start space-x-3">
-              <div className="flex flex-col items-center">
-                {getStageIcon(stage.id, stage.status)}
-                {index < stages.length - 1 && (
-                  <div
-                    className="w-0.5 h-8 mt-2"
-                    style={{
-                      background: stage.status === 'completed'
-                        ? 'var(--success)'
-                        : 'var(--border-subtle)'
-                    }}
-                  />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {stage.title}
-                  </h4>
-                  <Badge variant={getBadgeVariant(stage.status)}>
-                    {stage.status === 'completed' ? 'Complete' :
-                     stage.status === 'active' ? 'Active' : 'Pending'}
-                  </Badge>
-                </div>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  {stage.description}
-                </p>
-              </div>
+        </span>
+      </div>
+      <div className="flex flex-col">
+        {stages.map((stage, index) => (
+          <div key={stage.id} className="flex gap-4">
+            <div className="flex flex-col items-center">
+              {getStageIcon(stage.id, stage.status)}
+              {index < stages.length - 1 && (
+                <div
+                  className="w-0.5 my-1"
+                  style={{
+                    height: '32px',
+                    background: stage.status === 'completed'
+                      ? 'var(--success)'
+                      : 'var(--border-subtle)'
+                  }}
+                />
+              )}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <div className="flex-1 pb-6">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+                  {stage.title}
+                </span>
+                <span
+                  className="text-[0.625rem] uppercase tracking-wide px-2 py-1 rounded"
+                  style={
+                    stage.status === 'completed'
+                      ? { background: 'var(--success-bg)', color: 'var(--success)' }
+                      : stage.status === 'active'
+                      ? { background: 'rgba(212, 175, 140, 0.15)', color: 'var(--rose-gold)' }
+                      : { background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)' }
+                  }
+                >
+                  {stage.status === 'completed' ? 'Complete' :
+                   stage.status === 'active' ? 'Active' : 'Pending'}
+                </span>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {stage.description}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 
