@@ -130,11 +130,41 @@ const CreateTaskForm = ({ onTaskCreated }) => {
     }
   };
 
+  const labelStyle = {
+    color: 'var(--text-muted)',
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    marginBottom: '0.5rem',
+    display: 'block'
+  };
+
+  const inputStyle = {
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text-primary)',
+    padding: '0.875rem 1rem',
+    width: '100%',
+    fontSize: '0.9375rem',
+    transition: 'all 0.2s ease'
+  };
+
   if (!isConnected) {
     return (
-      <div className="bg-card rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
-        <div className="text-center py-4 text-secondary">
+      <div
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)'
+        }}
+      >
+        <h2 className="font-display text-xl font-medium mb-4" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+          Create New Task
+        </h2>
+        <div className="text-center py-6" style={{ color: 'var(--text-secondary)' }}>
           Please connect your wallet to create tasks
         </div>
       </div>
@@ -142,12 +172,21 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   }
 
   return (
-    <div className="bg-card rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Create New Task</h2>
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <h2 className="font-display text-xl font-medium mb-6" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Create New Task
+      </h2>
 
       <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label htmlFor="title" className="block text-sm font-medium text-foreground mb-1">
+        <div className="mb-5">
+          <label htmlFor="title" style={labelStyle}>
             Task Title *
           </label>
           <input
@@ -155,37 +194,36 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
+            style={inputStyle}
             placeholder="e.g., Build a responsive landing page"
             required
             maxLength={100}
           />
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
             Public title visible to everyone ({title.length}/100)
           </p>
         </div>
 
-        <div className="mb-4">
-          <label htmlFor="detailedDescription" className="block text-sm font-medium text-foreground mb-1">
+        <div className="mb-5">
+          <label htmlFor="detailedDescription" style={labelStyle}>
             Detailed Description *
           </label>
           <textarea
             id="detailedDescription"
             value={detailedDescription}
             onChange={(e) => setDetailedDescription(e.target.value)}
-            className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
-            rows="6"
+            style={{ ...inputStyle, minHeight: '140px', resize: 'vertical' }}
             placeholder="Provide comprehensive details about the task requirements, deliverables, timeline, etc."
             required
           />
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
             Visible to everyone. ({detailedDescription.length} characters)
           </p>
         </div>
 
         <div className="mb-6">
-          <label htmlFor="deposit" className="block text-sm font-medium text-foreground mb-1">
-            Payment Amount (ROSE Tokens) *
+          <label htmlFor="deposit" style={labelStyle}>
+            Payment Amount *
           </label>
           <div className="relative">
             <input
@@ -193,24 +231,34 @@ const CreateTaskForm = ({ onTaskCreated }) => {
               type="number"
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
+              style={inputStyle}
               placeholder="e.g., 100"
               step="0.01"
               min="0.01"
               onWheel={(e) => e.currentTarget.blur()}
               required
             />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <span className="text-muted-foreground">ROSE</span>
+            <div
+              className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-sm font-medium"
+              style={{ color: 'var(--rose-gold)' }}
+            >
+              ROSE
             </div>
           </div>
-          <p className="mt-1 text-sm text-muted">
-            This amount in ROSE tokens will be paid to the worker upon successful completion
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            This amount will be paid to the worker upon successful completion
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-destructive/20 text-destructive rounded-md border border-destructive">
+          <div
+            className="mb-5 p-4 rounded-xl text-sm"
+            style={{
+              background: 'var(--error-bg)',
+              border: '1px solid rgba(248, 113, 113, 0.3)',
+              color: 'var(--error)'
+            }}
+          >
             {error}
           </div>
         )}
@@ -218,22 +266,30 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         <button
           type="submit"
           disabled={isSubmitting || !isConnected}
-          className={`w-full py-2 px-4 rounded-md font-medium ${
-            isSubmitting || !isConnected
-              ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-primary text-primary-foreground hover:bg-primary'
-          }`}
+          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300"
+          style={{
+            background: isSubmitting || !isConnected
+              ? 'var(--bg-secondary)'
+              : 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+            color: isSubmitting || !isConnected
+              ? 'var(--text-muted)'
+              : 'var(--bg-primary)',
+            boxShadow: isSubmitting || !isConnected
+              ? 'none'
+              : '0 4px 16px rgba(212, 165, 165, 0.3)',
+            cursor: isSubmitting || !isConnected ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting || !isConnected ? 0.6 : 1
+          }}
         >
           {isSubmitting ? (
             <>
-              <span className="animate-pulse inline-block mr-2">✨</span>
+              <span className="inline-block mr-2 animate-pulse">⚡</span>
               Creating Task...
             </>
           ) : (
             'Create Task'
           )}
         </button>
-
       </form>
     </div>
   );

@@ -23,59 +23,63 @@ const TaskFilters = ({ filters, setFilters }) => {
     filters.myTasks ||
     filters.showClosed;
 
+  const checkboxStyle = {
+    width: '18px',
+    height: '18px',
+    borderRadius: '4px',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--bg-secondary)',
+    cursor: 'pointer',
+    accentColor: 'var(--rose-gold)'
+  };
+
   return (
-    <div className="mb-4 p-4 bg-card rounded-lg">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-md font-medium">Filter Tasks</h3>
+    <div
+      className="mb-6 p-5 rounded-xl"
+      style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid var(--border-subtle)'
+      }}
+    >
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+          Filter Tasks
+        </h3>
         {usingCustomFilters && (
-          <button 
+          <button
             onClick={resetFilters}
-            className="text-sm text-muted hover:text-muted"
+            className="text-xs font-medium transition-colors"
+            style={{ color: 'var(--rose-pink)' }}
           >
-            Reset to defaults
+            Reset filters
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={filters.needStakeholder} 
-            onChange={() => handleFilterChange('needStakeholder')}
-            className="rounded text-muted focus:ring-muted"
-          />
-          <span className="text-sm">Need Stakeholder</span>
-        </label>
-        
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={filters.needWorker} 
-            onChange={() => handleFilterChange('needWorker')}
-            className="rounded text-muted focus:ring-muted"
-          />
-          <span className="text-sm">Need Worker</span>
-        </label>
-        
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={filters.myTasks} 
-            onChange={() => handleFilterChange('myTasks')}
-            className="rounded text-muted focus:ring-primary"
-          />
-          <span className="text-sm">My Tasks</span>
-        </label>
-        
-        <label className="flex items-center space-x-2 cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={filters.showClosed} 
-            onChange={() => handleFilterChange('showClosed')}
-            className="rounded text-bmuted focus:ring-primary"
-          />
-          <span className="text-sm">Show Closed</span>
-        </label>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { key: 'needStakeholder', label: 'Need Stakeholder', color: 'var(--warning)' },
+          { key: 'needWorker', label: 'Need Worker', color: 'var(--info)' },
+          { key: 'myTasks', label: 'My Tasks', color: 'var(--rose-pink)' },
+          { key: 'showClosed', label: 'Show Closed', color: 'var(--text-muted)' }
+        ].map((filter) => (
+          <label
+            key={filter.key}
+            className="flex items-center gap-2.5 cursor-pointer group"
+          >
+            <input
+              type="checkbox"
+              checked={filters[filter.key]}
+              onChange={() => handleFilterChange(filter.key)}
+              style={checkboxStyle}
+            />
+            <span
+              className="text-sm transition-colors"
+              style={{ color: filters[filter.key] ? filter.color : 'var(--text-secondary)' }}
+            >
+              {filter.label}
+            </span>
+          </label>
+        ))}
       </div>
     </div>
   );

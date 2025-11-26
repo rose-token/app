@@ -3,87 +3,86 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const WalletNotConnected = () => {
   const [showDetails, setShowDetails] = useState(false);
-    
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200 text-center">
-      <h2 className="text-xl font-semibold mb-4">Connect Your Wallet</h2>
-        
-      <div className="mb-6 text-gray-600">
-        <p className="mb-4">
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 text-center transition-all duration-300"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <h2 className="font-display text-2xl font-medium mb-4" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Connect Your Wallet
+      </h2>
+
+      <div className="mb-6">
+        <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
           Connect your wallet to create tasks, claim work, and earn ROSE tokens
         </p>
-          
+
         {/* Educational content about Rose Token */}
         <div className="mt-6 text-left">
-          <h3 className="text-lg font-medium mb-3 text-primary">What is Rose Token?</h3>
-          <p className="mb-3">
-            ROSE is a decentralized ERC20 token with a <strong>worker distribution model</strong> that rewards participation in our task marketplace ecosystem.
+          <h3 className="font-display text-lg font-medium mb-3" style={{ color: 'var(--rose-pink)' }}>
+            What is Rose Token?
+          </h3>
+          <p className="mb-3" style={{ color: 'var(--text-secondary)' }}>
+            ROSE is a decentralized ERC20 token with a <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>worker distribution model</span> that rewards participation in our task marketplace ecosystem.
           </p>
-            
+
           {!showDetails ? (
             <button
               onClick={() => setShowDetails(true)}
-              className="text-primary hover:underline mb-4"
+              className="font-medium text-sm transition-colors"
+              style={{ color: 'var(--rose-pink)' }}
             >
               Learn more about ROSE Token →
             </button>
           ) : (
-            <div className="bg-gray-50 p-4 rounded-md mt-3">
-              <h4 className="font-medium mb-2">How Rose Token Works:</h4>
-              <ul className="list-disc pl-5 space-y-2 mb-4">
+            <div
+              className="p-5 rounded-xl mt-3"
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)'
+              }}
+            >
+              <h4 className="font-medium mb-3" style={{ color: 'var(--text-primary)' }}>How Rose Token Works:</h4>
+              <ul className="space-y-3 mb-4">
                 <li>
-                  <strong>Three Core Roles:</strong>
-                  <ul className="list-circle pl-5 mt-1 space-y-1">
-                    <li><strong>Customers:</strong> Create tasks by depositing ROSE tokens as payment. Your deposit is held safely in escrow until the work is completed and approved.</li>
-                    <li><strong>Workers:</strong> Browse open tasks, claim work on a first-come first-served basis, complete the task, and earn 95% of the task value in ROSE tokens.</li>
-                    <li><strong>Stakeholders:</strong> Stake 10% of a task's value to enable it, then validate completed work quality. Earn a 5% fee plus your stake back (50% ROI) when the task is successfully completed.</li>
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>Three Core Roles:</span>
+                  <ul className="pl-5 mt-2 space-y-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    <li>• <span style={{ color: 'var(--rose-pink)' }}>Customers:</span> Create tasks by depositing ROSE tokens as payment</li>
+                    <li>• <span style={{ color: 'var(--info)' }}>Workers:</span> Browse tasks, complete work, and earn 95% of the task value</li>
+                    <li>• <span style={{ color: 'var(--warning)' }}>Stakeholders:</span> Stake 10% to enable tasks and earn 5% fee (50% ROI)</li>
                   </ul>
                 </li>
                 <li>
-                  <strong>Task Payment Flow:</strong>
-                  <ul className="list-circle pl-5 mt-1">
-                    <li>Customer deposits ROSE tokens (e.g., 10 ROSE for a task)</li>
-                    <li>Stakeholder stakes 10% of task value (e.g., 1 ROSE, returned on completion)</li>
-                    <li>Platform mints 2% to DAO treasury separately (e.g., 0.2 ROSE)</li>
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>Payment Distribution:</span>
+                  <ul className="pl-5 mt-2 space-y-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    <li>• Worker receives <span style={{ color: 'var(--success)' }}>95%</span> of customer's deposit</li>
+                    <li>• Stakeholder receives <span style={{ color: 'var(--success)' }}>5%</span> fee + stake returned</li>
+                    <li>• DAO receives <span style={{ color: 'var(--success)' }}>2%</span> minted separately</li>
                   </ul>
                 </li>
-                <li>
-                  <strong>Payment Distribution (on successful completion):</strong>
-                  <ul className="list-circle pl-5 mt-1">
-                    <li><strong>Worker receives 95%</strong> of customer's deposit (e.g., 9.5 ROSE)</li>
-                    <li><strong>Stakeholder receives 5%</strong> fee + 10% stake returned (e.g., 1.5 ROSE total = 50% ROI)</li>
-                    <li><strong>DAO receives 2%</strong> minted separately for governance</li>
-                  </ul>
-                </li>
-                <li>
-                  <strong>Task-Value Based:</strong> All payments scale with the task value - higher value tasks pay more ROSE tokens.
-                </li>
-              </ul>
-
-              <h4 className="font-medium mb-2">Benefits:</h4>
-              <ul className="list-disc pl-5 space-y-1 mb-4">
-                <li>Workers earn 95% of task value in ROSE tokens</li>
-                <li>Stakeholders earn 50% ROI on their stake for validating work</li>
-                <li>Customer deposits held safely in escrow until work is approved</li>
-                <li>Community-governed ecosystem through the DAO treasury</li>
-                <li>Built on Ethereum (Sepolia testnet) for security and transparency</li>
               </ul>
 
               <button
                 onClick={() => setShowDetails(false)}
-                className="text-primary hover:underline mt-2"
+                className="text-sm font-medium transition-colors"
+                style={{ color: 'var(--rose-pink)' }}
               >
                 Show less
               </button>
             </div>
-          )}  
-        </div>  
-      </div>  
-        
+          )}
+        </div>
+      </div>
+
       <div className="flex justify-center">
         <ConnectButton />
-      </div>  
-    </div>  
+      </div>
+    </div>
   );
 };
 

@@ -40,12 +40,14 @@ const VaultPage = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Vault</h1>
-        <p className="text-foreground mt-1">
-          Deposit USDC to mint ROSE. Redeem ROSE for USDC. Real asset backing.
+      <div className="text-center mb-10">
+        <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
+          Treasury <span className="gradient-text">Vault</span>
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
+          Asset-backed stability. Transparent on-chain reserves.
         </p>
       </div>
 
@@ -101,18 +103,39 @@ const VaultPage = () => {
       {isConnected && <TransactionHistory treasuryAddress={treasuryAddress} />}
 
       {/* How it works section */}
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-3">How it works</h3>
-        <div className="space-y-2 text-sm text-foreground">
-          <p>
-            <span className="font-medium text-foreground">Deposit:</span> Send USDC to the vault and receive ROSE tokens at the current exchange rate. The vault automatically diversifies your deposit into BTC, ETH, Gold, and USDC.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Redeem:</span> Burn ROSE tokens to withdraw USDC from the vault at the current exchange rate. The ROSE price reflects the total value of all assets held in the vault.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Backing:</span> Each ROSE token is backed by real-world assets held in the treasury. As asset prices change, so does the ROSE price.
-          </p>
+      <div
+        className="mt-6 p-7 rounded-[20px] backdrop-blur-[20px] transition-all hover:border-[rgba(212,175,140,0.35)]"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)'
+        }}
+      >
+        <h3 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+          How It Works
+        </h3>
+        <div className="space-y-4">
+          {[
+            { num: '1', title: 'Deposit', desc: 'Send USDC to the vault and receive ROSE tokens at the current NAV. The vault automatically diversifies into BTC, Gold, and stablecoins.' },
+            { num: '2', title: 'Redeem', desc: 'Burn ROSE tokens to withdraw USDC at the current exchange rate. The ROSE price reflects total treasury value.' },
+            { num: '3', title: 'Asset Backing', desc: 'Each ROSE token is backed by real-world assets: 40% Bitcoin, 40% Gold (PAXG), 20% USDC. As asset prices change, so does your position.' }
+          ].map((item) => (
+            <div key={item.num} className="flex gap-3.5">
+              <div
+                className="flex-shrink-0 w-[26px] h-[26px] rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{
+                  background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                  color: 'var(--bg-primary)'
+                }}
+              >
+                {item.num}
+              </div>
+              <div>
+                <h4 className="font-display text-[0.9375rem] font-medium mb-0.5" style={{ color: 'var(--text-primary)' }}>{item.title}</h4>
+                <p className="text-[0.8125rem] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{item.desc}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

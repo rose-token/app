@@ -39,7 +39,13 @@ const ExchangeRate = () => {
   // Show error state if there's an issue
   if (isError) {
     return (
-      <div className="bg-white/10 px-4 py-2 rounded-md text-white flex items-center space-x-2">
+      <div
+        className="flex items-center gap-2.5 px-4 py-3 rounded-xl"
+        style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid var(--border-subtle)'
+        }}
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -48,17 +54,27 @@ const ExchangeRate = () => {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="h-5 w-5"
+          className="h-[18px] w-[18px]"
+          style={{ color: 'var(--rose-pink)' }}
         >
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
         </svg>
-        <span>$-- USD/ROSE</span>
+        <div>
+          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>$--</div>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>USD/ROSE</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white/10 px-4 py-2 rounded-md text-white flex items-center space-x-2">
+    <div
+      className="flex items-center gap-2.5 px-4 py-3 rounded-xl"
+      style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid var(--border-subtle)'
+      }}
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -67,11 +83,15 @@ const ExchangeRate = () => {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="h-5 w-5"
+        className="h-[18px] w-[18px]"
+        style={{ color: 'var(--rose-pink)' }}
       >
         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
       </svg>
-      <span>${exchangeRate} USD/ROSE</span>
+      <div>
+        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>${exchangeRate}</div>
+        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>USD/ROSE</div>
+      </div>
     </div>
   );
 };

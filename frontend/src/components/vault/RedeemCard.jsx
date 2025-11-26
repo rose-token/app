@@ -145,14 +145,45 @@ const RedeemCard = ({
 
   const canRedeem = amountInWei > 0n && !validationError && !isSubmitting;
 
+  const labelStyle = {
+    color: 'var(--text-muted)',
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    marginBottom: '0.5rem',
+    display: 'block'
+  };
+
+  const inputStyle = {
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text-primary)',
+    padding: '0.875rem 1rem',
+    paddingRight: '4rem',
+    width: '100%',
+    fontSize: '0.9375rem',
+    transition: 'all 0.2s ease'
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-foreground mb-4">Redeem ROSE</h3>
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <h3 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Redeem ROSE
+      </h3>
 
       <div className="space-y-4">
         {/* Amount Input */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
+          <label style={labelStyle}>
             ROSE Amount
           </label>
           <div className="relative">
@@ -165,18 +196,19 @@ const RedeemCard = ({
               }}
               placeholder="0.00"
               disabled={isSubmitting}
-              className="w-full px-3 py-2 pr-16 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground disabled:opacity-50"
+              style={inputStyle}
             />
             <button
               onClick={handleMaxClick}
               disabled={isSubmitting || !roseBalance}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
+              className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors disabled:opacity-50"
+              style={{ color: 'var(--rose-gold)', background: 'rgba(212, 175, 140, 0.1)' }}
             >
               MAX
             </button>
           </div>
           {roseBalance !== null && (
-            <p className="text-xs text-foreground mt-1">
+            <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
               Balance: {roseBalance.toLocaleString()} ROSE
             </p>
           )}
@@ -184,11 +216,14 @@ const RedeemCard = ({
 
         {/* Preview */}
         {amountInWei > 0n && (
-          <div className="bg-muted/20 rounded-md p-3">
-            <p className="text-sm text-foreground">You will receive:</p>
-            <p className="text-lg font-semibold text-foreground">{usdcToReceiveFormatted} USDC</p>
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'var(--info-bg)', border: '1px solid rgba(96, 165, 250, 0.3)' }}
+          >
+            <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>You will receive:</p>
+            <p className="font-display text-xl font-semibold" style={{ color: 'var(--info)' }}>{usdcToReceiveFormatted} USDC</p>
             {rosePrice && (
-              <p className="text-xs text-foreground mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 Exchange rate: 1 ROSE = ${rosePrice.toFixed(4)}
               </p>
             )}
@@ -197,12 +232,15 @@ const RedeemCard = ({
 
         {/* Validation Error */}
         {validationError && (
-          <p className="text-sm text-destructive">{validationError}</p>
+          <p className="text-sm" style={{ color: 'var(--error)' }}>{validationError}</p>
         )}
 
         {/* Error */}
         {error && (
-          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
+          <div
+            className="rounded-xl p-4 text-sm"
+            style={{ background: 'var(--error-bg)', border: '1px solid rgba(248, 113, 113, 0.3)', color: 'var(--error)' }}
+          >
             {error}
           </div>
         )}
@@ -211,19 +249,22 @@ const RedeemCard = ({
         <button
           onClick={handleRedeem}
           disabled={!canRedeem}
-          className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-            canRedeem
-              ? 'bg-primary text-primary-foreground hover:bg-primary'
-              : 'bg-primary text-primary-foreground hover:bg-primary cursor-not-allowed'
-          }`}
+          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300"
+          style={{
+            background: canRedeem ? 'transparent' : 'var(--bg-secondary)',
+            border: canRedeem ? '1px solid rgba(212, 165, 165, 0.3)' : 'none',
+            color: canRedeem ? 'var(--rose-pink)' : 'var(--text-muted)',
+            cursor: canRedeem ? 'pointer' : 'not-allowed',
+            opacity: canRedeem ? 1 : 0.6
+          }}
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
-              <span className="animate-pulse mr-2">✨</span>
-              {needsApproval ? 'Redeeming...' : 'Redeeming...'}
+              <span className="animate-pulse mr-2">⚡</span>
+              Redeeming...
             </span>
           ) : (
-            'Redeem'
+            'Redeem ROSE'
           )}
         </button>
       </div>

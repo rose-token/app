@@ -10,16 +10,16 @@ const Layout = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen flex relative z-[1]">
       <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
-        
+
       <div className="flex-1 flex flex-col md:ml-64">
         <Header toggleSidebar={toggleSidebar} />
-        <main className="flex-1 container mx-auto py-8 px-4">
+        <main className="flex-1 py-8 px-4 md:px-8 max-w-[1000px]">
           {children}
         </main>
-        <footer className="py-6 text-center text-xs text-mutedd">
-          <p>Copyright © 2025 Rose Labs, Inc. Licensed under the Peer Production License (PPL).</p>
+        <footer className="py-6 text-center text-xs border-t border-[rgba(255,255,255,0.08)]" style={{ color: 'var(--text-muted)' }}>
+          <p>© 2025 Rose Labs, Inc. · Licensed under the <a href="#" className="hover:underline" style={{ color: 'var(--rose-pink)' }}>Peer Production License (PPL)</a></p>
         </footer>
       </div>
     </div>
