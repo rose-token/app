@@ -58,6 +58,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     // ============ Oracle Staleness ============
     uint256 public constant MAX_ORACLE_STALENESS = 1 hours;
 
+    // ============ Minimum Swap Threshold ============
+    uint256 public constant MIN_SWAP_AMOUNT = 1e6; // 1 USDC minimum to avoid tiny swaps
+
     // ============ Marketplace Integration ============
     address public marketplace;
 
@@ -307,17 +310,101 @@ contract RoseTreasury is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Diversify deposited USDC into RWA according to allocation
+     * @dev Diversify deposited USDC into RWA with smart rebalancing.
+     * Prioritizes underweight assets (USDC first, then RWA proportionally).
+     * Only uses target ratios for excess after all deficits are filled.
      */
     function _diversify(uint256 usdcAmount) internal {
+        if (usdcAmount == 0) return;
+
+        uint256 wbtcBal = wbtc.balanceOf(address(this));
+        uint256 rethBal = reth.balanceOf(address(this));
+        uint256 paxgBal = paxg.balanceOf(address(this));
+        uint256 usdcBal = usdc.balanceOf(address(this));
+
+        // First deposit - use simple ratio split
+        if (wbtcBal == 0 && rethBal == 0 && paxgBal == 0) {
+            _diversifyByRatio(usdcAmount);
+            return;
+        }
+
+        // Get current values via Chainlink
+        uint256 btcPrice = getBTCPrice();
+        uint256 ethPrice = getETHPrice();
+        uint256 goldPrice = getGoldPrice();
+
+        uint256 currentBTC = _getAssetValueUSD(wbtcBal, btcPrice, WBTC_DECIMALS);
+        uint256 currentETH = _getAssetValueUSD(rethBal, ethPrice, RETH_DECIMALS);
+        uint256 currentGold = _getAssetValueUSD(paxgBal, goldPrice, PAXG_DECIMALS);
+
+        uint256 newVaultTotal = currentBTC + currentETH + currentGold + usdcBal;
+
+        // Target values based on new total
+        uint256 targetBTC = (newVaultTotal * allocBTC) / ALLOC_DENOMINATOR;
+        uint256 targetETH = (newVaultTotal * allocETH) / ALLOC_DENOMINATOR;
+        uint256 targetGold = (newVaultTotal * allocGold) / ALLOC_DENOMINATOR;
+        uint256 targetUSDC = (newVaultTotal * allocUSDC) / ALLOC_DENOMINATOR;
+
+        uint256 preDepositUSDC = usdcBal - usdcAmount;
+
+        // Calculate deficits
+        uint256 deficitUSDC = targetUSDC > preDepositUSDC ? targetUSDC - preDepositUSDC : 0;
+        uint256 deficitBTC = targetBTC > currentBTC ? targetBTC - currentBTC : 0;
+        uint256 deficitETH = targetETH > currentETH ? targetETH - currentETH : 0;
+        uint256 deficitGold = targetGold > currentGold ? targetGold - currentGold : 0;
+
+        uint256 remaining = usdcAmount;
+
+        // Phase 1: Fill USDC buffer first
+        if (deficitUSDC > 0 && remaining > 0) {
+            uint256 toUSDC = remaining < deficitUSDC ? remaining : deficitUSDC;
+            remaining -= toUSDC;
+        }
+
+        // Phase 2: Fill RWA deficits proportionally
+        if (remaining > 0) {
+            uint256 totalRWADeficit = deficitBTC + deficitETH + deficitGold;
+
+            if (totalRWADeficit > 0) {
+                uint256 toSpend = remaining < totalRWADeficit ? remaining : totalRWADeficit;
+
+                if (deficitBTC > 0) {
+                    uint256 spentBTC = (toSpend * deficitBTC) / totalRWADeficit;
+                    if (spentBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(wbtc), spentBTC);
+                }
+                if (deficitETH > 0) {
+                    uint256 spentETH = (toSpend * deficitETH) / totalRWADeficit;
+                    if (spentETH >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(reth), spentETH);
+                }
+                if (deficitGold > 0) {
+                    uint256 spentGold = toSpend - ((toSpend * deficitBTC) / totalRWADeficit)
+                                              - ((toSpend * deficitETH) / totalRWADeficit);
+                    if (spentGold >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), spentGold);
+                }
+
+                remaining -= toSpend;
+            }
+        }
+
+        // Phase 3: Excess goes to RWA by ratio
+        if (remaining > 0) {
+            _diversifyByRatio(remaining);
+        }
+    }
+
+    /**
+     * @dev Simple diversification using target ratios (for first deposit or excess)
+     * Distributes USDC according to allocBTC/allocETH/allocGold, remainder stays as USDC buffer
+     */
+    function _diversifyByRatio(uint256 usdcAmount) internal {
         uint256 toBTC = (usdcAmount * allocBTC) / ALLOC_DENOMINATOR;
         uint256 toETH = (usdcAmount * allocETH) / ALLOC_DENOMINATOR;
         uint256 toGold = (usdcAmount * allocGold) / ALLOC_DENOMINATOR;
-        // Rest stays as USDC buffer
+        // Rest stays as USDC buffer (allocUSDC percentage)
 
-        if (toBTC > 0) _swapUSDCToAsset(address(wbtc), toBTC);
-        if (toETH > 0) _swapUSDCToAsset(address(reth), toETH);
-        if (toGold > 0) _swapUSDCToAsset(address(paxg), toGold);
+        if (toBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(wbtc), toBTC);
+        if (toETH >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(reth), toETH);
+        if (toGold >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), toGold);
     }
 
     /**
