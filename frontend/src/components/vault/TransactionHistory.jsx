@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount, usePublicClient, useChainId } from 'wagmi';
 import { formatUnits, parseAbiItem } from 'viem';
 import { Skeleton } from '../ui/skeleton';
 
@@ -9,6 +9,7 @@ const REDEEMED_EVENT = parseAbiItem('event Redeemed(address indexed user, uint25
 const TransactionHistory = ({ treasuryAddress }) => {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const chainId = useChainId();
 
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,7 +90,13 @@ const TransactionHistory = ({ treasuryAddress }) => {
   };
 
   const getExplorerUrl = (hash) => {
-    return `https://sepolia.etherscan.io/tx/${hash}`;
+    const explorers = {
+      1: 'https://etherscan.io',
+      11155111: 'https://sepolia.etherscan.io',
+      560048: 'https://hoodi.etherscan.io'
+    };
+    const baseUrl = explorers[chainId] || 'https://hoodi.etherscan.io';
+    return `${baseUrl}/tx/${hash}`;
   };
 
   if (!isConnected) {

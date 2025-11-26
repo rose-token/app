@@ -29,6 +29,18 @@ const SEPOLIA = {
   swapRouter: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Uniswap V3 Sepolia
 };
 
+// Hoodi testnet addresses (all mocks - no Chainlink or Uniswap support)
+const HOODI = {
+  usdc: null, // Will deploy mock
+  wbtc: null, // Will deploy mock
+  reth: null, // Will deploy mock
+  paxg: null, // Will deploy mock
+  btcUsdFeed: null, // Will deploy mock
+  ethUsdFeed: null, // Will deploy mock
+  xauUsdFeed: null, // Will deploy mock
+  swapRouter: null, // Will deploy mock
+};
+
 // Simple mock ERC20 for testnet
 const MOCK_TOKEN_ABI = [
   "constructor(string name, string symbol, uint8 decimals)",
@@ -61,10 +73,14 @@ async function main() {
     addresses = { ...SEPOLIA };
     isTestnet = true;
     console.log("Using SEPOLIA addresses (testnet mode)");
-  } else {
-    addresses = { ...SEPOLIA };
+  } else if (chainId === 560048) {
+    addresses = { ...HOODI };
     isTestnet = true;
-    console.log("Unknown network - using SEPOLIA addresses as default (testnet mode)");
+    console.log("Using HOODI addresses (testnet mode - all mocks)");
+  } else {
+    addresses = { ...HOODI };
+    isTestnet = true;
+    console.log("Unknown network - using HOODI addresses as default (testnet mode)");
   }
 
   // ============ Step 0: Deploy Mock Tokens (Testnet Only) ============
@@ -290,7 +306,7 @@ async function main() {
   console.log(`
 To seed the treasury with initial capital:
 
-1. Get USDC (or testnet USDC on Sepolia)
+1. Get USDC (or use the deployed mock USDC on testnets)
 
 2. Approve treasury to spend your USDC:
    await usdc.approve("${treasuryAddress}", amount);

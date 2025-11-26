@@ -41,6 +41,12 @@ module.exports = {
       chainId: 11155111,
       maxFeePerGas: 4000000000,         // 4 gwei
       maxPriorityFeePerGas: 2000000000, // 2 gwei
+    },
+    hoodi: {
+      url: process.env.HOODI_RPC_URL || "https://rpc.hoodi.ethpandaops.io",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 560048,
+      gasPrice: "auto"
     }
   },
   paths: {
@@ -51,8 +57,19 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      sepolia: process.env.ETHERSCAN_API_KEY
-    }
+      sepolia: process.env.ETHERSCAN_API_KEY,
+      hoodi: process.env.ETHERSCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io"
+        }
+      }
+    ]
   },
   sourcify: {
     enabled: false
