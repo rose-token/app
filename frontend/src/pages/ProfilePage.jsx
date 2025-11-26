@@ -74,53 +74,86 @@ const ProfilePage = () => {
       <h1 className="text-3xl font-bold mb-6">User Profile</h1>
       
       {isLoading && !profile ? (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div
+          className="rounded-[20px] backdrop-blur-[20px] p-6 mb-6"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
           <div className="animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-6"></div>
-            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+            <div className="h-4 rounded w-1/4 mb-4" style={{ background: 'var(--border-subtle)' }}></div>
+            <div className="h-4 rounded w-1/2 mb-6" style={{ background: 'var(--border-subtle)' }}></div>
+            <div className="h-4 rounded w-3/4 mb-2" style={{ background: 'var(--border-subtle)' }}></div>
+            <div className="h-4 rounded w-1/2 mb-2" style={{ background: 'var(--border-subtle)' }}></div>
           </div>
         </div>
       ) : error ? (
-        <div className="bg-red-100 text-red-700 p-4 rounded-md mb-6">
+        <div
+          className="p-4 rounded-xl mb-6"
+          style={{
+            background: 'var(--error-bg)',
+            border: '1px solid rgba(248, 113, 113, 0.3)',
+            color: 'var(--error)'
+          }}
+        >
           {error}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div
+          className="rounded-[20px] backdrop-blur-[20px] p-6 mb-6"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
           {!isEditing ? (
             <div>
               <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2">Wallet Address</h2>
-                <p className="text-gray-700 break-all">
+                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Wallet Address</h2>
+                <p className="break-all font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
                   {account}
                 </p>
               </div>
-              
+
               <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2">Username</h2>
-                <p className="text-gray-700">
-                  {profile?.username || <span className="text-gray-400 italic">Not set</span>}
+                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Username</h2>
+                <p style={{ color: 'var(--text-secondary)' }}>
+                  {profile?.username || <span style={{ color: 'var(--text-muted)' }} className="italic">Not set</span>}
                 </p>
               </div>
-              
+
               <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2">Bio</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {profile?.bio || <span className="text-gray-400 italic">Not set</span>}
+                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Bio</h2>
+                <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                  {profile?.bio || <span style={{ color: 'var(--text-muted)' }} className="italic">Not set</span>}
                 </p>
               </div>
-              
+
               {updateSuccess && (
-                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
+                <div
+                  className="mb-4 p-3 rounded-xl"
+                  style={{
+                    background: 'var(--success-bg)',
+                    border: '1px solid rgba(74, 222, 128, 0.3)',
+                    color: 'var(--success)'
+                  }}
+                >
                   Profile updated successfully!
                 </div>
               )}
-              
+
               <div className="flex justify-end">
                 <button
                   onClick={handleEdit}
-                  className="bg-primary text-white py-2 px-4 rounded-md hover:bg-primary"
+                  className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                    color: 'var(--bg-primary)',
+                    boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                  }}
                 >
                   Edit Profile
                 </button>
@@ -129,7 +162,11 @@ const ProfilePage = () => {
           ) : (
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
+                <label
+                  className="block text-xs uppercase tracking-widest font-medium mb-2"
+                  style={{ color: 'var(--text-muted)' }}
+                  htmlFor="username"
+                >
                   Username
                 </label>
                 <input
@@ -137,45 +174,76 @@ const ProfilePage = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-3 rounded-xl"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)'
+                  }}
                   placeholder="Enter your username"
                 />
               </div>
-              
+
               <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="bio">
+                <label
+                  className="block text-xs uppercase tracking-widest font-medium mb-2"
+                  style={{ color: 'var(--text-muted)' }}
+                  htmlFor="bio"
+                >
                   Bio
                 </label>
                 <textarea
                   id="bio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-3 rounded-xl resize-y"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)'
+                  }}
                   rows="4"
                   placeholder="Tell us about yourself"
                 />
               </div>
-              
+
               {updateError && (
-                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
+                <div
+                  className="mb-4 p-3 rounded-xl"
+                  style={{
+                    background: 'var(--error-bg)',
+                    border: '1px solid rgba(248, 113, 113, 0.3)',
+                    color: 'var(--error)'
+                  }}
+                >
                   {updateError}
                 </div>
               )}
-              
+
               <div className="flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400"
+                  className="py-2 px-4 rounded-xl font-medium transition-all duration-200"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)'
+                  }}
                   disabled={isSaving}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className={`bg-primary text-white py-2 px-4 rounded-md ${
-                    isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary'
+                  className={`py-2 px-4 rounded-xl font-semibold transition-all duration-300 ${
+                    isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5'
                   }`}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                    color: 'var(--bg-primary)',
+                    boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                  }}
                   disabled={isSaving}
                 >
                   {isSaving ? 'Saving...' : 'Save Profile'}
