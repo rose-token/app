@@ -101,8 +101,8 @@ const RedeemCard = ({
         console.log('⏳ Waiting for approval confirmation...');
 
         await publicClient.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: 1
+          hash: approveHash,
+          confirmations: 1
         });
       }
 
