@@ -2,7 +2,20 @@ import React, { useState, useMemo } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
-import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+
+// Standard ERC20 ABI for approve
+const ERC20_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+];
 
 const SEPOLIA_GAS_SETTINGS = {
   gas: 500_000n,
@@ -91,7 +104,7 @@ const RedeemCard = ({
         console.log('⛽ Approving ROSE transfer...');
         const approveHash = await writeContractAsync({
           address: tokenAddress,
-          abi: RoseTokenABI,
+          abi: ERC20_ABI,
           functionName: 'approve',
           args: [treasuryAddress, amountInWei],
           ...SEPOLIA_GAS_SETTINGS,
