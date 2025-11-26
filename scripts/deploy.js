@@ -232,6 +232,12 @@ async function main() {
     const setAllocTx = await roseTreasury.setAllocation(4000, 0, 4000, 2000); // 40% BTC, 0% ETH, 40% Gold, 20% USDC
     await setAllocTx.wait();
     console.log("Testnet allocation set to 40% BTC, 40% Gold, 20% USDC ✓");
+
+    // Increase slippage tolerance to 2% for testnet (allows exact exchange rates)
+    console.log("Setting testnet slippage tolerance (2%)...");
+    const setSlippageTx = await roseTreasury.setMaxSlippage(200); // 2% = 200 bps
+    await setSlippageTx.wait();
+    console.log("Slippage tolerance set ✓");
   }
 
   // ============ Summary ============
