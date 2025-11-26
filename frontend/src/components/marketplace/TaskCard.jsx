@@ -101,25 +101,62 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isAcceptingPayment = loadingStates.acceptPayment?.[task.id] || false;
   const isCancelling = loadingStates.cancel?.[task.id] || false;
 
-  console.log('TaskCard:', { isStakeholder, status: task.status, statusCompare: task.status === TaskStatus.Completed, stakeholderApproval: task.stakeholderApproval, canApproveAsStakeholder });
+  // Status badge styling
+  const getStatusBadgeStyle = (status) => {
+    const styles = {
+      [TaskStatus.StakeholderRequired]: { background: 'var(--warning-bg)', border: '1px solid rgba(251, 191, 36, 0.3)', color: 'var(--warning)' },
+      [TaskStatus.Open]: { background: 'var(--info-bg)', border: '1px solid rgba(96, 165, 250, 0.3)', color: 'var(--info)' },
+      [TaskStatus.InProgress]: { background: 'var(--rose-pink-muted)', border: '1px solid rgba(212, 165, 165, 0.3)', color: 'var(--rose-pink-light)' },
+      [TaskStatus.Completed]: { background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)', color: 'var(--success)' },
+      [TaskStatus.ApprovedPendingPayment]: { background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)', color: 'var(--success)' },
+      [TaskStatus.Closed]: { background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' },
+    };
+    return styles[status] || styles[TaskStatus.Closed];
+  };
+
+  const labelStyle = {
+    color: 'var(--text-muted)',
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em'
+  };
+
+  const buttonBaseClass = "px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200";
 
   return (
-    <div className="bg-card rounded-lg shadow-md p-6 mb-4 ">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold text-foreground">{task.description}</h3>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-5 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <div className="flex justify-between items-start mb-5">
+        <h3 className="font-display text-xl font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+          {task.description}
+        </h3>
+        <span
+          className="px-3.5 py-1.5 rounded-full text-[0.6875rem] font-semibold uppercase tracking-wide"
+          style={getStatusBadgeStyle(task.status)}
+        >
           {getStatusText(task.status)}
         </span>
       </div>
 
       {/* Detailed Description Section */}
-      <div className="mb-4">
-        <div className="rounded-md p-3 bg-muted/20">
+      <div className="mb-5">
+        <div
+          className="rounded-xl p-4"
+          style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)' }}
+        >
           {!showDetails ? (
             <button
               onClick={loadDetailedDescription}
               disabled={isLoadingDetails}
-              className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
+              className="text-sm font-medium flex items-center transition-colors"
+              style={{ color: 'var(--rose-pink)' }}
             >
               {isLoadingDetails ? (
                 <>
@@ -135,20 +172,27 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             </button>
           ) : (
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-semibold text-sm text-foreground">Detailed Description</h4>
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Detailed Description</h4>
                 <button
                   onClick={() => setShowDetails(false)}
-                  className="text-muted-foreground hover:text-foreground text-xs"
+                  className="text-xs transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
                 >
                   Hide
                 </button>
               </div>
               {detailedContent && (
-                <div className="text-sm text-foreground whitespace-pre-wrap bg-card p-3 rounded">
+                <div
+                  className="text-sm whitespace-pre-wrap p-4 rounded-lg"
+                  style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                >
                   {detailedContent.description}
                   {detailedContent.uploadedAt && (
-                    <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
+                    <p
+                      className="text-xs mt-3 pt-3"
+                      style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                    >
                       Uploaded: {new Date(detailedContent.uploadedAt).toLocaleString()}
                     </p>
                   )}
@@ -157,45 +201,53 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             </div>
           )}
           {detailsError && (
-            <p className="text-xs text-destructive mt-1">{detailsError}</p>
+            <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>{detailsError}</p>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-5 mb-5">
         <div>
-          <p className="text-sm text-muted">Customer</p>
-          <p className="text-sm font-medium text-foreground truncate">{task.customer}</p>
+          <p style={labelStyle}>Customer</p>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: 'var(--text-primary)' }}>{task.customer}</p>
         </div>
         <div>
-          <p className="text-sm text-muted">Deposit</p>
-          <p className="text-sm font-medium text-foreground">{formatTokens(task.deposit)} ROSE</p>
+          <p style={labelStyle}>Deposit</p>
+          <p className="text-sm font-medium mt-1" style={{ color: 'var(--rose-gold)' }}>{formatTokens(task.deposit)} ROSE</p>
         </div>
         <div>
-          <p className="text-sm text-muted">Worker</p>
-          <p className="text-sm font-medium text-foreground truncate">{task.worker || 'Not assigned'}</p>
+          <p style={labelStyle}>Worker</p>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: task.worker ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            {task.worker || 'Not assigned'}
+          </p>
         </div>
         <div>
-          <p className="text-sm text-muted">Stakeholder</p>
-          <p className="text-sm font-medium text-foreground truncate">{task.stakeholder || 'Not assigned'}</p>
+          <p style={labelStyle}>Stakeholder</p>
+          <p className="text-sm font-medium truncate mt-1" style={{ color: task.stakeholder ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            {task.stakeholder || 'Not assigned'}
+          </p>
         </div>
         {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
           <div>
-            <p className="text-sm text-muted">Stakeholder Deposit</p>
-            <p className="text-sm font-medium text-foreground">{formatTokens(task.stakeholderDeposit)} ROSE</p>
+            <p style={labelStyle}>Stakeholder Deposit</p>
+            <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{formatTokens(task.stakeholderDeposit)} ROSE</p>
           </div>
         )}
       </div>
 
       {/* Display PR URL if task is completed or beyond */}
       {task.prUrl && task.status >= TaskStatus.Completed && (
-        <div className="mb-4 p-3 bg-accent/20 rounded-md border border-accent">
-          <p className="text-sm text-muted-foreground mb-1">Pull Request:</p>
+        <div
+          className="mb-5 p-4 rounded-xl"
+          style={{ background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)' }}
+        >
+          <p style={labelStyle} className="mb-2">Pull Request</p>
           <a
             href={task.prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-primary hover:text-primary/80 underline break-all"
+            className="text-sm underline break-all"
+            style={{ color: 'var(--success)' }}
           >
             {task.prUrl}
           </a>
@@ -203,32 +255,40 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       )}
 
       {task.status === TaskStatus.Completed && (
-        <div className="mb-4 flex space-x-4">
+        <div className="mb-5 flex space-x-6">
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.customerApproval ? 'bg-approval-success' : 'bg-muted'}`}></span>
-            <span className="text-sm text-foreground">Customer Approval</span>
+            <span
+              className="w-3 h-3 rounded-full mr-2"
+              style={{ background: task.customerApproval ? 'var(--success)' : 'var(--border-subtle)' }}
+            />
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Customer Approval</span>
           </div>
           <div className="flex items-center">
-            <span className={`w-3 h-3 rounded-full mr-2 ${task.stakeholderApproval ? 'bg-approval-success' : 'bg-muted'}`}></span>
-            <span className="text-sm text-foreground">Stakeholder Approval</span>
+            <span
+              className="w-3 h-3 rounded-full mr-2"
+              style={{ background: task.stakeholderApproval ? 'var(--success)' : 'var(--border-subtle)' }}
+            />
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Stakeholder Approval</span>
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-4">
+      <div className="flex flex-wrap gap-3 mt-5">
         {canStake && (
           <button
             onClick={() => onStake(task.id)}
             disabled={isStaking}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isStaking
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-stake hover:bg-task-stake/90 text-task-stake-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isStaking ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--warning) 0%, #f59e0b 100%)',
+              color: isStaking ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isStaking ? 'none' : '0 4px 16px rgba(251, 191, 36, 0.3)',
+              opacity: isStaking ? 0.6 : 1
+            }}
           >
             {isStaking ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Staking...
               </>
             ) : (
@@ -241,15 +301,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onClaim(task.id)}
             disabled={isClaiming}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isClaiming
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-claim hover:bg-task-claim/90 text-task-claim-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isClaiming ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--info) 0%, #3b82f6 100%)',
+              color: isClaiming ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isClaiming ? 'none' : '0 4px 16px rgba(96, 165, 250, 0.3)',
+              opacity: isClaiming ? 0.6 : 1
+            }}
           >
             {isClaiming ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Claiming...
               </>
             ) : (
@@ -262,16 +324,18 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onUnclaim(task.id)}
             disabled={isUnclaiming}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isUnclaiming
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-unclaim hover:bg-task-unclaim/90 text-task-unclaim-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-subtle)',
+              color: isUnclaiming ? 'var(--text-muted)' : 'var(--text-secondary)',
+              opacity: isUnclaiming ? 0.6 : 1
+            }}
             title="Release this task so another worker can claim it"
           >
             {isUnclaiming ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Unclaiming...
               </>
             ) : (
@@ -284,15 +348,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={handleMarkCompleted}
             disabled={isCompleting}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isCompleting
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isCompleting ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+              color: isCompleting ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isCompleting ? 'none' : '0 4px 16px rgba(212, 165, 165, 0.3)',
+              opacity: isCompleting ? 0.6 : 1
+            }}
           >
             {isCompleting ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Marking Complete...
               </>
             ) : (
@@ -305,15 +371,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onApprove(task.id, 'customer')}
             disabled={isApprovingCustomer}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isApprovingCustomer
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isApprovingCustomer ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--success) 0%, #22c55e 100%)',
+              color: isApprovingCustomer ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isApprovingCustomer ? 'none' : '0 4px 16px rgba(74, 222, 128, 0.3)',
+              opacity: isApprovingCustomer ? 0.6 : 1
+            }}
           >
             {isApprovingCustomer ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Approving...
               </>
             ) : (
@@ -326,15 +394,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onApprove(task.id, 'stakeholder')}
             disabled={isApprovingStakeholder}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ease-in-out shadow-md ${
-              isApprovingStakeholder
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-approve hover:bg-task-approve/90 text-task-approve-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isApprovingStakeholder ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--success) 0%, #22c55e 100%)',
+              color: isApprovingStakeholder ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isApprovingStakeholder ? 'none' : '0 4px 16px rgba(74, 222, 128, 0.3)',
+              opacity: isApprovingStakeholder ? 0.6 : 1
+            }}
           >
             {isApprovingStakeholder ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Approving...
               </>
             ) : (
@@ -347,21 +417,21 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onAcceptPayment(task.id)}
             disabled={isAcceptingPayment}
-            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center space-x-1 ${
-              isAcceptingPayment
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isAcceptingPayment ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+              color: isAcceptingPayment ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isAcceptingPayment ? 'none' : '0 4px 16px rgba(212, 165, 165, 0.3)',
+              opacity: isAcceptingPayment ? 0.6 : 1
+            }}
           >
             {isAcceptingPayment ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
-                <span>Accepting Payment...</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
+                Accepting Payment...
               </>
             ) : (
-              <>
-                <span>Accept Payment</span>
-              </>
+              'Accept Payment'
             )}
           </button>
         )}
@@ -370,15 +440,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <button
             onClick={() => onCancel(task.id)}
             disabled={isCancelling}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              isCancelling
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-task-cancel hover:bg-task-cancel/90 text-task-cancel-foreground'
-            }`}
+            className={buttonBaseClass}
+            style={{
+              background: isCancelling ? 'var(--bg-secondary)' : 'var(--error-bg)',
+              border: '1px solid rgba(248, 113, 113, 0.3)',
+              color: isCancelling ? 'var(--text-muted)' : 'var(--error)',
+              opacity: isCancelling ? 0.6 : 1
+            }}
           >
             {isCancelling ? (
               <>
-                <span className="animate-pulse inline-block mr-2">✨</span>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
                 Cancelling...
               </>
             ) : (
@@ -390,22 +462,34 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       {/* Progress Tracker - visible to all participants */}
       {isParticipant && (
-        <div className="mt-4">
+        <div className="mt-6">
           <ProgressTracker task={task} />
         </div>
       )}
 
       {/* PR URL Modal */}
       {showPrUrlModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Mark Task as Completed</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            className="rounded-[20px] p-7 max-w-md w-full mx-4"
+            style={{
+              background: 'var(--bg-card-solid)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-card)'
+            }}
+          >
+            <h3 className="font-display text-xl font-medium mb-4" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+              Mark Task as Completed
+            </h3>
+            <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
               Please provide the GitHub Pull Request URL for the completed work:
             </p>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-foreground mb-2">
+            <div className="mb-5">
+              <label style={{ ...labelStyle, display: 'block', marginBottom: '0.5rem' }}>
                 GitHub PR URL *
               </label>
               <input
@@ -413,23 +497,39 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
                 value={prUrl}
                 onChange={(e) => setPrUrl(e.target.value)}
                 placeholder="https://github.com/owner/repo/pull/123"
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground"
+                className="w-full px-4 py-3 rounded-xl"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9375rem'
+                }}
               />
               {prUrlError && (
-                <p className="text-xs text-destructive mt-1">{prUrlError}</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>{prUrlError}</p>
               )}
             </div>
 
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowPrUrlModal(false)}
-                className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted/80 rounded-md"
+                className="px-5 py-2.5 text-sm font-semibold rounded-xl"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-secondary)'
+                }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmitCompletion}
-                className="px-4 py-2 text-sm font-medium bg-task-complete hover:bg-task-complete/90 text-task-complete-foreground rounded-md"
+                className="px-5 py-2.5 text-sm font-semibold rounded-xl"
+                style={{
+                  background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                  color: 'var(--bg-primary)',
+                  boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                }}
               >
                 Submit
               </button>

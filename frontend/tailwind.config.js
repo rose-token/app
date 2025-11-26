@@ -15,6 +15,10 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Cormorant Garamond', 'Georgia', 'serif'],
+        body: ['DM Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

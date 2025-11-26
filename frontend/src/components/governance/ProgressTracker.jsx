@@ -42,9 +42,24 @@ const ProgressTracker = ({ task }) => {
   };
 
   const getStageIcon = (stage, status) => {
-    if (status === 'completed') return <CheckCircle className="h-5 w-5 text-accent" />;
-    if (status === 'active') return <Clock className="h-5 w-5 text-primary" />;
-    return <div className="h-5 w-5 rounded-full border-muted border" />;
+    if (status === 'completed') {
+      return <CheckCircle className="h-5 w-5" style={{ color: 'var(--success)' }} />;
+    }
+    if (status === 'active') {
+      return <Clock className="h-5 w-5" style={{ color: 'var(--rose-pink)' }} />;
+    }
+    return (
+      <div
+        className="h-5 w-5 rounded-full"
+        style={{ border: '2px solid var(--border-subtle)' }}
+      />
+    );
+  };
+
+  const getBadgeVariant = (status) => {
+    if (status === 'completed') return 'success';
+    if (status === 'active') return 'inProgress';
+    return 'default';
   };
 
   const stages = [
@@ -87,10 +102,10 @@ const ProgressTracker = ({ task }) => {
   ];
 
   return (
-    <Card className="border">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Award className="h-5 w-5 mr-2" />
+          <Award className="h-5 w-5 mr-2" style={{ color: 'var(--rose-gold)' }} />
           Task Progress
         </CardTitle>
       </CardHeader>
@@ -101,29 +116,33 @@ const ProgressTracker = ({ task }) => {
               <div className="flex flex-col items-center">
                 {getStageIcon(stage.id, stage.status)}
                 {index < stages.length - 1 && (
-                  <div className={`w-0.5 h-8 mt-2 ${
-                    stage.status === 'completed' ? 'bg-green-600' : 'bg-gray-300'
-                  }`} />
+                  <div
+                    className="w-0.5 h-8 mt-2"
+                    style={{
+                      background: stage.status === 'completed'
+                        ? 'var(--success)'
+                        : 'var(--border-subtle)'
+                    }}
+                  />
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">{stage.title}</h4>
-                  <Badge variant={
-                    stage.status === 'completed' ? 'default' :
-                    stage.status === 'active' ? 'secondary' : 'outline'
-                  }>
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {stage.title}
+                  </h4>
+                  <Badge variant={getBadgeVariant(stage.status)}>
                     {stage.status === 'completed' ? 'Complete' :
                      stage.status === 'active' ? 'Active' : 'Pending'}
                   </Badge>
                 </div>
-                <p className="text-xs text-gray-600 mt-1">{stage.description}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {stage.description}
+                </p>
               </div>
             </div>
           ))}
         </div>
-        
-        
       </CardContent>
     </Card>
   );

@@ -1,13 +1,27 @@
 import React from 'react';
 import { Skeleton } from '../ui/skeleton';
 
-const StatCard = ({ label, value, isLoading, prefix = '', suffix = '' }) => (
-  <div className="bg-card rounded-lg shadow-sm p-4">
-    <p className="text-sm text-foreground mb-1">{label}</p>
+const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false }) => (
+  <div
+    className="rounded-xl p-5 transition-all duration-300"
+    style={{
+      background: highlight ? 'var(--rose-pink-muted)' : 'rgba(255, 255, 255, 0.03)',
+      border: `1px solid ${highlight ? 'rgba(212, 165, 165, 0.3)' : 'var(--border-subtle)'}`
+    }}
+  >
+    <p
+      className="text-[0.6875rem] font-semibold uppercase tracking-wide mb-2"
+      style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}
+    >
+      {label}
+    </p>
     {isLoading ? (
       <Skeleton className="h-8 w-24" />
     ) : (
-      <p className="text-2xl font-bold text-foreground">
+      <p
+        className="font-display text-2xl font-semibold"
+        style={{ color: highlight ? 'var(--rose-pink-light)' : 'var(--text-primary)', letterSpacing: '-0.02em' }}
+      >
         {prefix}{value !== null ? value : '--'}{suffix}
       </p>
     )}
@@ -34,8 +48,17 @@ const VaultStats = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Vault Overview</h2>
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Vault Overview
+      </h2>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
@@ -43,6 +66,7 @@ const VaultStats = ({
           value={formatUSD(rosePrice)}
           prefix="$"
           isLoading={isLoading}
+          highlight={true}
         />
 
         <StatCard

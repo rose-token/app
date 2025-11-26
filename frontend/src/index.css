@@ -5,143 +5,135 @@
 @layer base {
   :root {
     /*
-     * Rose Theme Color Palette
+     * Rose Token Dark Theme
      *
-     * Core Colors:
-     * - #F6E8D5 (Background) - Soft cream, warm and inviting
-     * - #B1452C (Primary) - Deep rose, main brand color for navbar and primary actions
-     * - #E4A97F (Accent) - Warm peach, positive buttons and highlights
-     * - #421F16 (Destructive) - Dark brown, negative actions and warnings
-     * - #755947 (Secondary) - Medium brown, secondary elements and muted states
-     *
-     * All colors use HSL format for Tailwind CSS compatibility
-     * Modify these variables to change the entire theme
+     * A sophisticated dark theme with rose-gold accents
+     * featuring glassmorphism and subtle gradient effects
      */
 
-    /* Base Colors - Rose Theme Palette */
-    /* Standard background: #F6E8D5 */
-    --background: 33 58% 91%;
-    --foreground: 12 49% 17%;
+    /* Background colors */
+    --bg-primary: #1a1a1f;
+    --bg-secondary: #222228;
+    --bg-card: rgba(38, 38, 45, 0.85);
+    --bg-card-solid: #2a2a32;
+    --bg-card-hover: rgba(50, 50, 58, 0.9);
 
-    /* Card background uses white to stand out from cream background */
-    --card: 0 0% 100%;
-    --card-foreground: 12 49% 17%;
+    /* Border colors */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-accent: rgba(212, 175, 140, 0.35);
 
-    --popover: 33 58% 91%;
-    --popover-foreground: 12 49% 17%;
+    /* Text colors */
+    --text-primary: #f5f5f7;
+    --text-secondary: rgba(245, 245, 247, 0.7);
+    --text-muted: rgba(245, 245, 247, 0.5);
 
-    /* Main color/Left navbar: #B1452C */
-    --primary: 356, 55%, 65%;
-    --primary-foreground: 33 58% 91%;
+    /* Brand colors */
+    --rose-gold: #d4af8c;
+    --rose-gold-light: #e8d4bc;
+    --rose-gold-dark: #a67c52;
+    --rose-pink: #d4a5a5;
+    --rose-pink-light: #e8c4c4;
+    --rose-pink-muted: rgba(212, 165, 165, 0.15);
 
-    /* Secondary/muted: #755947 */
-    --secondary: 25 25% 38%;
-    --secondary-foreground: 33 58% 91%;
+    /* Status colors */
+    --success: #4ade80;
+    --success-bg: rgba(74, 222, 128, 0.15);
+    --warning: #fbbf24;
+    --warning-bg: rgba(251, 191, 36, 0.15);
+    --error: #f87171;
+    --error-bg: rgba(248, 113, 113, 0.15);
+    --info: #60a5fa;
+    --info-bg: rgba(96, 165, 250, 0.15);
 
-    --muted: 25 25% 38%;
-    --muted-foreground: 33 58% 91%;
+    /* Asset colors (vault) */
+    --btc-orange: #f7931a;
+    --gold-yellow: #ffd700;
+    --usdc-blue: #2775ca;
+    --eth-purple: #627eea;
 
-    /* Positive buttons/accents: #E4A97F */
-    --accent: 23 65% 69%;
-    --accent-foreground: 12 49% 17%;
+    /* Typography */
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
-    /* Negative buttons/accents: #421F16 */
-    --destructive: 12 49% 17%;
-    --destructive-foreground: 33 58% 91%;
-
-    --border: 25 25% 38%;
-    --input: 0 0% 100%;
-    --ring: 12 58% 43%;
-
+    /* Spacing & radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
     --radius: 0.5rem;
 
+    /* Shadows */
+    --shadow-glow: 0 0 60px rgba(212, 175, 140, 0.08);
+    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+    /* Tailwind CSS variable mappings */
+    --background: 240 6% 11%;
+    --foreground: 240 5% 96%;
+
+    --card: 240 6% 16%;
+    --card-foreground: 240 5% 96%;
+
+    --popover: 240 6% 16%;
+    --popover-foreground: 240 5% 96%;
+
+    --primary: 22 41% 69%;
+    --primary-foreground: 240 6% 11%;
+
+    --secondary: 240 4% 20%;
+    --secondary-foreground: 240 5% 96%;
+
+    --muted: 240 4% 20%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 0 31% 74%;
+    --accent-foreground: 240 6% 11%;
+
+    --destructive: 0 62% 72%;
+    --destructive-foreground: 240 6% 11%;
+
+    --border: 240 4% 20%;
+    --input: 240 6% 16%;
+    --ring: 22 41% 69%;
+
     /* Task-Specific Action Colors */
-    /* Stake action - warm orange tone */
-    --task-stake: 23 65% 69%;
-    --task-stake-foreground: 12 49% 17%;
+    --task-stake: 43 96% 56%;
+    --task-stake-foreground: 240 6% 11%;
 
-    /* Claim action - primary rose */
-    --task-claim: 12 58% 43%;
-    --task-claim-foreground: 33 58% 91%;
+    --task-claim: 217 91% 60%;
+    --task-claim-foreground: 240 6% 11%;
 
-    /* Unclaim action - muted brown */
-    --task-unclaim: 25 25% 38%;
-    --task-unclaim-foreground: 33 58% 91%;
+    --task-unclaim: 240 4% 20%;
+    --task-unclaim-foreground: 240 5% 96%;
 
-    /* Complete action - accent orange */
-    --task-complete: 23 65% 69%;
-    --task-complete-foreground: 12 49% 17%;
+    --task-complete: 22 41% 69%;
+    --task-complete-foreground: 240 6% 11%;
 
-    /* Approve action - primary rose */
-    --task-approve: 12 58% 43%;
-    --task-approve-foreground: 33 58% 91%;
+    --task-approve: 142 71% 45%;
+    --task-approve-foreground: 240 6% 11%;
 
-    /* Cancel action - destructive dark */
-    --task-cancel: 12 49% 17%;
-    --task-cancel-foreground: 33 58% 91%;
+    --task-cancel: 0 62% 72%;
+    --task-cancel-foreground: 240 6% 11%;
 
-    /* Approval/Success indicator - soft green */
-    --approval-success: 142 52% 48%;
-    --approval-success-foreground: 0 0% 100%;
+    --approval-success: 142 71% 45%;
+    --approval-success-foreground: 240 6% 11%;
 
     /* Status Badge Colors */
-    /* Open status - inviting accent */
-    --status-open: 23 65% 69%;
-    --status-open-foreground: 12 49% 17%;
+    --status-open: 217 91% 60%;
+    --status-open-foreground: 240 6% 11%;
 
-    /* Needs stakeholder - warm attention */
-    --status-stakeholder-needed: 23 65% 69%;
-    --status-stakeholder-needed-foreground: 12 49% 17%;
+    --status-stakeholder-needed: 43 96% 56%;
+    --status-stakeholder-needed-foreground: 240 6% 11%;
 
-    /* In progress - primary active */
-    --status-in-progress: 12 58% 43%;
-    --status-in-progress-foreground: 33 58% 91%;
+    --status-in-progress: 0 31% 74%;
+    --status-in-progress-foreground: 240 6% 11%;
 
-    /* Completed - success tone */
-    --status-completed: 23 65% 69%;
-    --status-completed-foreground: 12 49% 17%;
+    --status-completed: 22 41% 69%;
+    --status-completed-foreground: 240 6% 11%;
 
-    /* Approved - confirmed state */
-    --status-approved: 12 58% 43%;
-    --status-approved-foreground: 33 58% 91%;
+    --status-approved: 142 71% 45%;
+    --status-approved-foreground: 240 6% 11%;
 
-    /* Closed - muted finished */
-    --status-closed: 25 25% 38%;
-    --status-closed-foreground: 33 58% 91%;
-  }
-
-  .dark {
-    /* Dark mode with rose theme adjustments */
-    --background: 12 49% 17%;
-    --foreground: 33 58% 91%;
-
-    --card: 12 49% 17%;
-    --card-foreground: 33 58% 91%;
-
-    --popover: 12 49% 17%;
-    --popover-foreground: 33 58% 91%;
-
-    --primary: 12 58% 43%;
-    --primary-foreground: 33 58% 91%;
-
-    --secondary: 25 25% 38%;
-    --secondary-foreground: 33 58% 91%;
-
-    --muted: 25 25% 38%;
-    --muted-foreground: 33 58% 91%;
-
-    --accent: 23 65% 69%;
-    --accent-foreground: 12 49% 17%;
-
-    --destructive: 12 49% 17%;
-    --destructive-foreground: 33 58% 91%;
-
-    --border: 25 25% 38%;
-    --input: 25 25% 38%;
-    --ring: 23 65% 69%;
-
-    /* Task-specific colors remain the same in dark mode */
-    /* They will automatically adjust based on background contrast */
+    --status-closed: 240 4% 35%;
+    --status-closed-foreground: 240 5% 96%;
   }
 }
 
@@ -149,41 +141,212 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Background noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Gradient glow overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 20% 30%, rgba(212, 165, 165, 0.07) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(212, 175, 140, 0.05) 0%, transparent 45%),
+                radial-gradient(ellipse at 50% 50%, rgba(212, 165, 165, 0.03) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ensure content is above background effects */
+  #root {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* Form inputs */
+  input, textarea, select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--rose-gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 140, 0.1);
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-accent);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--rose-gold);
   }
 }
 
-/* RainbowKit Custom Styling - Rose Theme */
+/* RainbowKit Custom Styling - Dark Rose Theme */
 @layer components {
-  /* Style the main Connect Wallet button to match Rose theme */
+  /* Style the main Connect Wallet button */
   button[data-testid="rk-connect-button"],
   button[class*="ConnectButton"] {
-    @apply bg-primary text-primary-foreground hover:opacity-90 transition-opacity;
-    font-weight: 500 !important;
-    border-radius: 0.375rem !important;
+    background: linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%) !important;
+    color: var(--bg-primary) !important;
+    font-weight: 600 !important;
+    border-radius: var(--radius-md) !important;
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(212, 165, 165, 0.3) !important;
+    transition: all 0.3s ease !important;
+  }
+
+  button[data-testid="rk-connect-button"]:hover,
+  button[class*="ConnectButton"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 24px rgba(212, 165, 165, 0.4) !important;
   }
 
   /* Style the account button when connected */
   button[data-testid="rk-account-button"] {
-    @apply bg-primary text-primary-foreground hover:opacity-90 transition-opacity;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-accent) !important;
+    color: var(--text-primary) !important;
     font-weight: 500 !important;
+    border-radius: var(--radius-md) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  button[data-testid="rk-account-button"]:hover {
+    border-color: var(--rose-gold) !important;
   }
 
   /* Style the chain/network button */
   button[data-testid="rk-chain-button"] {
-    @apply border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-all;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: var(--text-secondary) !important;
+    border-radius: var(--radius-md) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  button[data-testid="rk-chain-button"]:hover {
+    border-color: var(--border-accent) !important;
   }
 }
 
-/* Override RainbowKit modal styles to match Rose theme */
+/* Override RainbowKit modal styles */
 div[data-rk] {
-  --rk-colors-accentColor: hsl(var(--primary)) !important;
-  --rk-colors-accentColorForeground: hsl(var(--primary-foreground)) !important;
-  --rk-colors-modalBackground: hsl(var(--card)) !important;
-  --rk-colors-modalBorder: hsl(var(--border)) !important;
-  --rk-colors-modalText: hsl(var(--foreground)) !important;
-  --rk-colors-modalTextSecondary: hsl(var(--muted-foreground)) !important;
-  --rk-radii-modal: 0.5rem !important;
-  --rk-radii-actionButton: 0.375rem !important;
+  --rk-colors-accentColor: var(--rose-gold) !important;
+  --rk-colors-accentColorForeground: var(--bg-primary) !important;
+  --rk-colors-modalBackground: var(--bg-card-solid) !important;
+  --rk-colors-modalBorder: var(--border-subtle) !important;
+  --rk-colors-modalText: var(--text-primary) !important;
+  --rk-colors-modalTextSecondary: var(--text-secondary) !important;
+  --rk-radii-modal: var(--radius-lg) !important;
+  --rk-radii-actionButton: var(--radius-md) !important;
+}
+
+/* Utility classes for the new design system */
+@layer utilities {
+  .glass {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .glass:hover {
+    border-color: var(--border-accent);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--rose-pink-light) 0%, var(--rose-pink) 50%, var(--rose-gold) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, var(--success) 0%, #22c55e 100%);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 2s infinite;
+  }
 }

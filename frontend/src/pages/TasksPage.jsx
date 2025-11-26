@@ -786,11 +786,13 @@ const TasksPage = () => {
   });
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Rose Token Marketplace</h1>
-        <p className="text-gray-600">
-          A decentralized task marketplace powered by a worker-first token distribution model
+    <div className="animate-fade-in">
+      <div className="mb-10">
+        <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
+          Worker-Owned <span className="gradient-text">Marketplace</span>
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
+          Decentralized task coordination where workers earn 95%
         </p>
       </div>
 

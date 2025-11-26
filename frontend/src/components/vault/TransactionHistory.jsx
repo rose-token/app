@@ -104,54 +104,71 @@ const TransactionHistory = ({ treasuryAddress }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-foreground mb-4">Transaction History</h3>
+    <div
+      className="rounded-[20px] backdrop-blur-[20px] p-7 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)'
+      }}
+    >
+      <h3 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Transaction History
+      </h3>
 
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
           ))}
         </div>
       ) : error ? (
-        <div className="text-center py-4 text-foreground">
+        <div className="text-center py-4" style={{ color: 'var(--error)' }}>
           <p>{error}</p>
         </div>
       ) : transactions.length === 0 ? (
-        <div className="text-center py-8 text-foreground">
-          <p>No transactions yet.</p>
-          <p className="text-sm mt-1">Your deposit and redemption history will appear here.</p>
+        <div className="text-center py-8">
+          <p style={{ color: 'var(--text-secondary)' }}>No transactions yet.</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Your deposit and redemption history will appear here.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {transactions.map((tx, index) => (
             <div
               key={`${tx.txHash}-${index}`}
-              className="flex items-center justify-between p-3 bg-muted/10 rounded-md hover:bg-muted/20 transition-colors"
+              className="flex items-center justify-between p-4 rounded-xl transition-colors"
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)'
+              }}
             >
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center gap-3">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    tx.type === 'Deposit' ? 'bg-accent/20' : 'bg-secondary/20'
-                  }`}
+                  className="w-9 h-9 rounded-full flex items-center justify-center"
+                  style={{
+                    background: tx.type === 'Deposit' ? 'var(--success-bg)' : 'var(--info-bg)',
+                    border: `1px solid ${tx.type === 'Deposit' ? 'rgba(74, 222, 128, 0.3)' : 'rgba(96, 165, 250, 0.3)'}`
+                  }}
                 >
                   {tx.type === 'Deposit' ? (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-accent"
+                      className="h-4 w-4"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      style={{ color: 'var(--success)' }}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                   ) : (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-secondary"
+                      className="h-4 w-4"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      style={{ color: 'var(--info)' }}
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                     </svg>
@@ -159,8 +176,8 @@ const TransactionHistory = ({ treasuryAddress }) => {
                 </div>
 
                 <div>
-                  <p className="text-sm font-medium text-foreground">{tx.type}</p>
-                  <p className="text-xs text-foreground">
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{tx.type}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {tx.type === 'Deposit'
                       ? `${tx.usdcAmount.toFixed(2)} USDC → ${tx.roseAmount.toFixed(4)} ROSE`
                       : `${tx.roseAmount.toFixed(4)} ROSE → ${tx.usdcAmount.toFixed(2)} USDC`}
@@ -172,7 +189,8 @@ const TransactionHistory = ({ treasuryAddress }) => {
                 href={getExplorerUrl(tx.txHash)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary hover:text-primary/80 hover:underline"
+                className="text-xs font-medium transition-colors"
+                style={{ color: 'var(--rose-pink)' }}
               >
                 {shortenHash(tx.txHash)}
               </a>

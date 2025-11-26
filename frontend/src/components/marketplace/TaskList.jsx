@@ -5,27 +5,37 @@ import { RefreshCw } from 'lucide-react';
 
 const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, isLoading, isRefreshing, error, onErrorDismiss, roseMarketplace, onRefresh, loadingStates }) => {
   if (isLoading && tasks.length === 0) {
-    return <div className="text-center py-8">Loading tasks...</div>;
+    return (
+      <div className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>
+        Loading tasks...
+      </div>
+    );
   }
-  
+
   if (error) {
     return (
       <ErrorMessage message={error} onDismiss={onErrorDismiss} />
     );
   }
-  
+
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        No tasks available. Create a new task to get started!
+      <div className="text-center py-8">
+        <p style={{ color: 'var(--text-secondary)' }}>No tasks available.</p>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Create a new task to get started!</p>
         {onRefresh && (
           <div className="mt-4">
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border-accent)',
+                color: 'var(--rose-gold)'
+              }}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh Tasks
             </button>
           </div>
@@ -33,13 +43,21 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
       </div>
     );
   }
-  
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <div>
           {isRefreshing && (
-            <div className="bg-accent/20 text-accent-foreground p-2 rounded-md text-sm border border-accent">
+            <div
+              className="p-2 rounded-xl text-sm flex items-center gap-2"
+              style={{
+                background: 'rgba(212, 175, 140, 0.1)',
+                border: '1px solid var(--border-accent)',
+                color: 'var(--rose-gold)'
+              }}
+            >
+              <RefreshCw className="h-4 w-4 animate-spin" />
               Refreshing tasks...
             </div>
           )}
@@ -48,9 +66,14 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm bg-primary text-primary-foreground hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:border-[rgba(212,175,140,0.5)]"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-accent)',
+              color: 'var(--rose-gold)'
+            }}
           >
-            <RefreshCw className="h-4 w-4 mr-1" />
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         )}
