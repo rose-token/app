@@ -60,68 +60,68 @@ contract RoseToken {
 
     /**
      * @dev Add or remove authorized minter/burner
-     * @param _account Address to update
-     * @param _status True to authorize, false to revoke
+     * @param account Address to update
+     * @param status True to authorize, false to revoke
      */
-    function setAuthorized(address _account, bool _status) external onlyOwner {
-        if (_account == address(0)) revert ZeroAddress();
-        authorized[_account] = _status;
-        emit AuthorizationUpdated(_account, _status);
+    function setAuthorized(address account, bool status) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        authorized[account] = status;
+        emit AuthorizationUpdated(account, status);
     }
 
     /**
      * @dev Transfer ownership
-     * @param _newOwner New owner address
+     * @param newOwner New owner address
      */
-    function transferOwnership(address _newOwner) external onlyOwner {
-        if (_newOwner == address(0)) revert ZeroAddress();
-        emit OwnershipTransferred(owner, _newOwner);
-        owner = _newOwner;
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
 
     // ============ Mint / Burn ============
 
     /**
      * @dev Mint new tokens to a specified address
-     * @param _to Recipient address
-     * @param _amount Amount to mint
+     * @param to Recipient address
+     * @param amount Amount to mint
      */
-    function mint(address _to, uint256 _amount) external onlyAuthorized {
-        if (_to == address(0)) revert ZeroAddress();
-        totalSupply += _amount;
-        balanceOf[_to] += _amount;
-        emit Transfer(address(0), _to, _amount);
+    function mint(address to, uint256 amount) external onlyAuthorized {
+        if (to == address(0)) revert ZeroAddress();
+        totalSupply += amount;
+        balanceOf[to] += amount;
+        emit Transfer(address(0), to, amount);
     }
 
     /**
      * @dev Burn tokens from a specified address (must have allowance or be the holder)
-     * @param _from Address to burn from
-     * @param _amount Amount to burn
+     * @param from Address to burn from
+     * @param amount Amount to burn
      */
-    function burn(address _from, uint256 _amount) external onlyAuthorized {
-        if (_from == address(0)) revert ZeroAddress();
-        if (balanceOf[_from] < _amount) revert InsufficientBalance();
-        
+    function burn(address from, uint256 amount) external onlyAuthorized {
+        if (from == address(0)) revert ZeroAddress();
+        if (balanceOf[from] < amount) revert InsufficientBalance();
+
         // If caller is not the holder, check allowance
-        if (_from != msg.sender) {
-            if (allowance[_from][msg.sender] < _amount) revert InsufficientAllowance();
-            allowance[_from][msg.sender] -= _amount;
+        if (from != msg.sender) {
+            if (allowance[from][msg.sender] < amount) revert InsufficientAllowance();
+            allowance[from][msg.sender] -= amount;
         }
-        
-        balanceOf[_from] -= _amount;
-        totalSupply -= _amount;
-        emit Transfer(_from, address(0), _amount);
+
+        balanceOf[from] -= amount;
+        totalSupply -= amount;
+        emit Transfer(from, address(0), amount);
     }
 
     /**
      * @dev Burn tokens from msg.sender (convenience function)
-     * @param _amount Amount to burn
+     * @param amount Amount to burn
      */
-    function burn(uint256 _amount) external {
-        if (balanceOf[msg.sender] < _amount) revert InsufficientBalance();
-        balanceOf[msg.sender] -= _amount;
-        totalSupply -= _amount;
-        emit Transfer(msg.sender, address(0), _amount);
+    function burn(uint256 amount) external {
+        if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
+        balanceOf[msg.sender] -= amount;
+        totalSupply -= amount;
+        emit Transfer(msg.sender, address(0), amount);
     }
 
     // ============ ERC20 Standard ============
@@ -129,39 +129,39 @@ contract RoseToken {
     /**
      * @dev Transfer tokens from msg.sender to a recipient
      */
-    function transfer(address _to, uint256 _amount) external returns (bool) {
-        if (_to == address(0)) revert ZeroAddress();
-        if (balanceOf[msg.sender] < _amount) revert InsufficientBalance();
-        balanceOf[msg.sender] -= _amount;
-        balanceOf[_to] += _amount;
-        emit Transfer(msg.sender, _to, _amount);
+    function transfer(address to, uint256 amount) external returns (bool) {
+        if (to == address(0)) revert ZeroAddress();
+        if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(msg.sender, to, amount);
         return true;
     }
 
     /**
      * @dev Approve another address to spend tokens on behalf of msg.sender
      */
-    function approve(address _spender, uint256 _amount) external returns (bool) {
-        if (_spender == address(0)) revert ZeroAddress();
-        allowance[msg.sender][_spender] = _amount;
-        emit Approval(msg.sender, _spender, _amount);
+    function approve(address spender, uint256 amount) external returns (bool) {
+        if (spender == address(0)) revert ZeroAddress();
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
         return true;
     }
 
     /**
      * @dev Transfer tokens from one address to another using allowance
      */
-    function transferFrom(address _from, address _to, uint256 _amount) external returns (bool) {
-        if (_from == address(0)) revert ZeroAddress();
-        if (_to == address(0)) revert ZeroAddress();
-        if (balanceOf[_from] < _amount) revert InsufficientBalance();
-        if (allowance[_from][msg.sender] < _amount) revert InsufficientAllowance();
-        
-        balanceOf[_from] -= _amount;
-        balanceOf[_to] += _amount;
-        allowance[_from][msg.sender] -= _amount;
-        
-        emit Transfer(_from, _to, _amount);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        if (from == address(0)) revert ZeroAddress();
+        if (to == address(0)) revert ZeroAddress();
+        if (balanceOf[from] < amount) revert InsufficientBalance();
+        if (allowance[from][msg.sender] < amount) revert InsufficientAllowance();
+
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        allowance[from][msg.sender] -= amount;
+
+        emit Transfer(from, to, amount);
         return true;
     }
 }
