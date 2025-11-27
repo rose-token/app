@@ -18,7 +18,7 @@ export async function getPassportScore(address: string): Promise<number> {
     throw new Error(`Gitcoin API error: ${response.status}`);
   }
 
-  const data: PassportScore = await response.json();
+  const data = await response.json() as PassportScore;
 
   if (data.status === 'ERROR') {
     throw new Error(data.error || 'Passport verification failed');
