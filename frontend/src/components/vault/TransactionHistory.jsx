@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useAccount, usePublicClient, useChainId } from 'wagmi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAccount, usePublicClient, useChainId, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseAbiItem } from 'viem';
 import { Skeleton } from '../ui/skeleton';
+import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 
 const DEPOSITED_EVENT = parseAbiItem('event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted)');
 const REDEEMED_EVENT = parseAbiItem('event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut)');
@@ -15,74 +16,100 @@ const TransactionHistory = ({ treasuryAddress }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      if (!isConnected || !address || !treasuryAddress || !publicClient) {
-        setTransactions([]);
-        setIsLoading(false);
-        return;
-      }
+  // Extract fetch logic into a reusable function
+  const fetchTransactions = useCallback(async () => {
+    if (!isConnected || !address || !treasuryAddress || !publicClient) {
+      setTransactions([]);
+      setIsLoading(false);
+      return;
+    }
 
-      setIsLoading(true);
-      setError(null);
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        // Get current block number
-        const currentBlock = await publicClient.getBlockNumber();
-        // Look back ~7 days (assuming ~12 second blocks on Sepolia)
-        const fromBlock = currentBlock - BigInt(50000);
+    try {
+      // Get current block number
+      const currentBlock = await publicClient.getBlockNumber();
+      // Look back ~7 days (assuming ~12 second blocks on Sepolia)
+      const fromBlock = currentBlock - BigInt(50000);
 
-        // Fetch deposit events
-        const depositLogs = await publicClient.getLogs({
-          address: treasuryAddress,
-          event: DEPOSITED_EVENT,
-          args: { user: address },
-          fromBlock: fromBlock > 0n ? fromBlock : 0n,
-          toBlock: 'latest',
-        });
+      // Fetch deposit events
+      const depositLogs = await publicClient.getLogs({
+        address: treasuryAddress,
+        event: DEPOSITED_EVENT,
+        args: { user: address },
+        fromBlock: fromBlock > 0n ? fromBlock : 0n,
+        toBlock: 'latest',
+      });
 
-        // Fetch redeem events
-        const redeemLogs = await publicClient.getLogs({
-          address: treasuryAddress,
-          event: REDEEMED_EVENT,
-          args: { user: address },
-          fromBlock: fromBlock > 0n ? fromBlock : 0n,
-          toBlock: 'latest',
-        });
+      // Fetch redeem events
+      const redeemLogs = await publicClient.getLogs({
+        address: treasuryAddress,
+        event: REDEEMED_EVENT,
+        args: { user: address },
+        fromBlock: fromBlock > 0n ? fromBlock : 0n,
+        toBlock: 'latest',
+      });
 
-        // Process and combine transactions
-        const depositTxs = depositLogs.map((log) => ({
-          type: 'Deposit',
-          usdcAmount: Number(formatUnits(log.args.usdcIn, 6)),
-          roseAmount: Number(formatUnits(log.args.roseMinted, 18)),
-          txHash: log.transactionHash,
-          blockNumber: log.blockNumber,
-        }));
+      // Process and combine transactions
+      const depositTxs = depositLogs.map((log) => ({
+        type: 'Deposit',
+        usdcAmount: Number(formatUnits(log.args.usdcIn, 6)),
+        roseAmount: Number(formatUnits(log.args.roseMinted, 18)),
+        txHash: log.transactionHash,
+        blockNumber: log.blockNumber,
+      }));
 
-        const redeemTxs = redeemLogs.map((log) => ({
-          type: 'Redeem',
-          roseAmount: Number(formatUnits(log.args.roseBurned, 18)),
-          usdcAmount: Number(formatUnits(log.args.usdcOut, 6)),
-          txHash: log.transactionHash,
-          blockNumber: log.blockNumber,
-        }));
+      const redeemTxs = redeemLogs.map((log) => ({
+        type: 'Redeem',
+        roseAmount: Number(formatUnits(log.args.roseBurned, 18)),
+        usdcAmount: Number(formatUnits(log.args.usdcOut, 6)),
+        txHash: log.transactionHash,
+        blockNumber: log.blockNumber,
+      }));
 
-        // Combine and sort by block number (most recent first)
-        const allTxs = [...depositTxs, ...redeemTxs]
-          .sort((a, b) => Number(b.blockNumber - a.blockNumber))
-          .slice(0, 10); // Limit to 10 most recent
+      // Combine and sort by block number (most recent first)
+      const allTxs = [...depositTxs, ...redeemTxs]
+        .sort((a, b) => Number(b.blockNumber - a.blockNumber))
+        .slice(0, 10); // Limit to 10 most recent
 
-        setTransactions(allTxs);
-      } catch (err) {
-        console.error('Error fetching transaction history:', err);
-        setError('Failed to load transaction history');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTransactions();
+      setTransactions(allTxs);
+    } catch (err) {
+      console.error('Error fetching transaction history:', err);
+      setError('Failed to load transaction history');
+    } finally {
+      setIsLoading(false);
+    }
   }, [address, isConnected, treasuryAddress, publicClient]);
+
+  // Watch for Deposited events to trigger refresh
+  useWatchContractEvent({
+    address: treasuryAddress,
+    abi: RoseTreasuryABI,
+    eventName: 'Deposited',
+    onLogs: () => {
+      console.log('Deposited event detected, refreshing transactions...');
+      fetchTransactions();
+    },
+    enabled: isConnected && !!treasuryAddress
+  });
+
+  // Watch for Redeemed events to trigger refresh
+  useWatchContractEvent({
+    address: treasuryAddress,
+    abi: RoseTreasuryABI,
+    eventName: 'Redeemed',
+    onLogs: () => {
+      console.log('Redeemed event detected, refreshing transactions...');
+      fetchTransactions();
+    },
+    enabled: isConnected && !!treasuryAddress
+  });
+
+  // Initial fetch on mount and when dependencies change
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const shortenHash = (hash) => {
     if (!hash) return '';
