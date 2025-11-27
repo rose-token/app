@@ -218,9 +218,19 @@ async function main() {
 
   // ============ Step 3: Deploy RoseMarketplace ============
   console.log("\n--- Step 3: Deploying RoseMarketplace ---");
+
+  // Get passport signer address from env or use deployer for testing
+  let passportSignerAddress = process.env.PASSPORT_SIGNER_ADDRESS;
+  if (!passportSignerAddress) {
+    // For testnet/local, use deployer address as signer (testing only)
+    passportSignerAddress = deployer.address;
+    console.log("No PASSPORT_SIGNER_ADDRESS set, using deployer for testing");
+  }
+  console.log("Passport signer:", passportSignerAddress);
+
   const RoseMarketplace = await hre.ethers.getContractFactory("RoseMarketplace");
-  // Updated: RoseMarketplace now takes (roseToken, daoTreasury)
-  const roseMarketplace = await RoseMarketplace.deploy(roseTokenAddress, treasuryAddress);
+  // Updated: RoseMarketplace now takes (roseToken, daoTreasury, passportSigner)
+  const roseMarketplace = await RoseMarketplace.deploy(roseTokenAddress, treasuryAddress, passportSignerAddress);
   await roseMarketplace.waitForDeployment();
   const marketplaceAddress = await roseMarketplace.getAddress();
   console.log("RoseMarketplace deployed to:", marketplaceAddress);
@@ -330,6 +340,7 @@ async function main() {
     tokenAddress: roseTokenAddress,
     treasuryAddress: treasuryAddress,
     marketplaceAddress: marketplaceAddress,
+    passportSignerAddress: passportSignerAddress,
     externalAddresses: addresses,
     timestamp: new Date().toISOString(),
   };

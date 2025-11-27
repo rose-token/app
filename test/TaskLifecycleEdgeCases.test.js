@@ -18,11 +18,15 @@ describe("Task Lifecycle Edge Cases", function () {
   let worker;
   let stakeholder;
   let otherUser;
+  let passportSigner;
 
   const taskTitle = "Build a website";
   const taskDeposit = ethers.parseEther("1");
   const ipfsHash = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
   const testPrUrl = "https://github.com/test/repo/pull/123";
+
+  // Nonce for unique expiry values
+  let signatureNonce = 0;
 
   // Helper function to get ROSE tokens via Treasury deposit
   async function getRoseTokens(user, usdcAmount) {
@@ -31,8 +35,26 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseTreasury.connect(user).deposit(usdcAmount);
   }
 
+  // Helper function to generate passport signature
+  async function generatePassportSignature(userAddress, action, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["address", "string", "uint256"],
+      [userAddress, action, expiry]
+    );
+    const signature = await passportSigner.signMessage(ethers.getBytes(messageHash));
+    return signature;
+  }
+
+  // Helper to get unique future expiry timestamp (uses blockchain time, not JS time)
+  async function getFutureExpiry() {
+    signatureNonce++;
+    const block = await ethers.provider.getBlock("latest");
+    return block.timestamp + 3600 + signatureNonce;
+  }
+
   beforeEach(async function () {
-    [owner, customer, worker, stakeholder, otherUser] = await ethers.getSigners();
+    [owner, customer, worker, stakeholder, otherUser, passportSigner] = await ethers.getSigners();
+    signatureNonce = 0;
 
     // 1. Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
@@ -81,11 +103,12 @@ describe("Task Lifecycle Edge Cases", function () {
       await swapRouter.getAddress()
     );
 
-    // 8. Deploy RoseMarketplace (Treasury is the DAO treasury)
+    // 8. Deploy RoseMarketplace (Treasury is the DAO treasury, passportSigner for verification)
     const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
     roseMarketplace = await RoseMarketplace.deploy(
       await roseToken.getAddress(),
-      await roseTreasury.getAddress()
+      await roseTreasury.getAddress(),
+      passportSigner.address
     );
 
     // 9. Authorize Treasury and Marketplace on RoseToken
@@ -101,21 +124,29 @@ describe("Task Lifecycle Edge Cases", function () {
   it("Should not allow creating a task with zero deposit", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
 
+    const expiry = await getFutureExpiry();
+    const sig = await generatePassportSignature(customer.address, "createTask", expiry);
+
     await expect(
-      roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash)
+      roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash, expiry, sig)
     ).to.be.reverted;
   });
 
   it("Should not allow stakeholder to stake without sufficient approval", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
 
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit - 1n);
 
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+
     await expect(
-      roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit)
+      roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig)
     ).to.be.reverted;
   });
 
@@ -127,50 +158,73 @@ describe("Task Lifecycle Edge Cases", function () {
 
   it("Should not allow customer to claim their own task", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+    const claimExpiry = await getFutureExpiry();
+    const claimSig = await generatePassportSignature(customer.address, "claim", claimExpiry);
 
     await expect(
-      roseMarketplace.connect(customer).claimTask(1)
+      roseMarketplace.connect(customer).claimTask(1, claimExpiry, claimSig)
     ).to.be.revertedWith("Customer cannot claim their own task");
   });
 
   it("Should not allow stakeholder to be the customer", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
 
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(customer.address, "stake", stakeExpiry);
+
     await expect(
-      roseMarketplace.connect(customer).stakeholderStake(1, stakeholderDeposit)
+      roseMarketplace.connect(customer).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig)
     ).to.be.revertedWith("Customer cannot be stakeholder for their own task");
   });
 
   it("Should not allow wrong deposit amount for stakeholder", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const wrongDeposit = taskDeposit / 5n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), wrongDeposit);
 
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+
     await expect(
-      roseMarketplace.connect(stakeholder).stakeholderStake(1, wrongDeposit)
+      roseMarketplace.connect(stakeholder).stakeholderStake(1, wrongDeposit, stakeExpiry, stakeSig)
     ).to.be.revertedWith("Must deposit exactly 10% of task value");
   });
 
   it("Should not allow non-worker to mark task as completed", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
-    await roseMarketplace.connect(worker).claimTask(1);
+    const claimExpiry = await getFutureExpiry();
+    const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+    await roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig);
 
     await expect(
       roseMarketplace.connect(otherUser).markTaskCompleted(1, testPrUrl)
@@ -179,26 +233,38 @@ describe("Task Lifecycle Edge Cases", function () {
 
   it("Should enforce all three roles (customer, stakeholder, worker) are different addresses", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    const custStakeExpiry = await getFutureExpiry();
+    const custStakeSig = await generatePassportSignature(customer.address, "stake", custStakeExpiry);
     await expect(
-      roseMarketplace.connect(customer).stakeholderStake(1, stakeholderDeposit)
+      roseMarketplace.connect(customer).stakeholderStake(1, stakeholderDeposit, custStakeExpiry, custStakeSig)
     ).to.be.revertedWith("Customer cannot be stakeholder for their own task");
 
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
+    const custClaimExpiry = await getFutureExpiry();
+    const custClaimSig = await generatePassportSignature(customer.address, "claim", custClaimExpiry);
     await expect(
-      roseMarketplace.connect(customer).claimTask(1)
+      roseMarketplace.connect(customer).claimTask(1, custClaimExpiry, custClaimSig)
     ).to.be.revertedWith("Customer cannot claim their own task");
 
+    const stakeClaimExpiry = await getFutureExpiry();
+    const stakeClaimSig = await generatePassportSignature(stakeholder.address, "claim", stakeClaimExpiry);
     await expect(
-      roseMarketplace.connect(stakeholder).claimTask(1)
+      roseMarketplace.connect(stakeholder).claimTask(1, stakeClaimExpiry, stakeClaimSig)
     ).to.be.revertedWith("Stakeholder cannot claim task they are validating");
 
-    await roseMarketplace.connect(worker).claimTask(1);
+    const claimExpiry = await getFutureExpiry();
+    const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+    await roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig);
 
     const task = await roseMarketplace.tasks(1);
     expect(task.customer).to.equal(customer.address);
@@ -212,11 +278,15 @@ describe("Task Lifecycle Edge Cases", function () {
 
   it("Should not allow unclaiming task that was never claimed", async function() {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash);
+    const createExpiry = await getFutureExpiry();
+    const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
-    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit);
+    const stakeExpiry = await getFutureExpiry();
+    const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+    await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
     await expect(
       roseMarketplace.connect(worker).unclaimTask(1)

@@ -1,0 +1,48 @@
+---
+version: "2.0"
+
+services:
+  signer:
+    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest
+    expose:
+      - port: 3000
+        as: 80
+        to:
+          - global: true
+    env:
+      - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
+      - GITCOIN_SCORER_ID=${GITCOIN_SCORER_ID}
+      - GITCOIN_API_KEY=${GITCOIN_API_KEY}
+      - THRESHOLD_CREATE_TASK=20
+      - THRESHOLD_STAKE=20
+      - THRESHOLD_CLAIM=20
+      - SIGNATURE_TTL=3600
+      - ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=30
+
+profiles:
+  compute:
+    signer:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          size: 1Gi
+
+  placement:
+    dcloud:
+      attributes:
+        host: akash
+      pricing:
+        signer:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  signer:
+    dcloud:
+      profile: signer
+      count: 1

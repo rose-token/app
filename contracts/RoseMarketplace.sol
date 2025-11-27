@@ -4,6 +4,9 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title RoseMarketplace
@@ -11,15 +14,30 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * validation process and RoseToken minting logic.
  *
  * Updated to accept an existing RoseToken address rather than deploying its own.
+ * Includes Gitcoin Passport signature verification for sybil resistance.
  */
-contract RoseMarketplace is ReentrancyGuard {
+contract RoseMarketplace is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
 
     // Reference to the RoseToken contract (external, not deployed by this contract)
     IERC20 public immutable roseToken;
 
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
+
+    // Passport signer (backend service that verifies Gitcoin Passport)
+    address public passportSigner;
+
+    // Track used signatures to prevent replay attacks
+    mapping(bytes32 => bool) public usedSignatures;
+
+    // Custom errors for passport verification
+    error InvalidSignature();
+    error SignatureExpired();
+    error SignatureAlreadyUsed();
+    error ZeroAddressSigner();
 
     // A simple enum to track task status
     enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
@@ -77,16 +95,53 @@ contract RoseMarketplace is ReentrancyGuard {
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /**
-     * @dev Constructor accepts existing RoseToken and DAO treasury addresses.
+     * @dev Constructor accepts existing RoseToken, DAO treasury, and passport signer addresses.
      * @param _roseToken The address of the deployed RoseToken contract
      * @param _daoTreasury The address where part of minted tokens go (RoseTreasury)
+     * @param _passportSigner The address of the backend signer for Gitcoin Passport verification
      */
-    constructor(address _roseToken, address _daoTreasury) {
+    constructor(address _roseToken, address _daoTreasury, address _passportSigner) Ownable(msg.sender) {
         require(_roseToken != address(0), "RoseToken cannot be zero address");
         require(_daoTreasury != address(0), "Treasury cannot be zero address");
-        
+        if (_passportSigner == address(0)) revert ZeroAddressSigner();
+
         roseToken = IERC20(_roseToken);
         daoTreasury = _daoTreasury;
+        passportSigner = _passportSigner;
+    }
+
+    /**
+     * @dev Modifier to verify Gitcoin Passport signature from backend
+     * @param action The action being performed (createTask, stake, claim)
+     * @param expiry The expiry timestamp of the signature
+     * @param signature The signature from the passport signer backend
+     */
+    modifier requiresPassport(string memory action, uint256 expiry, bytes memory signature) {
+        // Check expiry
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        // Build message hash (must match backend signing)
+        bytes32 messageHash = keccak256(abi.encodePacked(msg.sender, action, expiry));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        // Prevent replay attacks
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        // Verify signer
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != passportSigner) revert InvalidSignature();
+
+        _;
+    }
+
+    /**
+     * @dev Update the passport signer address (owner only)
+     * @param _signer The new signer address
+     */
+    function setPassportSigner(address _signer) external onlyOwner {
+        if (_signer == address(0)) revert ZeroAddressSigner();
+        passportSigner = _signer;
     }
 
     /**
@@ -94,8 +149,16 @@ contract RoseMarketplace is ReentrancyGuard {
      * @param _title Short public title of the task
      * @param _tokenAmount Amount of ROSE tokens to deposit
      * @param _detailedDescriptionHash IPFS hash containing detailed task description (mandatory)
+     * @param _expiry Signature expiry timestamp
+     * @param _signature Passport verification signature from backend
      */
-    function createTask(string calldata _title, uint256 _tokenAmount, string calldata _detailedDescriptionHash) external {
+    function createTask(
+        string calldata _title,
+        uint256 _tokenAmount,
+        string calldata _detailedDescriptionHash,
+        uint256 _expiry,
+        bytes calldata _signature
+    ) external requiresPassport("createTask", _expiry, _signature) {
         require(_tokenAmount > 0, "Token amount must be greater than zero");
         require(bytes(_title).length > 0, "Title cannot be empty");
         require(bytes(_detailedDescriptionHash).length > 0, "Detailed description hash is required");
@@ -120,8 +183,15 @@ contract RoseMarketplace is ReentrancyGuard {
      * @dev Stakeholder stakes 10% of the task deposit in ROSE tokens to become the stakeholder for a task
      * @param _taskId ID of the task to stake on
      * @param _tokenAmount Amount of ROSE tokens to stake (must be exactly 10% of task deposit)
+     * @param _expiry Signature expiry timestamp
+     * @param _signature Passport verification signature from backend
      */
-    function stakeholderStake(uint256 _taskId, uint256 _tokenAmount) external nonReentrant {
+    function stakeholderStake(
+        uint256 _taskId,
+        uint256 _tokenAmount,
+        uint256 _expiry,
+        bytes calldata _signature
+    ) external nonReentrant requiresPassport("stake", _expiry, _signature) {
         Task storage t = tasks[_taskId];
         require(t.status == TaskStatus.StakeholderRequired, "Task must be waiting for stakeholder");
         require(t.stakeholder == address(0), "Task already has a stakeholder");
@@ -134,7 +204,7 @@ contract RoseMarketplace is ReentrancyGuard {
 
         // Transfer tokens from stakeholder to the contract using SafeERC20
         roseToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
-        
+
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
         t.status = TaskStatus.Open;
@@ -191,8 +261,14 @@ contract RoseMarketplace is ReentrancyGuard {
     /**
      * @dev Worker claims an open task, assigns themselves as the worker, and marks it in progress.
      * @param _taskId ID of the task to claim
+     * @param _expiry Signature expiry timestamp
+     * @param _signature Passport verification signature from backend
      */
-    function claimTask(uint256 _taskId) external {
+    function claimTask(
+        uint256 _taskId,
+        uint256 _expiry,
+        bytes calldata _signature
+    ) external requiresPassport("claim", _expiry, _signature) {
         Task storage t = tasks[_taskId];
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");

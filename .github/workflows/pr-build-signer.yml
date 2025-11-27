@@ -1,0 +1,26 @@
+name: PR Build Signer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/signer/**'
+      - '.github/workflows/pr-build-signer.yml'
+
+jobs:
+  build-signer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/signer
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
