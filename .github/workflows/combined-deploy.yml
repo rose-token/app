@@ -59,14 +59,6 @@ jobs:
           ARBISCAN_API_KEY: ${{ secrets.ARBISCAN_API_KEY }}
         run: npx hardhat run scripts/deploy.js --network arbitrumSepolia
 
-      - name: Seed Treasury
-        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-        env:
-          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          SEED_AMOUNT: ${{ github.event.inputs.seed_amount || '10000' }}
-        run: npx hardhat run scripts/seed-treasury.js --network arbitrumSepolia
-
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         run: |
