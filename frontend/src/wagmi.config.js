@@ -1,16 +1,16 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { optimismSepolia } from 'wagmi/chains';
+import { arbitrumSepolia } from 'wagmi/chains';
 import { http } from 'wagmi';
 
-const opSepoliaRpcUrl = process.env.RPC_OP_SEPOLIA_URL || 'https://sepolia.optimism.io';
+const arbitrumSepoliaRpcUrl = process.env.RPC_ARBITRUM_SEPOLIA_URL || 'https://sepolia-rollup.arbitrum.io/rpc';
 
 // Simple default configuration that includes all popular wallets automatically
 export const config = getDefaultConfig({
   appName: 'Rose Token',
   projectId: '95be0fbf27f06934c74d670d57f44939',
-  chains: [optimismSepolia],
+  chains: [arbitrumSepolia],
   transports: {
-    [optimismSepolia.id]: http(opSepoliaRpcUrl, {
+    [arbitrumSepolia.id]: http(arbitrumSepoliaRpcUrl, {
       batch: {
         wait: 100,
       },

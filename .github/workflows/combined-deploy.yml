@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: 'Deploy to Optimism Sepolia and GitHub Pages'
+        description: 'Deploy to Arbitrum Sepolia and GitHub Pages'
         required: true
         default: 'true'
       seed_amount:
@@ -51,21 +51,21 @@ jobs:
       - name: Update ABIs
         run: node scripts/update-abi.js
       
-      - name: Deploy to Optimism Sepolia
+      - name: Deploy to Arbitrum Sepolia
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
-          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
+          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          OPTIMISM_ETHERSCAN_API_KEY: ${{ secrets.OPTIMISM_ETHERSCAN_API_KEY }}
-        run: npx hardhat run scripts/deploy.js --network opsepolia
+          ARBISCAN_API_KEY: ${{ secrets.ARBISCAN_API_KEY }}
+        run: npx hardhat run scripts/deploy.js --network arbitrumSepolia
 
       - name: Seed Treasury
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
-          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
+          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           SEED_AMOUNT: ${{ github.event.inputs.seed_amount || '10000' }}
-        run: npx hardhat run scripts/seed-treasury.js --network opsepolia
+        run: npx hardhat run scripts/seed-treasury.js --network arbitrumSepolia
 
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -167,7 +167,7 @@ jobs:
       - name: Build
         run: cd frontend && npm run build
         env:
-          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
+          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
           VITE_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
           VITE_TREASURY_ADDRESS: ${{ env.TREASURY_ADDRESS }}
           VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}

@@ -35,10 +35,15 @@ module.exports = {
       url: "http://127.0.0.1:8545/",
       chainId: 1337,
     },
-    opsepolia: {
-      url: process.env.OP_SEPOLIA_RPC_URL || "https://sepolia.optimism.io",
+    arbitrumSepolia: {
+      url: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155420,
+      chainId: 421614,
+    },
+    arbitrum: {
+      url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 42161,
     },
     tenderly: {
       url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",
@@ -55,15 +60,16 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      opsepolia: process.env.OPTIMISM_ETHERSCAN_API_KEY
+      arbitrumSepolia: process.env.ARBISCAN_API_KEY,
+      arbitrumOne: process.env.ARBISCAN_API_KEY
     },
     customChains: [
       {
-        network: "opsepolia",
-        chainId: 11155420,
+        network: "arbitrumSepolia",
+        chainId: 421614,
         urls: {
-          apiURL: "https://api-sepolia-optimistic.etherscan.io/api",
-          browserURL: "https://sepolia-optimism.etherscan.io"
+          apiURL: "https://api-sepolia.arbiscan.io/api",
+          browserURL: "https://sepolia.arbiscan.io"
         }
       },
       {

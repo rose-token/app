@@ -19,7 +19,8 @@ npm run compile           # Compile contracts
 npm test                  # Run all tests (4 test files, ~954 lines)
 npx hardhat test test/RoseMarketplace.test.js  # Run specific test
 npx hardhat node          # Start local node
-npm run deploy:opsepolia  # Deploy to Optimism Sepolia testnet
+npm run deploy:arbitrumSepolia  # Deploy to Arbitrum Sepolia testnet
+npm run deploy:arbitrum   # Deploy to Arbitrum One mainnet
 npm run update-abi        # Copy ABIs to frontend after contract changes
 
 # Frontend (from frontend/ directory)
@@ -110,16 +111,17 @@ Tests use mock contracts to simulate external dependencies:
 - `build-frontend`: npm install → update-abi → vite build
 
 **combined-deploy.yml:** Runs on main push
-- Deploys contracts to Optimism Sepolia, verifies on Optimism Etherscan, deploys frontend to GitHub Pages
+- Deploys contracts to Arbitrum Sepolia, verifies on Arbiscan, deploys frontend to GitHub Pages
 
 ## Environment Variables
 
 **Root .env (contracts):**
 ```bash
-OP_SEPOLIA_RPC_URL=https://sepolia.optimism.io
+ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 PRIVATE_KEY=your_wallet_private_key
 DAO_TREASURY_ADDRESS=0x...
-OPTIMISM_ETHERSCAN_API_KEY=...
+ARBISCAN_API_KEY=...
 ```
 
 **frontend/.env:**
@@ -137,7 +139,7 @@ VITE_PINATA_JWT=...
 - **Solidity version:** 0.8.20 (contracts use OpenZeppelin v5)
 - **Chainlink contracts:** v1.5.0 (import path: `@chainlink/contracts/src/v0.8/shared/interfaces/`)
 - **Optimizer:** enabled with 1 run + viaIR
-- **Networks:** Optimism Sepolia testnet (chainId: 11155420)
+- **Networks:** Arbitrum Sepolia testnet (chainId: 421614), Arbitrum One mainnet (chainId: 42161)
 - **Frontend bundler:** Vite 7.x (not webpack/CRA)
 - **Web3 stack:** wagmi + viem + RainbowKit (not ethers.js in frontend)
 

@@ -15,8 +15,8 @@ const MAINNET = {
   swapRouter: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
 };
 
-// Optimism Sepolia testnet addresses (all mocks for reliable CI/CD)
-const OP_SEPOLIA = {
+// Arbitrum Sepolia testnet addresses (all mocks for reliable CI/CD)
+const ARBITRUM_SEPOLIA = {
   usdc: null, // Will deploy mock
   wbtc: null, // Will deploy mock
   paxg: null, // Will deploy mock
@@ -52,20 +52,20 @@ async function main() {
 
   if (USE_MOCKS) {
     // Force mock mode (useful for Tenderly forks without state sync)
-    addresses = { ...OP_SEPOLIA };
+    addresses = { ...ARBITRUM_SEPOLIA };
     isTestnet = true;
     console.log("⚠️  --use-mocks flag detected: deploying mock oracles/router");
-  } else if (chainId === 1) {
+  } else if (chainId === 42161) {
     addresses = MAINNET;
-    console.log("Using MAINNET addresses");
-  } else if (chainId === 11155420) {
-    addresses = { ...OP_SEPOLIA };
+    console.log("Using MAINNET addresses (Arbitrum One)");
+  } else if (chainId === 421614) {
+    addresses = { ...ARBITRUM_SEPOLIA };
     isTestnet = true;
-    console.log("Using OP_SEPOLIA addresses (Optimism Sepolia testnet - all mocks)");
+    console.log("Using ARBITRUM_SEPOLIA addresses (Arbitrum Sepolia testnet - all mocks)");
   } else {
-    addresses = { ...OP_SEPOLIA };
+    addresses = { ...ARBITRUM_SEPOLIA };
     isTestnet = true;
-    console.log("Unknown network - using OP_SEPOLIA addresses as default (testnet mode)");
+    console.log("Unknown network - using ARBITRUM_SEPOLIA addresses as default (testnet mode)");
   }
 
   // ============ Step 0: Deploy Mock Tokens (Testnet Only) ============

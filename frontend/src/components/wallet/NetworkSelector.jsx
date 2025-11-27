@@ -6,8 +6,8 @@ const NetworkSelector = () => {
   const { switchChain } = useSwitchChain();
   
   const networks = [
-    { id: 11155111, name: 'Sepolia Testnet' },
-    { id: 1, name: 'Ethereum Mainnet' }
+    { id: 421614, name: 'Arbitrum Sepolia' },
+    { id: 42161, name: 'Arbitrum One' }
   ];
 
   const currentNetwork = networks.find(network => network.id === chainId) || { name: 'Unknown Network' };

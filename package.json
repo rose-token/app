@@ -6,7 +6,8 @@
     "test": "hardhat test",
     "compile": "hardhat compile",
     "update-abi": "hardhat compile && node scripts/update-abi.js",
-    "deploy:opsepolia": "hardhat run scripts/deploy.js --network opsepolia",
+    "deploy:arbitrumSepolia": "hardhat run scripts/deploy.js --network arbitrumSepolia",
+    "deploy:arbitrum": "hardhat run scripts/deploy.js --network arbitrum",
     "build": "cd frontend && npm install && npm run build"
   },
   "keywords": [],
