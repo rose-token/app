@@ -39,7 +39,6 @@ module.exports = {
       url: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 421614,
-      gasPrice: 100000000, // 0.1 gwei - required for Arbitrum Sepolia
     },
     arbitrum: {
       url: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
@@ -50,7 +49,6 @@ module.exports = {
       url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 1,
-      gasPrice: "auto"
     }
   },
   paths: {

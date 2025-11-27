@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWatchContractEvent, usePublicClient } from 'wagmi';
-import { formatUnits, parseUnits, parseGwei } from 'viem';
+import { formatUnits, parseUnits } from 'viem';
 import TaskList from '../components/marketplace/TaskList';
 import TaskFilters from '../components/marketplace/TaskFilters';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
@@ -40,11 +40,6 @@ const TasksPage = () => {
     myTasks: false,
     showClosed: false
   });
-  const SEPOLIA_GAS_SETTINGS = {
-    gas: 500_000n,
-    maxFeePerGas: parseGwei('10'),
-    maxPriorityFeePerGas: parseGwei('5'),
-  };
 
   const { address: account, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -252,7 +247,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
         args: [BigInt(taskId)],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Claim task transaction sent:', hash);
@@ -293,7 +287,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
         args: [BigInt(taskId)],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Unclaim task transaction sent:', hash);
@@ -334,7 +327,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
         args: [BigInt(taskId), prUrl],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Complete task transaction sent:', hash);
@@ -380,7 +372,6 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByCustomer',
           args: [BigInt(taskId)],
-          ...SEPOLIA_GAS_SETTINGS,
         });
       } else if (role === 'stakeholder') {
         console.log("⛽ Approving as stakeholder for task:", taskId);
@@ -390,7 +381,6 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
           args: [BigInt(taskId)],
-          ...SEPOLIA_GAS_SETTINGS,
         });
       }
 
@@ -431,7 +421,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
         args: [BigInt(taskId)],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Accept payment transaction sent:", hash);
@@ -506,7 +495,6 @@ const TasksPage = () => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
-        ...SEPOLIA_GAS_SETTINGS,
       });
       console.log("✅ Token approval transaction sent:", approveHash);
       console.log('⏳ Waiting for approval confirmation...');
@@ -531,7 +519,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
         args: [BigInt(taskId), depositAmount],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Stake transaction sent:", stakeHash);
@@ -599,7 +586,6 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
         args: [BigInt(taskId)],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log("✅ Cancel transaction sent:", hash);

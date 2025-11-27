@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
-import { parseUnits, formatUnits, parseGwei } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 
@@ -12,12 +12,6 @@ const formatCooldown = (seconds) => {
   if (hours > 0) return `${hours}h ${mins}m`;
   const secs = seconds % 60;
   return `${mins}m ${secs}s`;
-};
-
-const SEPOLIA_GAS_SETTINGS = {
-  gas: 500_000n,
-  maxFeePerGas: parseGwei('10'),
-  maxPriorityFeePerGas: parseGwei('5'),
 };
 
 const RedeemCard = ({
@@ -124,7 +118,6 @@ const RedeemCard = ({
           abi: RoseTokenABI,
           functionName: 'approve',
           args: [treasuryAddress, amountInWei],
-          ...SEPOLIA_GAS_SETTINGS,
         });
 
         console.log('✅ Approval transaction sent:', approveHash);
@@ -143,7 +136,6 @@ const RedeemCard = ({
         abi: RoseTreasuryABI,
         functionName: 'redeem',
         args: [amountInWei],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Redeem transaction sent:', redeemHash);

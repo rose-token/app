@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { parseEther, parseGwei } from 'viem';
+import { parseEther } from 'viem';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
@@ -70,8 +70,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [marketplaceAddress, tokenAmount],
-        maxFeePerGas: parseGwei('10'),
-        maxPriorityFeePerGas: parseGwei('5'),
       });
 
       console.log('✅ Approval transaction sent:', approveHash);
@@ -90,9 +88,6 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         abi: RoseMarketplaceABI,
         functionName: 'createTask',
         args: [title, tokenAmount, hash],
-        gas: 500_000n,
-        maxFeePerGas: parseGwei('10'),
-        maxPriorityFeePerGas: parseGwei('5'),
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);

@@ -74,7 +74,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 - `frontend/src/components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm
 - `frontend/src/components/vault/` - VaultStats, VaultAllocation, DepositCard, RedeemCard, TransactionHistory
 - `frontend/src/components/wallet/` - TokenBalance, NetworkSelector
-- `frontend/src/hooks/` - useNotifications, useProfile, useGasEstimation, useVaultData
+- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData
 - `frontend/src/utils/ipfs/` - pinataService.js for IPFS integration
 - `frontend/src/contracts/` - Auto-generated ABIs (via update-abi script)
 

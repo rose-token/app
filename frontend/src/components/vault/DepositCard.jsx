@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
-import { parseUnits, formatUnits, parseGwei } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 
 // Format cooldown seconds to human readable
@@ -26,12 +26,6 @@ const ERC20_ABI = [
     type: 'function',
   },
 ];
-
-const SEPOLIA_GAS_SETTINGS = {
-  gas: 500_000n,
-  maxFeePerGas: parseGwei('10'),
-  maxPriorityFeePerGas: parseGwei('5'),
-};
 
 const DepositCard = ({
   usdcBalance,
@@ -137,7 +131,6 @@ const DepositCard = ({
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [treasuryAddress, amountInWei],
-          ...SEPOLIA_GAS_SETTINGS,
         });
 
         console.log('✅ Approval transaction sent:', approveHash);
@@ -155,7 +148,6 @@ const DepositCard = ({
         abi: RoseTreasuryABI,
         functionName: 'deposit',
         args: [amountInWei],
-        ...SEPOLIA_GAS_SETTINGS,
       });
 
       console.log('✅ Deposit transaction sent:', depositHash);
