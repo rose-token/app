@@ -2,7 +2,7 @@ const hre = require("hardhat");
 const fs = require("fs");
 
 // ============ CLI Flags ============
-const USE_MOCKS = process.argv.includes('--use-mocks');
+const USE_MOCKS = true;
 
 // ============ Network Addresses ============
 // Mainnet addresses
