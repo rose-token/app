@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../hooks/useProfile';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
+import PassportStatus from '../components/passport/PassportStatus';
+import { PASSPORT_THRESHOLDS } from '../constants/passport';
 
 const ProfilePage = () => {
   const { profile, isLoading, error, updateProfile } = useProfile();
@@ -253,6 +255,14 @@ const ProfilePage = () => {
           )}
         </div>
       )}
+
+      {/* Gitcoin Passport Section */}
+      <div className="mt-6">
+        <h2 className="font-display text-xl font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
+          Sybil Resistance
+        </h2>
+        <PassportStatus threshold={PASSPORT_THRESHOLDS.CREATE_TASK} />
+      </div>
     </div>
   );
 };
