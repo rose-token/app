@@ -9,6 +9,7 @@ export const config = getDefaultConfig({
   appName: 'Rose Token',
   projectId: '95be0fbf27f06934c74d670d57f44939',
   chains: [arbitrumSepolia],
+  pollingInterval: 30_000,
   transports: {
     [arbitrumSepolia.id]: http(arbitrumSepoliaRpcUrl, {
       batch: {
