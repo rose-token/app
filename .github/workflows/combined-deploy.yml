@@ -57,7 +57,7 @@ jobs:
           HOODI_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-        run: npx hardhat run scripts/deploy.js --network hoodi
+        run: npx hardhat run scripts/deploy.js --network tenderly --use-mocks
 
       - name: Seed Treasury
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -65,61 +65,8 @@ jobs:
           HOODI_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           SEED_AMOUNT: ${{ github.event.inputs.seed_amount || '10000' }}
-        run: npx hardhat run scripts/seed-treasury.js --network hoodi
-      
-      # Add a delay to ensure contracts are propagated before verification
-      - name: Wait for contract propagation
-        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-        run: sleep 90
-      
-      # Etherscan verification
-      - name: Verify contracts on Etherscan
-        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
-        continue-on-error: true
-        env:
-          HOODI_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-        run: |
-          # Get contract addresses from deployment output
-          TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
-          TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.treasuryAddress')
-          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
-
-          # Get external addresses for constructor args
-          USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
-          WBTC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.wbtc')
-          RETH_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.reth')
-          PAXG_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.paxg')
-          BTC_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.btcUsdFeed')
-          ETH_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.ethUsdFeed')
-          XAU_FEED=$(cat deployment-output.json | jq -r '.externalAddresses.xauUsdFeed')
-          SWAP_ROUTER=$(cat deployment-output.json | jq -r '.externalAddresses.swapRouter')
-          DEPLOYER=$(cat deployment-output.json | jq -r '.deployer')
-
-          echo "Verifying contracts..."
-          echo "Token: $TOKEN_ADDRESS"
-          echo "Treasury: $TREASURY_ADDRESS"
-          echo "Marketplace: $MARKETPLACE_ADDRESS"
-
-          # Verify RoseToken (constructor: address _initialAuthorized)
-          npx hardhat verify --network hoodi $TOKEN_ADDRESS $DEPLOYER || echo "Token verification failed or already verified"
-
-          # Verify RoseTreasury (constructor: roseToken, usdc, wbtc, reth, paxg, btcFeed, ethFeed, xauFeed, swapRouter)
-          npx hardhat verify --network hoodi $TREASURY_ADDRESS \
-            $TOKEN_ADDRESS \
-            $USDC_ADDRESS \
-            $WBTC_ADDRESS \
-            $RETH_ADDRESS \
-            $PAXG_ADDRESS \
-            $BTC_FEED \
-            $ETH_FEED \
-            $XAU_FEED \
-            $SWAP_ROUTER || echo "Treasury verification failed or already verified"
-
-          # Verify RoseMarketplace (constructor: roseToken, daoTreasury)
-          npx hardhat verify --network hoodi $MARKETPLACE_ADDRESS $TOKEN_ADDRESS $TREASURY_ADDRESS || echo "Marketplace verification failed or already verified"
-      
+        run: npx hardhat run scripts/seed-treasury.js --network tenderly
+        
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         run: |
