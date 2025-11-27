@@ -15,20 +15,8 @@ const MAINNET = {
   swapRouter: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
 };
 
-// Sepolia testnet addresses
-// NOTE: For testnet, we run in USDC-only mode (no RWA diversification)
+// Sepolia testnet addresses (all mocks for reliable CI/CD)
 const SEPOLIA = {
-  usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle's Sepolia USDC
-  wbtc: null, // Will deploy mock
-  paxg: null, // Will deploy mock
-  // Chainlink Sepolia feeds
-  btcUsdFeed: "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
-  xauUsdFeed: "0xC5981F461d74c46eB4b0CF3f4Ec79f025573B0Ea", // XAU/USD Sepolia
-  swapRouter: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Uniswap V3 Sepolia
-};
-
-// Hoodi testnet addresses (all mocks - no Chainlink or Uniswap support)
-const HOODI = {
   usdc: null, // Will deploy mock
   wbtc: null, // Will deploy mock
   paxg: null, // Will deploy mock
@@ -64,7 +52,7 @@ async function main() {
 
   if (USE_MOCKS) {
     // Force mock mode (useful for Tenderly forks without state sync)
-    addresses = { ...HOODI };
+    addresses = { ...SEPOLIA };
     isTestnet = true;
     console.log("⚠️  --use-mocks flag detected: deploying mock oracles/router");
   } else if (chainId === 1) {
@@ -73,15 +61,11 @@ async function main() {
   } else if (chainId === 11155111) {
     addresses = { ...SEPOLIA };
     isTestnet = true;
-    console.log("Using SEPOLIA addresses (testnet mode)");
-  } else if (chainId === 560048) {
-    addresses = { ...HOODI };
-    isTestnet = true;
-    console.log("Using HOODI addresses (testnet mode - all mocks)");
+    console.log("Using SEPOLIA addresses (testnet mode - all mocks)");
   } else {
-    addresses = { ...HOODI };
+    addresses = { ...SEPOLIA };
     isTestnet = true;
-    console.log("Unknown network - using HOODI addresses as default (testnet mode)");
+    console.log("Unknown network - using SEPOLIA addresses as default (testnet mode)");
   }
 
   // ============ Step 0: Deploy Mock Tokens (Testnet Only) ============

@@ -285,7 +285,7 @@ const HelpPage = () => {
                 <p><strong>Connect Your Wallet</strong></p>
                 <p>Click the "Connect Wallet" button in the top-right corner and follow the prompts to connect your MetaMask wallet.</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Ensure you're on the Hoodi or Sepolia testnet. If you're not, the network selector will allow you to switch.
+                  Ensure you're on the Sepolia testnet. If you're not, the network selector will allow you to switch.
                 </p>
               </li>
               <li>
@@ -475,7 +475,7 @@ const HelpPage = () => {
             },
             {
               q: "Is Rose Token available on mainnet?",
-              a: "Currently, Rose Token operates on the Hoodi testnet (with Sepolia as a fallback). Mainnet deployment is planned for the future once thorough testing and auditing are complete."
+              a: "Currently, Rose Token operates on the Sepolia testnet. Mainnet deployment is planned for the future once thorough testing and auditing are complete."
             },
             {
               q: "What fees are associated with using the platform?",
@@ -501,7 +501,7 @@ const HelpPage = () => {
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Ensure MetaMask is installed and unlocked</li>
                   <li>Refresh the page and try connecting again</li>
-                  <li>Check if you're on the correct network (Hoodi or Sepolia)</li>
+                  <li>Check if you're on the correct network (Sepolia)</li>
                   <li>Clear browser cache and cookies</li>
                   <li>Try using a different browser</li>
                 </ol>
@@ -509,13 +509,12 @@ const HelpPage = () => {
 
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
                 <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Wrong network showing</h4>
-                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform supports Hoodi (recommended) and Sepolia testnets. To switch networks:</p>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform operates on the Sepolia testnet. To switch networks:</p>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Click the network dropdown in MetaMask</li>
-                  <li>Select "Hoodi Testnet" or "Sepolia Test Network"</li>
+                  <li>Select "Sepolia Test Network"</li>
                   <li>If not visible, go to MetaMask Settings {'->'} Networks {'->'} Add Network</li>
-                  <li>For Hoodi: RPC URL: https://rpc.hoodi.ethpandaops.io, Chain ID: 560048</li>
-                  <li>For Sepolia: RPC URL: https://sepolia.infura.io/v3/YOUR_INFURA_KEY, Chain ID: 11155111</li>
+                  <li>RPC URL: https://ethereum-sepolia-rpc.publicnode.com, Chain ID: 11155111</li>
                 </ol>
               </div>
             </div>
@@ -622,12 +621,8 @@ const HelpPage = () => {
               definition: "The primary wallet interface used to interact with the Rose Token platform."
             },
             {
-              term: "Hoodi",
-              definition: "The recommended Ethereum testnet where the Rose Token platform is currently deployed. A newer testnet introduced for the Fusaka upgrade."
-            },
-            {
               term: "Sepolia",
-              definition: "An alternative Ethereum testnet supported by Rose Token platform."
+              definition: "The Ethereum testnet where the Rose Token platform is currently deployed."
             }
           ].map((item, index) => (
             <div key={index} className="border-b pb-4">

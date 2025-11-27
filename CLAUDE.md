@@ -19,8 +19,7 @@ npm run compile           # Compile contracts
 npm test                  # Run all tests (4 test files, ~954 lines)
 npx hardhat test test/RoseMarketplace.test.js  # Run specific test
 npx hardhat node          # Start local node
-npm run deploy:hoodi      # Deploy to Hoodi (recommended)
-npm run deploy:sepolia    # Deploy to Sepolia (fallback)
+npm run deploy:sepolia    # Deploy to Sepolia testnet
 npm run update-abi        # Copy ABIs to frontend after contract changes
 
 # Frontend (from frontend/ directory)
@@ -111,14 +110,13 @@ Tests use mock contracts to simulate external dependencies:
 - `build-frontend`: npm install → update-abi → vite build
 
 **combined-deploy.yml:** Runs on main push
-- Deploys contracts to Hoodi (or Sepolia), verifies on Etherscan, deploys frontend to GitHub Pages
+- Deploys contracts to Sepolia, verifies on Etherscan, deploys frontend to GitHub Pages
 
 ## Environment Variables
 
 **Root .env (contracts):**
 ```bash
-HOODI_RPC_URL=https://rpc.hoodi.ethpandaops.io
-SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/...
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 PRIVATE_KEY=your_wallet_private_key
 DAO_TREASURY_ADDRESS=0x...
 ETHERSCAN_API_KEY=...
@@ -139,7 +137,7 @@ VITE_PINATA_JWT=...
 - **Solidity version:** 0.8.20 (contracts use OpenZeppelin v5)
 - **Chainlink contracts:** v1.5.0 (import path: `@chainlink/contracts/src/v0.8/shared/interfaces/`)
 - **Optimizer:** enabled with 1 run + viaIR
-- **Networks:** Hoodi testnet (chainId: 560048, recommended) and Sepolia testnet (chainId: 11155111, fallback)
+- **Networks:** Sepolia testnet (chainId: 11155111)
 - **Frontend bundler:** Vite 7.x (not webpack/CRA)
 - **Web3 stack:** wagmi + viem + RainbowKit (not ethers.js in frontend)
 

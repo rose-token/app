@@ -36,17 +36,11 @@ module.exports = {
       chainId: 1337,
     },
     sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID",
+      url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11155111,
       maxFeePerGas: 4000000000,         // 4 gwei
       maxPriorityFeePerGas: 2000000000, // 2 gwei
-    },
-    hoodi: {
-      url: process.env.HOODI_RPC_URL || "https://ethereum-hoodi-rpc.publicnode.com",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 560048,
-      gasPrice: "auto"
     },
     tenderly: {
       url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",
@@ -63,18 +57,9 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      sepolia: process.env.ETHERSCAN_API_KEY,
-      hoodi: process.env.ETHERSCAN_API_KEY
+      sepolia: process.env.ETHERSCAN_API_KEY
     },
     customChains: [
-      {
-        network: "hoodi",
-        chainId: 560048,
-        urls: {
-          apiURL: "https://api-hoodi.etherscan.io/api",
-          browserURL: "https://hoodi.etherscan.io"
-        }
-      },
       {
         network: "tenderly",
         chainId: 1,

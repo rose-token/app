@@ -119,10 +119,9 @@ const TransactionHistory = ({ treasuryAddress }) => {
   const getExplorerUrl = (hash) => {
     const explorers = {
       1: 'https://etherscan.io',
-      11155111: 'https://sepolia.etherscan.io',
-      560048: 'https://hoodi.etherscan.io'
+      11155111: 'https://sepolia.etherscan.io'
     };
-    const baseUrl = explorers[chainId] || 'https://hoodi.etherscan.io';
+    const baseUrl = explorers[chainId] || 'https://sepolia.etherscan.io';
     return `${baseUrl}/tx/${hash}`;
   };
 
