@@ -118,8 +118,8 @@ jobs:
           AKASH_GAS_ADJUSTMENT: "1.5"
           # Signer configuration secrets
           SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
-          GITCOIN_API_KEY: ${{ secrets.GITCOIN_API_KEY }}
-          GITCOIN_SCORER_ID: ${{ secrets.GITCOIN_SCORER_ID }}
+          VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
+          VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
         run: |
           echo "Deploying to Akash Network..."
 

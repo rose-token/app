@@ -9,8 +9,8 @@ export const config = {
   },
 
   gitcoin: {
-    scorerId: process.env.GITCOIN_SCORER_ID || '',
-    apiKey: process.env.GITCOIN_API_KEY || '',
+    scorerId: process.env.VITE_GITCOIN_SCORER_ID || '',
+    apiKey: process.env.VITE_GITCOIN_API_KEY || '',
     baseUrl: 'https://api.scorer.gitcoin.co',
   },
 
@@ -31,7 +31,7 @@ export const config = {
 };
 
 // Validate required env vars
-const required = ['SIGNER_PRIVATE_KEY', 'GITCOIN_SCORER_ID', 'GITCOIN_API_KEY'];
+const required = ['SIGNER_PRIVATE_KEY', 'VITE_GITCOIN_SCORER_ID', 'VITE_GITCOIN_API_KEY'];
 const missing: string[] = [];
 
 for (const key of required) {
