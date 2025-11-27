@@ -794,7 +794,7 @@ const TasksPage = () => {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-10">
+      <div className="mb-10 text-center">
         <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
           Worker-Owned <span className="gradient-text">Marketplace</span>
         </h1>
