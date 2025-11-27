@@ -78,8 +78,16 @@ describe("RoseTreasury Smart Deposits", function () {
     await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
   });
 
-  // Helper to perform deposit
-  async function deposit(signer, usdcAmount) {
+  // Helper constants
+  const DAY = 24 * 60 * 60;
+
+  // Helper to perform deposit (advances time if not first deposit from this address)
+  async function deposit(signer, usdcAmount, skipTimeAdvance = false) {
+    if (!skipTimeAdvance) {
+      // Advance time past cooldown to allow deposit
+      await ethers.provider.send("evm_increaseTime", [DAY + 1]);
+      await ethers.provider.send("evm_mine");
+    }
     await usdc.mint(signer.address, usdcAmount);
     await usdc.connect(signer).approve(await roseTreasury.getAddress(), usdcAmount);
     await roseTreasury.connect(signer).deposit(usdcAmount);
@@ -401,6 +409,229 @@ describe("RoseTreasury Smart Deposits", function () {
       await expect(
         roseTreasury.connect(owner).setMaxSlippage(200)
       ).to.not.be.reverted;
+    });
+  });
+
+  describe("User Cooldowns (24hr)", function () {
+    it("Should allow first deposit without cooldown", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      // First deposit should work (no prior cooldown)
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount)
+      ).to.not.be.reverted;
+    });
+
+    it("Should block second deposit within 24hr", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+
+      // First deposit
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+      await roseTreasury.connect(user).deposit(depositAmount);
+
+      // Second deposit immediately should fail
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount)
+      ).to.be.revertedWithCustomError(roseTreasury, "CooldownNotElapsed");
+    });
+
+    it("Should allow deposit after 24hr cooldown elapsed", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+
+      // First deposit
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+      await roseTreasury.connect(user).deposit(depositAmount);
+
+      // Advance time past 24hr
+      await ethers.provider.send("evm_increaseTime", [DAY + 1]);
+      await ethers.provider.send("evm_mine");
+
+      // Second deposit should work
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount)
+      ).to.not.be.reverted;
+    });
+
+    it("Should allow first redeem without cooldown", async function () {
+      // Setup: deposit first
+      await deposit(user, ethers.parseUnits("1000", 6));
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      // First redeem should work
+      await expect(
+        roseTreasury.connect(user).redeem(roseBalance)
+      ).to.not.be.reverted;
+    });
+
+    it("Should block second redeem within 24hr", async function () {
+      // Setup: deposit enough for two redeems
+      await deposit(user, ethers.parseUnits("2000", 6));
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+      const halfBalance = roseBalance / 2n;
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      // First redeem
+      await roseTreasury.connect(user).redeem(halfBalance);
+
+      // Second redeem immediately should fail
+      await expect(
+        roseTreasury.connect(user).redeem(halfBalance)
+      ).to.be.revertedWithCustomError(roseTreasury, "CooldownNotElapsed");
+    });
+
+    it("Should allow redeem after 24hr cooldown elapsed", async function () {
+      // Setup: deposit enough for two redeems
+      await deposit(user, ethers.parseUnits("2000", 6));
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+      const halfBalance = roseBalance / 2n;
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      // First redeem
+      await roseTreasury.connect(user).redeem(halfBalance);
+
+      // Advance time past 24hr
+      await ethers.provider.send("evm_increaseTime", [DAY + 1]);
+      await ethers.provider.send("evm_mine");
+
+      // Second redeem should work
+      await expect(
+        roseTreasury.connect(user).redeem(halfBalance)
+      ).to.not.be.reverted;
+    });
+
+    it("Should track deposit and redeem cooldowns separately", async function () {
+      // Deposit
+      await deposit(user, ethers.parseUnits("1000", 6));
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      // Immediately try to redeem - should work (different cooldown)
+      await expect(
+        roseTreasury.connect(user).redeem(roseBalance / 2n)
+      ).to.not.be.reverted;
+
+      // But second redeem should fail (redeem cooldown now active)
+      await expect(
+        roseTreasury.connect(user).redeem(roseBalance / 4n)
+      ).to.be.revertedWithCustomError(roseTreasury, "CooldownNotElapsed");
+    });
+
+    it("Should allow owner to bypass deposit cooldown", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+
+      // Owner first deposit
+      await usdc.mint(owner.address, depositAmount);
+      await usdc.connect(owner).approve(await roseTreasury.getAddress(), depositAmount);
+      await roseTreasury.connect(owner).deposit(depositAmount);
+
+      // Owner second deposit immediately should work (owner bypasses)
+      await usdc.mint(owner.address, depositAmount);
+      await usdc.connect(owner).approve(await roseTreasury.getAddress(), depositAmount);
+
+      await expect(
+        roseTreasury.connect(owner).deposit(depositAmount)
+      ).to.not.be.reverted;
+    });
+
+    it("Should allow owner to bypass redeem cooldown", async function () {
+      // Setup: owner deposits
+      await usdc.mint(owner.address, ethers.parseUnits("2000", 6));
+      await usdc.connect(owner).approve(await roseTreasury.getAddress(), ethers.parseUnits("2000", 6));
+      await roseTreasury.connect(owner).deposit(ethers.parseUnits("2000", 6));
+
+      const roseBalance = await roseToken.balanceOf(owner.address);
+      const halfBalance = roseBalance / 2n;
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(owner).approve(await roseTreasury.getAddress(), roseBalance);
+
+      // Owner first redeem
+      await roseTreasury.connect(owner).redeem(halfBalance);
+
+      // Owner second redeem immediately should work (owner bypasses)
+      await expect(
+        roseTreasury.connect(owner).redeem(halfBalance)
+      ).to.not.be.reverted;
+    });
+
+    it("Should report correct time until deposit via view function", async function () {
+      // First deposit
+      await deposit(user, ethers.parseUnits("1000", 6));
+
+      // Check time remaining
+      const timeRemaining = await roseTreasury.timeUntilDeposit(user.address);
+
+      // Should be close to 24 hours (allow 10 second tolerance for block time)
+      expect(timeRemaining).to.be.closeTo(DAY, 10);
+
+      // For fresh address, should be 0
+      const timeForFresh = await roseTreasury.timeUntilDeposit(user2.address);
+      expect(timeForFresh).to.equal(0);
+    });
+
+    it("Should report correct time until redeem via view function", async function () {
+      // Setup and redeem
+      await deposit(user, ethers.parseUnits("1000", 6));
+      const roseBalance = await roseToken.balanceOf(user.address);
+
+      // Approve Treasury to burn tokens
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      await roseTreasury.connect(user).redeem(roseBalance / 2n);
+
+      // Check time remaining
+      const timeRemaining = await roseTreasury.timeUntilRedeem(user.address);
+
+      // Should be close to 24 hours
+      expect(timeRemaining).to.be.closeTo(DAY, 10);
+
+      // For fresh address, should be 0
+      const timeForFresh = await roseTreasury.timeUntilRedeem(user2.address);
+      expect(timeForFresh).to.equal(0);
+    });
+
+    it("Should return correct time remaining in error", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+
+      // First deposit
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+      await roseTreasury.connect(user).deposit(depositAmount);
+
+      // Advance 12 hours
+      await ethers.provider.send("evm_increaseTime", [12 * 60 * 60]);
+      await ethers.provider.send("evm_mine");
+
+      // Second deposit should fail with ~12 hours remaining
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      // Check the view function reports ~12hr remaining
+      const timeRemaining = await roseTreasury.timeUntilDeposit(user.address);
+      expect(timeRemaining).to.be.closeTo(12 * 60 * 60, 10);
     });
   });
 });

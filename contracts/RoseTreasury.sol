@@ -77,6 +77,11 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ Marketplace Integration ============
     address public marketplace;
 
+    // ============ User Cooldowns ============
+    uint256 public constant USER_COOLDOWN = 24 hours;
+    mapping(address => uint256) public lastDepositTime;
+    mapping(address => uint256) public lastRedeemTime;
+
     // ============ Events ============
     event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted);
     event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut);
@@ -104,6 +109,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error InsufficientBalance();
     error RebalanceNotNeeded();
     error RebalanceCooldown();
+    error CooldownNotElapsed(uint256 timeRemaining);
 
     constructor(
         address _roseToken,
@@ -135,8 +141,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     /**
      * @dev Deposit USDC, receive ROSE at current NAV
+     * 24hr cooldown between deposits (owner exempt)
      */
     function deposit(uint256 usdcAmount) external nonReentrant whenNotPaused {
+        if (msg.sender != owner()) {
+            uint256 nextAllowed = lastDepositTime[msg.sender] + USER_COOLDOWN;
+            if (block.timestamp < nextAllowed) {
+                revert CooldownNotElapsed(nextAllowed - block.timestamp);
+            }
+        }
         if (usdcAmount == 0) revert ZeroAmount();
         if (usdc.balanceOf(msg.sender) < usdcAmount) revert InsufficientBalance();
 
@@ -147,13 +160,21 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         _diversify(usdcAmount);
 
+        lastDepositTime[msg.sender] = block.timestamp;
         emit Deposited(msg.sender, usdcAmount, roseToMint);
     }
 
     /**
      * @dev Redeem ROSE for USDC at current NAV
+     * 24hr cooldown between redemptions (owner exempt)
      */
     function redeem(uint256 roseAmount) external nonReentrant whenNotPaused {
+        if (msg.sender != owner()) {
+            uint256 nextAllowed = lastRedeemTime[msg.sender] + USER_COOLDOWN;
+            if (block.timestamp < nextAllowed) {
+                revert CooldownNotElapsed(nextAllowed - block.timestamp);
+            }
+        }
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
 
@@ -168,6 +189,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         usdc.safeTransfer(msg.sender, usdcOwed);
 
+        lastRedeemTime[msg.sender] = block.timestamp;
         emit Redeemed(msg.sender, roseAmount, usdcOwed);
     }
 
@@ -800,6 +822,24 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
             return 0;
         }
         return (lastRebalanceTime + REBALANCE_COOLDOWN) - block.timestamp;
+    }
+
+    /**
+     * @dev Time until user can deposit again (0 if allowed now)
+     */
+    function timeUntilDeposit(address user) external view returns (uint256) {
+        uint256 nextAllowed = lastDepositTime[user] + USER_COOLDOWN;
+        if (block.timestamp >= nextAllowed) return 0;
+        return nextAllowed - block.timestamp;
+    }
+
+    /**
+     * @dev Time until user can redeem again (0 if allowed now)
+     */
+    function timeUntilRedeem(address user) external view returns (uint256) {
+        uint256 nextAllowed = lastRedeemTime[user] + USER_COOLDOWN;
+        if (block.timestamp >= nextAllowed) return 0;
+        return nextAllowed - block.timestamp;
     }
 }
 
