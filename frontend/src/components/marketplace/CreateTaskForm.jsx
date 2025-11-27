@@ -4,6 +4,8 @@ import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+import PassportGate from '../passport/PassportGate';
+import { PASSPORT_THRESHOLDS } from '../../constants/passport';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -171,19 +173,23 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   }
 
   return (
-    <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-subtle)',
-        boxShadow: 'var(--shadow-card)'
-      }}
+    <PassportGate
+      threshold={PASSPORT_THRESHOLDS.CREATE_TASK}
+      action="create tasks"
     >
-      <h2 className="font-display text-xl font-medium mb-6" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-        Create New Task
-      </h2>
+      <div
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)'
+        }}
+      >
+        <h2 className="font-display text-xl font-medium mb-6" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+          Create New Task
+        </h2>
 
-      <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
         <div className="mb-5">
           <label htmlFor="title" style={labelStyle}>
             Task Title *
@@ -289,8 +295,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             'Create Task'
           )}
         </button>
-      </form>
-    </div>
+        </form>
+      </div>
+    </PassportGate>
   );
 };
 

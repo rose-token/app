@@ -7,6 +7,8 @@ import TokenDistributionChart from '../components/marketplace/TokenDistributionC
 import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
+import { usePassport } from '../hooks/usePassport';
+import { PASSPORT_THRESHOLDS } from '../constants/passport';
 
 // Import ABIs directly
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
@@ -43,6 +45,7 @@ const TasksPage = () => {
 
   const { address: account, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { score: passportScore, isConfigured: passportConfigured } = usePassport();
 
   // Track if this is the initial load
   const isInitialLoadRef = useRef(true);
@@ -233,6 +236,12 @@ const TasksPage = () => {
 
     if (task.worker !== '0x0000000000000000000000000000000000000000') {
       setError('Task has already been claimed by another worker');
+      return;
+    }
+
+    // Passport verification check
+    if (passportConfigured && passportScore !== null && passportScore < PASSPORT_THRESHOLDS.CLAIM_TASK) {
+      setError(`Gitcoin Passport score of ${PASSPORT_THRESHOLDS.CLAIM_TASK}+ required to claim tasks. Your score: ${passportScore.toFixed(1)}`);
       return;
     }
 
@@ -467,6 +476,13 @@ const TasksPage = () => {
       if (!task) {
         setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
         setError('Task not found');
+        return;
+      }
+
+      // Passport verification check
+      if (passportConfigured && passportScore !== null && passportScore < PASSPORT_THRESHOLDS.STAKE) {
+        setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
+        setError(`Gitcoin Passport score of ${PASSPORT_THRESHOLDS.STAKE}+ required to stake. Your score: ${passportScore.toFixed(1)}`);
         return;
       }
 
