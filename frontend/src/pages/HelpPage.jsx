@@ -285,7 +285,7 @@ const HelpPage = () => {
                 <p><strong>Connect Your Wallet</strong></p>
                 <p>Click the "Connect Wallet" button in the top-right corner and follow the prompts to connect your MetaMask wallet.</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Ensure you're on the Sepolia testnet. If you're not, the network selector will allow you to switch.
+                  Ensure you're on Optimism Sepolia. If you're not, the network selector will allow you to switch.
                 </p>
               </li>
               <li>
@@ -475,7 +475,7 @@ const HelpPage = () => {
             },
             {
               q: "Is Rose Token available on mainnet?",
-              a: "Currently, Rose Token operates on the Sepolia testnet. Mainnet deployment is planned for the future once thorough testing and auditing are complete."
+              a: "Currently, Rose Token operates on Optimism Sepolia testnet. Mainnet deployment is planned for the future once thorough testing and auditing are complete."
             },
             {
               q: "What fees are associated with using the platform?",
@@ -501,7 +501,7 @@ const HelpPage = () => {
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Ensure MetaMask is installed and unlocked</li>
                   <li>Refresh the page and try connecting again</li>
-                  <li>Check if you're on the correct network (Sepolia)</li>
+                  <li>Check if you're on the correct network (Optimism Sepolia)</li>
                   <li>Clear browser cache and cookies</li>
                   <li>Try using a different browser</li>
                 </ol>
@@ -509,12 +509,12 @@ const HelpPage = () => {
 
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
                 <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Wrong network showing</h4>
-                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform operates on the Sepolia testnet. To switch networks:</p>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform operates on Optimism Sepolia. To switch networks:</p>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
                   <li>Click the network dropdown in MetaMask</li>
-                  <li>Select "Sepolia Test Network"</li>
+                  <li>Select "Optimism Sepolia"</li>
                   <li>If not visible, go to MetaMask Settings {'->'} Networks {'->'} Add Network</li>
-                  <li>RPC URL: https://ethereum-sepolia-rpc.publicnode.com, Chain ID: 11155111</li>
+                  <li>RPC URL: https://sepolia.optimism.io, Chain ID: 11155420</li>
                 </ol>
               </div>
             </div>
@@ -526,7 +526,7 @@ const HelpPage = () => {
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
                 <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Transaction pending for too long</h4>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
-                  <li>Check Sepolia gas prices and ensure you've set an appropriate gas fee</li>
+                  <li>Check Optimism Sepolia gas prices and ensure you've set an appropriate gas fee</li>
                   <li>In MetaMask, you can speed up the transaction by clicking on the pending transaction and selecting "Speed Up"</li>
                   <li>Alternatively, you can cancel the transaction and try again</li>
                 </ol>
@@ -621,8 +621,8 @@ const HelpPage = () => {
               definition: "The primary wallet interface used to interact with the Rose Token platform."
             },
             {
-              term: "Sepolia",
-              definition: "The Ethereum testnet where the Rose Token platform is currently deployed."
+              term: "Optimism Sepolia",
+              definition: "The Optimism L2 testnet where the Rose Token platform is currently deployed."
             }
           ].map((item, index) => (
             <div key={index} className="border-b pb-4">

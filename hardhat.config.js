@@ -35,12 +35,10 @@ module.exports = {
       url: "http://127.0.0.1:8545/",
       chainId: 1337,
     },
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
+    opsepolia: {
+      url: process.env.OP_SEPOLIA_RPC_URL || "https://sepolia.optimism.io",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155111,
-      maxFeePerGas: 10000000000,        // 10 gwei
-      maxPriorityFeePerGas: 5000000000, // 5 gwei
+      chainId: 11155420,
     },
     tenderly: {
       url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",
@@ -57,9 +55,17 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      sepolia: process.env.ETHERSCAN_API_KEY
+      opsepolia: process.env.OPTIMISM_ETHERSCAN_API_KEY
     },
     customChains: [
+      {
+        network: "opsepolia",
+        chainId: 11155420,
+        urls: {
+          apiURL: "https://api-sepolia-optimistic.etherscan.io/api",
+          browserURL: "https://sepolia-optimism.etherscan.io"
+        }
+      },
       {
         network: "tenderly",
         chainId: 1,

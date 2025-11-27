@@ -8,7 +8,7 @@ const fs = require("fs");
  * For mainnet: Requires real USDC in deployer wallet
  * 
  * Run after deploy.js:
- * npx hardhat run scripts/seed-treasury.js --network sepolia
+ * npx hardhat run scripts/seed-treasury.js --network opsepolia
  */
 
 // Amount to seed (in USDC, 6 decimals)
@@ -87,7 +87,7 @@ async function main() {
     if (!isTestnet) {
       console.log("\n--- For mainnet, you need real USDC ---");
     } else {
-      console.log("\n--- For Sepolia USDC, use: https://faucet.circle.com/ ---");
+      console.log("\n--- For testnet USDC, use mock tokens or get from a faucet ---");
     }
     process.exit(1);
   }

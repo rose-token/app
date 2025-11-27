@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: 'Deploy to Sepolia and GitHub Pages'
+        description: 'Deploy to Optimism Sepolia and GitHub Pages'
         required: true
         default: 'true'
       seed_amount:
@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # First job: Deploy contracts to Sepolia
+  # First job: Deploy contracts to Optimism Sepolia
   deploy-contracts:
     runs-on: ubuntu-latest
     steps:
@@ -51,21 +51,21 @@ jobs:
       - name: Update ABIs
         run: node scripts/update-abi.js
       
-      - name: Deploy to Sepolia
+      - name: Deploy to Optimism Sepolia
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
-          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-        run: npx hardhat run scripts/deploy.js --network sepolia
+          OPTIMISM_ETHERSCAN_API_KEY: ${{ secrets.OPTIMISM_ETHERSCAN_API_KEY }}
+        run: npx hardhat run scripts/deploy.js --network opsepolia
 
       - name: Seed Treasury
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         env:
-          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           SEED_AMOUNT: ${{ github.event.inputs.seed_amount || '10000' }}
-        run: npx hardhat run scripts/seed-treasury.js --network sepolia
+        run: npx hardhat run scripts/seed-treasury.js --network opsepolia
 
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -167,7 +167,7 @@ jobs:
       - name: Build
         run: cd frontend && npm run build
         env:
-          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          OP_SEPOLIA_RPC_URL: ${{ secrets.OP_SEPOLIA_RPC_URL }}
           VITE_TOKEN_ADDRESS: ${{ env.TOKEN_ADDRESS }}
           VITE_TREASURY_ADDRESS: ${{ env.TREASURY_ADDRESS }}
           VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}

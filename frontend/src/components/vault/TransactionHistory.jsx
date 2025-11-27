@@ -30,8 +30,8 @@ const TransactionHistory = ({ treasuryAddress }) => {
     try {
       // Get current block number
       const currentBlock = await publicClient.getBlockNumber();
-      // Look back ~7 days (assuming ~12 second blocks on Sepolia)
-      const fromBlock = currentBlock - BigInt(50000);
+      // Look back ~7 days (assuming ~2 second blocks on Optimism Sepolia)
+      const fromBlock = currentBlock - BigInt(300000);
 
       // Fetch deposit events
       const depositLogs = await publicClient.getLogs({
@@ -119,9 +119,9 @@ const TransactionHistory = ({ treasuryAddress }) => {
   const getExplorerUrl = (hash) => {
     const explorers = {
       1: 'https://etherscan.io',
-      11155111: 'https://sepolia.etherscan.io'
+      11155420: 'https://sepolia-optimism.etherscan.io'
     };
-    const baseUrl = explorers[chainId] || 'https://sepolia.etherscan.io';
+    const baseUrl = explorers[chainId] || 'https://sepolia-optimism.etherscan.io';
     return `${baseUrl}/tx/${hash}`;
   };
 

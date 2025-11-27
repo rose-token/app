@@ -4,7 +4,7 @@ A worker-focused decentralized marketplace with task-value-based token distribut
 
 ![License](https://img.shields.io/badge/license-PPL-blue.svg)
 ![Solidity](https://img.shields.io/badge/solidity-0.8.17-purple.svg)
-![Network](https://img.shields.io/badge/network-Sepolia-orange.svg)
+![Network](https://img.shields.io/badge/network-Optimism_Sepolia-red.svg)
 
 ## Overview
 
@@ -182,7 +182,7 @@ React 18.2.0 application with MetaMask integration and responsive UI.
 
 **Wallet:**
 - `TokenBalance.jsx` - ROSE balance display
-- `NetworkSelector.jsx` - Sepolia network switching
+- `NetworkSelector.jsx` - Network switching
 - `WalletNotConnected.jsx` - MetaMask connection prompts
 
 ### Custom Hooks
@@ -214,7 +214,7 @@ The application uses a **soft red rose color palette** with centralized CSS vari
 ### Prerequisites
 - Node.js 18.x or higher
 - MetaMask wallet extension
-- Sepolia testnet ETH (for deployment)
+- Optimism Sepolia testnet ETH (for deployment)
 - Pinata account (for IPFS integration)
 
 ### Smart Contract Development
@@ -241,8 +241,8 @@ npx hardhat node
 # Deploy to local network
 npx hardhat run scripts/deploy.js --network localhost
 
-# Deploy to Sepolia testnet
-npm run deploy:sepolia
+# Deploy to Optimism Sepolia testnet
+npm run deploy:opsepolia
 
 # Update contract ABIs in frontend
 npm run update-abi
@@ -273,8 +273,8 @@ npm test
 Required for contract deployment:
 
 ```bash
-# Sepolia RPC endpoint
-SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+# Optimism Sepolia RPC endpoint
+OP_SEPOLIA_RPC_URL=https://sepolia.optimism.io
 
 # Deployer wallet private key (without 0x prefix)
 PRIVATE_KEY=your_wallet_private_key
@@ -282,8 +282,8 @@ PRIVATE_KEY=your_wallet_private_key
 # DAO treasury address
 DAO_TREASURY_ADDRESS=0x_treasury_address
 
-# Etherscan API key (for contract verification)
-ETHERSCAN_API_KEY=your_etherscan_api_key
+# Optimism Etherscan API key (for contract verification)
+OPTIMISM_ETHERSCAN_API_KEY=your_optimism_etherscan_api_key
 ```
 
 ### Frontend `.env`
@@ -295,7 +295,7 @@ REACT_APP_MARKETPLACE_ADDRESS=0x_deployed_marketplace_address
 REACT_APP_TOKEN_ADDRESS=0x_deployed_token_address
 
 # Optional: Custom RPC URL (defaults to MetaMask provider)
-REACT_APP_ETHEREUM_RPC_URL=https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID
+RPC_OP_SEPOLIA_URL=https://sepolia.optimism.io
 
 # Pinata IPFS credentials
 REACT_APP_PINATA_API_KEY=your_pinata_api_key
@@ -358,9 +358,9 @@ Runs on main branch pushes and manual triggers:
 
 **deploy-contracts job:**
 - Run tests and compile
-- Deploy to Sepolia testnet
+- Deploy to Optimism Sepolia testnet
 - Wait 90 seconds for contract propagation
-- Verify on Etherscan (API v2)
+- Verify on Optimism Etherscan
 - Save deployment addresses as artifact
 
 **deploy-frontend job:**
@@ -370,10 +370,10 @@ Runs on main branch pushes and manual triggers:
 - Deploy to GitHub Pages
 
 **Required GitHub Secrets:**
-- `SEPOLIA_RPC_URL`
+- `OP_SEPOLIA_RPC_URL`
 - `PRIVATE_KEY`
 - `DAO_TREASURY_ADDRESS`
-- `ETHERSCAN_API_KEY`
+- `OPTIMISM_ETHERSCAN_API_KEY`
 - `REACT_APP_PINATA_API_KEY`
 - `REACT_APP_PINATA_SECRET_API_KEY`
 - `REACT_APP_PINATA_JWT`
@@ -388,8 +388,8 @@ Runs on main branch pushes and manual triggers:
 4. Deployment creates `deployment-output.json` with addresses
 
 ```bash
-# Deploy to Sepolia
-npm run deploy:sepolia
+# Deploy to Optimism Sepolia
+npm run deploy:opsepolia
 
 # Output includes:
 # - Deployer's ETH balance (before/after)
@@ -408,8 +408,8 @@ npm run deploy:sepolia
 
 **Supported Networks:**
 - **Local Development**: Hardhat node (localhost:8545, chainId: 1337)
-- **Testnet**: Sepolia (chainId: 11155111)
-- **Frontend Default**: Sepolia
+- **Testnet**: Optimism Sepolia (chainId: 11155420)
+- **Frontend Default**: Optimism Sepolia
 
 **Gas Optimization:**
 - Optimizer enabled with 1 run
@@ -535,7 +535,7 @@ The project follows a **"Progressive Enhancement"** approach:
 - Pinata Cloud service
 
 **Network:**
-- Sepolia testnet (chainId: 11155111)
+- Optimism Sepolia testnet (chainId: 11155420)
 
 ## Contributing
 
@@ -608,5 +608,5 @@ For issues, questions, or contributions:
 **Last Updated**: November 2024
 **Solidity Version**: 0.8.17
 **Node Version**: 18.x
-**Network**: Sepolia (chainId: 11155111)
+**Network**: Optimism Sepolia (chainId: 11155420)
 **Status**: MVP - Production Ready
