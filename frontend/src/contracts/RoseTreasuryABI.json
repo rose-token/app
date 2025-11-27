@@ -18,22 +18,12 @@
       },
       {
         "internalType": "address",
-        "name": "_reth",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
         "name": "_paxg",
         "type": "address"
       },
       {
         "internalType": "address",
         "name": "_btcUsdFeed",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_ethUsdFeed",
         "type": "address"
       },
       {
@@ -109,6 +99,16 @@
   },
   {
     "inputs": [],
+    "name": "RebalanceCooldown",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RebalanceNotNeeded",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
     "type": "error"
   },
@@ -155,12 +155,6 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "eth",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
         "name": "gold",
         "type": "uint256"
       },
@@ -168,6 +162,12 @@
         "indexed": false,
         "internalType": "uint256",
         "name": "usdc",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "rose",
         "type": "uint256"
       }
     ],
@@ -256,12 +256,6 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "ethValue",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
         "name": "goldValue",
         "type": "uint256"
       },
@@ -274,7 +268,13 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "treasuryRoseBalance",
+        "name": "roseValue",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "totalHardAssets",
         "type": "uint256"
       }
     ],
@@ -304,6 +304,25 @@
       }
     ],
     "name": "Redeemed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcSpent",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "roseBought",
+        "type": "uint256"
+      }
+    ],
+    "name": "RoseBuyback",
     "type": "event"
   },
   {
@@ -372,6 +391,19 @@
   },
   {
     "inputs": [],
+    "name": "DRIFT_THRESHOLD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "MAX_ORACLE_STALENESS",
     "outputs": [
       {
@@ -411,7 +443,7 @@
   },
   {
     "inputs": [],
-    "name": "POOL_FEE",
+    "name": "POOL_FEE_STABLE",
     "outputs": [
       {
         "internalType": "uint24",
@@ -424,12 +456,25 @@
   },
   {
     "inputs": [],
-    "name": "RETH_DECIMALS",
+    "name": "POOL_FEE_VOLATILE",
     "outputs": [
       {
-        "internalType": "uint8",
+        "internalType": "uint24",
         "name": "",
-        "type": "uint8"
+        "type": "uint24"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "REBALANCE_COOLDOWN",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -489,7 +534,7 @@
   },
   {
     "inputs": [],
-    "name": "allocETH",
+    "name": "allocGold",
     "outputs": [
       {
         "internalType": "uint256",
@@ -502,7 +547,7 @@
   },
   {
     "inputs": [],
-    "name": "allocGold",
+    "name": "allocROSE",
     "outputs": [
       {
         "internalType": "uint256",
@@ -605,24 +650,53 @@
   },
   {
     "inputs": [],
-    "name": "ethUsdFeed",
-    "outputs": [
-      {
-        "internalType": "contract AggregatorV3Interface",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
+    "name": "forceRebalance",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "getBTCPrice",
+    "name": "getAllocationStatus",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "targetBTC",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetGold",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetUSDC",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetROSE",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualBTC",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualGold",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualUSDC",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "actualROSE",
         "type": "uint256"
       }
     ],
@@ -631,7 +705,7 @@
   },
   {
     "inputs": [],
-    "name": "getETHPrice",
+    "name": "getBTCPrice",
     "outputs": [
       {
         "internalType": "uint256",
@@ -666,11 +740,6 @@
       },
       {
         "internalType": "uint256",
-        "name": "ethValue",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
         "name": "goldValue",
         "type": "uint256"
       },
@@ -681,17 +750,53 @@
       },
       {
         "internalType": "uint256",
-        "name": "totalValue",
+        "name": "roseValue",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "treasuryRose",
+        "name": "totalHardAssets",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
         "name": "currentRosePrice",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "circulatingRose",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "rebalanceNeeded",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "hardAssetValueUSD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lastRebalanceTime",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
         "type": "uint256"
       }
     ],
@@ -719,6 +824,19 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "needsRebalance",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -799,19 +917,6 @@
   },
   {
     "inputs": [],
-    "name": "reth",
-    "outputs": [
-      {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "rosePrice",
     "outputs": [
       {
@@ -845,17 +950,17 @@
       },
       {
         "internalType": "uint256",
-        "name": "_eth",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
         "name": "_gold",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
         "name": "_usdc",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_rose",
         "type": "uint256"
       }
     ],
@@ -927,6 +1032,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "timeUntilRebalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -941,7 +1059,7 @@
   },
   {
     "inputs": [],
-    "name": "treasuryRoseBalance",
+    "name": "treasuryRoseValueUSD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -967,19 +1085,6 @@
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "vaultValueUSD",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",

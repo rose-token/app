@@ -54,7 +54,7 @@ const useVaultData = () => {
       {
         address: treasuryAddress,
         abi: RoseTreasuryABI,
-        functionName: 'vaultValueUSD',
+        functionName: 'hardAssetValueUSD',
       },
       {
         address: treasuryAddress,
@@ -154,20 +154,16 @@ const useVaultData = () => {
       ? Number(formatUnits(vaultValueResult.result, 6))
       : null;
 
-    // getVaultBreakdown returns: btcValue, ethValue, goldValue, usdcValue, totalValue, treasuryRose, currentRosePrice
+    // getVaultBreakdown returns: btcValue, goldValue, usdcValue, roseValue, totalHardAssets, currentRosePrice, circulatingRose, rebalanceNeeded
     let breakdown = null;
     if (breakdownResult?.result) {
-      const [btcValue, ethValue, goldValue, usdcValue, totalValue] = breakdownResult.result;
-      const total = Number(formatUnits(totalValue, 6));
+      const [btcValue, goldValue, usdcValue, roseValue, totalHardAssets] = breakdownResult.result;
+      const total = Number(formatUnits(totalHardAssets, 6));
 
       breakdown = {
         btc: {
           value: Number(formatUnits(btcValue, 6)),
           percentage: total > 0 ? (Number(formatUnits(btcValue, 6)) / total) * 100 : 0,
-        },
-        eth: {
-          value: Number(formatUnits(ethValue, 6)),
-          percentage: total > 0 ? (Number(formatUnits(ethValue, 6)) / total) * 100 : 0,
         },
         gold: {
           value: Number(formatUnits(goldValue, 6)),
@@ -176,6 +172,10 @@ const useVaultData = () => {
         usdc: {
           value: Number(formatUnits(usdcValue, 6)),
           percentage: total > 0 ? (Number(formatUnits(usdcValue, 6)) / total) * 100 : 0,
+        },
+        rose: {
+          value: Number(formatUnits(roseValue, 6)),
+          percentage: total > 0 ? (Number(formatUnits(roseValue, 6)) / total) * 100 : 0,
         },
         total,
       };
