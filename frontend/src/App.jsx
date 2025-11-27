@@ -46,7 +46,7 @@ function App() {
             <Router basename="/">
               <Layout>
                 <Routes>
-                  <Route path="/" element={<TasksPage />} />
+                  <Route path="/rose-token-v2" element={<TasksPage />} />
                   <Route path="/vault" element={<VaultPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/help" element={<HelpPage />} />
