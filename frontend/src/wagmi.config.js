@@ -2,7 +2,7 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { arbitrumSepolia } from 'wagmi/chains';
 import { http } from 'wagmi';
 
-const arbitrumSepoliaRpcUrl = 'https://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn';
+const arbitrumSepoliaRpcUrl = 'https://rpc.ankr.com/arbitrum_sepolia';
 
 // Simple default configuration that includes all popular wallets automatically
 export const config = getDefaultConfig({
