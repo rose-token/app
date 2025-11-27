@@ -34,19 +34,16 @@ const TokenBalance = () => {
           border: '1px solid var(--border-subtle)'
         }}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-[18px] w-[18px]"
-          style={{ color: 'var(--rose-pink)' }}
+        <div
+          className="w-5 h-5 rounded-full flex items-center justify-center font-display text-xs font-semibold"
+          style={{
+            background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+            color: 'var(--bg-primary)',
+            boxShadow: 'rgba(212, 165, 165, 0.35) 0px 0px 24px'
+          }}
         >
-          <path d="M12 2s.35-.008 8 9c0 0-7.5 13-8 13-.5 0-8-13-8-13 7.65-9.008 8-9 8-9Z" />
-        </svg>
+          R
+        </div>
         <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>-- ROSE</span>
       </div>
     );
