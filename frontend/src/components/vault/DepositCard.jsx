@@ -1,7 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
+
+// Format cooldown seconds to human readable
+const formatCooldown = (seconds) => {
+  if (seconds <= 0) return '';
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  const secs = seconds % 60;
+  return `${mins}m ${secs}s`;
+};
 
 // Standard ERC20 ABI for approve
 const ERC20_ABI = [
@@ -32,6 +42,7 @@ const DepositCard = ({
   treasuryAddress,
   usdcAddress,
   onSuccess,
+  depositCooldown = 0,
 }) => {
   const { chain, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -40,6 +51,25 @@ const DepositCard = ({
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [cooldownRemaining, setCooldownRemaining] = useState(depositCooldown);
+
+  // Live countdown timer
+  useEffect(() => {
+    setCooldownRemaining(depositCooldown);
+    if (depositCooldown <= 0) return;
+
+    const interval = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [depositCooldown]);
 
   // Calculate ROSE amount to receive
   const amountInWei = useMemo(() => {
@@ -157,7 +187,7 @@ const DepositCard = ({
     }
   };
 
-  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting;
+  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -193,9 +223,24 @@ const DepositCard = ({
       <h3 className="font-display text-xl font-medium mb-1" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
         Deposit USDC
       </h3>
-      <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
         Receive ROSE
       </p>
+
+      {/* Cooldown Badge */}
+      {cooldownRemaining > 0 && (
+        <div
+          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
+          style={{
+            background: 'var(--warning-bg)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            color: 'var(--warning)',
+          }}
+        >
+          <span>⏳</span>
+          <span>Available in {formatCooldown(cooldownRemaining)}</span>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Amount Input */}

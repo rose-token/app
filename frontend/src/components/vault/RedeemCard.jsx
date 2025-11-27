@@ -1,8 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits, parseGwei } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+
+// Format cooldown seconds to human readable
+const formatCooldown = (seconds) => {
+  if (seconds <= 0) return '';
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  const secs = seconds % 60;
+  return `${mins}m ${secs}s`;
+};
 
 const SEPOLIA_GAS_SETTINGS = {
   gas: 500_000n,
@@ -19,6 +29,7 @@ const RedeemCard = ({
   treasuryAddress,
   tokenAddress,
   onSuccess,
+  redeemCooldown = 0,
 }) => {
   const { chain } = useAccount();
   const publicClient = usePublicClient();
@@ -27,6 +38,25 @@ const RedeemCard = ({
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [cooldownRemaining, setCooldownRemaining] = useState(redeemCooldown);
+
+  // Live countdown timer
+  useEffect(() => {
+    setCooldownRemaining(redeemCooldown);
+    if (redeemCooldown <= 0) return;
+
+    const interval = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [redeemCooldown]);
 
   // Calculate ROSE amount in wei
   const amountInWei = useMemo(() => {
@@ -146,7 +176,7 @@ const RedeemCard = ({
     }
   };
 
-  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting;
+  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -182,9 +212,24 @@ const RedeemCard = ({
       <h3 className="font-display text-xl font-medium mb-1" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
         Redeem ROSE
       </h3>
-      <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
         Receive USDC
       </p>
+
+      {/* Cooldown Badge */}
+      {cooldownRemaining > 0 && (
+        <div
+          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
+          style={{
+            background: 'var(--warning-bg)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            color: 'var(--warning)',
+          }}
+        >
+          <span>⏳</span>
+          <span>Available in {formatCooldown(cooldownRemaining)}</span>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Amount Input */}

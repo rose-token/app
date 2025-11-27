@@ -115,6 +115,20 @@ const useVaultData = () => {
         functionName: 'allowance',
         args: [address, treasuryAddress],
       },
+      // Cooldown: time until deposit allowed
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'timeUntilDeposit',
+        args: [address],
+      },
+      // Cooldown: time until redeem allowed
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'timeUntilRedeem',
+        args: [address],
+      },
     ];
   }, [address, tokenAddress, usdcAddress, treasuryAddress]);
 
@@ -205,10 +219,19 @@ const useVaultData = () => {
         usdcBalance: null,
         roseAllowance: null,
         usdcAllowance: null,
+        depositCooldown: 0,
+        redeemCooldown: 0,
       };
     }
 
-    const [roseBalanceResult, usdcBalanceResult, roseAllowanceResult, usdcAllowanceResult] = userData;
+    const [
+      roseBalanceResult,
+      usdcBalanceResult,
+      roseAllowanceResult,
+      usdcAllowanceResult,
+      depositCooldownResult,
+      redeemCooldownResult,
+    ] = userData;
 
     return {
       // ROSE has 18 decimals
@@ -230,6 +253,13 @@ const useVaultData = () => {
         ? Number(formatUnits(usdcAllowanceResult.result, 6))
         : null,
       usdcAllowanceRaw: usdcAllowanceResult?.result || 0n,
+      // Cooldowns (in seconds)
+      depositCooldown: depositCooldownResult?.result
+        ? Number(depositCooldownResult.result)
+        : 0,
+      redeemCooldown: redeemCooldownResult?.result
+        ? Number(redeemCooldownResult.result)
+        : 0,
     };
   }, [userData]);
 

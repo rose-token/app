@@ -25,6 +25,9 @@ const VaultPage = () => {
     roseAllowanceRaw,
     usdcAllowance,
     usdcAllowanceRaw,
+    // Cooldowns
+    depositCooldown,
+    redeemCooldown,
     // Addresses
     treasuryAddress,
     tokenAddress,
@@ -84,6 +87,7 @@ const VaultPage = () => {
             treasuryAddress={treasuryAddress}
             usdcAddress={usdcAddress}
             onSuccess={handleSuccess}
+            depositCooldown={depositCooldown}
           />
 
           <RedeemCard
@@ -95,6 +99,7 @@ const VaultPage = () => {
             treasuryAddress={treasuryAddress}
             tokenAddress={tokenAddress}
             onSuccess={handleSuccess}
+            redeemCooldown={redeemCooldown}
           />
         </div>
       )}
