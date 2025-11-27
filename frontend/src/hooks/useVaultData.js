@@ -158,26 +158,29 @@ const useVaultData = () => {
     let breakdown = null;
     if (breakdownResult?.result) {
       const [btcValue, goldValue, usdcValue, roseValue, totalHardAssets] = breakdownResult.result;
-      const total = Number(formatUnits(totalHardAssets, 6));
+      const hardAssetsTotal = Number(formatUnits(totalHardAssets, 6));
+      const roseVal = Number(formatUnits(roseValue, 6));
+      // Include ROSE in total so all percentages sum to 100%
+      const totalIncludingRose = hardAssetsTotal + roseVal;
 
       breakdown = {
         btc: {
           value: Number(formatUnits(btcValue, 6)),
-          percentage: total > 0 ? (Number(formatUnits(btcValue, 6)) / total) * 100 : 0,
+          percentage: totalIncludingRose > 0 ? (Number(formatUnits(btcValue, 6)) / totalIncludingRose) * 100 : 0,
         },
         gold: {
           value: Number(formatUnits(goldValue, 6)),
-          percentage: total > 0 ? (Number(formatUnits(goldValue, 6)) / total) * 100 : 0,
+          percentage: totalIncludingRose > 0 ? (Number(formatUnits(goldValue, 6)) / totalIncludingRose) * 100 : 0,
         },
         usdc: {
           value: Number(formatUnits(usdcValue, 6)),
-          percentage: total > 0 ? (Number(formatUnits(usdcValue, 6)) / total) * 100 : 0,
+          percentage: totalIncludingRose > 0 ? (Number(formatUnits(usdcValue, 6)) / totalIncludingRose) * 100 : 0,
         },
         rose: {
-          value: Number(formatUnits(roseValue, 6)),
-          percentage: total > 0 ? (Number(formatUnits(roseValue, 6)) / total) * 100 : 0,
+          value: roseVal,
+          percentage: totalIncludingRose > 0 ? (roseVal / totalIncludingRose) * 100 : 0,
         },
-        total,
+        total: totalIncludingRose,
       };
     }
 
