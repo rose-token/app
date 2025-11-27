@@ -74,10 +74,8 @@ describe("Task Detailed Description", function () {
       await roseToken.getAddress(),
       await usdc.getAddress(),
       await wbtc.getAddress(),
-      await reth.getAddress(),
       await paxg.getAddress(),
       await btcFeed.getAddress(),
-      await ethFeed.getAddress(),
       await xauFeed.getAddress(),
       await swapRouter.getAddress()
     );

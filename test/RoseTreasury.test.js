@@ -68,10 +68,8 @@ describe("RoseTreasury Smart Deposits", function () {
       await roseToken.getAddress(),
       await usdc.getAddress(),
       await wbtc.getAddress(),
-      await reth.getAddress(),
       await paxg.getAddress(),
       await btcFeed.getAddress(),
-      await ethFeed.getAddress(),
       await xauFeed.getAddress(),
       await swapRouter.getAddress()
     );
@@ -90,12 +88,11 @@ describe("RoseTreasury Smart Deposits", function () {
   // Helper to get vault allocation percentages
   async function getVaultPercentages() {
     const breakdown = await roseTreasury.getVaultBreakdown();
-    const total = breakdown.totalValue;
-    if (total == 0n) return { btc: 0, eth: 0, gold: 0, usdc: 0 };
+    const total = breakdown.totalHardAssets;
+    if (total == 0n) return { btc: 0, gold: 0, usdc: 0 };
 
     return {
       btc: Number((breakdown.btcValue * 10000n) / total) / 100,
-      eth: Number((breakdown.ethValue * 10000n) / total) / 100,
       gold: Number((breakdown.goldValue * 10000n) / total) / 100,
       usdc: Number((breakdown.usdcValue * 10000n) / total) / 100
     };
@@ -108,12 +105,11 @@ describe("RoseTreasury Smart Deposits", function () {
 
       const pcts = await getVaultPercentages();
 
-      // Should be approximately 40/30/20/10
-      // Allow 2% tolerance due to swap mechanics
-      expect(pcts.btc).to.be.closeTo(40, 2);
-      expect(pcts.eth).to.be.closeTo(30, 2);
-      expect(pcts.gold).to.be.closeTo(20, 2);
-      expect(pcts.usdc).to.be.closeTo(10, 2);
+      // Should be approximately 37.5/37.5/25 (btc/gold/usdc based on 3000/3000/2000 allocation)
+      // Allow 3% tolerance due to swap mechanics
+      expect(pcts.btc).to.be.closeTo(37.5, 3);
+      expect(pcts.gold).to.be.closeTo(37.5, 3);
+      expect(pcts.usdc).to.be.closeTo(25, 3);
     });
   });
 
@@ -137,8 +133,8 @@ describe("RoseTreasury Smart Deposits", function () {
 
       const pctsBeforeSecondDeposit = await getVaultPercentages();
 
-      // USDC should now be underweight (less than 10%)
-      expect(pctsBeforeSecondDeposit.usdc).to.be.lessThan(10);
+      // USDC should now be underweight (less than 25% target)
+      expect(pctsBeforeSecondDeposit.usdc).to.be.lessThan(20);
 
       // Track USDC before second deposit
       const usdcBefore = await usdc.balanceOf(treasuryAddr);
@@ -165,7 +161,7 @@ describe("RoseTreasury Smart Deposits", function () {
       await wbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Add BTC to make USDC underweight
 
       const pctsBeforeLargeDeposit = await getVaultPercentages();
-      expect(pctsBeforeLargeDeposit.usdc).to.be.lessThan(10); // USDC is underweight
+      expect(pctsBeforeLargeDeposit.usdc).to.be.lessThan(20); // USDC is underweight
 
       // Large deposit that exceeds USDC deficit
       const largeDeposit = ethers.parseUnits("5000", 6);
@@ -173,7 +169,7 @@ describe("RoseTreasury Smart Deposits", function () {
 
       const pcts = await getVaultPercentages();
 
-      // After large deposit, USDC should be closer to target (10%)
+      // After large deposit, USDC should be closer to target (25%)
       expect(pcts.usdc).to.be.greaterThan(pctsBeforeLargeDeposit.usdc);
     });
   });
@@ -199,7 +195,7 @@ describe("RoseTreasury Smart Deposits", function () {
       const breakdown = await roseTreasury.getVaultBreakdown();
 
       // Total vault should have increased by deposit amount
-      expect(breakdown.totalValue).to.be.greaterThan(ethers.parseUnits("12000", 6));
+      expect(breakdown.totalHardAssets).to.be.greaterThan(ethers.parseUnits("12000", 6));
     });
   });
 
@@ -219,7 +215,6 @@ describe("RoseTreasury Smart Deposits", function () {
 
       // Ratios should remain approximately the same
       expect(pctsAfterSecond.btc).to.be.closeTo(pctsAfterFirst.btc, 3);
-      expect(pctsAfterSecond.eth).to.be.closeTo(pctsAfterFirst.eth, 3);
       expect(pctsAfterSecond.gold).to.be.closeTo(pctsAfterFirst.gold, 3);
       expect(pctsAfterSecond.usdc).to.be.closeTo(pctsAfterFirst.usdc, 3);
     });
@@ -258,15 +253,14 @@ describe("RoseTreasury Smart Deposits", function () {
       await deposit(user, initialDeposit);
 
       const pctsBefore = await getVaultPercentages();
-      expect(pctsBefore.usdc).to.be.closeTo(10, 2);
+      expect(pctsBefore.usdc).to.be.closeTo(25, 3);
 
       // 2. Simulate USDC drain by adding more RWA
       const treasuryAddr = await roseTreasury.getAddress();
       await wbtc.mint(treasuryAddr, ethers.parseUnits("0.2", 8)); // Add BTC
-      await reth.mint(treasuryAddr, ethers.parseUnits("5", 18)); // Add ETH
 
       const pctsAfterDrain = await getVaultPercentages();
-      expect(pctsAfterDrain.usdc).to.be.lessThan(8); // USDC now underweight
+      expect(pctsAfterDrain.usdc).to.be.lessThan(20); // USDC now underweight
 
       // 3. New deposit should prioritize refilling USDC
       const refillDeposit = ethers.parseUnits("3000", 6);
@@ -285,11 +279,10 @@ describe("RoseTreasury Smart Deposits", function () {
       // 2. Simulate drain by adding more RWA (making USDC and Gold underweight)
       const treasuryAddr = await roseTreasury.getAddress();
       await wbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Heavy BTC
-      await reth.mint(treasuryAddr, ethers.parseUnits("10", 18)); // Heavy ETH
 
       const pctsAfterDrain = await getVaultPercentages();
-      expect(pctsAfterDrain.usdc).to.be.lessThan(6); // USDC underweight
-      expect(pctsAfterDrain.gold).to.be.lessThan(15); // Gold underweight
+      expect(pctsAfterDrain.usdc).to.be.lessThan(20); // USDC underweight
+      expect(pctsAfterDrain.gold).to.be.lessThan(35); // Gold underweight
 
       // 3. Multiple deposits to restore balance
       await deposit(user2, ethers.parseUnits("5000", 6));

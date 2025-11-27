@@ -6,10 +6,8 @@ const fs = require("fs");
 const MAINNET = {
   usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   wbtc: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-  reth: "0xae78736Cd615f374D3085123A210448E74Fc6393", // Rocket Pool ETH
   paxg: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
   btcUsdFeed: "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
-  ethUsdFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
   xauUsdFeed: "0x214eD9Da11D2fbe465a6fc601a91E62EbEc1a0D6",
   swapRouter: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
 };
@@ -18,13 +16,10 @@ const MAINNET = {
 // NOTE: For testnet, we run in USDC-only mode (no RWA diversification)
 const SEPOLIA = {
   usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle's Sepolia USDC
-  reth: null, // Will deploy mock (no official rETH on Sepolia)
-  // These don't exist on Sepolia - we'll deploy mocks or skip
   wbtc: null, // Will deploy mock
   paxg: null, // Will deploy mock
   // Chainlink Sepolia feeds
   btcUsdFeed: "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
-  ethUsdFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",
   xauUsdFeed: "0xC5981F461d74c46eB4b0CF3f4Ec79f025573B0Ea", // XAU/USD Sepolia
   swapRouter: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Uniswap V3 Sepolia
 };
@@ -33,10 +28,8 @@ const SEPOLIA = {
 const HOODI = {
   usdc: null, // Will deploy mock
   wbtc: null, // Will deploy mock
-  reth: null, // Will deploy mock
   paxg: null, // Will deploy mock
   btcUsdFeed: null, // Will deploy mock
-  ethUsdFeed: null, // Will deploy mock
   xauUsdFeed: null, // Will deploy mock
   swapRouter: null, // Will deploy mock
 };
@@ -96,10 +89,10 @@ async function main() {
     addresses.usdc = await mockUsdc.getAddress();
     console.log("Mock USDC deployed to:", addresses.usdc);
 
-    // Mint 10k USDC to deployer for treasury seeding
-    const mintAmount = hre.ethers.parseUnits("20000", 6); // 10,000 USDC
+    // Mint 1M USDC to deployer for treasury seeding
+    const mintAmount = hre.ethers.parseUnits("1000000", 6); // 1,000,000 USDC
     await (await mockUsdc.mint(deployer.address, mintAmount)).wait();
-    console.log("Minted 10,000 USDC to deployer ✓");
+    console.log("Minted 1,000,000 USDC to deployer ✓");
 
     // Deploy mock WBTC if needed
     if (!addresses.wbtc) {
@@ -107,14 +100,6 @@ async function main() {
       await mockWbtc.waitForDeployment();
       addresses.wbtc = await mockWbtc.getAddress();
       console.log("Mock WBTC deployed to:", addresses.wbtc);
-    }
-
-    // Deploy mock rETH (Rocket Pool ETH)
-    if (!addresses.reth) {
-      const mockReth = await MockToken.deploy("Mock Rocket Pool ETH", "rETH", 18);
-      await mockReth.waitForDeployment();
-      addresses.reth = await mockReth.getAddress();
-      console.log("Mock rETH deployed to:", addresses.reth);
     }
 
     // Deploy mock PAXG if needed
@@ -135,17 +120,17 @@ async function main() {
     addresses.btcUsdFeed = await mockBtcFeed.getAddress();
     console.log("Mock BTC/USD feed deployed to:", addresses.btcUsdFeed, "(price: $60,000)");
 
-    // Deploy mock ETH/USD feed (~$3,000 with 8 decimals)
-    const mockEthFeed = await MockAggregator.deploy(8, 300000000000n);
-    await mockEthFeed.waitForDeployment();
-    addresses.ethUsdFeed = await mockEthFeed.getAddress();
-    console.log("Mock ETH/USD feed deployed to:", addresses.ethUsdFeed, "(price: $3,000)");
-
     // Deploy mock XAU/USD feed (~$2,000 with 8 decimals)
     const mockXauFeed = await MockAggregator.deploy(8, 200000000000n);
     await mockXauFeed.waitForDeployment();
     addresses.xauUsdFeed = await mockXauFeed.getAddress();
     console.log("Mock XAU/USD feed deployed to:", addresses.xauUsdFeed, "(price: $2,000)");
+
+    // Deploy mock ROSE/USD feed ($1.00 with 8 decimals)
+    const mockRoseFeed = await MockAggregator.deploy(8, 100000000n);
+    await mockRoseFeed.waitForDeployment();
+    addresses.roseUsdFeed = await mockRoseFeed.getAddress();
+    console.log("Mock ROSE/USD feed deployed to:", addresses.roseUsdFeed, "(price: $1.00)");
 
     // Deploy MockUniswapV3Router for testnet (real Uniswap has no liquidity for mock tokens)
     console.log("\nDeploying MockUniswapV3Router for testnet...");
@@ -158,7 +143,6 @@ async function main() {
     // Configure token decimals on the mock router
     await (await mockRouter.setTokenDecimals(addresses.usdc, 6)).wait();
     await (await mockRouter.setTokenDecimals(addresses.wbtc, 8)).wait();
-    await (await mockRouter.setTokenDecimals(addresses.reth, 18)).wait();
     await (await mockRouter.setTokenDecimals(addresses.paxg, 18)).wait();
     console.log("Token decimals configured on mock router ✓");
 
@@ -168,8 +152,6 @@ async function main() {
     //
     // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
     await (await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1666666666666666n)).wait();
-    // ETH @ $3,000: (1e18 / 3000) * 1e18 / 1e6 = 3.33e26
-    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.reth, 333333333333333333333333333n)).wait();
     // Gold @ $2,000: (1e18 / 2000) * 1e18 / 1e6 = 5e26
     await (await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n)).wait();
     console.log("Forward exchange rates (USDC → Asset) configured ✓");
@@ -180,8 +162,6 @@ async function main() {
     //
     // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e23
     await (await mockRouter.setExchangeRate(addresses.wbtc, addresses.usdc, 600000000000000000000000n)).wait();
-    // ETH @ $3,000: 3000 * 1e6 * 1e18 / 1e18 = 3e9
-    await (await mockRouter.setExchangeRate(addresses.reth, addresses.usdc, 3000000000n)).wait();
     // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e18 = 2e9
     await (await mockRouter.setExchangeRate(addresses.paxg, addresses.usdc, 2000000000n)).wait();
     console.log("Reverse exchange rates (Asset → USDC) configured ✓");
@@ -189,15 +169,16 @@ async function main() {
     // Fund the mock router with tokens for swaps
     const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
     const mockWbtc_router = await hre.ethers.getContractAt("MockERC20", addresses.wbtc);
-    const mockReth_router = await hre.ethers.getContractAt("MockERC20", addresses.reth);
     const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
 
     // Fund with massive liquidity for stress testing redemptions
     await (await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
-    await (await mockReth_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M rETH
     await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M PAXG
     await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
-    console.log("Mock router funded with liquidity (1B USDC, 10k BTC, 1M rETH, 1M PAXG) ✓");
+    console.log("Mock router funded with liquidity (1B USDC, 10k BTC, 1M PAXG) ✓");
+
+    // Store mockRouter for ROSE configuration after RoseToken deploy
+    addresses.mockRouter = mockRouter;
   }
 
   // ============ Step 1: Deploy RoseToken ============
@@ -209,6 +190,24 @@ async function main() {
   const roseTokenAddress = await roseToken.getAddress();
   console.log("RoseToken deployed to:", roseTokenAddress);
 
+  // ============ Step 1.5: Configure ROSE on Mock Router (Testnet) ============
+  if (isTestnet && addresses.mockRouter) {
+    console.log("\n--- Step 1.5: Configuring ROSE on Mock Router ---");
+    const mockRouter = addresses.mockRouter;
+
+    // Set ROSE decimals
+    await (await mockRouter.setTokenDecimals(roseTokenAddress, 18)).wait();
+
+    // ROSE at $1.00
+    // USDC → ROSE: 1 USDC = 1 ROSE (rate = 1e12 to handle 6→18 decimal conversion)
+    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 1000000000000n)).wait();
+    // ROSE → USDC: 1 ROSE = 1 USDC (rate = 1e6 to handle 18→6 decimal conversion)
+    await (await mockRouter.setExchangeRate(roseTokenAddress, addresses.usdc, 1000000n)).wait();
+    console.log("ROSE exchange rates configured (USDC ↔ ROSE @ $1.00) ✓");
+
+    // Note: ROSE liquidity for router will be added after treasury deposit
+  }
+
   // ============ Step 2: Deploy RoseTreasury ============
   console.log("\n--- Step 2: Deploying RoseTreasury ---");
   const RoseTreasury = await hre.ethers.getContractFactory("RoseTreasury");
@@ -216,10 +215,8 @@ async function main() {
     roseTokenAddress,
     addresses.usdc,
     addresses.wbtc,
-    addresses.reth,
     addresses.paxg,
     addresses.btcUsdFeed,
-    addresses.ethUsdFeed,
     addresses.xauUsdFeed,
     addresses.swapRouter
   );
@@ -257,18 +254,57 @@ async function main() {
   await setMarketplaceTx.wait();
   console.log("Marketplace set in Treasury ✓");
 
-  // For testnet, set allocation to diversified RWA using mock router
+  // For testnet, set allocation to diversified RWA + ROSE reserve
   if (isTestnet) {
-    console.log("Setting testnet allocation (40% BTC, 40% Gold, 20% USDC)...");
-    const setAllocTx = await roseTreasury.setAllocation(4000, 0, 4000, 2000); // 40% BTC, 0% ETH, 40% Gold, 20% USDC
+    console.log("Setting testnet allocation (30% BTC, 30% Gold, 20% USDC, 20% ROSE)...");
+    const setAllocTx = await roseTreasury.setAllocation(3000, 3000, 2000, 2000); // 30% BTC, 30% Gold, 20% USDC, 20% ROSE
     await setAllocTx.wait();
-    console.log("Testnet allocation set to 40% BTC, 40% Gold, 20% USDC ✓");
+    console.log("Testnet allocation set to 30% BTC, 30% Gold, 20% USDC, 20% ROSE ✓");
 
     // Increase slippage tolerance to 2% for testnet (allows exact exchange rates)
     console.log("Setting testnet slippage tolerance (5%)...");
     const setSlippageTx = await roseTreasury.setMaxSlippage(500); // 5% = 500 bps
     await setSlippageTx.wait();
     console.log("Slippage tolerance set ✓");
+
+    // ============ Step 5: Seed Treasury & Distribute ROSE ============
+    console.log("\n--- Step 5: Seeding Treasury with 1M USDC ---");
+
+    // Get mockUSDC contract reference
+    const mockUsdcForDeposit = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
+
+    // Approve treasury to spend deployer's USDC
+    console.log("Approving treasury to spend 1M USDC...");
+    await (await mockUsdcForDeposit.approve(treasuryAddress, hre.ethers.parseUnits("1000000", 6))).wait();
+    console.log("Treasury approved to spend USDC ✓");
+
+    // Deposit 1M USDC into treasury -> receive 1M ROSE (at $1 initial NAV)
+    console.log("Depositing 1M USDC into treasury...");
+    await (await roseTreasury.deposit(hre.ethers.parseUnits("1000000", 6))).wait();
+    console.log("Deposited 1M USDC, received 1M ROSE ✓");
+
+    // Distribute ROSE: 500k to LP, 250k to treasury, 250k stays with deployer
+    console.log("Distributing ROSE tokens...");
+
+    // 500k ROSE to mock router (LP liquidity)
+    await (await roseToken.transfer(addresses.swapRouter, hre.ethers.parseUnits("500000", 18))).wait();
+    console.log("  - 500k ROSE sent to mock LP ✓");
+
+    // 250k ROSE to treasury (ROSE reserve)
+    await (await roseToken.transfer(treasuryAddress, hre.ethers.parseUnits("250000", 18))).wait();
+    console.log("  - 250k ROSE sent to treasury ✓");
+
+    // 250k ROSE stays with deployer (no action needed)
+    console.log("  - 250k ROSE kept by deployer ✓");
+
+    // Log final balances
+    const deployerRose = await roseToken.balanceOf(deployer.address);
+    const routerRose = await roseToken.balanceOf(addresses.swapRouter);
+    const treasuryRose = await roseToken.balanceOf(treasuryAddress);
+    console.log("\nROSE Distribution Complete:");
+    console.log("  Deployer:", hre.ethers.formatUnits(deployerRose, 18), "ROSE");
+    console.log("  Mock LP:", hre.ethers.formatUnits(routerRose, 18), "ROSE");
+    console.log("  Treasury:", hre.ethers.formatUnits(treasuryRose, 18), "ROSE");
   }
 
   // ============ Summary ============

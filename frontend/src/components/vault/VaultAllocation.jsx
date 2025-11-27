@@ -4,9 +4,9 @@ import { Skeleton } from '../ui/skeleton';
 
 const ASSET_COLORS = {
   BTC: '#F7931A',
-  ETH: '#627EEA',
   Gold: '#FFD700',
   USDC: '#2775CA',
+  ROSE: '#D4AF8C',
 };
 
 const VaultAllocation = ({ breakdown, isLoading }) => {
@@ -15,9 +15,9 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
 
     return [
       { name: 'BTC', value: breakdown.btc.value, percentage: breakdown.btc.percentage },
-      { name: 'ETH', value: breakdown.eth.value, percentage: breakdown.eth.percentage },
       { name: 'Gold', value: breakdown.gold.value, percentage: breakdown.gold.percentage },
       { name: 'USDC', value: breakdown.usdc.value, percentage: breakdown.usdc.percentage },
+      { name: 'ROSE', value: breakdown.rose.value, percentage: breakdown.rose.percentage },
     ].filter(item => item.value > 0);
   }, [breakdown]);
 
