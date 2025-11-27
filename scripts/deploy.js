@@ -1,6 +1,9 @@
 const hre = require("hardhat");
 const fs = require("fs");
 
+// ============ CLI Flags ============
+const USE_MOCKS = process.argv.includes('--use-mocks');
+
 // ============ Network Addresses ============
 // Mainnet addresses
 const MAINNET = {
@@ -58,8 +61,13 @@ async function main() {
   // Select addresses based on network
   let addresses;
   let isTestnet = false;
-  
-  if (chainId === 1) {
+
+  if (USE_MOCKS) {
+    // Force mock mode (useful for Tenderly forks without state sync)
+    addresses = { ...HOODI };
+    isTestnet = true;
+    console.log("⚠️  --use-mocks flag detected: deploying mock oracles/router");
+  } else if (chainId === 1) {
     addresses = MAINNET;
     console.log("Using MAINNET addresses");
   } else if (chainId === 11155111) {

@@ -47,6 +47,12 @@ module.exports = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 560048,
       gasPrice: "auto"
+    },
+    tenderly: {
+      url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 1,
+      gasPrice: "auto"
     }
   },
   paths: {
@@ -67,6 +73,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-hoodi.etherscan.io/api",
           browserURL: "https://hoodi.etherscan.io"
+        }
+      },
+      {
+        network: "tenderly",
+        chainId: 1,
+        urls: {
+          apiURL: "https://dashboard.tenderly.co/explorer/vnet/6e9729a9-2365-49cd-aaa0-4a07f31753d2/transactions",
+          browserURL: "https://dashboard.tenderly.co/explorer/vnet/6e9729a9-2365-49cd-aaa0-4a07f31753d2/transactions"
         }
       }
     ]
