@@ -1,0 +1,144 @@
+name: Build and Deploy Passport Signer
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/signer/**'
+      - '.github/workflows/deploy-signer.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_to_akash:
+        description: 'Deploy to Akash Network'
+        required: true
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/passport-signer
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/signer
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image info
+        run: |
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
+          echo "Image digest: ${{ steps.build.outputs.digest }}"
+
+  deploy-akash:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event.inputs.deploy_to_akash == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Akash CLI
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | sh
+          echo "$HOME/.akash/bin" >> $GITHUB_PATH
+
+      - name: Configure Akash
+        env:
+          AKASH_KEY_SECRET: ${{ secrets.AKASH_KEY_SECRET }}
+          AKASH_KEYRING_BACKEND: test
+        run: |
+          mkdir -p ~/.akash
+          echo "$AKASH_KEY_SECRET" | akash keys import deploy - --keyring-backend test
+
+          # Set network configuration
+          export AKASH_NODE="https://rpc.akashnet.net:443"
+          export AKASH_CHAIN_ID="akashnet-2"
+          export AKASH_GAS_PRICES="0.025uakt"
+          export AKASH_GAS="auto"
+          export AKASH_GAS_ADJUSTMENT="1.5"
+
+      - name: Update SDL with image tag
+        run: |
+          # Update the image tag in deploy.yaml
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          sed -i "s|image:.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
+
+          # Show updated SDL
+          cat backend/signer/deploy.yaml
+
+      - name: Deploy to Akash
+        env:
+          AKASH_FROM: deploy
+          AKASH_KEYRING_BACKEND: test
+          AKASH_NODE: https://rpc.akashnet.net:443
+          AKASH_CHAIN_ID: akashnet-2
+          AKASH_GAS_PRICES: 0.025uakt
+          AKASH_GAS: auto
+          AKASH_GAS_ADJUSTMENT: "1.5"
+          # Signer configuration secrets
+          SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
+          GITCOIN_API_KEY: ${{ secrets.GITCOIN_API_KEY }}
+          GITCOIN_SCORER_ID: ${{ secrets.GITCOIN_SCORER_ID }}
+        run: |
+          echo "Deploying to Akash Network..."
+
+          # Create deployment
+          akash tx deployment create backend/signer/deploy.yaml \
+            --from deploy \
+            --yes \
+            --broadcast-mode sync
+
+          echo "Deployment created. Check Akash Console for status."
+          echo "Note: Bid acceptance and lease management should be done via Akash Console."
+
+      - name: Output deployment info
+        run: |
+          echo "Passport Signer deployment initiated"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          echo ""
+          echo "Next steps:"
+          echo "1. Go to Akash Console (https://console.akash.network)"
+          echo "2. Accept a bid from a provider"
+          echo "3. Note the deployment URL"
+          echo "4. Update VITE_PASSPORT_SIGNER_URL in GitHub secrets"

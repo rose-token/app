@@ -51,9 +51,14 @@ npm test                  # Run Vitest tests
 **Deployment order:**
 1. Deploy RoseToken with initial authorized address
 2. Deploy RoseTreasury with RoseToken address
-3. Deploy RoseMarketplace with RoseToken and Treasury addresses
+3. Deploy RoseMarketplace with RoseToken, Treasury, and passportSigner addresses
 4. Authorize Treasury on RoseToken via `setAuthorized()`
 5. Authorize Marketplace on RoseToken via `setAuthorized()`
+
+**Passport Verification:**
+- RoseMarketplace requires ECDSA signatures from a trusted passport signer
+- Actions requiring signatures: createTask, stakeholderStake, claimTask
+- Signatures include expiry timestamp and are single-use (replay protection)
 
 ## Task Status Flow
 
@@ -74,7 +79,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 - `frontend/src/components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm
 - `frontend/src/components/vault/` - VaultStats, VaultAllocation, DepositCard, RedeemCard, TransactionHistory
 - `frontend/src/components/wallet/` - TokenBalance, NetworkSelector
-- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData
+- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData, usePassport, usePassportVerify
 - `frontend/src/utils/ipfs/` - pinataService.js for IPFS integration
 - `frontend/src/contracts/` - Auto-generated ABIs (via update-abi script)
 
@@ -104,6 +109,36 @@ Tests use mock contracts to simulate external dependencies:
 3. Call `roseTreasury.deposit(usdcAmount)`
 4. Treasury diversifies into RWA and mints equivalent ROSE
 
+## Backend Passport Signer
+
+**Purpose:** Express API that verifies Gitcoin Passport scores and signs approvals for marketplace actions.
+
+**Directory:** `backend/signer/`
+- TypeScript Express server
+- Integrates with Gitcoin Passport API
+- Signs messages using ethers.js ECDSA
+- Deployed to Akash Network
+
+**Local development:**
+```bash
+cd backend/signer
+npm install
+cp .env.example .env  # Configure environment
+npm run dev           # Start development server
+```
+
+**Docker:**
+```bash
+cd backend/signer
+docker-compose up --build
+```
+
+**API Endpoints:**
+- `POST /api/passport/verify` - Verify passport and get signature
+- `GET /api/passport/score/:address` - Get current passport score
+- `GET /api/passport/signer` - Get signer address
+- `GET /api/passport/thresholds` - Get action thresholds
+
 ## CI/CD Workflows
 
 **pr-build.yml:** Runs on PRs (parallel jobs)
@@ -112,6 +147,10 @@ Tests use mock contracts to simulate external dependencies:
 
 **combined-deploy.yml:** Runs on main push
 - Deploys contracts to Arbitrum Sepolia, verifies on Arbiscan, deploys frontend to GitHub Pages
+
+**deploy-signer.yml:** Runs on main push (when backend/signer changes)
+- Builds Docker image and pushes to GHCR
+- Optionally deploys to Akash Network
 
 ## Environment Variables
 
@@ -122,6 +161,7 @@ ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 PRIVATE_KEY=your_wallet_private_key
 DAO_TREASURY_ADDRESS=0x...
 ARBISCAN_API_KEY=...
+PASSPORT_SIGNER_ADDRESS=0x...  # Address of passport signer wallet
 ```
 
 **frontend/.env:**
@@ -132,6 +172,20 @@ VITE_TREASURY_ADDRESS=0x...
 VITE_PINATA_API_KEY=...
 VITE_PINATA_SECRET_API_KEY=...
 VITE_PINATA_JWT=...
+VITE_PASSPORT_SIGNER_URL=https://...  # Backend signer API URL
+```
+
+**backend/signer/.env:**
+```bash
+PORT=3001
+NODE_ENV=development
+SIGNER_PRIVATE_KEY=0x...           # Private key for signing approvals
+GITCOIN_API_KEY=...                # Gitcoin Passport API key
+GITCOIN_SCORER_ID=...              # Gitcoin Scorer ID
+ALLOWED_ORIGINS=http://localhost:5173,https://yourapp.com
+THRESHOLD_CREATE_TASK=20
+THRESHOLD_STAKE=20
+THRESHOLD_CLAIM=20
 ```
 
 ## Key Technical Details
