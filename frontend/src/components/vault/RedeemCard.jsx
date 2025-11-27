@@ -179,16 +179,16 @@ const RedeemCard = ({
         boxShadow: 'var(--shadow-card)'
       }}
     >
-      <h3 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+      <h3 className="font-display text-xl font-medium mb-1" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
         Redeem ROSE
       </h3>
+      <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+        Receive USDC
+      </p>
 
       <div className="space-y-4">
         {/* Amount Input */}
         <div>
-          <label style={labelStyle}>
-            ROSE Amount
-          </label>
           <div className="relative">
             <input
               type="number"
