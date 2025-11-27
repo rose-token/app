@@ -532,6 +532,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     /**
      * @dev Liquidate RWA to USDC for redemptions
+     * Uses ceiling division to ensure we liquidate enough to cover the shortfall
      */
     function _liquidateForRedemption(uint256 usdcNeeded) internal {
         uint256 hardAssets = hardAssetValueUSD();
@@ -544,12 +545,20 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
 
         if (btcValue > 0) {
-            uint256 btcToSell = (wbtc.balanceOf(address(this)) * usdcNeeded) / rwaValue;
+            // Ceiling division: (a * b + c - 1) / c to ensure we sell enough
+            uint256 btcBalance = wbtc.balanceOf(address(this));
+            uint256 btcToSell = (btcBalance * usdcNeeded + rwaValue - 1) / rwaValue;
+            // Cap at actual balance to prevent overflow
+            if (btcToSell > btcBalance) btcToSell = btcBalance;
             if (btcToSell > 0) _swapAssetToUSDC(address(wbtc), btcToSell);
         }
 
         if (goldValue > 0) {
-            uint256 goldToSell = (paxg.balanceOf(address(this)) * usdcNeeded) / rwaValue;
+            // Ceiling division for gold as well
+            uint256 goldBalance = paxg.balanceOf(address(this));
+            uint256 goldToSell = (goldBalance * usdcNeeded + rwaValue - 1) / rwaValue;
+            // Cap at actual balance to prevent overflow
+            if (goldToSell > goldBalance) goldToSell = goldBalance;
             if (goldToSell > 0) _swapAssetToUSDC(address(paxg), goldToSell);
         }
     }
