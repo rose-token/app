@@ -120,12 +120,11 @@ async function main() {
   console.log("        TREASURY SEEDED");
   console.log("========================================");
   console.log("BTC value:       $", hre.ethers.formatUnits(breakdown.btcValue, 6));
-  console.log("ETH value:       $", hre.ethers.formatUnits(breakdown.ethValue, 6));
   console.log("Gold value:      $", hre.ethers.formatUnits(breakdown.goldValue, 6));
   console.log("USDC value:      $", hre.ethers.formatUnits(breakdown.usdcValue, 6));
   console.log("----------------------------------------");
-  console.log("Total vault:     $", hre.ethers.formatUnits(breakdown.totalValue, 6));
-  console.log("Treasury ROSE:   ", hre.ethers.formatEther(breakdown.treasuryRose));
+  console.log("Total vault:     $", hre.ethers.formatUnits(breakdown.totalHardAssets, 6));
+  console.log("Circulating ROSE:", hre.ethers.formatEther(breakdown.circulatingRose));
   console.log("ROSE price:      $", hre.ethers.formatUnits(breakdown.currentRosePrice, 6));
   console.log("========================================");
 
