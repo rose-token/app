@@ -152,8 +152,8 @@ async function main() {
     // Formula: amountOut = (amountIn * rate) / 1e18
     // For Asset -> USDC swaps: rate = price * 1e6 * 1e18 / 10^assetDecimals
     //
-    // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e23
-    await (await mockRouter.setExchangeRate(addresses.wbtc, addresses.usdc, 600000000000000000000000n)).wait();
+    // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e20
+    await (await mockRouter.setExchangeRate(addresses.wbtc, addresses.usdc, 600000000000000000000n)).wait();
     // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e18 = 2e9
     await (await mockRouter.setExchangeRate(addresses.paxg, addresses.usdc, 2000000000n)).wait();
     console.log("Reverse exchange rates (Asset → USDC) configured ✓");
