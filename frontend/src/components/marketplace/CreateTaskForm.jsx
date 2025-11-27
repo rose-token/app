@@ -70,8 +70,8 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [marketplaceAddress, tokenAmount],
-        maxFeePerGas: parseGwei('4'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        maxFeePerGas: parseGwei('10'),
+        maxPriorityFeePerGas: parseGwei('5'),
       });
 
       console.log('✅ Approval transaction sent:', approveHash);
@@ -91,8 +91,8 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         functionName: 'createTask',
         args: [title, tokenAmount, hash],
         gas: 500_000n,
-        maxFeePerGas: parseGwei('4'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        maxFeePerGas: parseGwei('10'),
+        maxPriorityFeePerGas: parseGwei('5'),
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);

@@ -39,8 +39,8 @@ module.exports = {
       url: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11155111,
-      maxFeePerGas: 4000000000,         // 4 gwei
-      maxPriorityFeePerGas: 2000000000, // 2 gwei
+      maxFeePerGas: 10000000000,        // 10 gwei
+      maxPriorityFeePerGas: 5000000000, // 5 gwei
     },
     tenderly: {
       url: "https://virtual.mainnet.us-west.rpc.tenderly.co/47607c89-e50a-4805-a15c-7d2c55d351f3",

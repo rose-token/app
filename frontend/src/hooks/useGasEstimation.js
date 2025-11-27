@@ -47,11 +47,10 @@ export const useGasEstimation = () => {
       const gasWithBuffer = (estimatedGas * 120n) / 100n;
 
       // Optimized gas parameters for Sepolia testnet
-      // Current Sepolia base fee is typically 1-2 Gwei
       const overrides = {
         gas: gasWithBuffer,
-        maxFeePerGas: parseGwei('4'), // 4 Gwei max fee
-        maxPriorityFeePerGas: parseGwei('2'), // 2 Gwei priority fee
+        maxFeePerGas: parseGwei('10'), // 10 Gwei max fee
+        maxPriorityFeePerGas: parseGwei('5'), // 5 Gwei priority fee
       };
 
       // Only add value if it's non-zero
@@ -71,8 +70,8 @@ export const useGasEstimation = () => {
 
       // Return default overrides if estimation fails
       return {
-        maxFeePerGas: parseGwei('4'),
-        maxPriorityFeePerGas: parseGwei('2'),
+        maxFeePerGas: parseGwei('10'),
+        maxPriorityFeePerGas: parseGwei('5'),
       };
     }
   };
