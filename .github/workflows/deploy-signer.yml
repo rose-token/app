@@ -26,7 +26,7 @@ jobs:
       packages: write
 
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
+      image_tag: ${{ github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
