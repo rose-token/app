@@ -120,8 +120,10 @@ jobs:
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "{
-              \"sdl\": $(cat backend/signer/deploy.yaml | jq -Rs .),
-              \"deposit\": 5000000
+              \"data\": {
+                \"sdl\": $(cat backend/signer/deploy.yaml | jq -Rs .),
+                \"deposit\": 5
+              }
             }")
 
           echo "Deployment response:"
