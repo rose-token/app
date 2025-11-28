@@ -35,8 +35,8 @@ jobs:
           # Run container and capture output (timeout after 10 seconds)
           timeout 10 docker run --rm \
             -e SIGNER_PRIVATE_KEY=${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }} \
-            -e GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }} \
-            -e GITCOIN_SCORER_ID=${{ secrets.VITE_GITCOIN_SCORER_ID }} \
+            -e VITE_GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }} \
+            -e VITE_GITCOIN_SCORER_ID=${{ secrets.VITE_GITCOIN_SCORER_ID }} \
             -e PORT=3000 \
             -p 3000:3000 \
             rose-signer-test || true
