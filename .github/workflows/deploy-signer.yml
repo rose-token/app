@@ -112,7 +112,7 @@ jobs:
 
             if [ "$DEPLOYMENT_STATE" = "active" ]; then
               echo "Updating existing deployment..."
-              UPDATE_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{sdl: $sdl}')
+              UPDATE_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl}}')
 
               UPDATE_RESPONSE=$(curl -s -X PUT "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
                 -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
