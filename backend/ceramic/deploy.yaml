@@ -24,11 +24,11 @@ profiles:
     ceramic:
       resources:
         cpu:
-          units: 2
+          units: 4
         memory:
-          size: 4Gi
+          size: 8Gi
         storage:
-          - size: 1Gi
+          - size: 2Gi
           - name: data
             size: 20Gi
             attributes:
@@ -42,7 +42,7 @@ profiles:
       pricing:
         ceramic:
           denom: uakt
-          amount: 5000
+          amount: 10000
 
 deployment:
   ceramic:

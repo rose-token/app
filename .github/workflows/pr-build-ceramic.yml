@@ -35,19 +35,32 @@ jobs:
           # Run in background with a name
           docker run -d --name ceramic-test \
             -e CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true \
+            -e CERAMIC_NETWORK=mainnet \
             -p 7007:7007 \
+            -p 5101:5101 \
             rose-ceramic-test
 
-          # Wait for startup (Ceramic takes longer to start)
-          echo "Waiting for Ceramic to start..."
-          sleep 60
+          # Wait for startup (ceramic-one + js-ceramic takes longer)
+          echo "Waiting for Ceramic to start (ceramic-one + js-ceramic)..."
 
-          # Show logs
+          # Poll for health with retries (up to 3 minutes)
+          for i in $(seq 1 18); do
+            echo "Health check attempt $i/18..."
+            if curl -sf http://localhost:7007/api/v0/node/healthcheck > /dev/null 2>&1; then
+              echo "Ceramic is healthy!"
+              curl http://localhost:7007/api/v0/node/healthcheck
+              break
+            fi
+            sleep 10
+          done
+
+          # Show logs regardless of outcome
+          echo "=== Container logs ==="
           docker logs ceramic-test
 
-          # Test health endpoint
-          echo "Testing health endpoint..."
-          curl -f http://localhost:7007/api/v0/node/healthcheck || echo "Health check failed (may still be starting)"
+          # Final health check (fail the build if unhealthy)
+          echo "=== Final health check ==="
+          curl -f http://localhost:7007/api/v0/node/healthcheck
 
           # Clean up
           docker stop ceramic-test
