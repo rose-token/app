@@ -1,0 +1,4 @@
+{
+  "_comment": "Add addresses with fake passport scores for testing. Copy this to whitelist.json",
+  "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1": 50
+}
