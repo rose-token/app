@@ -11,7 +11,7 @@ on:
       deploy_to_akash:
         description: 'Deploy to Akash Network'
         required: true
-        default: 'false'
+        default: 'true'
         type: boolean
 
 env:
@@ -63,6 +63,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          no-cache: true
 
       - name: Output image info
         run: |
