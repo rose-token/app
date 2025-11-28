@@ -1,0 +1,37 @@
+{
+  "anchor": {
+    "auth-method": "did",
+    "anchor-service-url": "https://cas.3boxlabs.com"
+  },
+  "http-api": {
+    "cors-allowed-origins": [
+      "https://emmadorably.github.io",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ],
+    "admin-dids": ["PLACEHOLDER_ADMIN_DID"]
+  },
+  "ipfs": {
+    "mode": "remote",
+    "host": "http://localhost:5101"
+  },
+  "logger": {
+    "log-level": 2,
+    "log-to-files": false
+  },
+  "network": {
+    "name": "mainnet"
+  },
+  "node": {
+    "privateSeedUrl": "PLACEHOLDER_PRIVATE_SEED_URL"
+  },
+  "state-store": {
+    "mode": "fs",
+    "local-directory": "/data/statestore"
+  },
+  "indexing": {
+    "db": "postgres://ceramic:ceramic@localhost:5432/ceramic",
+    "allow-queries-before-historical-sync": true,
+    "models": []
+  }
+}

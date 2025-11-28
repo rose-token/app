@@ -1,0 +1,15 @@
+type RoseProfile @createModel(
+  accountRelation: SINGLE,
+  description: "Rose Token marketplace user profile"
+) {
+  displayName: String @string(minLength: 1, maxLength: 100)
+  bio: String @string(maxLength: 500)
+  avatarUrl: String @string(maxLength: 500)
+  skills: [String!] @list(maxLength: 20) @string(maxLength: 50)
+  website: String @string(maxLength: 200)
+  twitter: String @string(maxLength: 50)
+  github: String @string(maxLength: 50)
+  walletAddress: String! @string(minLength: 42, maxLength: 42)
+  joinedAt: DateTime!
+  lastActiveAt: DateTime
+}

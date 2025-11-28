@@ -1,0 +1,13 @@
+type ReputationSummary @createModel(
+  accountRelation: SINGLE,
+  description: "Aggregated reputation metrics"
+) {
+  tasksCompletedAsWorker: Int!
+  tasksCompletedAsStakeholder: Int!
+  tasksCompletedAsCustomer: Int!
+  averageRating: Float
+  totalRatingsReceived: Int!
+  totalEarned: String!
+  lastUpdatedAt: DateTime!
+  passportScore: Float
+}

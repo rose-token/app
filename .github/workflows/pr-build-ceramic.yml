@@ -1,0 +1,72 @@
+name: PR Build Ceramic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/ceramic/**'
+      - '.github/workflows/pr-build-ceramic.yml'
+
+jobs:
+  build-ceramic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/ceramic
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container to test startup
+        env:
+          CERAMIC_ADMIN_DID: ${{ secrets.CERAMIC_ADMIN_DID }}
+          CERAMIC_ADMIN_PRIVATE_KEY: ${{ secrets.CERAMIC_ADMIN_PRIVATE_KEY }}
+        run: |
+          # Build locally with a tag we can reference
+          docker build -t rose-ceramic-test ./backend/ceramic
+
+          # Run in background with a name
+          docker run -d --name ceramic-test \
+            -e CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true \
+            -e CERAMIC_NETWORK=mainnet \
+            -e CERAMIC_ADMIN_DID="$CERAMIC_ADMIN_DID" \
+            -e CERAMIC_ADMIN_PRIVATE_KEY="$CERAMIC_ADMIN_PRIVATE_KEY" \
+            -p 7007:7007 \
+            -p 5101:5101 \
+            rose-ceramic-test
+
+          # Wait for startup (ceramic-one + js-ceramic takes longer)
+          echo "Waiting for Ceramic to start (ceramic-one + js-ceramic)..."
+
+          # Poll for health with retries (up to 3 minutes)
+          for i in $(seq 1 18); do
+            echo "Health check attempt $i/18..."
+            if curl -sf http://localhost:7007/api/v0/node/healthcheck > /dev/null 2>&1; then
+              echo "Ceramic is healthy!"
+              curl http://localhost:7007/api/v0/node/healthcheck
+              break
+            fi
+            sleep 10
+          done
+
+          # Show logs regardless of outcome
+          echo "=== Container logs ==="
+          docker logs ceramic-test
+
+          # Final health check (fail the build if unhealthy)
+          echo "=== Final health check ==="
+          curl -f http://localhost:7007/api/v0/node/healthcheck
+
+          # Clean up
+          docker stop ceramic-test
+          docker rm ceramic-test
+
+          echo "Container startup test complete"
