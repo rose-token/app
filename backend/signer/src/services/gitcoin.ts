@@ -2,7 +2,7 @@ import { config } from '../config';
 import { PassportScore } from '../types';
 
 export async function getPassportScore(address: string): Promise<number> {
-  const url = `${config.gitcoin.baseUrl}/registry/score/${config.gitcoin.scorerId}/${address}`;
+  const url = `${config.gitcoin.baseUrl}/v2/stamps/${config.gitcoin.scorerId}/score/${address}`;
 
   const response = await fetch(url, {
     headers: {

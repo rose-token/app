@@ -11,7 +11,7 @@ export const PASSPORT_THRESHOLDS = {
 };
 
 export const PASSPORT_CONFIG = {
-  API_URL: 'https://api.scorer.gitcoin.co/registry/score',
+  API_URL: 'https://api.passport.xyz/v2/stamps',
   CACHE_TTL_MS: 60 * 60 * 1000, // 1 hour
   API_TIMEOUT_MS: 10000, // 10 seconds
   CACHE_KEY_PREFIX: 'gitcoin_passport_cache',

@@ -11,7 +11,7 @@ export const config = {
   gitcoin: {
     scorerId: process.env.VITE_GITCOIN_SCORER_ID || '',
     apiKey: process.env.VITE_GITCOIN_API_KEY || '',
-    baseUrl: 'https://api.scorer.gitcoin.co',
+    baseUrl: 'https://api.passport.xyz',
   },
 
   thresholds: {

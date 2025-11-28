@@ -66,7 +66,7 @@ const fetchPassportScore = async (address) => {
 
   try {
     const response = await fetch(
-      `${PASSPORT_CONFIG.API_URL}/${SCORER_ID}/${address}`,
+      `${PASSPORT_CONFIG.API_URL}/${SCORER_ID}/score/${address}`,
       {
         headers: {
           'X-API-KEY': API_KEY,
