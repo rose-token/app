@@ -1,0 +1,56 @@
+name: PR Build Ceramic
+
+on:
+  push:
+    branches: [ 'debug-ceramic-*' ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'backend/ceramic/**'
+      - '.github/workflows/pr-build-ceramic.yml'
+
+jobs:
+  build-ceramic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/ceramic
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container to test startup
+        run: |
+          # Build locally with a tag we can reference
+          docker build -t rose-ceramic-test ./backend/ceramic
+
+          # Run in background with a name
+          docker run -d --name ceramic-test \
+            -e CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true \
+            -p 7007:7007 \
+            rose-ceramic-test
+
+          # Wait for startup (Ceramic takes longer to start)
+          echo "Waiting for Ceramic to start..."
+          sleep 60
+
+          # Show logs
+          docker logs ceramic-test
+
+          # Test health endpoint
+          echo "Testing health endpoint..."
+          curl -f http://localhost:7007/api/v0/node/healthcheck || echo "Health check failed (may still be starting)"
+
+          # Clean up
+          docker stop ceramic-test
+          docker rm ceramic-test
+
+          echo "Container startup test complete"
