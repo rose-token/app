@@ -55,10 +55,12 @@ npm test                  # Run Vitest tests
 4. Authorize Treasury on RoseToken via `setAuthorized()`
 5. Authorize Marketplace on RoseToken via `setAuthorized()`
 
-**Passport Verification:**
-- RoseMarketplace requires ECDSA signatures from a trusted passport signer
-- Actions requiring signatures: createTask, stakeholderStake, claimTask
-- Signatures include expiry timestamp and are single-use (replay protection)
+**Passport Signature Verification:**
+- Contract verifies ECDSA signatures from trusted passportSigner address
+- Protected functions: `createTask("createTask")`, `stakeholderStake("stake")`, `claimTask("claim")`
+- Replay protection: `usedSignatures` mapping marks each signature as consumed
+- Custom errors: `InvalidSignature`, `SignatureExpired`, `SignatureAlreadyUsed`, `ZeroAddressSigner`
+- Admin: `setPassportSigner(address)` - owner-only signer update
 
 ## Task Status Flow
 
@@ -84,6 +86,23 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 - `frontend/src/contracts/` - Auto-generated ABIs (via update-abi script)
 
 **Styling:** Uses CSS variables in `index.css` with semantic Tailwind classes (`bg-primary`, `text-accent`, etc.). Never use hardcoded colors.
+
+## Frontend Passport System
+
+**Hooks:**
+- `usePassport` - Direct Gitcoin API integration with 1-hour localStorage caching; provides `{ score, loading, error, refetch, meetsThreshold }`
+- `usePassportVerify` - Backend signer communication; provides `{ getSignature, getScore, getSignerAddress }`
+
+**Components:**
+- `PassportGate` - Conditional rendering based on score threshold; wraps protected actions
+- `PassportStatus` - Score display (compact header badge or full profile card); color-coded levels
+
+**Integration Points:**
+- Header: Compact PassportStatus badge
+- CreateTaskForm: Wrapped in PassportGate (threshold: 20)
+- ProfilePage: Full PassportStatus in "Sybil Resistance" section
+
+**Thresholds:** CREATE_TASK=20, STAKE=20, CLAIM_TASK=20 (defined in `constants/passport.js`)
 
 ## Testing
 
@@ -111,33 +130,34 @@ Tests use mock contracts to simulate external dependencies:
 
 ## Backend Passport Signer
 
-**Purpose:** Express API that verifies Gitcoin Passport scores and signs approvals for marketplace actions.
+**Purpose:** Express API that verifies Gitcoin Passport scores and signs ECDSA approvals for marketplace actions.
 
 **Directory:** `backend/signer/`
-- TypeScript Express server
-- Integrates with Gitcoin Passport API
-- Signs messages using ethers.js ECDSA
-- Deployed to Akash Network
-
-**Local development:**
-```bash
-cd backend/signer
-npm install
-cp .env.example .env  # Configure environment
-npm run dev           # Start development server
-```
-
-**Docker:**
-```bash
-cd backend/signer
-docker-compose up --build
-```
 
 **API Endpoints:**
-- `POST /api/passport/verify` - Verify passport and get signature
+- `POST /api/passport/verify` - Verify passport score & get signature (`{address, action}` → `{expiry, signature}`)
 - `GET /api/passport/score/:address` - Get current passport score
-- `GET /api/passport/signer` - Get signer address
+- `GET /api/passport/signer` - Get signer wallet address
 - `GET /api/passport/thresholds` - Get action thresholds
+
+**Signature Format:** `keccak256(abi.encodePacked(address, action, expiry))` signed with Ethereum message prefix
+
+**Security:** CORS whitelist, rate limiting (30/min), Helmet headers, address validation
+
+**Key Files:**
+- `src/routes/passport.ts` - API endpoint handlers
+- `src/services/signer.ts` - ECDSA signing with ethers.js
+- `src/services/gitcoin.ts` - Gitcoin Passport API integration
+- `src/config.ts` - Environment configuration
+
+**Local Development:**
+```bash
+cd backend/signer
+npm install && cp .env.example .env
+npm run dev  # tsx watch mode
+```
+
+**Docker:** `docker-compose up --build` (port 3000)
 
 ## CI/CD Workflows
 
@@ -178,14 +198,16 @@ VITE_PASSPORT_SIGNER_URL=https://...  # Backend signer API URL
 **backend/signer/.env:**
 ```bash
 PORT=3001
-NODE_ENV=development
-SIGNER_PRIVATE_KEY=0x...           # Private key for signing approvals
+SIGNER_PRIVATE_KEY=0x...           # Private key for signing
 VITE_GITCOIN_API_KEY=...           # Gitcoin Passport API key
 VITE_GITCOIN_SCORER_ID=...         # Gitcoin Scorer ID
 ALLOWED_ORIGINS=http://localhost:5173,https://yourapp.com
-THRESHOLD_CREATE_TASK=20
-THRESHOLD_STAKE=20
-THRESHOLD_CLAIM=20
+THRESHOLD_CREATE_TASK=20           # Min score for createTask
+THRESHOLD_STAKE=20                 # Min score for stake
+THRESHOLD_CLAIM=20                 # Min score for claim
+SIGNATURE_TTL=3600                 # Signature validity (seconds)
+RATE_LIMIT_WINDOW_MS=60000         # Rate limit window (ms)
+RATE_LIMIT_MAX_REQUESTS=30         # Max requests per window
 ```
 
 ## Key Technical Details
