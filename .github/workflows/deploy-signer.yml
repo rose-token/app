@@ -78,85 +78,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Akash CLI
-        run: |
-          # Download Akash CLI release
-          AKASH_VERSION="0.36.0"
-          curl -sSfL "https://github.com/akash-network/node/releases/download/v${AKASH_VERSION}/akash_${AKASH_VERSION}_linux_amd64.zip" -o akash.zip
-          unzip akash.zip -d akash-tmp
-
-          # Install to local bin
-          mkdir -p $HOME/.akash/bin
-          mv akash-tmp/akash $HOME/.akash/bin/
-          chmod +x $HOME/.akash/bin/akash
-          rm -rf akash.zip akash-tmp
-
-          # Add to PATH for subsequent steps
-          echo "$HOME/.akash/bin" >> $GITHUB_PATH
-
-          # Verify installation
-          $HOME/.akash/bin/akash version
-
-      - name: Configure Akash
+      - name: Deploy to Akash Console
         env:
-          AKASH_KEY_SECRET: ${{ secrets.AKASH_KEY_SECRET }}
-          AKASH_KEYRING_BACKEND: test
+          AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          # Verify akash is available (PATH set by previous step via GITHUB_PATH)
-          which akash
-          akash version
-
-          mkdir -p ~/.akash
-
-          # Write key to temp file (akash doesn't support stdin with -)
-          echo "$AKASH_KEY_SECRET" > /tmp/akash-key.txt
-          akash keys import deploy /tmp/akash-key.txt --keyring-backend test
-          rm -f /tmp/akash-key.txt
-
-          # Verify key import
-          akash keys list --keyring-backend test
-
-      - name: Update SDL with image tag
-        run: |
-          # Update the image tag in deploy.yaml
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          # Update image in SDL
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
           sed -i "s|image:.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
-          # Show updated SDL
+          echo "Updated SDL:"
           cat backend/signer/deploy.yaml
 
-      - name: Deploy to Akash
-        env:
-          AKASH_FROM: deploy
-          AKASH_KEYRING_BACKEND: test
-          AKASH_NODE: https://rpc.akashnet.net:443
-          AKASH_CHAIN_ID: akashnet-2
-          AKASH_GAS_PRICES: 0.025uakt
-          AKASH_GAS: auto
-          AKASH_GAS_ADJUSTMENT: "1.5"
-          # Signer configuration secrets
-          SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
-          VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
-          VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
-        run: |
-          echo "Deploying to Akash Network..."
+          # Read SDL content
+          SDL_CONTENT=$(cat backend/signer/deploy.yaml)
 
-          # Create deployment
-          akash tx deployment create backend/signer/deploy.yaml \
-            --from deploy \
-            --yes \
-            --broadcast-mode sync
+          # Create deployment via Console API
+          echo "Creating deployment via Akash Console API..."
+          RESPONSE=$(curl -s -X POST "https://api.akash.network/v1/deployments" \
+            -H "Authorization: Bearer ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"sdl\": $(echo "$SDL_CONTENT" | jq -Rs .),
+              \"deposit\": 500000
+            }")
 
-          echo "Deployment created. Check Akash Console for status."
-          echo "Note: Bid acceptance and lease management should be done via Akash Console."
+          echo "Deployment response:"
+          echo "$RESPONSE" | jq .
 
-      - name: Output deployment info
-        run: |
-          echo "Passport Signer deployment initiated"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
-          echo ""
-          echo "Next steps:"
-          echo "1. Go to Akash Console (https://console.akash.network)"
-          echo "2. Accept a bid from a provider"
-          echo "3. Note the deployment URL"
-          echo "4. Update VITE_PASSPORT_SIGNER_URL in GitHub secrets"
+          # Extract deployment ID
+          DEPLOYMENT_ID=$(echo "$RESPONSE" | jq -r '.deploymentId // .id // empty')
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            echo "Deployment created: $DEPLOYMENT_ID"
+            echo "View at: https://console.akash.network/deployments/$DEPLOYMENT_ID"
+          else
+            echo "Error creating deployment - check response above"
+            exit 1
+          fi
