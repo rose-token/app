@@ -798,7 +798,7 @@ const TasksPage = () => {
     <div className="animate-fade-in">
       <div className="mb-10 text-center">
         <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
-          Worker-Owned <span className="gradient-text">Marketplace</span>
+          The Worker's <span className="gradient-text">Marketplace</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
           Decentralized task coordination owned by workers
