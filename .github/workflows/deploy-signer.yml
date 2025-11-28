@@ -88,8 +88,9 @@ jobs:
           VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
           VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
         run: |
-          # Update image in SDL
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          # Update image in SDL (use short SHA to match docker/metadata-action output)
+          SHORT_SHA="${IMAGE_TAG:0:7}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
           sed -i "s|image:.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
           # Substitute secrets into SDL
