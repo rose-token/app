@@ -130,11 +130,13 @@ jobs:
           echo "$DEPLOY_RESPONSE" | jq .
 
           DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
+          MANIFEST=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.manifest // .manifest // empty')
           if [ -z "$DSEQ" ]; then
             echo "Failed to create deployment"
             exit 1
           fi
           echo "Deployment created: dseq=$DSEQ"
+          echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
 
           # Step 3: Poll for bids
           echo "Step 3: Waiting for provider bids..."
@@ -144,9 +146,12 @@ jobs:
             BID_RESPONSE=$(curl -s "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
               -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
 
-            BID_COUNT=$(echo "$BID_RESPONSE" | jq '(.data.bids // .bids // []) | length')
+            # Response format: {data: [{bid: {id: {...}, state: ...}, escrow_account: {...}}]}
+            BID_COUNT=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
             if [ "$BID_COUNT" -gt 0 ]; then
               echo "Received $BID_COUNT bid(s)"
+              echo "First bid:"
+              echo "$BID_RESPONSE" | jq '.data[0].bid.id'
               break
             fi
             echo "Attempt $i: No bids yet..."
@@ -154,27 +159,40 @@ jobs:
 
           if [ "$BID_COUNT" -eq 0 ]; then
             echo "No bids received after 30 seconds"
+            echo "Bid response:"
+            echo "$BID_RESPONSE" | jq .
             exit 1
           fi
 
           # Step 4: Create lease with first bid
-          BIDS=$(echo "$BID_RESPONSE" | jq '.data.bids // .bids')
-          PROVIDER=$(echo "$BIDS" | jq -r '.[0].provider')
-          GSEQ=$(echo "$BIDS" | jq -r '.[0].gseq // 1')
-          OSEQ=$(echo "$BIDS" | jq -r '.[0].oseq // 1')
+          # Bids are in .data array, with provider/gseq/oseq nested in .bid.id
+          PROVIDER=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.provider')
+          GSEQ=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.gseq // 1')
+          OSEQ=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.oseq // 1')
 
           echo "Step 4: Creating lease with provider: $PROVIDER"
+          # Build lease payload with proper structure:
+          # {manifest: string, certificate: {certPem, keyPem}, leases: [{dseq, gseq, oseq, provider}]}
+          LEASE_PAYLOAD=$(jq -n \
+            --arg manifest "$MANIFEST" \
+            --arg certPem "$CERT_PEM" \
+            --arg keyPem "$ENCRYPTED_KEY" \
+            --arg dseq "$DSEQ" \
+            --argjson gseq "$GSEQ" \
+            --argjson oseq "$OSEQ" \
+            --arg provider "$PROVIDER" \
+            '{
+              manifest: $manifest,
+              certificate: {certPem: $certPem, keyPem: $keyPem},
+              leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
+            }')
+          echo "Lease payload structure:"
+          echo "$LEASE_PAYLOAD" | jq 'del(.manifest) | del(.certificate)'
+
           LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"dseq\": \"${DSEQ}\",
-              \"gseq\": ${GSEQ},
-              \"oseq\": ${OSEQ},
-              \"provider\": \"${PROVIDER}\",
-              \"certPem\": $(echo "$CERT_PEM" | jq -Rs .),
-              \"encryptedKey\": $(echo "$ENCRYPTED_KEY" | jq -Rs .)
-            }")
+            -d "$LEASE_PAYLOAD")
 
           echo "Lease response:"
           echo "$LEASE_RESPONSE" | jq .
