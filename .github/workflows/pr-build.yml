@@ -3,6 +3,14 @@ name: PR Build Workflow
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - 'frontend/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'hardhat.config'
+      - 'package**'
+      - '.github/workflows/combined-deploy.yml'
 
 jobs:
   # Build and test contracts

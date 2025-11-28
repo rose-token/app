@@ -1,8 +1,6 @@
 name: PR Build Ceramic
 
 on:
-  push:
-    branches: [ 'debug-ceramic-*' ]
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -28,6 +26,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run container to test startup
+        env:
+          CERAMIC_ADMIN_DID: ${{ secrets.CERAMIC_ADMIN_DID }}
+          CERAMIC_ADMIN_PRIVATE_KEY: ${{ secrets.CERAMIC_ADMIN_PRIVATE_KEY }}
         run: |
           # Build locally with a tag we can reference
           docker build -t rose-ceramic-test ./backend/ceramic
@@ -36,6 +37,8 @@ jobs:
           docker run -d --name ceramic-test \
             -e CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true \
             -e CERAMIC_NETWORK=mainnet \
+            -e CERAMIC_ADMIN_DID="$CERAMIC_ADMIN_DID" \
+            -e CERAMIC_ADMIN_PRIVATE_KEY="$CERAMIC_ADMIN_PRIVATE_KEY" \
             -p 7007:7007 \
             -p 5101:5101 \
             rose-ceramic-test

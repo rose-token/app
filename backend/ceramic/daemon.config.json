@@ -1,12 +1,15 @@
 {
-  "anchor": {},
+  "anchor": {
+    "auth-method": "did",
+    "anchor-service-url": "https://cas.3boxlabs.com"
+  },
   "http-api": {
     "cors-allowed-origins": [
       "https://emmadorably.github.io",
       "http://localhost:5173",
       "http://localhost:3000"
     ],
-    "admin-dids": []
+    "admin-dids": ["PLACEHOLDER_ADMIN_DID"]
   },
   "ipfs": {
     "mode": "remote",
@@ -19,7 +22,9 @@
   "network": {
     "name": "mainnet"
   },
-  "node": {},
+  "node": {
+    "privateSeedUrl": "PLACEHOLDER_PRIVATE_SEED_URL"
+  },
   "state-store": {
     "mode": "fs",
     "local-directory": "/data/statestore"
