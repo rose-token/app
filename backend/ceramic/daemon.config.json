@@ -8,6 +8,10 @@
     ],
     "admin-dids": []
   },
+  "ipfs": {
+    "mode": "remote",
+    "host": "http://localhost:5101"
+  },
   "logger": {
     "log-level": 2,
     "log-to-files": false
