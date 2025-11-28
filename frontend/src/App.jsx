@@ -45,7 +45,7 @@ function App() {
         >
           <ProfileProvider>
             <PassportProvider>
-              <Router basename="/">
+              <Router basename="/rose-token-v3">
                 <Layout>
                   <Routes>
                     <Route path="/" element={<TasksPage />} />
