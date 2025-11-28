@@ -107,7 +107,11 @@ jobs:
           akash version
 
           mkdir -p ~/.akash
-          echo "$AKASH_KEY_SECRET" | akash keys import deploy - --keyring-backend test
+
+          # Write key to temp file (akash doesn't support stdin with -)
+          echo "$AKASH_KEY_SECRET" > /tmp/akash-key.txt
+          akash keys import deploy /tmp/akash-key.txt --keyring-backend test
+          rm -f /tmp/akash-key.txt
 
           # Verify key import
           akash keys list --keyring-backend test
