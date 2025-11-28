@@ -1,0 +1,51 @@
+---
+version: "2.0"
+
+services:
+  ceramic:
+    image: ghcr.io/emmadorably/rose-token-v3/rose-ceramic:latest
+    expose:
+      - port: 7007
+        as: 80
+        to:
+          - global: true
+    env:
+      - CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true
+      - CERAMIC_NETWORK=mainnet
+      - CORS_ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
+    params:
+      storage:
+        data:
+          mount: /data
+          readOnly: false
+
+profiles:
+  compute:
+    ceramic:
+      resources:
+        cpu:
+          units: 2
+        memory:
+          size: 4Gi
+        storage:
+          - size: 1Gi
+          - name: data
+            size: 20Gi
+            attributes:
+              persistent: true
+              class: beta3
+
+  placement:
+    dcloud:
+      attributes:
+        host: akash
+      pricing:
+        ceramic:
+          denom: uakt
+          amount: 5000
+
+deployment:
+  ceramic:
+    dcloud:
+      profile: ceramic
+      count: 1

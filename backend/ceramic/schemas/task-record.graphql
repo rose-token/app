@@ -1,0 +1,14 @@
+type TaskRecord @createModel(
+  accountRelation: LIST,
+  description: "Completed task participation record"
+) @createIndex(fields: [{ path: "taskId" }])
+  @createIndex(fields: [{ path: "completedAt" }]) {
+  taskId: String! @string(minLength: 1, maxLength: 100)
+  taskTitle: String! @string(maxLength: 200)
+  role: String! @string(maxLength: 20)
+  completedAt: DateTime!
+  amountEarned: String @string(maxLength: 50)
+  ratingReceived: Int @int(min: 1, max: 5)
+  txHash: String @string(minLength: 66, maxLength: 66)
+  chainId: Int!
+}

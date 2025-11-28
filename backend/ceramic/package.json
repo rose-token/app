@@ -1,0 +1,9 @@
+{
+  "name": "rose-ceramic",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate:did": "node -e \"const {randomBytes}=require('crypto');console.log('0x'+randomBytes(32).toString('hex'))\"",
+    "dev": "docker-compose up --build"
+  }
+}

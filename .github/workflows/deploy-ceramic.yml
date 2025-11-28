@@ -1,0 +1,173 @@
+name: Build and Deploy Ceramic Node
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/ceramic/**'
+      - '.github/workflows/deploy-ceramic.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_to_akash:
+        description: 'Deploy to Akash Network'
+        required: true
+        default: 'true'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/rose-ceramic
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./backend/ceramic
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-akash:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event.inputs.deploy_to_akash == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Akash
+        env:
+          AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
+          AKASH_CERAMIC_DSEQ: ${{ secrets.AKASH_CERAMIC_DSEQ }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          SHORT_SHA="${IMAGE_TAG:0:7}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+
+          # Update image in SDL
+          sed -i "s|image:.*|image: ${IMAGE}|g" backend/ceramic/deploy.yaml
+
+          echo "Updated SDL with image: ${IMAGE}"
+          cat backend/ceramic/deploy.yaml
+
+          # Check for existing deployment
+          if [ -n "$AKASH_CERAMIC_DSEQ" ]; then
+            echo "Checking existing deployment: $AKASH_CERAMIC_DSEQ"
+            DEPLOYMENT_STATUS=$(curl -s -X GET \
+              "https://console-api.akash.network/v1/deployments/${AKASH_CERAMIC_DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+              -H "Content-Type: application/json" | jq -r '.data.status // .status // "unknown"')
+            echo "Current deployment status: $DEPLOYMENT_STATUS"
+
+            if [ "$DEPLOYMENT_STATUS" = "active" ]; then
+              echo "Updating existing deployment..."
+              SDL_CONTENT=$(cat backend/ceramic/deploy.yaml | jq -Rs .)
+              UPDATE_RESPONSE=$(curl -s -X PUT \
+                "https://console-api.akash.network/v1/deployments/${AKASH_CERAMIC_DSEQ}" \
+                -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"data\":{\"sdl\":${SDL_CONTENT}}}")
+              echo "Update response: $UPDATE_RESPONSE"
+              echo "Deployment updated successfully"
+              exit 0
+            fi
+          fi
+
+          # Create certificate
+          echo "Creating certificate..."
+          CERT_RESPONSE=$(curl -s -X POST \
+            "https://console-api.akash.network/v1/certificates" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json")
+
+          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.data.certPem // .certPem // empty')
+          KEY_PEM=$(echo "$CERT_RESPONSE" | jq -r '.data.encryptedKey // .encryptedKey // empty')
+
+          if [ -z "$CERT_PEM" ]; then
+            echo "Failed to create certificate"
+            exit 1
+          fi
+
+          # Create deployment
+          echo "Creating new deployment..."
+          SDL_CONTENT=$(cat backend/ceramic/deploy.yaml | jq -Rs .)
+          DEPLOY_RESPONSE=$(curl -s -X POST \
+            "https://console-api.akash.network/v1/deployments" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"data\":{\"sdl\":${SDL_CONTENT},\"deposit\":5}}")
+
+          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
+          MANIFEST=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.manifest // .manifest // empty')
+
+          if [ -z "$DSEQ" ]; then
+            echo "Failed to create deployment: $DEPLOY_RESPONSE"
+            exit 1
+          fi
+
+          echo "Deployment created with DSEQ: $DSEQ"
+
+          # Poll for bids
+          echo "Waiting for bids..."
+          for i in $(seq 1 10); do
+            sleep 3
+            BIDS_RESPONSE=$(curl -s -X GET \
+              "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+            BID_COUNT=$(echo "$BIDS_RESPONSE" | jq -r '.data | length // 0')
+            echo "Poll $i: Found $BID_COUNT bids"
+            if [ "$BID_COUNT" -gt 0 ]; then
+              PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.bidId.provider // .data[0].provider // empty')
+              break
+            fi
+          done
+
+          if [ -z "$PROVIDER" ]; then
+            echo "No bids received"
+            exit 1
+          fi
+
+          # Create lease
+          echo "Creating lease with provider: $PROVIDER"
+          LEASE_RESPONSE=$(curl -s -X POST \
+            "https://console-api.akash.network/v1/leases" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"manifest\":${MANIFEST},\"certificate\":{\"certPem\":\"${CERT_PEM}\",\"keyPem\":\"${KEY_PEM}\"},\"leases\":[{\"dseq\":\"${DSEQ}\",\"gseq\":1,\"oseq\":1,\"provider\":\"${PROVIDER}\"}]}")
+
+          echo "Lease created: $LEASE_RESPONSE"
+          echo ""
+          echo "============================================"
+          echo "Deployment complete!"
+          echo "DSEQ: $DSEQ"
+          echo "View at: https://console.akash.network/deployments/${DSEQ}"
+          echo "============================================"
+          echo ""
+          echo "IMPORTANT: Add AKASH_CERAMIC_DSEQ=$DSEQ to GitHub Secrets for future updates"

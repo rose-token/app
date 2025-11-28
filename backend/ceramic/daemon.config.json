@@ -1,0 +1,31 @@
+{
+  "anchor": {},
+  "http-api": {
+    "cors-allowed-origins": [
+      "https://emmadorably.github.io",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ],
+    "admin-dids": []
+  },
+  "ipfs": {
+    "mode": "bundled"
+  },
+  "logger": {
+    "log-level": 2,
+    "log-to-files": false
+  },
+  "network": {
+    "name": "mainnet"
+  },
+  "node": {},
+  "state-store": {
+    "mode": "fs",
+    "local-directory": "/data/statestore"
+  },
+  "indexing": {
+    "db": "sqlite:///data/indexing.db",
+    "allow-queries-before-historical-sync": true,
+    "models": []
+  }
+}
