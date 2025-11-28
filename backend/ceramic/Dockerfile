@@ -10,8 +10,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends supervisor curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy ceramic-one binary from first stage
-COPY --from=ceramic-one /usr/local/bin/ceramic-one /usr/local/bin/ceramic-one
+# Copy ceramic-one binary from first stage (binary is at /usr/bin in the source image)
+COPY --from=ceramic-one /usr/bin/ceramic-one /usr/bin/ceramic-one
 
 # Create directories
 RUN mkdir -p /data/ceramic-one /data/statestore /var/log /var/run && \
