@@ -82,36 +82,106 @@ jobs:
         env:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
+          GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
+          GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
         run: |
           # Update image in SDL
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
           sed -i "s|image:.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
-          echo "Updated SDL:"
-          cat backend/signer/deploy.yaml
+          # Substitute secrets into SDL
+          sed -i "s|\${SIGNER_PRIVATE_KEY}|${SIGNER_PRIVATE_KEY}|g" backend/signer/deploy.yaml
+          sed -i "s|\${GITCOIN_SCORER_ID}|${GITCOIN_SCORER_ID}|g" backend/signer/deploy.yaml
+          sed -i "s|\${GITCOIN_API_KEY}|${GITCOIN_API_KEY}|g" backend/signer/deploy.yaml
 
-          # Read SDL content
-          SDL_CONTENT=$(cat backend/signer/deploy.yaml)
+          echo "Updated SDL (secrets redacted):"
+          cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g'
 
-          # Create deployment via Console API
-          echo "Creating deployment via Akash Console API..."
-          RESPONSE=$(curl -s -X POST "https://api.akash.network/v1/deployments" \
-            -H "Authorization: Bearer ${AKASH_CONSOLE_API_KEY}" \
+          # Step 1: Create certificate
+          echo "Step 1: Creating certificate..."
+          CERT_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/certificates" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json")
+
+          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.certPem')
+          ENCRYPTED_KEY=$(echo "$CERT_RESPONSE" | jq -r '.encryptedKey')
+
+          if [ -z "$CERT_PEM" ] || [ "$CERT_PEM" = "null" ]; then
+            echo "Failed to create certificate"
+            echo "$CERT_RESPONSE" | jq .
+            exit 1
+          fi
+          echo "Certificate created successfully"
+
+          # Step 2: Create deployment
+          echo "Step 2: Creating deployment..."
+          DEPLOY_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/deployments" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "{
-              \"sdl\": $(echo "$SDL_CONTENT" | jq -Rs .),
-              \"deposit\": 500000
+              \"sdl\": $(cat backend/signer/deploy.yaml | jq -Rs .),
+              \"deposit\": 5000000
             }")
 
           echo "Deployment response:"
-          echo "$RESPONSE" | jq .
+          echo "$DEPLOY_RESPONSE" | jq .
 
-          # Extract deployment ID
-          DEPLOYMENT_ID=$(echo "$RESPONSE" | jq -r '.deploymentId // .id // empty')
-          if [ -n "$DEPLOYMENT_ID" ]; then
-            echo "Deployment created: $DEPLOYMENT_ID"
-            echo "View at: https://console.akash.network/deployments/$DEPLOYMENT_ID"
-          else
-            echo "Error creating deployment - check response above"
+          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.dseq // empty')
+          if [ -z "$DSEQ" ]; then
+            echo "Failed to create deployment"
             exit 1
+          fi
+          echo "Deployment created: dseq=$DSEQ"
+
+          # Step 3: Poll for bids
+          echo "Step 3: Waiting for provider bids..."
+          BID_COUNT=0
+          for i in $(seq 1 10); do
+            sleep 3
+            BID_RESPONSE=$(curl -s "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            BID_COUNT=$(echo "$BID_RESPONSE" | jq '.bids | length // 0')
+            if [ "$BID_COUNT" -gt 0 ]; then
+              echo "Received $BID_COUNT bid(s)"
+              break
+            fi
+            echo "Attempt $i: No bids yet..."
+          done
+
+          if [ "$BID_COUNT" -eq 0 ]; then
+            echo "No bids received after 30 seconds"
+            exit 1
+          fi
+
+          # Step 4: Create lease with first bid
+          PROVIDER=$(echo "$BID_RESPONSE" | jq -r '.bids[0].provider')
+          GSEQ=$(echo "$BID_RESPONSE" | jq -r '.bids[0].gseq // 1')
+          OSEQ=$(echo "$BID_RESPONSE" | jq -r '.bids[0].oseq // 1')
+
+          echo "Step 4: Creating lease with provider: $PROVIDER"
+          LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"dseq\": \"${DSEQ}\",
+              \"gseq\": ${GSEQ},
+              \"oseq\": ${OSEQ},
+              \"provider\": \"${PROVIDER}\",
+              \"certPem\": $(echo "$CERT_PEM" | jq -Rs .),
+              \"encryptedKey\": $(echo "$ENCRYPTED_KEY" | jq -Rs .)
+            }")
+
+          echo "Lease response:"
+          echo "$LEASE_RESPONSE" | jq .
+
+          LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.leaseId // .id // empty')
+          if [ -n "$LEASE_ID" ]; then
+            echo "Lease created successfully!"
+            echo "Deployment ID: $DSEQ"
+            echo "View at: https://console.akash.network/deployments/$DSEQ"
+          else
+            echo "Warning: Could not extract lease ID, but deployment may still be active"
+            echo "Check: https://console.akash.network/deployments/$DSEQ"
           fi
