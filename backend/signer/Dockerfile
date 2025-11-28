@@ -11,6 +11,9 @@ COPY src ./src
 
 RUN npm run build
 
+# Copy config directory to dist (for whitelist.json)
+RUN mkdir -p dist/config && cp -r src/config/* dist/config/ 2>/dev/null || true
+
 # Production stage
 FROM node:20-alpine
 
