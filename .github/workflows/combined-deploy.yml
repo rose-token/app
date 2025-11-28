@@ -3,6 +3,14 @@ name: Combined Deployment Workflow
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'hardhat.config'
+      - 'package**'
+      - '.github/workflows/combined-deploy.yml'
   workflow_dispatch:
     inputs:
       deploy:

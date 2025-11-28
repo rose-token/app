@@ -81,6 +81,7 @@ jobs:
       - name: Deploy to Akash Console
         env:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
+          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
           SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
           GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
@@ -98,7 +99,44 @@ jobs:
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g'
 
-          # Step 1: Create certificate
+          SDL_CONTENT=$(cat backend/signer/deploy.yaml)
+
+          # Check if we have an existing deployment to update
+          if [ -n "$AKASH_DSEQ" ]; then
+            echo "Checking existing deployment: $AKASH_DSEQ"
+            EXISTING=$(curl -s "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            DEPLOYMENT_STATE=$(echo "$EXISTING" | jq -r '.data.deployment.state // .data.state // empty')
+            echo "Deployment state: $DEPLOYMENT_STATE"
+
+            if [ "$DEPLOYMENT_STATE" = "active" ]; then
+              echo "Updating existing deployment..."
+              UPDATE_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{sdl: $sdl}')
+
+              UPDATE_RESPONSE=$(curl -s -X PUT "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+                -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "$UPDATE_PAYLOAD")
+
+              echo "Update response:"
+              echo "$UPDATE_RESPONSE" | jq .
+
+              if echo "$UPDATE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+                echo "Update failed, will create new deployment"
+              else
+                echo "Deployment updated successfully!"
+                echo "View at: https://console.akash.network/deployments/$AKASH_DSEQ"
+                exit 0
+              fi
+            else
+              echo "Existing deployment not active (state: $DEPLOYMENT_STATE), creating new..."
+            fi
+          else
+            echo "No AKASH_DSEQ secret set, creating new deployment..."
+          fi
+
+          # Step 1: Create certificate (only needed for new deployments)
           echo "Step 1: Creating certificate..."
           CERT_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/certificates" \
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
@@ -116,7 +154,6 @@ jobs:
 
           # Step 2: Create deployment
           echo "Step 2: Creating deployment..."
-          SDL_CONTENT=$(cat backend/signer/deploy.yaml)
           DEPLOY_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl, deposit: 5}}')
           echo "Deployment payload structure:"
           echo "$DEPLOY_PAYLOAD" | jq 'del(.data.sdl)' # Show structure without full SDL
