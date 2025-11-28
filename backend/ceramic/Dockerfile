@@ -2,8 +2,8 @@ FROM ceramicnetwork/js-ceramic:latest
 
 USER root
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install curl for healthcheck (Debian-based image, not Alpine)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Copy configuration
 COPY daemon.config.json /root/.ceramic/daemon.config.json
