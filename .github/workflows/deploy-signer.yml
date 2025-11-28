@@ -116,15 +116,15 @@ jobs:
 
           # Step 2: Create deployment
           echo "Step 2: Creating deployment..."
+          SDL_CONTENT=$(cat backend/signer/deploy.yaml)
+          DEPLOY_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl, deposit: 5}}')
+          echo "Deployment payload structure:"
+          echo "$DEPLOY_PAYLOAD" | jq 'del(.data.sdl)' # Show structure without full SDL
+
           DEPLOY_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/deployments" \
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"data\": {
-                \"sdl\": $(cat backend/signer/deploy.yaml | jq -Rs .),
-                \"deposit\": 5
-              }
-            }")
+            -d "$DEPLOY_PAYLOAD")
 
           echo "Deployment response:"
           echo "$DEPLOY_RESPONSE" | jq .
