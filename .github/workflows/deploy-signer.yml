@@ -80,26 +80,37 @@ jobs:
 
       - name: Install Akash CLI
         run: |
-          curl -sSfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | sh
+          # Download Akash CLI release
+          AKASH_VERSION="0.36.0"
+          curl -sSfL "https://github.com/akash-network/node/releases/download/v${AKASH_VERSION}/akash_${AKASH_VERSION}_linux_amd64.zip" -o akash.zip
+          unzip akash.zip -d akash-tmp
+
+          # Install to local bin
+          mkdir -p $HOME/.akash/bin
+          mv akash-tmp/akash $HOME/.akash/bin/
+          chmod +x $HOME/.akash/bin/akash
+          rm -rf akash.zip akash-tmp
+
+          # Add to PATH for subsequent steps
           echo "$HOME/.akash/bin" >> $GITHUB_PATH
+
+          # Verify installation
+          $HOME/.akash/bin/akash version
 
       - name: Configure Akash
         env:
           AKASH_KEY_SECRET: ${{ secrets.AKASH_KEY_SECRET }}
           AKASH_KEYRING_BACKEND: test
         run: |
-          # Add akash to PATH for this step (GITHUB_PATH only affects subsequent steps)
-          export PATH="$HOME/.akash/bin:$PATH"
+          # Verify akash is available (PATH set by previous step via GITHUB_PATH)
+          which akash
+          akash version
 
           mkdir -p ~/.akash
           echo "$AKASH_KEY_SECRET" | akash keys import deploy - --keyring-backend test
 
-          # Set network configuration
-          export AKASH_NODE="https://rpc.akashnet.net:443"
-          export AKASH_CHAIN_ID="akashnet-2"
-          export AKASH_GAS_PRICES="0.025uakt"
-          export AKASH_GAS="auto"
-          export AKASH_GAS_ADJUSTMENT="1.5"
+          # Verify key import
+          akash keys list --keyring-backend test
 
       - name: Update SDL with image tag
         run: |
