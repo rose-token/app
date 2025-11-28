@@ -1,6 +1,8 @@
 name: PR Build Signer
 
 on:
+  push:
+    branches: [ 'debug-signer-*' ]  # Temporary for debugging
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -24,3 +26,27 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Run container to test startup
+        run: |
+          # Build locally with a tag we can reference
+          docker build -t rose-signer-test ./backend/signer
+
+          # Run in background with a name
+          docker run -d --name signer-test \
+            -e SIGNER_PRIVATE_KEY=${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }} \
+            -e VITE_GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }} \
+            -e VITE_GITCOIN_SCORER_ID=${{ secrets.VITE_GITCOIN_SCORER_ID }} \
+            -e PORT=3000 \
+            -p 3000:3000 \
+            rose-signer-test
+
+          # Wait for startup and show logs
+          sleep 20
+          docker logs signer-test
+
+          # Clean up
+          docker stop signer-test
+          docker rm signer-test
+
+          echo "Container startup test complete"

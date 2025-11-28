@@ -84,8 +84,8 @@ jobs:
           AKASH_DSEQ: ${{ secrets.AKASH_DSEQ }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
           SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
-          GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
-          GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
+          VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
+          VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
         run: |
           # Update image in SDL
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
@@ -93,8 +93,8 @@ jobs:
 
           # Substitute secrets into SDL
           sed -i "s|\${SIGNER_PRIVATE_KEY}|${SIGNER_PRIVATE_KEY}|g" backend/signer/deploy.yaml
-          sed -i "s|\${GITCOIN_SCORER_ID}|${GITCOIN_SCORER_ID}|g" backend/signer/deploy.yaml
-          sed -i "s|\${GITCOIN_API_KEY}|${GITCOIN_API_KEY}|g" backend/signer/deploy.yaml
+          sed -i "s|\${VITE_GITCOIN_SCORER_ID}|${VITE_GITCOIN_SCORER_ID}|g" backend/signer/deploy.yaml
+          sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g'
