@@ -88,6 +88,9 @@ jobs:
           AKASH_KEY_SECRET: ${{ secrets.AKASH_KEY_SECRET }}
           AKASH_KEYRING_BACKEND: test
         run: |
+          # Add akash to PATH for this step (GITHUB_PATH only affects subsequent steps)
+          export PATH="$HOME/.akash/bin:$PATH"
+
           mkdir -p ~/.akash
           echo "$AKASH_KEY_SECRET" | akash keys import deploy - --keyring-backend test
 
