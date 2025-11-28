@@ -3,7 +3,7 @@ let loadPromise = null;
 
 async function loadWhitelist() {
   try {
-    const response = await fetch('/config/whitelist.json');
+    const response = await fetch(`${import.meta.env.BASE_URL}config/whitelist.json`);
     if (response.ok) {
       const data = await response.json();
       // Normalize addresses to lowercase, filter out comments
