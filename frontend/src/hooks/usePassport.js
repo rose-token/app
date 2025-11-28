@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { PASSPORT_CONFIG } from '../constants/passport';
+import { getWhitelistedScore } from '../services/whitelist';
 
 const PassportContext = createContext();
 
@@ -111,7 +112,7 @@ export const PassportProvider = ({ children }) => {
   });
 
   /**
-   * Load passport score (from cache or API)
+   * Load passport score (from whitelist, cache, or API)
    */
   const loadScore = useCallback(async (forceRefresh = false) => {
     if (!address || !isConnected) {
@@ -120,6 +121,20 @@ export const PassportProvider = ({ children }) => {
         loading: false,
         error: null,
         lastUpdated: null,
+        isCached: false,
+      });
+      return;
+    }
+
+    // Check whitelist first - allows overriding scores for testing
+    const whitelistedScore = await getWhitelistedScore(address);
+    if (whitelistedScore !== null) {
+      console.log(`Using whitelisted score for ${address}: ${whitelistedScore}`);
+      setState({
+        score: whitelistedScore,
+        loading: false,
+        error: null,
+        lastUpdated: new Date(),
         isCached: false,
       });
       return;

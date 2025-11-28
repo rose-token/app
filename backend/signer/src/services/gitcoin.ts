@@ -1,7 +1,15 @@
 import { config } from '../config';
 import { PassportScore } from '../types';
+import { getWhitelistedScore } from './whitelist';
 
 export async function getPassportScore(address: string): Promise<number> {
+  // Check whitelist first - allows overriding scores for testing
+  const whitelistedScore = getWhitelistedScore(address);
+  if (whitelistedScore !== null) {
+    console.log(`Using whitelisted score for ${address}: ${whitelistedScore}`);
+    return whitelistedScore;
+  }
+
   const url = `${config.gitcoin.baseUrl}/v2/stamps/${config.gitcoin.scorerId}/score/${address}`;
 
   const response = await fetch(url, {
