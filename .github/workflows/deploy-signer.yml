@@ -104,8 +104,8 @@ jobs:
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json")
 
-          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.certPem')
-          ENCRYPTED_KEY=$(echo "$CERT_RESPONSE" | jq -r '.encryptedKey')
+          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.data.certPem')
+          ENCRYPTED_KEY=$(echo "$CERT_RESPONSE" | jq -r '.data.encryptedKey')
 
           if [ -z "$CERT_PEM" ] || [ "$CERT_PEM" = "null" ]; then
             echo "Failed to create certificate"
@@ -127,7 +127,7 @@ jobs:
           echo "Deployment response:"
           echo "$DEPLOY_RESPONSE" | jq .
 
-          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.dseq // empty')
+          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
           if [ -z "$DSEQ" ]; then
             echo "Failed to create deployment"
             exit 1
@@ -142,7 +142,7 @@ jobs:
             BID_RESPONSE=$(curl -s "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
               -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
 
-            BID_COUNT=$(echo "$BID_RESPONSE" | jq '.bids | length // 0')
+            BID_COUNT=$(echo "$BID_RESPONSE" | jq '(.data.bids // .bids // []) | length')
             if [ "$BID_COUNT" -gt 0 ]; then
               echo "Received $BID_COUNT bid(s)"
               break
@@ -156,9 +156,10 @@ jobs:
           fi
 
           # Step 4: Create lease with first bid
-          PROVIDER=$(echo "$BID_RESPONSE" | jq -r '.bids[0].provider')
-          GSEQ=$(echo "$BID_RESPONSE" | jq -r '.bids[0].gseq // 1')
-          OSEQ=$(echo "$BID_RESPONSE" | jq -r '.bids[0].oseq // 1')
+          BIDS=$(echo "$BID_RESPONSE" | jq '.data.bids // .bids')
+          PROVIDER=$(echo "$BIDS" | jq -r '.[0].provider')
+          GSEQ=$(echo "$BIDS" | jq -r '.[0].gseq // 1')
+          OSEQ=$(echo "$BIDS" | jq -r '.[0].oseq // 1')
 
           echo "Step 4: Creating lease with provider: $PROVIDER"
           LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
@@ -176,7 +177,7 @@ jobs:
           echo "Lease response:"
           echo "$LEASE_RESPONSE" | jq .
 
-          LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.leaseId // .id // empty')
+          LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.data.leaseId // .data.id // .leaseId // .id // empty')
           if [ -n "$LEASE_ID" ]; then
             echo "Lease created successfully!"
             echo "Deployment ID: $DSEQ"
