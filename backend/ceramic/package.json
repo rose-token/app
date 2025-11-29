@@ -7,6 +7,7 @@
     "dev": "docker-compose up --build"
   },
   "dependencies": {
+    "@composedb/cli": "^0.8.0",
     "@composedb/devtools": "^0.8.0",
     "@composedb/devtools-node": "^0.8.0",
     "express": "^4.18.2",
