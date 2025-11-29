@@ -18,7 +18,7 @@ import {
   getCachedProfile,
   setCachedProfile,
 } from '../services/ceramic/profileCache';
-import { isCeramicAvailable } from '../services/ceramic/client';
+import { isCeramicAvailable, isClientInitialized } from '../services/ceramic/client';
 
 const ProfileContext = createContext();
 
@@ -206,7 +206,7 @@ export const ProfileProvider = ({ children }) => {
     }
 
     // Fetch from Ceramic
-    if (!isCeramicAvailable()) {
+    if (!(await isCeramicAvailable())) {
       return null;
     }
 

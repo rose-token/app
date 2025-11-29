@@ -12,7 +12,7 @@ import { getComposeClient } from './client';
  * @returns {Promise<Object>} Created profile with stream ID
  */
 export const createProfile = async (session, profileData) => {
-  const client = getComposeClient();
+  const client = await getComposeClient();
 
   if (!client) {
     throw new Error('Ceramic client not available');
@@ -88,7 +88,7 @@ export const createProfile = async (session, profileData) => {
  * @returns {Promise<Object>} Updated profile
  */
 export const updateProfile = async (session, streamId, updates) => {
-  const client = getComposeClient();
+  const client = await getComposeClient();
 
   if (!client) {
     throw new Error('Ceramic client not available');
@@ -159,7 +159,7 @@ export const updateProfile = async (session, streamId, updates) => {
  * @returns {Promise<Object|null>} Profile data or null if not found
  */
 export const getProfileByAddress = async (address) => {
-  const client = getComposeClient();
+  const client = await getComposeClient();
 
   if (!client) {
     console.warn('Ceramic client not available');
@@ -221,7 +221,7 @@ export const getProfileByAddress = async (address) => {
  * @returns {Promise<Object|null>} Profile data or null if not found
  */
 export const getOwnProfile = async (session) => {
-  const client = getComposeClient();
+  const client = await getComposeClient();
 
   if (!client) {
     console.warn('Ceramic client not available');

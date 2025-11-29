@@ -12,7 +12,7 @@ import {
   clearSession,
   isSessionValid,
 } from '../services/ceramic/session';
-import { isCeramicAvailable, getConnectionError } from '../services/ceramic/client';
+import { isCeramicAvailable, getConnectionError, isClientInitialized } from '../services/ceramic/client';
 
 const CeramicSessionContext = createContext();
 
@@ -96,7 +96,7 @@ export const CeramicSessionProvider = ({ children }) => {
       return null;
     }
 
-    if (!isCeramicAvailable()) {
+    if (!(await isCeramicAvailable())) {
       const connError = getConnectionError();
       setState((prev) => ({
         ...prev,
@@ -217,7 +217,7 @@ export const CeramicSessionProvider = ({ children }) => {
     setHasProfile,
     dismissProfilePrompt,
     clearError,
-    isCeramicAvailable: isCeramicAvailable(),
+    isCeramicAvailable: isClientInitialized(),
   };
 
   return (

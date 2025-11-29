@@ -5,6 +5,7 @@
     "ethereum-rpc-url": "PLACEHOLDER_ETH_RPC_URL"
   },
   "http-api": {
+    "port": 7017,
     "cors-allowed-origins": [
       "https://emmadorably.github.io",
       "http://localhost:5173",
