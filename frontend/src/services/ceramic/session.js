@@ -4,7 +4,8 @@
  */
 
 import { DIDSession } from 'did-session';
-import { EthereumWebAuth, getAccountId } from '@didtools/pkh-ethereum';
+import { EthereumWebAuth } from '@didtools/pkh-ethereum';
+import { AccountId } from 'caip';
 import { getComposeClient, setClientDID } from './client';
 
 const SESSION_KEY_PREFIX = 'rose_ceramic_session';
@@ -128,8 +129,12 @@ export const createSession = async (walletClient, address, chainId = 1) => {
   }
 
   try {
-    // Get account ID for did:pkh format
-    const accountId = await getAccountId(walletClient, address);
+    // Manually create AccountId with mainnet chain ID (1) regardless of wallet's current network
+    // This ensures DID format is always did:pkh:eip155:1:{address} to match Ceramic node
+    const accountId = new AccountId({
+      chainId: { namespace: 'eip155', reference: '1' },
+      address: address.toLowerCase(),
+    });
 
     // Create auth method that will sign messages with the wallet
     const authMethod = await EthereumWebAuth.getAuthMethod(walletClient, accountId);
