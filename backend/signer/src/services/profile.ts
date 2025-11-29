@@ -132,8 +132,21 @@ export async function createOrUpdateProfile(
   message: ProfileMessage,
   signature: string
 ): Promise<{ success: boolean; profile?: ProfileData; error?: string; details?: Record<string, string>; invalid?: string[] }> {
+  // Debug: Log incoming request
+  console.log('[Profile Service] Create/update request:', {
+    address: message.address,
+    name: message.name,
+    timestamp: message.timestamp,
+    signaturePrefix: signature.substring(0, 20) + '...',
+  });
+
   // Validate message
   const validation = validateProfileMessage(message);
+  console.log('[Profile Service] Validation result:', {
+    valid: validation.valid,
+    error: validation.error,
+  });
+
   if (!validation.valid) {
     return {
       success: false,
@@ -144,15 +157,26 @@ export async function createOrUpdateProfile(
   }
 
   // Verify signature against allowed chain IDs
+  console.log('[Profile Service] Verifying signature with chainIds:', config.profile.chainIds);
+
   let recoveredAddress: string;
   try {
     recoveredAddress = verifyProfileSignature(message, signature, config.profile.chainIds);
-  } catch {
+  } catch (err) {
+    console.log('[Profile Service] Signature verification failed:', (err as Error).message);
     return { success: false, error: 'Invalid signature' };
   }
 
+  // Debug: Log recovered vs expected address
+  console.log('[Profile Service] Signature verification result:', {
+    recoveredAddress,
+    expectedAddress: message.address,
+    match: recoveredAddress.toLowerCase() === message.address.toLowerCase(),
+  });
+
   // Check recovered address matches message address
   if (recoveredAddress.toLowerCase() !== message.address.toLowerCase()) {
+    console.log('[Profile Service] Address mismatch - returning Invalid signature');
     return { success: false, error: 'Invalid signature' };
   }
 

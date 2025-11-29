@@ -10,8 +10,16 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const body = req.body as ProfileRequest;
 
+    // Debug: Log incoming request
+    console.log('[Profile Route] POST /api/profile - Request body:', {
+      hasMessage: !!body.message,
+      hasSignature: !!body.signature,
+      messageKeys: body.message ? Object.keys(body.message) : [],
+    });
+
     // Basic request validation
     if (!body.message || !body.signature) {
+      console.log('[Profile Route] Missing message or signature');
       return res.status(400).json({ error: 'Missing message or signature' });
     }
 
@@ -19,11 +27,24 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Validate required fields exist
     if (!message.address || !message.name || message.timestamp === undefined) {
+      console.log('[Profile Route] Missing required fields:', {
+        hasAddress: !!message.address,
+        hasName: !!message.name,
+        hasTimestamp: message.timestamp !== undefined,
+      });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    console.log('[Profile Route] Processing profile for:', message.address);
+
     // Create or update profile
     const result = await createOrUpdateProfile(message, signature);
+
+    console.log('[Profile Route] Service result:', {
+      success: result.success,
+      error: result.error,
+      hasProfile: !!result.profile,
+    });
 
     if (!result.success) {
       const status = result.error === 'Invalid signature' || result.error === 'Signature expired' ? 401 : 400;

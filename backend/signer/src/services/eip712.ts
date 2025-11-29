@@ -42,28 +42,51 @@ export function verifyProfileSignature(
     timestamp: message.timestamp,
   };
 
+  console.log('[EIP712] Verifying signature with message:', {
+    address: message.address,
+    name: message.name,
+    timestamp: message.timestamp,
+    timestampType: typeof message.timestamp,
+  });
+
   // Try each allowed chainId
+  const errors: string[] = [];
   for (const chainId of allowedChainIds) {
+    console.log(`[EIP712] Trying chainId ${chainId}...`);
     try {
       const domain = getDomain(chainId);
+      console.log('[EIP712] Domain:', domain);
       const recoveredAddress = ethers.verifyTypedData(domain, PROFILE_TYPES, value, signature);
+      console.log(`[EIP712] ChainId ${chainId} SUCCESS - recovered: ${recoveredAddress}`);
       return recoveredAddress;
-    } catch {
-      // Try next chainId
+    } catch (err) {
+      const errorMsg = (err as Error).message;
+      errors.push(`chainId ${chainId}: ${errorMsg}`);
+      console.log(`[EIP712] ChainId ${chainId} FAILED:`, errorMsg);
       continue;
     }
   }
 
+  console.log('[EIP712] All chainIds failed:', errors);
   throw new Error('Invalid signature for all allowed chain IDs');
 }
 
 export function isTimestampValid(timestamp: number): boolean {
   const now = Math.floor(Date.now() / 1000);
   const age = now - timestamp;
+  const valid = age >= -60 && age <= config.profile.timestampTtl;
+
+  console.log('[EIP712] Timestamp validation:', {
+    timestamp,
+    now,
+    age,
+    ttl: config.profile.timestampTtl,
+    valid,
+  });
 
   // Timestamp must be within TTL (default 5 minutes)
   // Also reject future timestamps (more than 60 seconds ahead)
-  return age >= -60 && age <= config.profile.timestampTtl;
+  return valid;
 }
 
 export { getDomain, PROFILE_TYPES };
