@@ -1,5 +1,5 @@
 # Multi-stage build: ceramic-one (Rust) + js-ceramic (Node) + PostgreSQL
-FROM public.ecr.aws/r5b3e0r5/3box/ceramic-one:0.19.0 AS ceramic-one
+FROM public.ecr.aws/r5b3e0r5/3box/ceramic-one:0.56.0 AS ceramic-one
 
 FROM ceramicnetwork/js-ceramic:latest
 
