@@ -26,6 +26,8 @@ services:
     expose:
       - port: 3000
         as: 80
+        accept:
+          - signer.rose-token.com
         to:
           - global: true
     env:
