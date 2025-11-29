@@ -1,7 +1,7 @@
 type RoseProfile @createModel(
   accountRelation: SINGLE,
   description: "Rose Token marketplace user profile"
-) {
+) @createIndex(fields: [{ path: "walletAddress" }]) {
   displayName: String @string(minLength: 1, maxLength: 100)
   bio: String @string(maxLength: 500)
   avatarUrl: String @string(maxLength: 500)

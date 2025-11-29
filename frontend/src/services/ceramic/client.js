@@ -13,7 +13,7 @@ const CERAMIC_ENDPOINT = import.meta.env.VITE_CERAMIC_URL || 'https://ceramic.ro
 const definition = {
   models: {
     RoseProfile: {
-      id: 'kjzl6hvfrbw6c5kvo76cayrcdvnl8j0y1r3k8zfr3ht3sj9s9d51j50c3b6s7v1',
+      id: 'k2t6wzhkhabz1xabnid0dl223iezkf7pdrylm2orjwzhvt0qdu3cl86dzjzu4p',
       accountRelation: { type: 'single' },
     },
   },
