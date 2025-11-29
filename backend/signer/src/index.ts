@@ -17,8 +17,13 @@ app.set('trust proxy', 1);
 // Handle OPTIONS explicitly (before helmet which might interfere)
 app.use(optionsHandler);
 
-// Security
-app.use(helmet());
+// Security - configure helmet for CORS compatibility
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'unsafe-none' },
+  })
+);
 app.use(corsMiddleware);
 
 // Parsing
