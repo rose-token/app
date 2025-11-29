@@ -67,12 +67,18 @@ jobs:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
           AKASH_CERAMIC_DSEQ: ${{ secrets.AKASH_CERAMIC_DSEQ }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          CERAMIC_ADMIN_DID: ${{ secrets.CERAMIC_ADMIN_DID }}
+          CERAMIC_ADMIN_PRIVATE_KEY: ${{ secrets.CERAMIC_ADMIN_PRIVATE_KEY }}
         run: |
           SHORT_SHA="${IMAGE_TAG:0:7}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
 
           # Update image in SDL
           sed -i "s|image:.*|image: ${IMAGE}|g" backend/ceramic/deploy.yaml
+
+          # Inject secrets into SDL (never committed to git)
+          sed -i "s|PLACEHOLDER_ADMIN_DID|${CERAMIC_ADMIN_DID}|g" backend/ceramic/deploy.yaml
+          sed -i "s|PLACEHOLDER_ADMIN_PRIVATE_KEY|${CERAMIC_ADMIN_PRIVATE_KEY}|g" backend/ceramic/deploy.yaml
 
           echo "Updated SDL with image: ${IMAGE}"
           cat backend/ceramic/deploy.yaml
