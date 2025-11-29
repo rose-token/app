@@ -80,10 +80,11 @@ jobs:
           # Check for existing deployment
           if [ -n "$AKASH_CERAMIC_DSEQ" ]; then
             echo "Checking existing deployment: $AKASH_CERAMIC_DSEQ"
-            DEPLOYMENT_STATUS=$(curl -s -X GET \
+            EXISTING=$(curl -s -X GET \
               "https://console-api.akash.network/v1/deployments/${AKASH_CERAMIC_DSEQ}" \
               -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
-              -H "Content-Type: application/json" | jq -r '.data.status // .status // "unknown"')
+              -H "Content-Type: application/json")
+            DEPLOYMENT_STATUS=$(echo "$EXISTING" | jq -r '.data.deployment.state // .data.state // empty')
             echo "Current deployment status: $DEPLOYMENT_STATUS"
 
             if [ "$DEPLOYMENT_STATUS" = "active" ]; then
