@@ -30,6 +30,8 @@ fi
 # Substitute Ethereum RPC URL (required for mainnet anchor verification)
 if [ -n "$ETHEREUM_RPC_URL" ]; then
   sed -i "s|PLACEHOLDER_ETH_RPC_URL|$ETHEREUM_RPC_URL|g" "$CONFIG_FILE"
+  # Export for ceramic-one (expects CERAMIC_ONE_ETHEREUM_RPC_URLS env var)
+  export CERAMIC_ONE_ETHEREUM_RPC_URLS="$ETHEREUM_RPC_URL"
 else
   echo "ERROR: ETHEREUM_RPC_URL not set - ceramic-one requires this for mainnet"
   exit 1
