@@ -79,7 +79,7 @@ const useVaultData = () => {
     allowSparse: true,
     query: {
       enabled: isConnected && vaultContracts.length > 0,
-      refetchInterval: 15000, // 15 seconds
+      refetchInterval: 30000, // 30 seconds
     },
   });
 
@@ -141,7 +141,7 @@ const useVaultData = () => {
     allowSparse: true,
     query: {
       enabled: isConnected && userContracts.length > 0,
-      refetchInterval: 15000,
+      refetchInterval: 30000,
     },
   });
 

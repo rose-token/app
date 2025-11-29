@@ -151,6 +151,51 @@ export const isValidUrl = (url) => {
 };
 
 /**
+ * Upload a file (e.g., image) to IPFS via Pinata
+ * @param {File} file - File to upload
+ * @returns {Promise<{IpfsHash: string}>} Upload result with IPFS hash
+ */
+export const uploadFileToIPFS = async (file) => {
+  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
+  if (!apiKey || !apiSecret) {
+    throw new Error('Pinata API keys not configured');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const metadata = JSON.stringify({
+    name: `avatar-${Date.now()}`,
+    keyvalues: {
+      type: 'profile-avatar',
+    },
+  });
+  formData.append('pinataMetadata', metadata);
+
+  try {
+    const response = await axios.post(
+      'https://api.pinata.cloud/pinning/pinFileToIPFS',
+      formData,
+      {
+        maxBodyLength: 'Infinity',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,
+          pinata_api_key: apiKey,
+          pinata_secret_api_key: apiSecret,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading file to IPFS:', error);
+    throw new Error('Failed to upload file to IPFS');
+  }
+};
+
+/**
  * Upload detailed task description to IPFS
  * @param {string} detailedDescription - Markdown or plain text description
  * @param {string} title - Task title (for metadata)
