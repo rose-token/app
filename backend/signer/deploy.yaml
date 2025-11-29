@@ -25,7 +25,7 @@ services:
       - postgres
     expose:
       - port: 3000
-        as: 80
+        as: 443
         to:
           - global: true
     env:
