@@ -127,6 +127,7 @@ const RedeemCard = ({
           hash: approveHash,
           confirmations: 1
         });
+        await new Promise(r => setTimeout(r, 1000))
       }
 
       // Step 2: Redeem

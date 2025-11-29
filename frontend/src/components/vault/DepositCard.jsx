@@ -140,6 +140,7 @@ const DepositCard = ({
           hash: approveHash,
           confirmations: 1
         });
+        await new Promise(r => setTimeout(r, 1000))
       }
       // Step 2: Deposit
       console.log('⛽ Depositing USDC...');

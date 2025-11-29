@@ -529,11 +529,8 @@ const TasksPage = () => {
         hash: approveHash,
         confirmations: 1
       });
+      await new Promise(r => setTimeout(r, 1000))
 
-      await publicClient.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: 1
-      });
       console.log('✅ Token approval confirmed on blockchain!');
 
       // Step 2: Get passport signature

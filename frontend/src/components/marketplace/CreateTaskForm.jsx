@@ -83,6 +83,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         hash: approveHash,
         confirmations: 1
       });
+      await new Promise(r => setTimeout(r, 1000))
       // Step 3: Get passport signature
       console.log('🔐 Requesting passport signature...');
       const { expiry, signature } = await getSignature('createTask');
