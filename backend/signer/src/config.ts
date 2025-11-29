@@ -43,7 +43,10 @@ export const config = {
   },
 
   profile: {
-    chainId: parseInt(process.env.PROFILE_CHAIN_ID || '42161'),
+    chainIds: (process.env.PROFILE_CHAIN_IDS || '42161,421614')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id)),
     timestampTtl: parseInt(process.env.PROFILE_TIMESTAMP_TTL || '300'), // 5 minutes
   },
 };

@@ -3,10 +3,10 @@ import { config } from '../config';
 import { ProfileMessage } from '../types';
 
 // EIP-712 Domain for Rose Token profiles
-const getDomain = () => ({
+const getDomain = (chainId: number) => ({
   name: 'Rose Token',
   version: '1',
-  chainId: config.profile.chainId,
+  chainId,
 });
 
 // EIP-712 Types for Profile struct
@@ -24,9 +24,11 @@ const PROFILE_TYPES = {
   ],
 };
 
-export function verifyProfileSignature(message: ProfileMessage, signature: string): string {
-  const domain = getDomain();
-
+export function verifyProfileSignature(
+  message: ProfileMessage,
+  signature: string,
+  allowedChainIds: number[]
+): string {
   // Reconstruct the typed data value
   const value = {
     address: message.address,
@@ -40,10 +42,19 @@ export function verifyProfileSignature(message: ProfileMessage, signature: strin
     timestamp: message.timestamp,
   };
 
-  // Recover the signer address from the signature
-  const recoveredAddress = ethers.verifyTypedData(domain, PROFILE_TYPES, value, signature);
+  // Try each allowed chainId
+  for (const chainId of allowedChainIds) {
+    try {
+      const domain = getDomain(chainId);
+      const recoveredAddress = ethers.verifyTypedData(domain, PROFILE_TYPES, value, signature);
+      return recoveredAddress;
+    } catch {
+      // Try next chainId
+      continue;
+    }
+  }
 
-  return recoveredAddress;
+  throw new Error('Invalid signature for all allowed chain IDs');
 }
 
 export function isTimestampValid(timestamp: number): boolean {

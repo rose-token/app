@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { query } from '../db/pool';
+import { config } from '../config';
 import { verifyProfileSignature, isTimestampValid } from './eip712';
 import { validateSkills, MAX_SKILLS } from '../constants/skills';
 import { ProfileMessage, ProfileData } from '../types';
@@ -142,10 +143,10 @@ export async function createOrUpdateProfile(
     };
   }
 
-  // Verify signature
+  // Verify signature against allowed chain IDs
   let recoveredAddress: string;
   try {
-    recoveredAddress = verifyProfileSignature(message, signature);
+    recoveredAddress = verifyProfileSignature(message, signature, config.profile.chainIds);
   } catch {
     return { success: false, error: 'Invalid signature' };
   }
