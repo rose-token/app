@@ -9,8 +9,10 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmi.config';
+import { CeramicSessionProvider } from './hooks/useCeramicSession';
 import { ProfileProvider } from './hooks/useProfile';
 import { PassportProvider } from './hooks/usePassport';
+import ProfilePromptHandler from './components/profile/ProfilePromptHandler';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Create a client for react-query
@@ -43,20 +45,23 @@ function App() {
             overlayBlur: 'small',
           })}
         >
-          <ProfileProvider>
-            <PassportProvider>
-              <Router basename="/rose-token-v3">
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<TasksPage />} />
-                    <Route path="/vault" element={<VaultPage />} />
-                    <Route path="/profile" element={<ProfilePage />} />
-                    <Route path="/help" element={<HelpPage />} />
-                  </Routes>
-                </Layout>
-              </Router>
-            </PassportProvider>
-          </ProfileProvider>
+          <CeramicSessionProvider>
+            <ProfileProvider>
+              <PassportProvider>
+                <Router basename="/rose-token-v3">
+                  <ProfilePromptHandler />
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<TasksPage />} />
+                      <Route path="/vault" element={<VaultPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
+                      <Route path="/help" element={<HelpPage />} />
+                    </Routes>
+                  </Layout>
+                </Router>
+              </PassportProvider>
+            </ProfileProvider>
+          </CeramicSessionProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

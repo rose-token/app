@@ -13,7 +13,12 @@
   },
   "ipfs": {
     "mode": "remote",
-    "host": "http://localhost:5101"
+    "host": "http://localhost:5101",
+    "swarm": {
+      "deny": [
+        "/p2p/QmUvEKXuorR7YksrVgA7yKGbfjWHuCRisw2cH9iqRVM9P8"
+      ]
+    }
   },
   "logger": {
     "log-level": 2,

@@ -15,7 +15,7 @@ const ExchangeRate = () => {
     chainId: chain?.id,
     query: {
       enabled: isConnected && !!treasuryAddress,
-      refetchInterval: 10000, // Refetch every 10 seconds
+      refetchInterval: 30000, // Refetch every 30 seconds
     },
   });
 

@@ -1,10 +1,12 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import PassportStatus from '../passport/PassportStatus';
+import ProfileBadge from '../profile/ProfileBadge';
 
 const Header = ({ toggleSidebar }) => {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   return (
     <header
       className="sticky top-0 z-50 py-4 backdrop-blur-[20px] border-b"
@@ -32,7 +34,17 @@ const Header = ({ toggleSidebar }) => {
         </div>
 
         <div className="flex items-center space-x-3">
-          {isConnected && <PassportStatus compact showRefresh={false} />}
+          {isConnected && (
+            <>
+              <Link
+                to="/profile"
+                className="hidden sm:block hover:opacity-80 transition-opacity"
+              >
+                <ProfileBadge address={address} size="sm" showName={false} clickable={false} />
+              </Link>
+              <PassportStatus compact showRefresh={false} />
+            </>
+          )}
           <ConnectButton
             showBalance={false}
             accountStatus="address"

@@ -1,106 +1,128 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../hooks/useProfile';
+import { useCeramicSession } from '../hooks/useCeramicSession';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import PassportStatus from '../components/passport/PassportStatus';
+import ProfileCard from '../components/profile/ProfileCard';
+import ProfileModal from '../components/profile/ProfileModal';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
+import { Loader2, AlertCircle, Lock } from 'lucide-react';
 
 const ProfilePage = () => {
-  const { profile, isLoading, error, updateProfile } = useProfile();
+  const { profile, isLoading, error, refreshProfile } = useProfile();
   const { address: account, isConnected } = useAccount();
-  
-  const [username, setUsername] = useState('');
-  const [bio, setBio] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [updateError, setUpdateError] = useState('');
-  const [updateSuccess, setUpdateSuccess] = useState(false);
-  
-  useEffect(() => {
-    if (profile) {
-      setUsername(profile.username || '');
-      setBio(profile.bio || '');
-    }
-  }, [profile]);
-  
-  const handleEdit = () => {
-    setIsEditing(true);
-    setUpdateError('');
-    setUpdateSuccess(false);
+  const { isAuthenticated, authenticate, loading: authLoading } = useCeramicSession();
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+
+  const handleAuthenticate = async () => {
+    await authenticate();
   };
-  
-  const handleCancel = () => {
-    setIsEditing(false);
-    setUsername(profile?.username || '');
-    setBio(profile?.bio || '');
-    setUpdateError('');
-  };
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setUpdateError('');
-    setUpdateSuccess(false);
-    
-    try {
-      const result = await updateProfile(username, bio);
-      if (result) {
-        setIsEditing(false);
-        setUpdateSuccess(true);
-        
-        setTimeout(() => {
-          setUpdateSuccess(false);
-        }, 3000);
-      } else {
-        setUpdateError('Failed to update profile');
-      }
-    } catch (err) {
-      console.error('Error saving profile:', err);
-      setUpdateError('Error saving profile: ' + (err.message || 'Unknown error'));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  
+
   if (!isConnected) {
     return (
       <div>
-        <h1 className="text-3xl font-bold mb-6">User Profile</h1>
+        <h1
+          className="font-display text-3xl font-medium mb-6"
+          style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
+        >
+          User Profile
+        </h1>
         <WalletNotConnected />
       </div>
     );
   }
-  
+
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">User Profile</h1>
-      
+      <h1
+        className="font-display text-3xl font-medium mb-6"
+        style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
+      >
+        User Profile
+      </h1>
+
+      {/* Authentication Status */}
+      {!isAuthenticated && (
+        <div
+          className="rounded-xl p-4 mb-6 flex items-center justify-between"
+          style={{
+            background: 'color-mix(in srgb, var(--warning) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--warning) 30%, transparent)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <Lock className="w-5 h-5" style={{ color: 'var(--warning)' }} />
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                Authenticate to edit your profile
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Sign a message with your wallet to enable profile editing
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleAuthenticate}
+            disabled={authLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background: 'var(--warning)',
+              color: 'var(--bg-primary)',
+              opacity: authLoading ? 0.7 : 1,
+            }}
+          >
+            {authLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {authLoading ? 'Signing...' : 'Authenticate'}
+          </button>
+        </div>
+      )}
+
+      {/* Profile Card */}
       {isLoading && !profile ? (
         <div
           className="rounded-[20px] backdrop-blur-[20px] p-6 mb-6"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          <div className="animate-pulse">
-            <div className="h-4 rounded w-1/4 mb-4" style={{ background: 'var(--border-subtle)' }}></div>
-            <div className="h-4 rounded w-1/2 mb-6" style={{ background: 'var(--border-subtle)' }}></div>
-            <div className="h-4 rounded w-3/4 mb-2" style={{ background: 'var(--border-subtle)' }}></div>
-            <div className="h-4 rounded w-1/2 mb-2" style={{ background: 'var(--border-subtle)' }}></div>
+          <div className="animate-pulse space-y-4">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-full"
+                style={{ background: 'var(--border-subtle)' }}
+              />
+              <div className="flex-1 space-y-2">
+                <div
+                  className="h-5 rounded w-32"
+                  style={{ background: 'var(--border-subtle)' }}
+                />
+                <div
+                  className="h-4 rounded w-24"
+                  style={{ background: 'var(--border-subtle)' }}
+                />
+              </div>
+            </div>
+            <div
+              className="h-20 rounded-xl"
+              style={{ background: 'var(--border-subtle)' }}
+            />
           </div>
         </div>
       ) : error ? (
         <div
-          className="p-4 rounded-xl mb-6"
+          className="p-4 rounded-xl mb-6 flex items-center gap-3"
           style={{
             background: 'var(--error-bg)',
             border: '1px solid rgba(248, 113, 113, 0.3)',
-            color: 'var(--error)'
+            color: 'var(--error)',
           }}
         >
-          {error}
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error}</span>
         </div>
       ) : (
         <div
@@ -108,161 +130,37 @@ const ProfilePage = () => {
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-card)'
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          {!isEditing ? (
-            <div>
-              <div className="mb-6">
-                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Wallet Address</h2>
-                <p className="break-all font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {account}
-                </p>
-              </div>
-
-              <div className="mb-6">
-                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Username</h2>
-                <p style={{ color: 'var(--text-secondary)' }}>
-                  {profile?.username || <span style={{ color: 'var(--text-muted)' }} className="italic">Not set</span>}
-                </p>
-              </div>
-
-              <div className="mb-6">
-                <h2 className="font-display text-xl font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Bio</h2>
-                <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                  {profile?.bio || <span style={{ color: 'var(--text-muted)' }} className="italic">Not set</span>}
-                </p>
-              </div>
-
-              {updateSuccess && (
-                <div
-                  className="mb-4 p-3 rounded-xl"
-                  style={{
-                    background: 'var(--success-bg)',
-                    border: '1px solid rgba(74, 222, 128, 0.3)',
-                    color: 'var(--success)'
-                  }}
-                >
-                  Profile updated successfully!
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  onClick={handleEdit}
-                  className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5"
-                  style={{
-                    background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
-                    color: 'var(--bg-primary)',
-                    boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
-                  }}
-                >
-                  Edit Profile
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label
-                  className="block text-xs uppercase tracking-widest font-medium mb-2"
-                  style={{ color: 'var(--text-muted)' }}
-                  htmlFor="username"
-                >
-                  Username
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)'
-                  }}
-                  placeholder="Enter your username"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label
-                  className="block text-xs uppercase tracking-widest font-medium mb-2"
-                  style={{ color: 'var(--text-muted)' }}
-                  htmlFor="bio"
-                >
-                  Bio
-                </label>
-                <textarea
-                  id="bio"
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl resize-y"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)'
-                  }}
-                  rows="4"
-                  placeholder="Tell us about yourself"
-                />
-              </div>
-
-              {updateError && (
-                <div
-                  className="mb-4 p-3 rounded-xl"
-                  style={{
-                    background: 'var(--error-bg)',
-                    border: '1px solid rgba(248, 113, 113, 0.3)',
-                    color: 'var(--error)'
-                  }}
-                >
-                  {updateError}
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="py-2 px-4 rounded-xl font-medium transition-all duration-200"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-secondary)'
-                  }}
-                  disabled={isSaving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={`py-2 px-4 rounded-xl font-semibold transition-all duration-300 ${
-                    isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5'
-                  }`}
-                  style={{
-                    background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
-                    color: 'var(--bg-primary)',
-                    boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
-                  }}
-                  disabled={isSaving}
-                >
-                  {isSaving ? 'Saving...' : 'Save Profile'}
-                </button>
-              </div>
-            </form>
-          )}
+          <ProfileCard
+            address={account}
+            showReputation={true}
+            onEdit={isAuthenticated ? () => setEditModalOpen(true) : undefined}
+          />
         </div>
       )}
 
       {/* Gitcoin Passport Section */}
       <div className="mt-6">
-        <h2 className="font-display text-xl font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
+        <h2
+          className="font-display text-xl font-medium mb-4"
+          style={{ color: 'var(--text-primary)' }}
+        >
           Sybil Resistance
         </h2>
         <PassportStatus threshold={PASSPORT_THRESHOLDS.CREATE_TASK} />
       </div>
+
+      {/* Edit Profile Modal */}
+      <ProfileModal
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          refreshProfile();
+        }}
+        mode="edit"
+      />
     </div>
   );
 };

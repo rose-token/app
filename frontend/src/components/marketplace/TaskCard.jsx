@@ -4,6 +4,7 @@ import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
+import ProfileBadge from '../profile/ProfileBadge';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -213,7 +214,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       <div className="grid grid-cols-2 gap-5 mb-5">
         <div>
           <p style={labelStyle}>Customer</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: 'var(--text-secondary)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>{task.customer}</p>
+          <div className="mt-1">
+            <ProfileBadge address={task.customer} size="sm" />
+          </div>
         </div>
         <div>
           <p style={labelStyle}>Deposit</p>
@@ -221,15 +224,23 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         </div>
         <div>
           <p style={labelStyle}>Worker</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: task.worker ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>
-            {task.worker || 'Not assigned'}
-          </p>
+          <div className="mt-1">
+            {task.worker && task.worker !== '0x0000000000000000000000000000000000000000' ? (
+              <ProfileBadge address={task.worker} size="sm" />
+            ) : (
+              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Not assigned</p>
+            )}
+          </div>
         </div>
         <div>
           <p style={labelStyle}>Stakeholder</p>
-          <p className="text-sm font-medium truncate mt-1" style={{ color: task.stakeholder ? 'var(--text-secondary)' : 'var(--text-muted)', fontFamily: "'SF Mono', 'Monaco', monospace" }}>
-            {task.stakeholder || 'Not assigned'}
-          </p>
+          <div className="mt-1">
+            {task.stakeholder && task.stakeholder !== '0x0000000000000000000000000000000000000000' ? (
+              <ProfileBadge address={task.stakeholder} size="sm" />
+            ) : (
+              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Not assigned</p>
+            )}
+          </div>
         </div>
         {task.stakeholderDeposit && task.stakeholderDeposit !== '0' && (
           <div>
