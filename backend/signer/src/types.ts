@@ -48,3 +48,51 @@ export interface ThresholdsResponse {
   stake: number;
   claim: number;
 }
+
+// Profile types
+export interface ProfileMessage {
+  address: string;
+  name: string;
+  bio: string;
+  avatar: string;
+  skills: string; // JSON.stringify(skills[])
+  github: string;
+  twitter: string;
+  website: string;
+  timestamp: number;
+}
+
+export interface ProfileRequest {
+  message: ProfileMessage;
+  signature: string;
+}
+
+export interface ProfileData {
+  address: string;
+  name: string;
+  bio: string | null;
+  avatar: string | null;
+  skills: string[];
+  github: string | null;
+  twitter: string | null;
+  website: string | null;
+  signature: string;
+  signedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileResponse {
+  success: boolean;
+  profile: ProfileData;
+}
+
+export interface ProfilesResponse {
+  profiles: Record<string, ProfileData | null>;
+}
+
+export interface ProfileErrorResponse {
+  error: string;
+  invalid?: string[];
+  details?: Record<string, string>;
+}

@@ -2,8 +2,27 @@
 version: "2.0"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    expose:
+      - port: 5432
+        to:
+          - service: signer
+    env:
+      - POSTGRES_USER=rose
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=rose
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    params:
+      storage:
+        data:
+          mount: /var/lib/postgresql/data
+          readOnly: false
+
   signer:
     image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest
+    depends_on:
+      - postgres
     expose:
       - port: 3000
         as: 80
@@ -13,6 +32,8 @@ services:
       - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
       - VITE_GITCOIN_SCORER_ID=${VITE_GITCOIN_SCORER_ID}
       - VITE_GITCOIN_API_KEY=${VITE_GITCOIN_API_KEY}
+      - DATABASE_URL=postgresql://rose:${POSTGRES_PASSWORD}@postgres:5432/rose
+      - PROFILE_CHAIN_ID=42161
       - THRESHOLD_CREATE_TASK=20
       - THRESHOLD_STAKE=20
       - THRESHOLD_CLAIM=20
@@ -23,6 +44,19 @@ services:
 
 profiles:
   compute:
+    postgres:
+      resources:
+        cpu:
+          units: 0.25
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+          - name: data
+            size: 5Gi
+            attributes:
+              persistent: true
+              class: beta3
     signer:
       resources:
         cpu:
@@ -30,18 +64,25 @@ profiles:
         memory:
           size: 512Mi
         storage:
-          size: 1Gi
+          - size: 1Gi
 
   placement:
     dcloud:
       attributes:
         host: akash
       pricing:
+        postgres:
+          denom: uakt
+          amount: 500
         signer:
           denom: uakt
           amount: 1000
 
 deployment:
+  postgres:
+    dcloud:
+      profile: postgres
+      count: 1
   signer:
     dcloud:
       profile: signer
