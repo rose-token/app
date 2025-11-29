@@ -38,7 +38,7 @@ services:
       - THRESHOLD_STAKE=20
       - THRESHOLD_CLAIM=20
       - SIGNATURE_TTL=3600
-      - ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
+      - ALLOWED_ORIGINS=*
       - RATE_LIMIT_WINDOW_MS=60000
       - RATE_LIMIT_MAX_REQUESTS=30
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { config } from './config';
-import { corsMiddleware } from './middleware/cors';
+import { corsMiddleware, optionsHandler } from './middleware/cors';
 import { apiLimiter } from './middleware/rateLimit';
 import passportRoutes from './routes/passport';
 import profileRoutes from './routes/profile';
@@ -10,6 +10,9 @@ import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
 
 const app = express();
+
+// Handle OPTIONS explicitly (before helmet which might interfere)
+app.use(optionsHandler);
 
 // Security
 app.use(helmet());
