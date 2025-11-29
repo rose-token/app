@@ -77,6 +77,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event TokensMinted(address indexed to, uint256 amount);
     event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
     event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
+    event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -413,6 +414,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             // Return stakeholder's stake + their fee using SafeERC20
             uint256 stakeholderTotal = stakeholderDepositCache + stakeholderFee;
             roseToken.safeTransfer(t.stakeholder, stakeholderTotal);
+            emit StakeholderFeeEarned(_taskId, t.stakeholder, stakeholderFee);
         }
     }
 

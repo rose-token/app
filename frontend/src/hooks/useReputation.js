@@ -15,8 +15,9 @@ const MARKETPLACE_EVENTS = parseAbi([
   'event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount)',
   'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
   'event TaskClaimed(uint256 taskId, address indexed worker)',
-  'event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit, string description)',
+  'event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit)',
   'event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 deposit)',
+  'event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee)',
 ]);
 
 // Cache for reputation data
@@ -93,6 +94,7 @@ export const useReputation = (address) => {
         taskCreatedEvents,
         stakeholderEvents,
         claimedEvents,
+        stakeholderFeeEvents,
       ] = await Promise.all([
         // Payments received (as worker)
         publicClient.getLogs({
@@ -129,13 +131,27 @@ export const useReputation = (address) => {
           fromBlock: 'earliest',
           toBlock: 'latest',
         }).catch(() => []),
+
+        // Fees earned (as stakeholder)
+        publicClient.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: MARKETPLACE_EVENTS[6], // StakeholderFeeEarned
+          args: { stakeholder: address },
+          fromBlock: 'earliest',
+          toBlock: 'latest',
+        }).catch(() => []),
       ]);
 
-      // Calculate totals
+      // Calculate totals (worker payments + stakeholder fees)
       let totalEarned = BigInt(0);
       paymentEvents.forEach((event) => {
         if (event.args?.amount) {
           totalEarned += event.args.amount;
+        }
+      });
+      stakeholderFeeEvents.forEach((event) => {
+        if (event.args?.fee) {
+          totalEarned += event.args.fee;
         }
       });
 

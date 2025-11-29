@@ -423,6 +423,22 @@ describe("RoseMarketplace", function () {
       expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
     });
 
+    it("Should emit StakeholderFeeEarned event with only the fee amount (not stake refund)", async function () {
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(worker.address, "claim", expiry);
+      await roseMarketplace.connect(worker).claimTask(1, expiry, signature);
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+      await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
+      await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+
+      // Calculate expected fee (5% of task deposit, NOT including stake refund)
+      const stakeholderFee = (taskDeposit * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+
+      await expect(roseMarketplace.connect(worker).acceptPayment(1))
+        .to.emit(roseMarketplace, "StakeholderFeeEarned")
+        .withArgs(1, stakeholder.address, stakeholderFee);
+    });
+
     it("Should allow worker to unclaim a task", async function () {
       // Worker claims the task
       const expiry = await getFutureExpiry();
