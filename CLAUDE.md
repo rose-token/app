@@ -391,3 +391,13 @@ gh pr checks --watch  # Monitor CI
 - Issue: When total supply is 0, function returned 1 instead of 0
 - Impact: Caused `rosePrice()` to return 0 instead of initial $1 price
 - Fix: Added `if (total == 0) return 0;` check at start of function
+
+**ceramic-one "No such file or directory" crash (fixed):**
+- Issue: ceramic-one v0.56.0 crashed with `Error running command: No such file or directory (os error 2)` after starting
+- Root causes:
+  1. Missing `/root/.ceramic-one` directory that ceramic-one expects for internal state
+  2. Environment variable `CERAMIC_ONE_ETHEREUM_RPC_URLS` not passed through supervisord (it doesn't inherit shell exports)
+- Fix:
+  1. Added `/root/.ceramic-one` to mkdir in `entrypoint.sh` and `Dockerfile`
+  2. Added `environment=CERAMIC_ONE_ETHEREUM_RPC_URLS="%(ENV_ETHEREUM_RPC_URL)s"` to `supervisord.conf`
+- Key insight: Supervisord requires explicit `environment=` directives with `%(ENV_VAR)s` syntax to pass container env vars to managed processes
