@@ -1,5 +1,6 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { config } from '../config';
+import { withRetry } from '../utils/retry';
 
 let pool: Pool | null = null;
 
@@ -46,4 +47,35 @@ export async function closePool(): Promise<void> {
     await pool.end();
     pool = null;
   }
+}
+
+/**
+ * Waits for database to be available with exponential backoff retry.
+ * Use this at startup before running migrations.
+ */
+export async function waitForDatabase(): Promise<void> {
+  console.log('Waiting for database connection...');
+
+  await withRetry(
+    async () => {
+      const p = getPool();
+      const client = await p.connect();
+      try {
+        await client.query('SELECT 1');
+      } finally {
+        client.release();
+      }
+    },
+    {
+      maxRetries: config.database.retry.maxRetries,
+      initialDelayMs: config.database.retry.initialDelayMs,
+      maxDelayMs: config.database.retry.maxDelayMs,
+      onRetry: (attempt, error, delay) => {
+        console.log(`Database connection attempt ${attempt} failed: ${error.message}`);
+        console.log(`Retrying in ${delay}ms...`);
+      },
+    }
+  );
+
+  console.log('Database connected successfully');
 }

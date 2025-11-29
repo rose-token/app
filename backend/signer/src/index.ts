@@ -7,6 +7,7 @@ import passportRoutes from './routes/passport';
 import profileRoutes from './routes/profile';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
+import { waitForDatabase } from './db/pool';
 
 const app = express();
 
@@ -52,9 +53,10 @@ async function start() {
   // Run database migrations if DATABASE_URL is configured
   if (config.database.url) {
     try {
+      await waitForDatabase();
       await runMigrations();
     } catch (err) {
-      console.error('Failed to run migrations:', err);
+      console.error('Failed to connect to database or run migrations:', err);
       process.exit(1);
     }
   } else {
