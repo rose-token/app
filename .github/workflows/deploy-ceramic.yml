@@ -141,16 +141,32 @@ jobs:
             BIDS_RESPONSE=$(curl -s -X GET \
               "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
               -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            # Debug: Show full bids response structure
+            echo "=== Bids Response (Poll $i) ==="
+            echo "$BIDS_RESPONSE" | jq '.'
+
             BID_COUNT=$(echo "$BIDS_RESPONSE" | jq -r '.data | length // 0')
             echo "Poll $i: Found $BID_COUNT bids"
+
             if [ "$BID_COUNT" -gt 0 ]; then
-              PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.bidId.provider // .data[0].provider // empty')
-              break
+              # Try multiple possible paths for provider address
+              PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '
+                .data[0].bid_id.provider //
+                .data[0].bid.bid_id.provider //
+                .data[0].bid.bidId.provider //
+                .data[0].provider //
+                empty
+              ')
+              echo "Extracted provider: $PROVIDER"
+              if [ -n "$PROVIDER" ]; then
+                break
+              fi
             fi
           done
 
           if [ -z "$PROVIDER" ]; then
-            echo "No bids received"
+            echo "No bids received or could not extract provider"
             exit 1
           fi
 
