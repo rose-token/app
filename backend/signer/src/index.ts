@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { config } from './config';
+import cors from 'cors';
 import { corsMiddleware, optionsHandler } from './middleware/cors';
 import { apiLimiter } from './middleware/rateLimit';
 import passportRoutes from './routes/passport';
@@ -13,6 +14,11 @@ const app = express();
 
 // Trust first proxy (Akash ingress) for correct IP detection in rate limiting
 app.set('trust proxy', 1);
+
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+}))
 
 // Handle OPTIONS explicitly (before helmet which might interfere)
 app.use(optionsHandler);
@@ -43,6 +49,7 @@ app.get('/health', (_req, res) => {
 
 // 404
 app.use((_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.status(404).json({ error: 'Not found' });
 });
 
@@ -55,6 +62,7 @@ app.use(
     _next: express.NextFunction
   ) => {
     console.error('Unhandled error:', err);
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(500).json({ error: 'Internal server error' });
   }
 );
