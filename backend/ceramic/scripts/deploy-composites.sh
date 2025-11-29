@@ -81,7 +81,7 @@ echo "Composite deployed!"
 echo ""
 echo "Generating runtime definition..."
 npx composedb composite:compile "$COMPOSITES_DIR/merged.json" \
-  --output "$GENERATED_DIR/definition.json"
+  "$GENERATED_DIR/definition.json"
 echo "Runtime definition: $GENERATED_DIR/definition.json"
 
 echo ""
