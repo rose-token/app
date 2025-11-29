@@ -28,6 +28,19 @@ export const config = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30'),
   },
+
+  database: {
+    url: process.env.DATABASE_URL || '',
+    pool: {
+      max: parseInt(process.env.DB_POOL_MAX || '10'),
+      min: parseInt(process.env.DB_POOL_MIN || '2'),
+    },
+  },
+
+  profile: {
+    chainId: parseInt(process.env.PROFILE_CHAIN_ID || '42161'),
+    timestampTtl: parseInt(process.env.PROFILE_TIMESTAMP_TTL || '300'), // 5 minutes
+  },
 };
 
 // Validate required env vars

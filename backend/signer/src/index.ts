@@ -4,7 +4,9 @@ import { config } from './config';
 import { corsMiddleware } from './middleware/cors';
 import { apiLimiter } from './middleware/rateLimit';
 import passportRoutes from './routes/passport';
+import profileRoutes from './routes/profile';
 import { getSignerAddress } from './services/signer';
+import { runMigrations } from './db/migrate';
 
 const app = express();
 
@@ -20,6 +22,7 @@ app.use('/api/', apiLimiter);
 
 // Routes
 app.use('/api/passport', passportRoutes);
+app.use('/api/profile', profileRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -44,8 +47,27 @@ app.use(
   }
 );
 
-// Start server
-app.listen(config.port, () => {
-  console.log(`Passport signer running on port ${config.port}`);
-  console.log(`Signer address: ${getSignerAddress()}`);
-});
+// Start server with migrations
+async function start() {
+  // Run database migrations if DATABASE_URL is configured
+  if (config.database.url) {
+    try {
+      await runMigrations();
+    } catch (err) {
+      console.error('Failed to run migrations:', err);
+      process.exit(1);
+    }
+  } else {
+    console.log('DATABASE_URL not configured, skipping migrations');
+  }
+
+  app.listen(config.port, () => {
+    console.log(`Passport signer running on port ${config.port}`);
+    console.log(`Signer address: ${getSignerAddress()}`);
+    if (config.database.url) {
+      console.log('Database: connected');
+    }
+  });
+}
+
+start();

@@ -20,8 +20,8 @@ import { uploadFileToIPFS } from '../../utils/ipfs/pinataService';
 const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
   const { address } = useAccount();
   const { profile, updateProfile, isLoading: profileLoading } = useProfile();
-  // Profile editing is disabled until PostgreSQL backend is integrated
-  const isEditingDisabled = true;
+  // Profile editing is now enabled with PostgreSQL backend
+  const isEditingDisabled = false;
 
   const [formData, setFormData] = useState({
     displayName: '',
