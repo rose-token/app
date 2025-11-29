@@ -1,74 +1,108 @@
 /**
  * Ceramic/ComposeDB client singleton
  * Provides connection to Ceramic node for decentralized profile storage
+ *
+ * The runtime definition is fetched from the Ceramic server at /api/definition
+ * This ensures the frontend always uses the correct schema that matches the deployed composites
  */
 
 import { ComposeClient } from '@composedb/client';
 
 const CERAMIC_ENDPOINT = import.meta.env.VITE_CERAMIC_URL || 'https://ceramic.rose-token.com';
 
-// ComposeDB runtime definition - generated from schemas
-// This will be imported from a generated file after running composedb compile
-// For now, we define the structure based on our profile.graphql schema
-const definition = {
-  models: {
-    RoseProfile: {
-      id: 'k2t6wzhkhabz1xabnid0dl223iezkf7pdrylm2orjwzhvt0qdu3cl86dzjzu4p',
-      accountRelation: { type: 'single' },
-    },
-  },
-  objects: {
-    RoseProfile: {
-      displayName: { type: 'string', required: false },
-      bio: { type: 'string', required: false },
-      avatarUrl: { type: 'string', required: false },
-      skills: { type: 'list', required: false, item: { type: 'string' } },
-      website: { type: 'string', required: false },
-      twitter: { type: 'string', required: false },
-      github: { type: 'string', required: false },
-      walletAddress: { type: 'string', required: true },
-      joinedAt: { type: 'datetime', required: true },
-      lastActiveAt: { type: 'datetime', required: false },
-    },
-  },
-  enums: {},
-  accountData: {
-    roseProfile: { type: 'node', name: 'RoseProfile' },
-  },
-};
-
 let composeClient = null;
 let connectionError = null;
+let definitionPromise = null;
+let cachedDefinition = null;
 
 /**
- * Get or create the ComposeDB client singleton
- * @returns {ComposeClient|null} ComposeDB client instance or null if unavailable
+ * Fetch the runtime definition from the Ceramic server
+ * @returns {Promise<Object>} The runtime definition
  */
-export const getComposeClient = () => {
+async function fetchDefinition() {
+  const defUrl = `${CERAMIC_ENDPOINT}/api/definition`;
+
+  console.log('[Ceramic] Fetching runtime definition from:', defUrl);
+
+  const response = await fetch(defUrl, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch definition: ${response.status} - ${errorText}`);
+  }
+
+  const definition = await response.json();
+  console.log('[Ceramic] Runtime definition loaded successfully');
+  return definition;
+}
+
+/**
+ * Get or create the ComposeDB client singleton (async)
+ * Fetches the runtime definition from the server on first call
+ * @returns {Promise<ComposeClient|null>} ComposeDB client instance or null if unavailable
+ */
+export const getComposeClient = async () => {
   if (composeClient) {
     return composeClient;
   }
 
   try {
+    // Fetch definition if not cached
+    if (!cachedDefinition) {
+      if (!definitionPromise) {
+        definitionPromise = fetchDefinition();
+      }
+      cachedDefinition = await definitionPromise;
+    }
+
     composeClient = new ComposeClient({
       ceramic: CERAMIC_ENDPOINT,
-      definition,
+      definition: cachedDefinition,
     });
     connectionError = null;
+    console.log('[Ceramic] ComposeDB client initialized');
     return composeClient;
   } catch (err) {
-    console.error('Failed to initialize ComposeDB client:', err);
+    console.error('[Ceramic] Failed to initialize ComposeDB client:', err);
     connectionError = err;
+    definitionPromise = null; // Allow retry
     return null;
   }
 };
 
 /**
- * Check if the Ceramic client is available
- * @returns {boolean} True if client is available
+ * Get the ComposeDB client synchronously (for use after initialization)
+ * Throws if client not yet initialized - use getComposeClient() first
+ * @returns {ComposeClient} ComposeDB client instance
  */
-export const isCeramicAvailable = () => {
-  return getComposeClient() !== null;
+export const getComposeClientSync = () => {
+  if (!composeClient) {
+    throw new Error('ComposeDB client not initialized. Call await getComposeClient() first.');
+  }
+  return composeClient;
+};
+
+/**
+ * Check if the Ceramic client is available
+ * Note: This is now async and will attempt to initialize the client
+ * @returns {Promise<boolean>} True if client is available
+ */
+export const isCeramicAvailable = async () => {
+  const client = await getComposeClient();
+  return client !== null;
+};
+
+/**
+ * Check if the client is already initialized (sync check)
+ * @returns {boolean} True if client is already initialized
+ */
+export const isClientInitialized = () => {
+  return composeClient !== null;
 };
 
 /**
@@ -89,14 +123,16 @@ export const getCeramicEndpoint = () => CERAMIC_ENDPOINT;
 export const resetClient = () => {
   composeClient = null;
   connectionError = null;
+  definitionPromise = null;
+  cachedDefinition = null;
 };
 
 /**
  * Set DID on the compose client for authenticated operations
  * @param {DID} did - The DID instance from did-session
  */
-export const setClientDID = (did) => {
-  const client = getComposeClient();
+export const setClientDID = async (did) => {
+  const client = await getComposeClient();
   if (client && did) {
     client.setDID(did);
   }

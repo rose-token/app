@@ -41,6 +41,7 @@ jobs:
             -e CERAMIC_ADMIN_DID="$CERAMIC_ADMIN_DID" \
             -e CERAMIC_ADMIN_PRIVATE_KEY="$CERAMIC_ADMIN_PRIVATE_KEY" \
             -e ETHEREUM_RPC_URL="$ETHEREUM_RPC_URL" \
+            -e CORS_ALLOWED_ORIGINS="*" \
             -p 7007:7007 \
             -p 5101:5101 \
             rose-ceramic-test

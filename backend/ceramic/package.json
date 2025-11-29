@@ -5,5 +5,11 @@
   "scripts": {
     "generate:did": "node -e \"const {randomBytes}=require('crypto');console.log('0x'+randomBytes(32).toString('hex'))\"",
     "dev": "docker-compose up --build"
+  },
+  "dependencies": {
+    "@composedb/devtools": "^0.8.0",
+    "@composedb/devtools-node": "^0.8.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
   }
 }

@@ -122,7 +122,7 @@ export const createSession = async (walletClient, address, chainId = 1) => {
     throw new Error('Wallet client and address are required');
   }
 
-  const composeClient = getComposeClient();
+  const composeClient = await getComposeClient();
   if (!composeClient) {
     throw new Error('Ceramic client not available');
   }
