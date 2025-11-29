@@ -150,14 +150,8 @@ jobs:
             echo "Poll $i: Found $BID_COUNT bids"
 
             if [ "$BID_COUNT" -gt 0 ]; then
-              # Try multiple possible paths for provider address
-              PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '
-                .data[0].bid_id.provider //
-                .data[0].bid.bid_id.provider //
-                .data[0].bid.bidId.provider //
-                .data[0].provider //
-                empty
-              ')
+              # Extract provider from bid response (structure: .data[0].bid.id.provider)
+              PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.id.provider')
               echo "Extracted provider: $PROVIDER"
               if [ -n "$PROVIDER" ]; then
                 break
