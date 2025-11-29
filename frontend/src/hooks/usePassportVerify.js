@@ -34,13 +34,6 @@ const requestSignature = async (address, action) => {
     throw new Error(data.error || `HTTP ${response.status}`);
   }
 
-  if (!data.approved) {
-    const message = data.score !== undefined
-      ? `Passport score (${data.score}) below threshold (${data.threshold})`
-      : 'Passport verification failed';
-    throw new Error(message);
-  }
-
   return {
     expiry: data.expiry,
     signature: data.signature,
