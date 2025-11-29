@@ -10,7 +10,7 @@ on:
       - 'test/**'
       - 'hardhat.config'
       - 'package**'
-      - '.github/workflows/combined-deploy.yml'
+      - '.github/workflows/pr-build.yml'
 
 jobs:
   # Build and test contracts

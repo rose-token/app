@@ -180,6 +180,7 @@ jobs:
           VITE_PASSPORT_SIGNER_URL: ${{ secrets.VITE_PASSPORT_SIGNER_URL }}
           VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
           VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
+          VITE_CERAMIC_URL: ${{ secrets.VITE_CERAMIC_URL }}
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
