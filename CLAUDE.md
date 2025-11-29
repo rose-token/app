@@ -254,7 +254,7 @@ npm run dev  # tsx watch mode
 **Directory:** `backend/ceramic/`
 
 **Architecture:**
-- **ceramic-one** (v0.19.0): Rust IPFS/P2P daemon for block storage and networking
+- **ceramic-one** (v0.56.0): Rust IPFS/P2P daemon for block storage and networking
 - **js-ceramic**: JavaScript HTTP API (port 7007) with ComposeDB indexing
 - **PostgreSQL 15**: Local database for fast GraphQL queries
 - **Supervisord**: Process orchestration (startup order: PostgreSQL → ceramic-one → js-ceramic)

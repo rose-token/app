@@ -2,7 +2,7 @@
 set -e
 
 # Ensure required directories exist (persistent volume may be empty on first run)
-mkdir -p /data/ceramic-one /data/statestore /data/postgres
+mkdir -p /data/ceramic-one /data/statestore /data/postgres /root/.ceramic-one
 chown -R postgres:postgres /data/postgres
 
 # Initialize PostgreSQL if data directory is empty
@@ -25,6 +25,16 @@ if [ -n "$CERAMIC_ADMIN_DID" ]; then
 else
   echo "WARNING: CERAMIC_ADMIN_DID not set - admin API will be disabled"
   sed -i 's|"admin-dids": \["PLACEHOLDER_ADMIN_DID"\]|"admin-dids": []|g' "$CONFIG_FILE"
+fi
+
+# Substitute Ethereum RPC URL (required for mainnet anchor verification)
+if [ -n "$ETHEREUM_RPC_URL" ]; then
+  sed -i "s|PLACEHOLDER_ETH_RPC_URL|$ETHEREUM_RPC_URL|g" "$CONFIG_FILE"
+  # Export for ceramic-one (expects CERAMIC_ONE_ETHEREUM_RPC_URLS env var)
+  export CERAMIC_ONE_ETHEREUM_RPC_URLS="$ETHEREUM_RPC_URL"
+else
+  echo "ERROR: ETHEREUM_RPC_URL not set - ceramic-one requires this for mainnet"
+  exit 1
 fi
 
 # Substitute Node Private Seed URL (required for CAS authentication)

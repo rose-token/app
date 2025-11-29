@@ -1,5 +1,5 @@
 # Multi-stage build: ceramic-one (Rust) + js-ceramic (Node) + PostgreSQL
-FROM public.ecr.aws/r5b3e0r5/3box/ceramic-one:0.19.0 AS ceramic-one
+FROM public.ecr.aws/r5b3e0r5/3box/ceramic-one:0.56.0 AS ceramic-one
 
 FROM ceramicnetwork/js-ceramic:latest
 
@@ -7,14 +7,14 @@ USER root
 
 # Install supervisord, curl, and PostgreSQL
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends supervisor curl postgresql postgresql-contrib && \
+    apt-get install -y --no-install-recommends supervisor curl git postgresql postgresql-contrib && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy ceramic-one binary from first stage (binary is at /usr/bin in the source image)
 COPY --from=ceramic-one /usr/bin/ceramic-one /usr/bin/ceramic-one
 
 # Create directories
-RUN mkdir -p /data/ceramic-one /data/statestore /data/postgres /var/log /var/run/postgresql && \
+RUN mkdir -p /data/ceramic-one /data/statestore /data/postgres /var/log /var/run/postgresql /root/.ceramic-one && \
     chown -R root:root /data && \
     chown -R postgres:postgres /data/postgres /var/run/postgresql
 
