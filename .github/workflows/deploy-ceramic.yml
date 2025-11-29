@@ -122,7 +122,7 @@ jobs:
             "https://console-api.akash.network/v1/deployments" \
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{\"data\":{\"sdl\":${SDL_CONTENT},\"deposit\":5}}")
+            -d "{\"data\":{\"sdl\":${SDL_CONTENT},\"deposit\":10}}")
 
           DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
           MANIFEST=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.manifest // .manifest // empty')
@@ -150,9 +150,11 @@ jobs:
             echo "Poll $i: Found $BID_COUNT bids"
 
             if [ "$BID_COUNT" -gt 0 ]; then
-              # Extract provider from bid response (structure: .data[0].bid.id.provider)
+              # Extract provider, gseq, oseq from bid response (structure: .data[0].bid.id.*)
               PROVIDER=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.id.provider')
-              echo "Extracted provider: $PROVIDER"
+              GSEQ=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.id.gseq // 1')
+              OSEQ=$(echo "$BIDS_RESPONSE" | jq -r '.data[0].bid.id.oseq // 1')
+              echo "Extracted provider: $PROVIDER (gseq: $GSEQ, oseq: $OSEQ)"
               if [ -n "$PROVIDER" ]; then
                 break
               fi
@@ -164,13 +166,27 @@ jobs:
             exit 1
           fi
 
-          # Create lease
+          # Create lease - use jq to build proper JSON payload
           echo "Creating lease with provider: $PROVIDER"
+          LEASE_PAYLOAD=$(jq -n \
+            --arg manifest "$MANIFEST" \
+            --arg certPem "$CERT_PEM" \
+            --arg keyPem "$KEY_PEM" \
+            --arg dseq "$DSEQ" \
+            --argjson gseq "$GSEQ" \
+            --argjson oseq "$OSEQ" \
+            --arg provider "$PROVIDER" \
+            '{
+              manifest: $manifest,
+              certificate: {certPem: $certPem, keyPem: $keyPem},
+              leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
+            }')
+
           LEASE_RESPONSE=$(curl -s -X POST \
             "https://console-api.akash.network/v1/leases" \
             -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{\"manifest\":${MANIFEST},\"certificate\":{\"certPem\":\"${CERT_PEM}\",\"keyPem\":\"${KEY_PEM}\"},\"leases\":[{\"dseq\":\"${DSEQ}\",\"gseq\":1,\"oseq\":1,\"provider\":\"${PROVIDER}\"}]}")
+            -d "$LEASE_PAYLOAD")
 
           echo "Lease created: $LEASE_RESPONSE"
           echo ""
