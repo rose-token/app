@@ -29,6 +29,7 @@ jobs:
         env:
           CERAMIC_ADMIN_DID: ${{ secrets.CERAMIC_ADMIN_DID }}
           CERAMIC_ADMIN_PRIVATE_KEY: ${{ secrets.CERAMIC_ADMIN_PRIVATE_KEY }}
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
         run: |
           # Build locally with a tag we can reference
           docker build -t rose-ceramic-test ./backend/ceramic
@@ -39,6 +40,7 @@ jobs:
             -e CERAMIC_NETWORK=mainnet \
             -e CERAMIC_ADMIN_DID="$CERAMIC_ADMIN_DID" \
             -e CERAMIC_ADMIN_PRIVATE_KEY="$CERAMIC_ADMIN_PRIVATE_KEY" \
+            -e ETHEREUM_RPC_URL="$ETHEREUM_RPC_URL" \
             -p 7007:7007 \
             -p 5101:5101 \
             rose-ceramic-test
