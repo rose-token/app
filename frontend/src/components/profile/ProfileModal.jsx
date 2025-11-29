@@ -6,9 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
-import { useCeramicSession } from '../../hooks/useCeramicSession';
 import SkillSelect from './SkillSelect';
-import { X, Upload, Loader2, AlertCircle, Camera } from 'lucide-react';
+import { X, Upload, Loader2, AlertCircle, Camera, Info } from 'lucide-react';
 import { uploadFileToIPFS } from '../../utils/ipfs/pinataService';
 
 /**
@@ -21,7 +20,8 @@ import { uploadFileToIPFS } from '../../utils/ipfs/pinataService';
 const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
   const { address } = useAccount();
   const { profile, updateProfile, isLoading: profileLoading } = useProfile();
-  const { isAuthenticated, authenticate, loading: authLoading } = useCeramicSession();
+  // Profile editing is disabled until PostgreSQL backend is integrated
+  const isEditingDisabled = true;
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -100,14 +100,11 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
     setSaving(true);
 
     try {
-      // Ensure authenticated
-      if (!isAuthenticated) {
-        const session = await authenticate();
-        if (!session) {
-          setError('Authentication required to save profile');
-          setSaving(false);
-          return;
-        }
+      // Profile editing is disabled until PostgreSQL backend is integrated
+      if (isEditingDisabled) {
+        setError('Profile editing coming soon');
+        setSaving(false);
+        return;
       }
 
       // Upload avatar if changed
@@ -152,7 +149,7 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
 
   if (!isOpen) return null;
 
-  const isSubmitting = saving || profileLoading || authLoading;
+  const isSubmitting = saving || profileLoading;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -192,6 +189,20 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Coming Soon Notice */}
+          {isEditingDisabled && (
+            <div
+              className="flex items-center gap-2 p-3 rounded-xl text-sm"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--info) 15%, transparent)',
+                color: 'var(--info)',
+              }}
+            >
+              <Info className="w-4 h-4 flex-shrink-0" />
+              <span>Profile editing coming soon. You can view your profile but changes cannot be saved yet.</span>
+            </div>
+          )}
+
           {/* Avatar Upload */}
           <div className="flex justify-center">
             <label className="relative cursor-pointer group">

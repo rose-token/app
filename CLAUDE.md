@@ -104,89 +104,24 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 **Thresholds:** CREATE_TASK=20, STAKE=20, CLAIM_TASK=20 (defined in `constants/passport.js`)
 
-## Frontend Ceramic Profile System
+## Frontend Profile System
 
-**Purpose:** Decentralized user profiles with DID authentication using Ceramic/ComposeDB. Replaces IPFS-based profile storage with Ceramic streams for mutable, user-controlled data.
+**Status:** Profile editing is currently disabled (display-only stub). PostgreSQL backend integration planned for future.
 
-**Dependencies:**
-- `@composedb/client` - ComposeDB GraphQL client
-- `@didtools/pkh-ethereum` - Ethereum-based DID authentication
-- `did-session` - Session management for DIDs
-
-**Directory Structure:**
-```
-frontend/src/
-├── constants/
-│   └── skills.js                    # 15 predefined skills with categories
-├── services/ceramic/
-│   ├── client.js                    # ComposeDB client singleton
-│   ├── session.js                   # DID session create/restore/save
-│   ├── profileService.js            # Profile CRUD via GraphQL
-│   └── profileCache.js              # In-memory + localStorage caching
-├── hooks/
-│   ├── useCeramicSession.js         # DID auth context provider
-│   ├── useProfile.js                # Profile state (modified for Ceramic)
-│   └── useReputation.js             # On-chain task stats from events
-└── components/profile/
-    ├── SkillBadge.jsx               # Skill pill with category color
-    ├── SkillSelect.jsx              # Multi-select (max 10 skills)
-    ├── ProfileBadge.jsx             # Avatar + name, opens modal on click
-    ├── ProfileCard.jsx              # Full profile display
-    ├── ProfileModal.jsx             # Create/edit form
-    ├── ProfileViewModal.jsx         # Read-only profile viewer
-    ├── ProfilePromptHandler.jsx     # Auto-prompt for new users
-    ├── ReputationStats.jsx          # Task counts from on-chain
-    └── index.js                     # Barrel exports
-```
+**Current Components (in `frontend/src/components/profile/`):**
+- `SkillBadge.jsx` - Skill pill with category color
+- `SkillSelect.jsx` - Multi-select (max 10 skills)
+- `ProfileBadge.jsx` - Avatar + name display
+- `ProfileCard.jsx` - Full profile display
+- `ProfileModal.jsx` - Edit form (currently shows "coming soon")
+- `ProfileViewModal.jsx` - Read-only profile viewer
+- `ReputationStats.jsx` - Task counts from on-chain events
 
 **Hooks:**
-- `useCeramicSession` - Context provider for DID session; returns `{ session, isAuthenticated, authenticate, logout, hasProfile, showProfilePrompt, dismissProfilePrompt }`
-- `useProfile` - Profile CRUD; returns `{ profile, isLoading, error, updateProfile, refreshProfile, getProfile }`
+- `useProfile` - Profile state; returns `{ profile, isLoading, error, updateProfile, refreshProfile, getProfile }` (updateProfile currently disabled)
 - `useReputation` - On-chain stats; returns `{ reputation: { tasksAsWorker, tasksAsStakeholder, tasksAsCustomer, totalEarned }, loading }`
 
-**Services:**
-- `client.js` - `getComposeClient()`, `setClientDID()`, `isCeramicAvailable()`
-- `session.js` - `createSession()`, `restoreSession()`, `saveSession()`, `clearSession()`
-- `profileService.js` - `createProfile()`, `updateProfile()`, `getProfileByAddress()`, `getOwnProfile()`, `upsertProfile()`
-- `profileCache.js` - TTL-based caching (30min own profile, 5min others)
-
-**Components:**
-- `ProfileBadge` - Props: `{ address, size, showName, linkToProfile, onClick }`. Displays avatar + name, fetches profile from cache
-- `ProfileModal` - Props: `{ isOpen, onClose, mode }`. Create/edit form with IPFS avatar upload via Pinata
-- `ProfileViewModal` - Props: `{ isOpen, onClose, address }`. Read-only display with edit button for own profile
-- `ProfilePromptHandler` - Auto-renders ProfileModal for new users on wallet connect
-
-**Integration Points:**
-- `App.jsx` - `CeramicSessionProvider` wraps `ProfileProvider`, `ProfilePromptHandler` at root
-- `Header.jsx` - ProfileBadge shows connected user's avatar, links to /profile
-- `TaskCard.jsx` - Customer/worker/stakeholder addresses use ProfileBadge
-- `ProfilePage.jsx` - Uses ProfileCard + ProfileModal for profile management
-
-**DID Format:** `did:pkh:eip155:1:{walletAddress}` (Ethereum mainnet PKH)
-
-**Caching Strategy:**
-- DID sessions: localStorage with 24h TTL (`rose_ceramic_session_{address}`)
-- Own profile: localStorage with 30min TTL (`rose_profile_{address}`)
-- Other profiles: In-memory Map with 5min TTL
-- Prompt dismissal: localStorage (`rose_profile_prompt_dismissed`)
-
-**Profile Schema:**
-```javascript
-{
-  displayName: string,    // Required, max 100 chars
-  bio: string,            // Optional, max 500 chars
-  avatarUrl: string,      // IPFS URI (ipfs://Qm...)
-  skills: string[],       // Skill IDs, max 10
-  website: string,
-  twitter: string,
-  github: string,
-  walletAddress: string,  // Lowercase, set on creation
-  joinedAt: DateTime,     // Set on creation
-  lastActiveAt: DateTime  // Updated on save
-}
-```
-
-**Skills (15 predefined in constants/skills.js):**
+**Skills (15 predefined in `constants/skills.js`):**
 - Blockchain: Solidity, Rust, Smart Contracts, Security Auditing
 - Frontend: TypeScript, React, Frontend Development
 - Backend: Node.js, Python, Backend Development, Data Engineering
@@ -247,57 +182,6 @@ npm run dev  # tsx watch mode
 
 **Docker:** `docker-compose up --build` (port 3000)
 
-## Backend Ceramic Node
-
-**Purpose:** Decentralized data storage layer for off-chain user profiles, reputation tracking, and task history using Ceramic Network + ComposeDB.
-
-**Directory:** `backend/ceramic/`
-
-**Architecture:**
-- **ceramic-one** (v0.56.0): Rust IPFS/P2P daemon for block storage and networking
-- **js-ceramic**: JavaScript HTTP API (port 7007) with ComposeDB indexing
-- **PostgreSQL 15**: Local database for fast GraphQL queries
-- **Supervisord**: Process orchestration (startup order: PostgreSQL → ceramic-one → js-ceramic)
-
-**Directory Structure:**
-```
-backend/ceramic/
-├── Dockerfile              # Multi-stage build (ceramic-one + js-ceramic + PostgreSQL)
-├── docker-compose.yml      # Local development stack
-├── daemon.config.json      # Ceramic node configuration
-├── deploy.yaml             # Akash Network deployment manifest
-├── supervisord.conf        # Process manager config
-├── schemas/                # ComposeDB GraphQL models
-│   ├── profile.graphql     # User profile (displayName, bio, skills, wallet)
-│   ├── reputation.graphql  # Aggregated metrics (tasks completed, ratings, earnings)
-│   └── task-record.graphql # Task participation history
-└── scripts/
-    ├── entrypoint.sh       # Container initialization
-    └── init-postgres.sh    # Database setup
-```
-
-**Data Schemas:**
-- **Profile**: displayName, bio, avatarUrl, skills[], website, twitter, github, walletAddress, joinedAt
-- **Reputation**: tasksCompletedAsWorker/Stakeholder/Customer, averageRating, totalEarned, passportScore
-- **TaskRecord**: taskId, taskTitle, role, completedAt, amountEarned, ratingReceived, txHash, chainId
-
-**API Endpoints (port 7007):**
-- `POST /api/v0/ceramic/documents` - Create/update documents
-- `GET /api/v0/ceramic/documents/{docId}` - Fetch document
-- `GET /api/v0/node/healthcheck` - Health status
-- ComposeDB GraphQL endpoint for indexed queries
-
-**Local Development:**
-```bash
-cd backend/ceramic
-npm run dev  # docker-compose up --build
-# API available at http://localhost:7007
-```
-
-**Docker:** `docker-compose up --build` (ports 7007, 5101)
-
-**Integration Status:** Infrastructure deployed, frontend integration planned for reputation display.
-
 ## CI/CD Workflows
 
 **pr-build.yml:** Runs on PRs (parallel jobs)
@@ -310,13 +194,6 @@ npm run dev  # docker-compose up --build
 **deploy-signer.yml:** Runs on main push (when backend/signer changes)
 - Builds Docker image and pushes to GHCR
 - Optionally deploys to Akash Network
-
-**deploy-ceramic.yml:** Runs on main push (when backend/ceramic changes)
-- Builds Docker image and pushes to GHCR
-- Deploys to Akash Network (4 CPU, 8GB RAM, 20GB storage)
-
-**pr-build-ceramic.yml:** Runs on PRs (backend/ceramic changes)
-- Docker build + container startup test (18 retries, 10s intervals)
 
 ## Environment Variables
 
@@ -339,7 +216,6 @@ VITE_PINATA_API_KEY=...
 VITE_PINATA_SECRET_API_KEY=...
 VITE_PINATA_JWT=...
 VITE_PASSPORT_SIGNER_URL=https://...  # Backend signer API URL
-VITE_CERAMIC_URL=https://ceramic.rose-token.com  # Ceramic node endpoint
 ```
 
 **backend/signer/.env:**
@@ -355,14 +231,6 @@ THRESHOLD_CLAIM=20                 # Min score for claim
 SIGNATURE_TTL=3600                 # Signature validity (seconds)
 RATE_LIMIT_WINDOW_MS=60000         # Rate limit window (ms)
 RATE_LIMIT_MAX_REQUESTS=30         # Max requests per window
-```
-
-**backend/ceramic/.env:**
-```bash
-CERAMIC_NETWORK=mainnet                # Ceramic network (mainnet/testnet)
-CERAMIC_ADMIN_DID=did:key:...          # Admin DID for API access
-CERAMIC_ADMIN_PRIVATE_KEY=0x...        # Private key for signing
-CORS_ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
 ```
 
 ## Key Technical Details
@@ -391,13 +259,3 @@ gh pr checks --watch  # Monitor CI
 - Issue: When total supply is 0, function returned 1 instead of 0
 - Impact: Caused `rosePrice()` to return 0 instead of initial $1 price
 - Fix: Added `if (total == 0) return 0;` check at start of function
-
-**ceramic-one "No such file or directory" crash (fixed):**
-- Issue: ceramic-one v0.56.0 crashed with `Error running command: No such file or directory (os error 2)` after starting
-- Root causes:
-  1. Missing `/root/.ceramic-one` directory that ceramic-one expects for internal state
-  2. Environment variable `CERAMIC_ONE_ETHEREUM_RPC_URLS` not passed through supervisord (it doesn't inherit shell exports)
-- Fix:
-  1. Added `/root/.ceramic-one` to mkdir in `entrypoint.sh` and `Dockerfile`
-  2. Added `environment=CERAMIC_ONE_ETHEREUM_RPC_URLS="%(ENV_ETHEREUM_RPC_URL)s"` to `supervisord.conf`
-- Key insight: Supervisord requires explicit `environment=` directives with `%(ENV_VAR)s` syntax to pass container env vars to managed processes

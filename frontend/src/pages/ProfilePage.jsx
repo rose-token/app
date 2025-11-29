@@ -1,24 +1,18 @@
 import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../hooks/useProfile';
-import { useCeramicSession } from '../hooks/useCeramicSession';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import PassportStatus from '../components/passport/PassportStatus';
 import ProfileCard from '../components/profile/ProfileCard';
 import ProfileModal from '../components/profile/ProfileModal';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
-import { Loader2, AlertCircle, Lock } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 const ProfilePage = () => {
   const { profile, isLoading, error, refreshProfile } = useProfile();
   const { address: account, isConnected } = useAccount();
-  const { isAuthenticated, authenticate, loading: authLoading } = useCeramicSession();
 
   const [editModalOpen, setEditModalOpen] = useState(false);
-
-  const handleAuthenticate = async () => {
-    await authenticate();
-  };
 
   if (!isConnected) {
     return (
@@ -42,42 +36,6 @@ const ProfilePage = () => {
       >
         User Profile
       </h1>
-
-      {/* Authentication Status */}
-      {!isAuthenticated && (
-        <div
-          className="rounded-xl p-4 mb-6 flex items-center justify-between"
-          style={{
-            background: 'color-mix(in srgb, var(--warning) 10%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--warning) 30%, transparent)',
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <Lock className="w-5 h-5" style={{ color: 'var(--warning)' }} />
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                Authenticate to edit your profile
-              </p>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Sign a message with your wallet to enable profile editing
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleAuthenticate}
-            disabled={authLoading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-            style={{
-              background: 'var(--warning)',
-              color: 'var(--bg-primary)',
-              opacity: authLoading ? 0.7 : 1,
-            }}
-          >
-            {authLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {authLoading ? 'Signing...' : 'Authenticate'}
-          </button>
-        </div>
-      )}
 
       {/* Profile Card */}
       {isLoading && !profile ? (
@@ -136,7 +94,7 @@ const ProfilePage = () => {
           <ProfileCard
             address={account}
             showReputation={true}
-            onEdit={isAuthenticated ? () => setEditModalOpen(true) : undefined}
+            onEdit={() => setEditModalOpen(true)}
           />
         </div>
       )}
