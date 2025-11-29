@@ -28,6 +28,9 @@ COPY --from=builder /app/dist ./dist
 # Copy whitelist config file directly from source
 COPY src/config/whitelist.json ./dist/config/whitelist.json
 
+# Copy database migrations
+COPY migrations ./migrations
+
 USER nodejs
 
 EXPOSE 3000
