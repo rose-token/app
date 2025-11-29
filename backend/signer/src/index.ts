@@ -15,22 +15,20 @@ const app = express();
 // Trust first proxy (Akash ingress) for correct IP detection in rate limiting
 app.set('trust proxy', 1);
 
+// CORS — ONE middleware, first
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-}))
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
-// Handle OPTIONS explicitly (before helmet which might interfere)
-app.use(optionsHandler);
 
-// Security - configure helmet for CORS compatibility
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-    crossOriginOpenerPolicy: { policy: 'unsafe-none' },
-  })
-);
-app.use(corsMiddleware);
+
+// Helmet AFTER cors
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
+}));
 
 // Parsing
 app.use(express.json());
@@ -42,9 +40,8 @@ app.use('/api/', apiLimiter);
 app.use('/api/passport', passportRoutes);
 app.use('/api/profile', profileRoutes);
 
-// Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok' });
 });
 
 // 404
