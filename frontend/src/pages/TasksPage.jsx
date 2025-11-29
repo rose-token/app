@@ -8,6 +8,7 @@ import CreateTaskForm from '../components/marketplace/CreateTaskForm';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { TaskStatus } from '../utils/taskStatus';
 import { usePassport } from '../hooks/usePassport';
+import { usePassportVerify } from '../hooks/usePassportVerify';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
 
 // Import ABIs directly
@@ -46,6 +47,7 @@ const TasksPage = () => {
   const { address: account, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { score: passportScore, isConfigured: passportConfigured } = usePassport();
+  const { getSignature } = usePassportVerify();
 
   // Track if this is the initial load
   const isInitialLoadRef = useRef(true);
@@ -249,13 +251,18 @@ const TasksPage = () => {
       setError('');
       setLoadingStates(prev => ({ ...prev, claim: { ...prev.claim, [taskId]: true } }));
 
-      console.log('⛽ Claiming task with hardcoded 2 gwei gas...');
+      // Get passport signature
+      console.log('🔐 Requesting passport signature...');
+      const { expiry, signature } = await getSignature('claim');
+      console.log('✅ Passport signature obtained');
+
+      console.log('⛽ Claiming task...');
       console.log('💡 Please confirm the claim transaction in MetaMask');
       const hash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
-        args: [BigInt(taskId)],
+        args: [BigInt(taskId), BigInt(expiry), signature],
       });
 
       console.log('✅ Claim task transaction sent:', hash);
@@ -277,6 +284,8 @@ const TasksPage = () => {
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to claim task'
         : err.message.includes('User rejected') || err.message.includes('user rejected')
         ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
+        : err.message.includes('Passport score')
+        ? err.message
         : 'Failed to claim task';
       setError(errorMessage);
     }
@@ -527,14 +536,19 @@ const TasksPage = () => {
       });
       console.log('✅ Token approval confirmed on blockchain!');
 
-      // Step 2: Stake tokens
-      console.log("⛽ Staking tokens with hardcoded 2 gwei gas...");
+      // Step 2: Get passport signature
+      console.log('🔐 Requesting passport signature...');
+      const { expiry, signature } = await getSignature('stake');
+      console.log('✅ Passport signature obtained');
+
+      // Step 3: Stake tokens
+      console.log("⛽ Staking tokens...");
       console.log('💡 Please confirm the stake transaction in MetaMask');
       const stakeHash = await writeContractAsync({
         address: MARKETPLACE_ADDRESS,
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
-        args: [BigInt(taskId), depositAmount],
+        args: [BigInt(taskId), depositAmount, BigInt(expiry), signature],
       });
 
       console.log("✅ Stake transaction sent:", stakeHash);
@@ -570,6 +584,8 @@ const TasksPage = () => {
         errorMessage = 'Stake amount must be exactly 10% of the task deposit.';
       } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         errorMessage = 'Transaction rejected. Please approve the transaction in MetaMask to continue.';
+      } else if (err.message.includes('Passport score')) {
+        errorMessage = err.message;
       } else if (err.message.includes('execution reverted')) {
         const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
         if (revertReason) {

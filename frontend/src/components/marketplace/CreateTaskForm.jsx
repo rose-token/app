@@ -6,6 +6,7 @@ import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import PassportGate from '../passport/PassportGate';
 import { PASSPORT_THRESHOLDS } from '../../constants/passport';
+import { usePassportVerify } from '../../hooks/usePassportVerify';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -16,6 +17,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
   const { isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { getSignature } = usePassportVerify();
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
@@ -81,7 +83,12 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         hash: approveHash,
         confirmations: 1
       });
-      // Step 3: Create task
+      // Step 3: Get passport signature
+      console.log('🔐 Requesting passport signature...');
+      const { expiry, signature } = await getSignature('createTask');
+      console.log('✅ Passport signature obtained');
+
+      // Step 4: Create task
       console.log('⛽ Creating task...');
       console.log('💡 Please confirm the create task transaction in MetaMask');
 
@@ -89,7 +96,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         address: marketplaceAddress,
         abi: RoseMarketplaceABI,
         functionName: 'createTask',
-        args: [title, tokenAmount, hash],
+        args: [title, tokenAmount, hash, BigInt(expiry), signature],
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);
@@ -125,6 +132,12 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         setError('Insufficient funds for transaction. Please check your ETH and ROSE token balances.');
       } else if (err.message && err.message.includes('ERC20: insufficient allowance')) {
         setError('Insufficient token allowance. Please try again.');
+      } else if (err.message && err.message.includes('Passport score')) {
+        setError(err.message);
+      } else if (err.message && err.message.includes('SignatureExpired')) {
+        setError('Passport signature expired. Please try again.');
+      } else if (err.message && err.message.includes('SignatureAlreadyUsed')) {
+        setError('Passport signature already used. Please try again.');
       } else {
         setError(err.message || 'Failed to create task. Please try again.');
       }
