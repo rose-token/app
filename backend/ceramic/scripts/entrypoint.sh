@@ -1,12 +1,22 @@
 #!/bin/sh
 set -e
 
+# Ensure required directories exist (persistent volume may be empty on first run)
+mkdir -p /data/ceramic-one /data/statestore /data/postgres
+chown -R postgres:postgres /data/postgres
+
+# Initialize PostgreSQL if data directory is empty
+if [ ! -f /data/postgres/PG_VERSION ]; then
+  echo "Initializing PostgreSQL database..."
+  su postgres -c "/usr/lib/postgresql/*/bin/initdb -D /data/postgres"
+fi
+
 CONFIG_FILE="/root/.ceramic/daemon.config.json"
 
 # Substitute CORS origins if provided
 if [ -n "$CORS_ALLOWED_ORIGINS" ]; then
   ORIGINS_JSON=$(echo "$CORS_ALLOWED_ORIGINS" | sed 's/,/","/g' | sed 's/^/["/' | sed 's/$/"]/')
-  sed -i "s|\"cors-allowed-origins\":.*|\"cors-allowed-origins\": $ORIGINS_JSON,|g" "$CONFIG_FILE"
+  sed -i "s|\"cors-allowed-origins\": \[[^]]*\]|\"cors-allowed-origins\": $ORIGINS_JSON|g" "$CONFIG_FILE"
 fi
 
 # Substitute Admin DID (for admin API access)
