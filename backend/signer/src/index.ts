@@ -11,6 +11,9 @@ import { waitForDatabase } from './db/pool';
 
 const app = express();
 
+// Trust first proxy (Akash ingress) for correct IP detection in rate limiting
+app.set('trust proxy', 1);
+
 // Handle OPTIONS explicitly (before helmet which might interfere)
 app.use(optionsHandler);
 
