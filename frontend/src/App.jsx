@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmi.config';
 import { ProfileProvider } from './hooks/useProfile';
 import { PassportProvider } from './hooks/usePassport';
+import { PassportVerifyProvider } from './hooks/usePassportVerify';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Create a client for react-query
@@ -45,16 +46,18 @@ function App() {
         >
           <ProfileProvider>
             <PassportProvider>
-              <Router basename="/">
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<TasksPage />} />
-                    <Route path="/vault" element={<VaultPage />} />
-                    <Route path="/profile" element={<ProfilePage />} />
-                    <Route path="/help" element={<HelpPage />} />
-                  </Routes>
-                </Layout>
-              </Router>
+              <PassportVerifyProvider>
+                <Router basename="/">
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<TasksPage />} />
+                      <Route path="/vault" element={<VaultPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
+                      <Route path="/help" element={<HelpPage />} />
+                    </Routes>
+                  </Layout>
+                </Router>
+              </PassportVerifyProvider>
             </PassportProvider>
           </ProfileProvider>
         </RainbowKitProvider>
