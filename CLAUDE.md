@@ -159,6 +159,57 @@ npm run dev  # tsx watch mode
 
 **Docker:** `docker-compose up --build` (port 3000)
 
+## Backend Ceramic Node
+
+**Purpose:** Decentralized data storage layer for off-chain user profiles, reputation tracking, and task history using Ceramic Network + ComposeDB.
+
+**Directory:** `backend/ceramic/`
+
+**Architecture:**
+- **ceramic-one** (v0.19.0): Rust IPFS/P2P daemon for block storage and networking
+- **js-ceramic**: JavaScript HTTP API (port 7007) with ComposeDB indexing
+- **PostgreSQL 15**: Local database for fast GraphQL queries
+- **Supervisord**: Process orchestration (startup order: PostgreSQL → ceramic-one → js-ceramic)
+
+**Directory Structure:**
+```
+backend/ceramic/
+├── Dockerfile              # Multi-stage build (ceramic-one + js-ceramic + PostgreSQL)
+├── docker-compose.yml      # Local development stack
+├── daemon.config.json      # Ceramic node configuration
+├── deploy.yaml             # Akash Network deployment manifest
+├── supervisord.conf        # Process manager config
+├── schemas/                # ComposeDB GraphQL models
+│   ├── profile.graphql     # User profile (displayName, bio, skills, wallet)
+│   ├── reputation.graphql  # Aggregated metrics (tasks completed, ratings, earnings)
+│   └── task-record.graphql # Task participation history
+└── scripts/
+    ├── entrypoint.sh       # Container initialization
+    └── init-postgres.sh    # Database setup
+```
+
+**Data Schemas:**
+- **Profile**: displayName, bio, avatarUrl, skills[], website, twitter, github, walletAddress, joinedAt
+- **Reputation**: tasksCompletedAsWorker/Stakeholder/Customer, averageRating, totalEarned, passportScore
+- **TaskRecord**: taskId, taskTitle, role, completedAt, amountEarned, ratingReceived, txHash, chainId
+
+**API Endpoints (port 7007):**
+- `POST /api/v0/ceramic/documents` - Create/update documents
+- `GET /api/v0/ceramic/documents/{docId}` - Fetch document
+- `GET /api/v0/node/healthcheck` - Health status
+- ComposeDB GraphQL endpoint for indexed queries
+
+**Local Development:**
+```bash
+cd backend/ceramic
+npm run dev  # docker-compose up --build
+# API available at http://localhost:7007
+```
+
+**Docker:** `docker-compose up --build` (ports 7007, 5101)
+
+**Integration Status:** Infrastructure deployed, frontend integration planned for reputation display.
+
 ## CI/CD Workflows
 
 **pr-build.yml:** Runs on PRs (parallel jobs)
@@ -171,6 +222,13 @@ npm run dev  # tsx watch mode
 **deploy-signer.yml:** Runs on main push (when backend/signer changes)
 - Builds Docker image and pushes to GHCR
 - Optionally deploys to Akash Network
+
+**deploy-ceramic.yml:** Runs on main push (when backend/ceramic changes)
+- Builds Docker image and pushes to GHCR
+- Deploys to Akash Network (4 CPU, 8GB RAM, 20GB storage)
+
+**pr-build-ceramic.yml:** Runs on PRs (backend/ceramic changes)
+- Docker build + container startup test (18 retries, 10s intervals)
 
 ## Environment Variables
 
@@ -208,6 +266,14 @@ THRESHOLD_CLAIM=20                 # Min score for claim
 SIGNATURE_TTL=3600                 # Signature validity (seconds)
 RATE_LIMIT_WINDOW_MS=60000         # Rate limit window (ms)
 RATE_LIMIT_MAX_REQUESTS=30         # Max requests per window
+```
+
+**backend/ceramic/.env:**
+```bash
+CERAMIC_NETWORK=mainnet                # Ceramic network (mainnet/testnet)
+CERAMIC_ADMIN_DID=did:key:...          # Admin DID for API access
+CERAMIC_ADMIN_PRIVATE_KEY=0x...        # Private key for signing
+CORS_ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
 ```
 
 ## Key Technical Details
