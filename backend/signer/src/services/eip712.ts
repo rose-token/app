@@ -57,8 +57,17 @@ export function verifyProfileSignature(
       const domain = getDomain(chainId);
       console.log('[EIP712] Domain:', domain);
       const recoveredAddress = ethers.verifyTypedData(domain, PROFILE_TYPES, value, signature);
-      console.log(`[EIP712] ChainId ${chainId} SUCCESS - recovered: ${recoveredAddress}`);
-      return recoveredAddress;
+      console.log(`[EIP712] ChainId ${chainId} recovered: ${recoveredAddress}`);
+
+      // CRITICAL: verifyTypedData doesn't throw on wrong chainId - it just recovers wrong address
+      // Must check if recovered address matches expected address before returning
+      if (recoveredAddress.toLowerCase() === message.address.toLowerCase()) {
+        console.log(`[EIP712] ChainId ${chainId} SUCCESS - address matches!`);
+        return recoveredAddress;
+      } else {
+        console.log(`[EIP712] ChainId ${chainId} - address mismatch, trying next...`);
+        errors.push(`chainId ${chainId}: recovered ${recoveredAddress} != expected ${message.address}`);
+      }
     } catch (err) {
       const errorMsg = (err as Error).message;
       errors.push(`chainId ${chainId}: ${errorMsg}`);
