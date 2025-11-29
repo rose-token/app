@@ -7,7 +7,7 @@ USER root
 
 # Install supervisord, curl, and PostgreSQL
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends supervisor curl postgresql postgresql-contrib && \
+    apt-get install -y --no-install-recommends supervisor curl git postgresql postgresql-contrib && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy ceramic-one binary from first stage (binary is at /usr/bin in the source image)
