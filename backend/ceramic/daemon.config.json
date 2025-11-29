@@ -13,16 +13,14 @@
   },
   "ipfs": {
     "mode": "remote",
-    "host": "http://localhost:5101",
-    "swarm": {
-      "deny": [
-        "/p2p/QmUvEKXuorR7YksrVgA7yKGbfjWHuCRisw2cH9iqRVM9P8"
-      ]
-    }
+    "host": "http://localhost:5101"
   },
   "logger": {
-    "log-level": 2,
+    "log-level": 1,
     "log-to-files": false
+  },
+  "metrics": {
+    "metrics-exporter-enabled": false
   },
   "network": {
     "name": "mainnet"
