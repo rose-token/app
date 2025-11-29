@@ -14,7 +14,7 @@ RUN apt-get update && \
 COPY --from=ceramic-one /usr/bin/ceramic-one /usr/bin/ceramic-one
 
 # Create directories
-RUN mkdir -p /data/ceramic-one /data/statestore /data/postgres /var/log /var/run/postgresql && \
+RUN mkdir -p /data/ceramic-one /data/statestore /data/postgres /var/log /var/run/postgresql /root/.ceramic-one && \
     chown -R root:root /data && \
     chown -R postgres:postgres /data/postgres /var/run/postgresql
 

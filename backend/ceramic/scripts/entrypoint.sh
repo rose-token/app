@@ -2,7 +2,7 @@
 set -e
 
 # Ensure required directories exist (persistent volume may be empty on first run)
-mkdir -p /data/ceramic-one /data/statestore /data/postgres
+mkdir -p /data/ceramic-one /data/statestore /data/postgres /root/.ceramic-one
 chown -R postgres:postgres /data/postgres
 
 # Initialize PostgreSQL if data directory is empty
