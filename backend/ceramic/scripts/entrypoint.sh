@@ -27,6 +27,14 @@ else
   sed -i 's|"admin-dids": \["PLACEHOLDER_ADMIN_DID"\]|"admin-dids": []|g' "$CONFIG_FILE"
 fi
 
+# Substitute Ethereum RPC URL (required for mainnet anchor verification)
+if [ -n "$ETHEREUM_RPC_URL" ]; then
+  sed -i "s|PLACEHOLDER_ETH_RPC_URL|$ETHEREUM_RPC_URL|g" "$CONFIG_FILE"
+else
+  echo "ERROR: ETHEREUM_RPC_URL not set - ceramic-one requires this for mainnet"
+  exit 1
+fi
+
 # Substitute Node Private Seed URL (required for CAS authentication)
 if [ -n "$CERAMIC_ADMIN_PRIVATE_KEY" ]; then
   SEED_URL="inplace:ed25519#$CERAMIC_ADMIN_PRIVATE_KEY"

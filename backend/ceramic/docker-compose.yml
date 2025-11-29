@@ -10,6 +10,7 @@ services:
       - CERAMIC_ENABLE_EXPERIMENTAL_COMPOSE_DB=true
       - CERAMIC_NETWORK=mainnet
       - CORS_ALLOWED_ORIGINS=https://emmadorably.github.io,http://localhost:5173
+      - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
     volumes:
       - ceramic-one-data:/data/ceramic-one
       - js-ceramic-data:/data/statestore
