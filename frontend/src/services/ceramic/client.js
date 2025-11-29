@@ -5,7 +5,7 @@
 
 import { ComposeClient } from '@composedb/client';
 
-const CERAMIC_ENDPOINT = import.meta.env.VITE_CERAMIC_ENDPOINT || 'https://ceramic.rose-token.com';
+const CERAMIC_ENDPOINT = import.meta.env.VITE_CERAMIC_URL || 'https://ceramic.rose-token.com';
 
 // ComposeDB runtime definition - generated from schemas
 // This will be imported from a generated file after running composedb compile

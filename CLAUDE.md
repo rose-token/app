@@ -104,6 +104,94 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 **Thresholds:** CREATE_TASK=20, STAKE=20, CLAIM_TASK=20 (defined in `constants/passport.js`)
 
+## Frontend Ceramic Profile System
+
+**Purpose:** Decentralized user profiles with DID authentication using Ceramic/ComposeDB. Replaces IPFS-based profile storage with Ceramic streams for mutable, user-controlled data.
+
+**Dependencies:**
+- `@composedb/client` - ComposeDB GraphQL client
+- `@didtools/pkh-ethereum` - Ethereum-based DID authentication
+- `did-session` - Session management for DIDs
+
+**Directory Structure:**
+```
+frontend/src/
+├── constants/
+│   └── skills.js                    # 15 predefined skills with categories
+├── services/ceramic/
+│   ├── client.js                    # ComposeDB client singleton
+│   ├── session.js                   # DID session create/restore/save
+│   ├── profileService.js            # Profile CRUD via GraphQL
+│   └── profileCache.js              # In-memory + localStorage caching
+├── hooks/
+│   ├── useCeramicSession.js         # DID auth context provider
+│   ├── useProfile.js                # Profile state (modified for Ceramic)
+│   └── useReputation.js             # On-chain task stats from events
+└── components/profile/
+    ├── SkillBadge.jsx               # Skill pill with category color
+    ├── SkillSelect.jsx              # Multi-select (max 10 skills)
+    ├── ProfileBadge.jsx             # Avatar + name, opens modal on click
+    ├── ProfileCard.jsx              # Full profile display
+    ├── ProfileModal.jsx             # Create/edit form
+    ├── ProfileViewModal.jsx         # Read-only profile viewer
+    ├── ProfilePromptHandler.jsx     # Auto-prompt for new users
+    ├── ReputationStats.jsx          # Task counts from on-chain
+    └── index.js                     # Barrel exports
+```
+
+**Hooks:**
+- `useCeramicSession` - Context provider for DID session; returns `{ session, isAuthenticated, authenticate, logout, hasProfile, showProfilePrompt, dismissProfilePrompt }`
+- `useProfile` - Profile CRUD; returns `{ profile, isLoading, error, updateProfile, refreshProfile, getProfile }`
+- `useReputation` - On-chain stats; returns `{ reputation: { tasksAsWorker, tasksAsStakeholder, tasksAsCustomer, totalEarned }, loading }`
+
+**Services:**
+- `client.js` - `getComposeClient()`, `setClientDID()`, `isCeramicAvailable()`
+- `session.js` - `createSession()`, `restoreSession()`, `saveSession()`, `clearSession()`
+- `profileService.js` - `createProfile()`, `updateProfile()`, `getProfileByAddress()`, `getOwnProfile()`, `upsertProfile()`
+- `profileCache.js` - TTL-based caching (30min own profile, 5min others)
+
+**Components:**
+- `ProfileBadge` - Props: `{ address, size, showName, linkToProfile, onClick }`. Displays avatar + name, fetches profile from cache
+- `ProfileModal` - Props: `{ isOpen, onClose, mode }`. Create/edit form with IPFS avatar upload via Pinata
+- `ProfileViewModal` - Props: `{ isOpen, onClose, address }`. Read-only display with edit button for own profile
+- `ProfilePromptHandler` - Auto-renders ProfileModal for new users on wallet connect
+
+**Integration Points:**
+- `App.jsx` - `CeramicSessionProvider` wraps `ProfileProvider`, `ProfilePromptHandler` at root
+- `Header.jsx` - ProfileBadge shows connected user's avatar, links to /profile
+- `TaskCard.jsx` - Customer/worker/stakeholder addresses use ProfileBadge
+- `ProfilePage.jsx` - Uses ProfileCard + ProfileModal for profile management
+
+**DID Format:** `did:pkh:eip155:1:{walletAddress}` (Ethereum mainnet PKH)
+
+**Caching Strategy:**
+- DID sessions: localStorage with 24h TTL (`rose_ceramic_session_{address}`)
+- Own profile: localStorage with 30min TTL (`rose_profile_{address}`)
+- Other profiles: In-memory Map with 5min TTL
+- Prompt dismissal: localStorage (`rose_profile_prompt_dismissed`)
+
+**Profile Schema:**
+```javascript
+{
+  displayName: string,    // Required, max 100 chars
+  bio: string,            // Optional, max 500 chars
+  avatarUrl: string,      // IPFS URI (ipfs://Qm...)
+  skills: string[],       // Skill IDs, max 10
+  website: string,
+  twitter: string,
+  github: string,
+  walletAddress: string,  // Lowercase, set on creation
+  joinedAt: DateTime,     // Set on creation
+  lastActiveAt: DateTime  // Updated on save
+}
+```
+
+**Skills (15 predefined in constants/skills.js):**
+- Blockchain: Solidity, Rust, Smart Contracts, Security Auditing
+- Frontend: TypeScript, React, Frontend Development
+- Backend: Node.js, Python, Backend Development, Data Engineering
+- Other: UI/UX Design, DevOps, Testing/QA, Documentation
+
 ## Testing
 
 ```bash
@@ -251,6 +339,7 @@ VITE_PINATA_API_KEY=...
 VITE_PINATA_SECRET_API_KEY=...
 VITE_PINATA_JWT=...
 VITE_PASSPORT_SIGNER_URL=https://...  # Backend signer API URL
+VITE_CERAMIC_URL=https://ceramic.rose-token.com  # Ceramic node endpoint
 ```
 
 **backend/signer/.env:**
