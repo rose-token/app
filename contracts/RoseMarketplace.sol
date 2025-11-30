@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/IvROSE.sol";
 
 /**
  * @title RoseMarketplace
@@ -15,6 +16,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *
  * Updated to accept an existing RoseToken address rather than deploying its own.
  * Includes Gitcoin Passport signature verification for sybil resistance.
+ *
+ * Governance Integration:
+ * - Stakeholders must use vROSE (from governance staking) as collateral
+ * - DAO-sourced tasks can be created by governance contract
+ * - Task completion notifies governance for reputation updates
  */
 contract RoseMarketplace is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
@@ -24,8 +30,14 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     // Reference to the RoseToken contract (external, not deployed by this contract)
     IERC20 public immutable roseToken;
 
+    // Reference to the vROSE soulbound token (for stakeholder collateral)
+    IvROSE public vRoseToken;
+
     // A designated DAO Treasury that will receive a portion of newly minted tokens
     address public daoTreasury;
+
+    // Governance contract (can create DAO tasks, receives completion notifications)
+    address public governance;
 
     // Passport signer (backend service that verifies Gitcoin Passport)
     address public passportSigner;
@@ -38,9 +50,15 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     error SignatureExpired();
     error SignatureAlreadyUsed();
     error ZeroAddressSigner();
+    error NotGovernance();
+    error InsufficientVRose();
+    error ZeroAddress();
 
     // A simple enum to track task status
     enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
+
+    // Task source - whether created by customer or DAO governance
+    enum TaskSource { Customer, DAO }
     
 
     // Basic structure to store details about each task
@@ -49,13 +67,15 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         address worker;
         address stakeholder;
         uint256 deposit;           // Payment in ROSE tokens the customer puts up
-        uint256 stakeholderDeposit; // 10% deposit from stakeholder in ROSE tokens
+        uint256 stakeholderDeposit; // 10% collateral from stakeholder (in vROSE, locked)
         string title;              // Short public title (on-chain)
         string detailedDescriptionHash; // IPFS hash for detailed description (mandatory, off-chain)
         string prUrl;              // GitHub Pull Request URL (mandatory on completion)
         TaskStatus status;
         bool customerApproval;
         bool stakeholderApproval;
+        TaskSource source;         // Customer or DAO sourced
+        uint256 proposalId;        // If DAO sourced, the proposal ID
     }
     
 
@@ -68,6 +88,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
 
     // Events for logging
     event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit);
+    event DAOTaskCreated(uint256 taskId, address indexed proposer, uint256 value, uint256 proposalId);
     event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit);
     event TaskClaimed(uint256 taskId, address indexed worker);
     event TaskCompleted(uint256 taskId, string prUrl);
@@ -78,6 +99,8 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
     event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
     event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee);
+    event GovernanceUpdated(address indexed newGovernance);
+    event VRoseTokenUpdated(address indexed newVRoseToken);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -137,12 +160,40 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Modifier to restrict access to governance contract only
+     */
+    modifier onlyGovernance() {
+        if (msg.sender != governance) revert NotGovernance();
+        _;
+    }
+
+    /**
      * @dev Update the passport signer address (owner only)
      * @param _signer The new signer address
      */
     function setPassportSigner(address _signer) external onlyOwner {
         if (_signer == address(0)) revert ZeroAddressSigner();
         passportSigner = _signer;
+    }
+
+    /**
+     * @dev Set the governance contract address (owner only)
+     * @param _governance The new governance address
+     */
+    function setGovernance(address _governance) external onlyOwner {
+        if (_governance == address(0)) revert ZeroAddress();
+        governance = _governance;
+        emit GovernanceUpdated(_governance);
+    }
+
+    /**
+     * @dev Set the vROSE token contract address (owner only)
+     * @param _vRoseToken The new vROSE token address
+     */
+    function setVRoseToken(address _vRoseToken) external onlyOwner {
+        if (_vRoseToken == address(0)) revert ZeroAddress();
+        vRoseToken = IvROSE(_vRoseToken);
+        emit VRoseTokenUpdated(_vRoseToken);
     }
 
     /**
@@ -176,14 +227,57 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         newTask.status = TaskStatus.StakeholderRequired;
         newTask.customerApproval = false;
         newTask.stakeholderApproval = false;
+        newTask.source = TaskSource.Customer;
+        newTask.proposalId = 0;
 
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
 
     /**
-     * @dev Stakeholder stakes 10% of the task deposit in ROSE tokens to become the stakeholder for a task
+     * @dev Create a DAO-sourced task from a passed governance proposal
+     * Only callable by the governance contract
+     * @param _proposer The address of the proposal creator (acts as customer)
+     * @param _title Short public title of the task
+     * @param _value Amount of ROSE tokens for the task (from treasury)
+     * @param _descriptionHash IPFS hash containing detailed task description
+     * @param _proposalId The governance proposal ID
+     * @return taskId The created task ID
+     */
+    function createDAOTask(
+        address _proposer,
+        string calldata _title,
+        uint256 _value,
+        string calldata _descriptionHash,
+        uint256 _proposalId
+    ) external onlyGovernance returns (uint256) {
+        require(_value > 0, "Token amount must be greater than zero");
+        require(bytes(_title).length > 0, "Title cannot be empty");
+        require(_proposer != address(0), "Proposer cannot be zero address");
+
+        // ROSE tokens should already be transferred to marketplace by governance
+        // from treasury.spendRose()
+
+        taskCounter++;
+        Task storage newTask = tasks[taskCounter];
+        newTask.customer = _proposer;
+        newTask.deposit = _value;
+        newTask.title = _title;
+        newTask.detailedDescriptionHash = _descriptionHash;
+        newTask.status = TaskStatus.StakeholderRequired;
+        newTask.customerApproval = false;
+        newTask.stakeholderApproval = false;
+        newTask.source = TaskSource.DAO;
+        newTask.proposalId = _proposalId;
+
+        emit DAOTaskCreated(taskCounter, _proposer, _value, _proposalId);
+        return taskCounter;
+    }
+
+    /**
+     * @dev Stakeholder stakes 10% of the task deposit using vROSE as collateral
+     * vROSE is transferred to the marketplace contract (real escrow)
      * @param _taskId ID of the task to stake on
-     * @param _tokenAmount Amount of ROSE tokens to stake (must be exactly 10% of task deposit)
+     * @param _tokenAmount Amount of vROSE to stake (must be exactly 10% of task deposit)
      * @param _expiry Signature expiry timestamp
      * @param _signature Passport verification signature from backend
      */
@@ -203,8 +297,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         uint256 requiredDeposit = t.deposit / 10;
         require(_tokenAmount == requiredDeposit, "Must deposit exactly 10% of task value");
 
-        // Transfer tokens from stakeholder to the contract using SafeERC20
-        roseToken.safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        // Verify user has enough vROSE and transfer to marketplace (real escrow)
+        // User must have approved marketplace beforehand
+        if (vRoseToken.balanceOf(msg.sender) < _tokenAmount) revert InsufficientVRose();
+        vRoseToken.transferFrom(msg.sender, address(this), _tokenAmount);
 
         t.stakeholder = msg.sender;
         t.stakeholderDeposit = _tokenAmount;
@@ -214,7 +310,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Cancel a task before a worker claims it. Refunds deposits to customer and stakeholder (if staked).
+     * @dev Cancel a task before a worker claims it. Refunds deposits to customer and returns stakeholder vROSE.
      * Can be called by either the customer or the stakeholder.
      * @param _taskId ID of the task to cancel
      */
@@ -237,7 +333,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         uint256 customerRefund = 0;
         uint256 stakeholderRefund = 0;
 
-        // Refund customer deposit
+        // Refund customer deposit (ROSE tokens)
         if (t.deposit > 0) {
             customerRefund = t.deposit;
             uint256 depositCache = t.deposit;
@@ -245,12 +341,12 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             roseToken.safeTransfer(t.customer, depositCache);
         }
 
-        // Refund stakeholder deposit if they staked
+        // Return stakeholder's vROSE from escrow
         if (t.stakeholderDeposit > 0) {
             stakeholderRefund = t.stakeholderDeposit;
             uint256 stakeCache = t.stakeholderDeposit;
             t.stakeholderDeposit = 0;
-            roseToken.safeTransfer(t.stakeholder, stakeCache);
+            vRoseToken.transfer(t.stakeholder, stakeCache);
         }
 
         // Mark task as closed
@@ -379,7 +475,8 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
      * New tokenomics:
      * - Mint 2% of task value to DAO (separate, goes directly to DAO)
      * - Total pot = customer payment only (minted tokens not included in pot)
-     * - Distribute from pot: 95% worker, 5% stakeholder (fee), stakeholder gets stake back
+     * - Distribute from pot: 95% worker, 5% stakeholder (fee in ROSE)
+     * - Stakeholder's vROSE is returned from escrow
      */
     function _finalizeTask(uint256 _taskId, bool _payout) internal {
         Task storage t = tasks[_taskId];
@@ -411,10 +508,23 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             roseToken.safeTransfer(t.worker, workerAmount);
             emit PaymentReleased(_taskId, t.worker, workerAmount);
 
-            // Return stakeholder's stake + their fee using SafeERC20
-            uint256 stakeholderTotal = stakeholderDepositCache + stakeholderFee;
-            roseToken.safeTransfer(t.stakeholder, stakeholderTotal);
+            // Return stakeholder's vROSE from escrow
+            vRoseToken.transfer(t.stakeholder, stakeholderDepositCache);
+
+            // Transfer stakeholder fee in ROSE (from customer's deposit)
+            roseToken.safeTransfer(t.stakeholder, stakeholderFee);
             emit StakeholderFeeEarned(_taskId, t.stakeholder, stakeholderFee);
+
+            // Notify governance of task completion for reputation updates
+            if (governance != address(0)) {
+                IRoseGovernance(governance).updateUserStats(t.worker, taskValue, false);
+                IRoseGovernance(governance).updateUserStats(t.stakeholder, taskValue, false);
+
+                // If DAO-sourced task, notify governance for reward distribution
+                if (t.source == TaskSource.DAO) {
+                    IRoseGovernance(governance).onTaskComplete(_taskId);
+                }
+            }
         }
     }
 
@@ -437,4 +547,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
 // ============ Interface for RoseToken mint ============
 interface IRoseToken {
     function mint(address to, uint256 amount) external;
+}
+
+// ============ Interface for RoseGovernance ============
+interface IRoseGovernance {
+    function updateUserStats(address user, uint256 taskValue, bool isDispute) external;
+    function onTaskComplete(uint256 taskId) external;
 }

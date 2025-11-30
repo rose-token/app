@@ -5,6 +5,8 @@ describe("Task Detailed Description", function () {
   let roseMarketplace;
   let roseToken;
   let roseTreasury;
+  let vRose;
+  let governance;
   let usdc;
   let wbtc;
   let reth;
@@ -102,7 +104,11 @@ describe("Task Detailed Description", function () {
       await swapRouter.getAddress()
     );
 
-    // 8. Deploy RoseMarketplace (Treasury is the DAO treasury, passportSigner for verification)
+    // 8. Deploy vROSE soulbound token
+    const VROSE = await ethers.getContractFactory("vROSE");
+    vRose = await VROSE.deploy();
+
+    // 9. Deploy RoseMarketplace (Treasury is the DAO treasury, passportSigner for verification)
     const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
     roseMarketplace = await RoseMarketplace.deploy(
       await roseToken.getAddress(),
@@ -110,14 +116,38 @@ describe("Task Detailed Description", function () {
       passportSigner.address
     );
 
-    // 9. Authorize Treasury and Marketplace on RoseToken
+    // 10. Deploy RoseGovernance
+    const RoseGovernance = await ethers.getContractFactory("RoseGovernance");
+    governance = await RoseGovernance.deploy(
+      await roseToken.getAddress(),
+      await vRose.getAddress(),
+      await roseMarketplace.getAddress(),
+      await roseTreasury.getAddress(),
+      passportSigner.address
+    );
+
+    // 11. Set up vROSE with governance and marketplace
+    await vRose.setGovernance(await governance.getAddress());
+    await vRose.setMarketplace(await roseMarketplace.getAddress());
+
+    // 12. Set vROSE and governance on marketplace
+    await roseMarketplace.setVRoseToken(await vRose.getAddress());
+    await roseMarketplace.setGovernance(await governance.getAddress());
+
+    // 13. Authorize Treasury, Marketplace, and Governance on RoseToken
     await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
     await roseToken.setAuthorized(await roseMarketplace.getAddress(), true);
+    await roseToken.setAuthorized(await governance.getAddress(), true);
 
-    // 10. Get ROSE tokens via Treasury deposit
+    // 14. Get ROSE tokens via Treasury deposit
     const depositAmount = ethers.parseUnits("100000", 6);
     await getRoseTokens(customer, depositAmount);
     await getRoseTokens(stakeholder, depositAmount);
+
+    // 15. Stakeholder needs vROSE for staking - deposit ROSE to governance
+    const stakeholderVRoseAmount = ethers.parseEther("10000");
+    await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
   });
 
   it("Should create a task with mandatory IPFS hash", async function () {
@@ -174,8 +204,9 @@ describe("Task Detailed Description", function () {
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
     await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
+    // Stakeholder stakes with vROSE (approve marketplace to pull vROSE for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
-    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
     const stakeExpiry = await getFutureExpiry();
     const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
     await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
@@ -189,8 +220,9 @@ describe("Task Detailed Description", function () {
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
     await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
+    // Stakeholder stakes with vROSE (approve marketplace to pull vROSE for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
-    await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+    await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
     const stakeExpiry = await getFutureExpiry();
     const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
     await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);

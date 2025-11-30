@@ -77,6 +77,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ Marketplace Integration ============
     address public marketplace;
 
+    // ============ Governance Integration ============
+    address public governance;
+
     // ============ User Cooldowns ============
     uint256 public constant USER_COOLDOWN = 24 hours;
     mapping(address => uint256) public lastDepositTime;
@@ -96,6 +99,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     event RoseSpent(address indexed to, uint256 amount, string reason);
     event RoseBuyback(uint256 usdcSpent, uint256 roseBought);
     event MarketplaceUpdated(address indexed newMarketplace);
+    event GovernanceUpdated(address indexed newGovernance);
 
     // ============ Errors ============
     error InvalidPrice();
@@ -714,15 +718,27 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Spend treasury ROSE (dev payments, task posting, etc.)
+     * @dev Spend treasury ROSE (dev payments, task posting, DAO task funding, etc.)
+     * Callable by owner or governance contract
      */
-    function spendRose(address _to, uint256 _amount, string calldata _reason) external onlyOwner whenNotPaused {
+    function spendRose(address _to, uint256 _amount, string calldata _reason) external whenNotPaused {
+        require(msg.sender == owner() || msg.sender == governance, "Not authorized");
         if (_to == address(0)) revert ZeroAddress();
         uint256 balance = roseToken.balanceOf(address(this));
         if (balance < _amount) revert InsufficientLiquidity();
-        
+
         roseToken.safeTransfer(_to, _amount);
         emit RoseSpent(_to, _amount, _reason);
+    }
+
+    /**
+     * @dev Set the governance contract address (owner only)
+     * @param _governance The new governance address
+     */
+    function setGovernance(address _governance) external onlyOwner {
+        if (_governance == address(0)) revert ZeroAddress();
+        governance = _governance;
+        emit GovernanceUpdated(_governance);
     }
 
     /**
