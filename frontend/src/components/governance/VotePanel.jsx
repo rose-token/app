@@ -1,6 +1,7 @@
 /**
  * VotePanel - Voting interface for proposals
  * Allows users to vote Yay/Nay with a specified amount of ROSE
+ * Supports increasing vote allocation on existing votes (same direction only)
  */
 
 import React, { useState } from 'react';
@@ -20,6 +21,7 @@ const VotePanel = ({
   const { unallocatedRose, reputationRaw, canVote } = useGovernance();
   const [amount, setAmount] = useState('');
   const [voteType, setVoteType] = useState(null); // 'yay' or 'nay'
+  const [showAddMore, setShowAddMore] = useState(false); // Toggle for adding more to existing vote
 
   // Calculate preview vote power
   const previewVotePower = amount
@@ -49,7 +51,28 @@ const VotePanel = ({
     setAmount(unallocatedRose || '0');
   };
 
-  // Already voted - show status and unvote option
+  // Handle adding more to existing vote
+  const handleAddMore = async () => {
+    if (!amount || parseFloat(amount) <= 0) return;
+    try {
+      // Use existing vote direction
+      await onVote(proposalId, amount, userVote.support);
+      setAmount('');
+      setShowAddMore(false);
+    } catch (err) {
+      console.error('Add vote failed:', err);
+    }
+  };
+
+  // Calculate new vote power preview when adding to existing vote
+  const newTotalAmount = hasVoted && userVote && amount
+    ? parseFloat(userVote.allocatedAmount) + parseFloat(amount)
+    : parseFloat(amount || '0');
+  const newVotePower = newTotalAmount > 0
+    ? calculateVotePower(newTotalAmount * 1e18, reputationRaw || 6000)
+    : 0;
+
+  // Already voted - show status and option to add more
   if (hasVoted && userVote) {
     return (
       <div className="card">
@@ -79,15 +102,89 @@ const VotePanel = ({
           </div>
         </div>
 
-        {isActive && (
-          <button
-            onClick={handleUnvote}
-            disabled={loading}
-            className="btn-secondary w-full"
-            style={{ opacity: loading ? 0.5 : 1 }}
-          >
-            {loading ? 'Processing...' : 'Unallocate Vote'}
-          </button>
+        {isActive && !showAddMore && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAddMore(true)}
+              disabled={loading || parseFloat(unallocatedRose || 0) <= 0}
+              className="btn-primary flex-1"
+              style={{ opacity: loading || parseFloat(unallocatedRose || 0) <= 0 ? 0.5 : 1 }}
+            >
+              Add More
+            </button>
+            <button
+              onClick={handleUnvote}
+              disabled={loading}
+              className="btn-secondary flex-1"
+              style={{ opacity: loading ? 0.5 : 1 }}
+            >
+              {loading ? 'Processing...' : 'Unallocate'}
+            </button>
+          </div>
+        )}
+
+        {isActive && showAddMore && (
+          <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+            <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+              Add more ROSE to your {userVote.support ? 'Yay' : 'Nay'} vote:
+            </p>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                className="flex-1 px-3 py-2 rounded-lg"
+                style={{
+                  backgroundColor: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                }}
+              />
+              <button
+                onClick={() => setAmount(unallocatedRose || '0')}
+                className="px-3 py-2 rounded-lg text-sm"
+                style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}
+              >
+                Max
+              </button>
+            </div>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              Available: {parseFloat(unallocatedRose || 0).toLocaleString()} ROSE
+            </p>
+            {amount && parseFloat(amount) > 0 && (
+              <div className="text-xs mb-3 p-2 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>New total:</span>
+                  <span>{newTotalAmount.toLocaleString()} ROSE</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>New vote power:</span>
+                  <span className="font-semibold">{formatVotePower(newVotePower)}</span>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddMore}
+                disabled={loading || !amount || parseFloat(amount) <= 0}
+                className="btn-primary flex-1"
+                style={{
+                  backgroundColor: userVote.support ? 'var(--success)' : 'var(--error)',
+                  opacity: loading || !amount || parseFloat(amount) <= 0 ? 0.5 : 1,
+                }}
+              >
+                {loading ? 'Adding...' : `Add ${userVote.support ? 'Yay' : 'Nay'} Vote`}
+              </button>
+              <button
+                onClick={() => { setShowAddMore(false); setAmount(''); }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
     );

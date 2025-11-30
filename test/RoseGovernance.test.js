@@ -230,6 +230,120 @@ describe("RoseGovernance", function () {
       const rep = await governance.getReputation(user1.address);
       expect(rep).to.be.lessThan(100);
     });
+
+    it("Should return task history via getTaskHistory", async function () {
+      // Complete some tasks
+      for (let i = 0; i < 3; i++) {
+        await governance.connect(mockMarketplace).updateUserStats(
+          user1.address,
+          ethers.parseEther("100"),
+          false
+        );
+      }
+      // Add a dispute
+      await governance.connect(mockMarketplace).updateUserStats(
+        user1.address,
+        ethers.parseEther("50"),
+        true
+      );
+
+      const history = await governance.getTaskHistory(user1.address);
+      expect(history.length).to.equal(4);
+      expect(history[0].value).to.equal(ethers.parseEther("100"));
+      expect(history[0].isDispute).to.equal(false);
+      expect(history[3].isDispute).to.equal(true);
+    });
+
+    describe("Reputation Decay", function () {
+      it("Should not count tasks older than 1 year", async function () {
+        // Complete 10 tasks
+        for (let i = 0; i < 10; i++) {
+          await governance.connect(mockMarketplace).updateUserStats(
+            user1.address,
+            ethers.parseEther("100"),
+            false
+          );
+        }
+
+        // Should have 100% rep now
+        expect(await governance.getReputation(user1.address)).to.equal(100);
+
+        // Fast forward 366 days (past 1 year decay period)
+        await time.increase(366 * 24 * 60 * 60);
+
+        // Now should be back to default (60) since no recent tasks
+        expect(await governance.getReputation(user1.address)).to.equal(60);
+      });
+
+      it("Should still count disputes within 3 years", async function () {
+        // Complete 10 tasks
+        for (let i = 0; i < 10; i++) {
+          await governance.connect(mockMarketplace).updateUserStats(
+            user1.address,
+            ethers.parseEther("100"),
+            false
+          );
+        }
+        // Add a dispute
+        await governance.connect(mockMarketplace).updateUserStats(
+          user1.address,
+          ethers.parseEther("0"),
+          true
+        );
+
+        const repBefore = await governance.getReputation(user1.address);
+        expect(repBefore).to.be.lessThan(100);
+
+        // Fast forward 2 years - dispute should still count
+        await time.increase(2 * 365 * 24 * 60 * 60);
+
+        // Complete 10 more tasks to have recent activity
+        for (let i = 0; i < 10; i++) {
+          await governance.connect(mockMarketplace).updateUserStats(
+            user1.address,
+            ethers.parseEther("100"),
+            false
+          );
+        }
+
+        // Dispute from 2 years ago should still affect reputation
+        const repAfter = await governance.getReputation(user1.address);
+        expect(repAfter).to.be.lessThan(100);
+      });
+
+      it("Should not count disputes older than 3 years", async function () {
+        // Complete 10 tasks
+        for (let i = 0; i < 10; i++) {
+          await governance.connect(mockMarketplace).updateUserStats(
+            user1.address,
+            ethers.parseEther("100"),
+            false
+          );
+        }
+        // Add a dispute
+        await governance.connect(mockMarketplace).updateUserStats(
+          user1.address,
+          ethers.parseEther("0"),
+          true
+        );
+
+        // Fast forward 4 years
+        await time.increase(4 * 365 * 24 * 60 * 60);
+
+        // Complete 10 more tasks to have recent activity
+        for (let i = 0; i < 10; i++) {
+          await governance.connect(mockMarketplace).updateUserStats(
+            user1.address,
+            ethers.parseEther("100"),
+            false
+          );
+        }
+
+        // Dispute from 4 years ago should NOT affect reputation (>3 years)
+        const rep = await governance.getReputation(user1.address);
+        expect(rep).to.equal(100);
+      });
+    });
   });
 
   describe("Vote Power", function () {
@@ -702,11 +816,24 @@ describe("RoseGovernance", function () {
           .to.be.revertedWithCustomError(governance, "CannotVoteOnOwnProposal");
       });
 
-      it("Should revert if already voted", async function () {
+      it("Should allow vote increase (same direction)", async function () {
         await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("500"), true);
 
+        // Second vote should increase allocation
         await expect(governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("500"), true))
-          .to.be.revertedWithCustomError(governance, "AlreadyVoted");
+          .to.emit(governance, "VoteIncreased");
+
+        // Check total allocated
+        const vote = await governance.votes(proposalId, user1.address);
+        expect(vote.allocatedAmount).to.equal(ethers.parseEther("1000"));
+      });
+
+      it("Should revert if trying to change vote direction", async function () {
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("500"), true);
+
+        // Try to vote Nay after voting Yay
+        await expect(governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("500"), false))
+          .to.be.revertedWithCustomError(governance, "CannotChangeVoteDirection");
       });
     });
 

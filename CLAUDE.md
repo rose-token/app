@@ -32,13 +32,15 @@ npm test                  # Run Vitest tests
 
 ## Contract Architecture
 
-**3 core contracts + 3 mocks (in contracts/):**
+**5 core contracts + 3 mocks (in contracts/):**
 
 | Contract | Lines | Purpose |
 |----------|-------|---------|
 | RoseToken.sol | 167 | ERC20 with authorized mint/burn (multiple authorized addresses) |
 | RoseMarketplace.sol | 362 | Task lifecycle, escrow, payment distribution |
 | RoseTreasury.sol | 589 | RWA-backed treasury (BTC/rETH/Gold/USDC via Chainlink + Uniswap) |
+| RoseGovernance.sol | ~750 | Governance proposals, quadratic voting, reputation-weighted delegation |
+| vROSE.sol | 205 | Soulbound governance receipt token, marketplace-only transfers |
 | mocks/MockERC20.sol | 38 | ERC20 test utility with public mint |
 | mocks/MockV3Aggregator.sol | 50 | Chainlink price feed mock for testing |
 | mocks/MockUniswapV3Router.sol | 70 | Uniswap V3 swap router mock for testing |
@@ -61,6 +63,65 @@ npm test                  # Run Vitest tests
 - Replay protection: `usedSignatures` mapping marks each signature as consumed
 - Custom errors: `InvalidSignature`, `SignatureExpired`, `SignatureAlreadyUsed`, `ZeroAddressSigner`
 - Admin: `setPassportSigner(address)` - owner-only signer update
+
+## Governance System
+
+**Contracts:**
+- `RoseGovernance.sol` (~750 lines) - Proposal lifecycle, quadratic voting, delegation
+- `vROSE.sol` (205 lines) - Soulbound receipt token for stakeholder collateral
+
+**Vote Power Formula:** `√(staked_ROSE) × (reputation_score / 100)`
+
+**Thresholds:**
+- Pass: 7/12 (58.33%) Yay votes
+- Quorum: 33% of total staked ROSE
+- Proposer eligibility: 90% reputation + 10 tasks completed
+- Voter eligibility: 70% reputation
+- Delegate eligibility: 90% reputation + 10 tasks completed
+
+**Reputation Decay:**
+- Tasks count for 1 year (`TASK_DECAY_PERIOD = 365 days`)
+- Disputes count for 3 years (`DISPUTE_DECAY_PERIOD = 1095 days`)
+- Cold start: Default 60% reputation until 10 tasks completed
+
+**Proposal Lifecycle:**
+```
+Active → [Voting 2 weeks] → Passed/Failed
+  ↓                            ↓
+Quorum not met → timer resets  Failed → Nay voters get 2% mint
+  ↓                            ↓
+Max 4 edit cycles              Passed → Execute → DAO Task Created
+```
+
+**DAO Task Rewards (minted on completion):**
+- Treasury: 2%
+- Yay voters: 2% (split by vote power)
+- Proposer: 1%
+
+**Two-Token System:**
+- ROSE: Locked in governance, allocated to votes/delegates
+- vROSE: 1:1 receipt token, used for stakeholder escrow in marketplace
+
+**Withdrawal Requires:**
+1. vROSE returned (not locked in active task)
+2. ROSE unallocated (manually unvote/undelegate)
+
+**Vote Splitting:**
+- Users can increase existing vote allocation (same direction only)
+- Cannot change vote direction after voting
+
+**Frontend Pages:**
+- `/governance` - Proposal dashboard
+- `/governance/propose` - Create proposal (90% rep + passport required)
+- `/governance/:id` - Vote on proposal
+- `/governance/my-votes` - Personal governance dashboard
+- `/delegates` - Browse and manage delegation
+
+**Frontend Hooks:**
+- `useGovernance` - Staking, vROSE balance, eligibility
+- `useDelegation` - Delegate management
+- `useProposals` - Proposal CRUD operations
+- `useReputation` - On-chain reputation score + event-based task counts
 
 ## Task Status Flow
 
@@ -119,7 +180,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 **Hooks:**
 - `useProfile` - Profile state; returns `{ profile, isLoading, error, updateProfile, refreshProfile, getProfile }` (updateProfile currently disabled)
-- `useReputation` - On-chain stats; returns `{ reputation: { tasksAsWorker, tasksAsStakeholder, tasksAsCustomer, totalEarned }, loading }`
+- `useReputation` - Combined reputation data; returns `{ reputation: { tasksAsWorker, tasksAsStakeholder, tasksAsCustomer, totalEarned, reputationScore, canPropose, canVote, canDelegate, governanceStats }, loading }`
 
 **Skills (15 predefined in `constants/skills.js`):**
 - Blockchain: Solidity, Rust, Smart Contracts, Security Auditing

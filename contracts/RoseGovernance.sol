@@ -50,6 +50,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Reputation Tracking ============
     mapping(address => UserStats) internal _userStats;
 
+    // ============ Task History (for reputation decay) ============
+    // TaskRecord struct is inherited from IRoseGovernance
+    mapping(address => TaskRecord[]) internal _taskHistory;
+
     // ============ Proposals ============
     uint256 public proposalCounter;
     mapping(uint256 => Proposal) internal _proposals;
@@ -75,6 +79,8 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     uint256 public constant DELEGATE_REP_THRESHOLD = 90;
     uint256 public constant DEFAULT_REPUTATION = 60;
     uint256 public constant BASIS_POINTS = 10000;
+    uint256 public constant TASK_DECAY_PERIOD = 365 days;    // Tasks count for 1 year
+    uint256 public constant DISPUTE_DECAY_PERIOD = 1095 days; // Disputes count for 3 years
 
     // Reward percentages (basis points)
     uint256 public constant DAO_MINT_PERCENT = 200;       // 2%
@@ -151,30 +157,70 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev Get reputation score (0-100)
+     * @dev Get task history for a user (for frontend display/debugging)
+     */
+    function getTaskHistory(address user) external view returns (TaskRecord[] memory) {
+        return _taskHistory[user];
+    }
+
+    /**
+     * @dev Get reputation score (0-100) with time-based decay
+     * Tasks count for 1 year, disputes count for 3 years
      * Returns default (60) if cold start not complete
      */
     function getReputation(address user) public view returns (uint256) {
-        UserStats memory stats = _userStats[user];
+        TaskRecord[] memory history = _taskHistory[user];
+        uint256 failedProposals = _userStats[user].failedProposals;
 
-        // Cold start: return 60% if less than 10 tasks
-        if (stats.tasksCompleted < COLD_START_TASKS) {
+        // Calculate cutoff timestamps
+        uint256 taskCutoff = block.timestamp > TASK_DECAY_PERIOD
+            ? block.timestamp - TASK_DECAY_PERIOD
+            : 0;
+        uint256 disputeCutoff = block.timestamp > DISPUTE_DECAY_PERIOD
+            ? block.timestamp - DISPUTE_DECAY_PERIOD
+            : 0;
+
+        // Count recent tasks and disputes
+        uint256 recentTaskCount = 0;
+        uint256 recentTaskValue = 0;
+        uint256 recentDisputes = 0;
+
+        for (uint256 i = 0; i < history.length; i++) {
+            TaskRecord memory record = history[i];
+
+            if (record.isDispute) {
+                // Disputes count for 3 years
+                if (record.timestamp >= disputeCutoff) {
+                    recentDisputes++;
+                }
+            } else {
+                // Tasks count for 1 year
+                if (record.timestamp >= taskCutoff) {
+                    recentTaskCount++;
+                    recentTaskValue += record.value;
+                }
+            }
+        }
+
+        // Cold start: return 60% if less than 10 recent tasks
+        if (recentTaskCount < COLD_START_TASKS) {
             return DEFAULT_REPUTATION;
         }
 
-        // No tasks completed
-        if (stats.totalTaskValue == 0) {
+        // No recent task value
+        if (recentTaskValue == 0) {
             return DEFAULT_REPUTATION;
         }
 
-        // Calculate: ((totalValue - disputes - failedProposals*0.2) * 100) / totalValue
-        uint256 penalties = stats.disputes + (stats.failedProposals / 5);
-        if (penalties >= stats.tasksCompleted) {
+        // Calculate: ((totalValue - penalties * avgValue) * 100) / totalValue
+        // failedProposals count at 0.2x weight
+        uint256 penalties = recentDisputes + (failedProposals / 5);
+        if (penalties >= recentTaskCount) {
             return 0;
         }
 
-        uint256 effectiveValue = stats.totalTaskValue - (penalties * stats.totalTaskValue / stats.tasksCompleted);
-        return (effectiveValue * 100) / stats.totalTaskValue;
+        uint256 effectiveValue = recentTaskValue - (penalties * recentTaskValue / recentTaskCount);
+        return (effectiveValue * 100) / recentTaskValue;
     }
 
     /**
@@ -348,40 +394,69 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     /**
      * @dev Vote on a proposal by allocating ROSE
+     * Can be called multiple times to increase allocation (same direction only)
      */
     function allocateToProposal(uint256 proposalId, uint256 amount, bool support) external nonReentrant {
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
-        if (_votes[proposalId][msg.sender].hasVoted) revert AlreadyVoted();
         if (!canVote(msg.sender)) revert IneligibleToVote();
         if (amount == 0) revert ZeroAmount();
 
         uint256 unallocated = stakedRose[msg.sender] - allocatedRose[msg.sender];
         if (unallocated < amount) revert InsufficientUnallocated();
 
-        uint256 votePower = getVotePower(amount, getReputation(msg.sender));
+        Vote storage existingVote = _votes[proposalId][msg.sender];
 
-        // Record vote
-        _votes[proposalId][msg.sender] = Vote({
-            hasVoted: true,
-            support: support,
-            votePower: votePower,
-            allocatedAmount: amount
-        });
-        _proposalVoters[proposalId].push(msg.sender);
+        if (existingVote.hasVoted) {
+            // User already voted - allow adding to existing vote (same direction only)
+            if (existingVote.support != support) revert CannotChangeVoteDirection();
 
-        // Update proposal tallies
-        if (support) {
-            p.yayVotes += votePower;
+            // Calculate additional vote power using new total amount
+            uint256 newTotalAmount = existingVote.allocatedAmount + amount;
+            uint256 oldVotePower = existingVote.votePower;
+            uint256 newVotePower = getVotePower(newTotalAmount, getReputation(msg.sender));
+            uint256 additionalPower = newVotePower - oldVotePower;
+
+            // Update vote record
+            existingVote.votePower = newVotePower;
+            existingVote.allocatedAmount = newTotalAmount;
+
+            // Update proposal tallies
+            if (support) {
+                p.yayVotes += additionalPower;
+            } else {
+                p.nayVotes += additionalPower;
+            }
+            p.totalAllocated += amount;
+            allocatedRose[msg.sender] += amount;
+
+            emit VoteIncreased(proposalId, msg.sender, amount, newVotePower);
         } else {
-            p.nayVotes += votePower;
-        }
-        p.totalAllocated += amount;
-        allocatedRose[msg.sender] += amount;
+            // First vote
+            uint256 votePower = getVotePower(amount, getReputation(msg.sender));
 
-        emit VoteCast(proposalId, msg.sender, support, votePower);
+            // Record vote
+            _votes[proposalId][msg.sender] = Vote({
+                hasVoted: true,
+                support: support,
+                votePower: votePower,
+                allocatedAmount: amount
+            });
+            _proposalVoters[proposalId].push(msg.sender);
+
+            // Update proposal tallies
+            if (support) {
+                p.yayVotes += votePower;
+            } else {
+                p.nayVotes += votePower;
+            }
+            p.totalAllocated += amount;
+            allocatedRose[msg.sender] += amount;
+
+            emit VoteCast(proposalId, msg.sender, support, votePower);
+        }
     }
 
     /**
@@ -590,16 +665,26 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     /**
      * @dev Update user stats when task completes
      * Called by marketplace
+     * Records task in history for time-based reputation decay
      */
     function updateUserStats(address user, uint256 taskValue, bool isDispute) external onlyMarketplace {
+        // Add to task history for time-based decay
+        _taskHistory[user].push(TaskRecord({
+            timestamp: block.timestamp,
+            value: taskValue,
+            isDispute: isDispute
+        }));
+
+        // Keep aggregate counters for gas-efficient reads when decay not needed
         UserStats storage stats = _userStats[user];
         if (isDispute) {
             stats.disputes++;
         } else {
             stats.tasksCompleted++;
             stats.totalTaskValue += taskValue;
-            stats.lastTaskTimestamp = block.timestamp;
         }
+        stats.lastTaskTimestamp = block.timestamp;
+
         emit UserStatsUpdated(user, stats.tasksCompleted, stats.totalTaskValue);
     }
 

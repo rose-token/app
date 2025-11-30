@@ -50,6 +50,12 @@ interface IRoseGovernance {
         uint256 allocatedAmount;
     }
 
+    struct TaskRecord {
+        uint256 timestamp;
+        uint256 value;
+        bool isDispute;
+    }
+
     // ============ Events ============
 
     event Deposited(address indexed user, uint256 amount);
@@ -63,6 +69,7 @@ interface IRoseGovernance {
     event ProposalFinalized(uint256 indexed proposalId, ProposalStatus status);
     event ProposalExecuted(uint256 indexed proposalId, uint256 taskId);
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 votePower);
+    event VoteIncreased(uint256 indexed proposalId, address indexed voter, uint256 additionalAmount, uint256 newVotePower);
     event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower);
     event VoteUnallocated(uint256 indexed proposalId, address indexed voter, uint256 amount);
     event RewardsDistributed(uint256 indexed proposalId, uint256 totalRewards);
@@ -102,6 +109,7 @@ interface IRoseGovernance {
     error CannotDelegateToSelf();
     error QuorumNotMet();
     error TaskNotFromProposal();
+    error CannotChangeVoteDirection();
 
     // ============ View Functions ============
 
@@ -123,6 +131,7 @@ interface IRoseGovernance {
     function canDelegate(address user) external view returns (bool);
     function getQuorumProgress(uint256 proposalId) external view returns (uint256 current, uint256 required);
     function getVoteResult(uint256 proposalId) external view returns (uint256 yayPercent, uint256 nayPercent);
+    function getTaskHistory(address user) external view returns (TaskRecord[] memory);
 
     // ============ Staking Functions ============
 

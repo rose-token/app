@@ -42,6 +42,11 @@
   },
   {
     "inputs": [],
+    "name": "CannotChangeVoteDirection",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "CannotDelegateToSelf",
     "type": "error"
   },
@@ -568,6 +573,37 @@
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "additionalAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newVotePower",
+        "type": "uint256"
+      }
+    ],
+    "name": "VoteIncreased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "voter",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
       }
@@ -661,6 +697,19 @@
   },
   {
     "inputs": [],
+    "name": "DISPUTE_DECAY_PERIOD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "MAX_EDIT_CYCLES",
     "outputs": [
       {
@@ -727,6 +776,19 @@
   {
     "inputs": [],
     "name": "QUORUM_THRESHOLD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TASK_DECAY_PERIOD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1115,6 +1177,42 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getTaskHistory",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "isDispute",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IRoseGovernance.TaskRecord[]",
+        "name": "",
+        "type": "tuple[]"
       }
     ],
     "stateMutability": "view",
