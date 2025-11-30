@@ -50,7 +50,7 @@ const VaultPage = () => {
           Treasury <span className="gradient-text">Vault</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
-          Asset-backed stability. Transparent on-chain reserves.
+          Asset-Backed Stability, Transparent On-chain Reserves
         </p>
       </div>
 
