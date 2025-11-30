@@ -329,24 +329,40 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (delegate == msg.sender) revert CannotDelegateToSelf();
         if (amount == 0) revert ZeroAmount();
         if (!canDelegate(delegate)) revert IneligibleToDelegate();
-        if (delegatedTo[msg.sender] != address(0)) revert AlreadyDelegating();
+        // Allow increasing allocation to same delegate, block different delegate
+        if (delegatedTo[msg.sender] != address(0) && delegatedTo[msg.sender] != delegate) {
+            revert AlreadyDelegating();
+        }
         if (delegatedTo[delegate] != address(0)) revert DelegationChainNotAllowed();
 
         uint256 unallocated = stakedRose[msg.sender] - allocatedRose[msg.sender];
         if (unallocated < amount) revert InsufficientUnallocated();
 
-        // Calculate and cache vote power
-        uint256 votePower = getVotePower(amount, getReputation(msg.sender));
+        // Track if this is an increase to existing delegation
+        bool isIncrease = delegatedTo[msg.sender] == delegate;
+
+        // For increases: subtract old power first
+        if (isIncrease) {
+            totalDelegatedPower[delegate] -= cachedVotePower[msg.sender];
+        }
+
+        // Calculate new total amount and vote power
+        uint256 newTotalAmount = delegatedAmount[msg.sender] + amount;
+        uint256 votePower = getVotePower(newTotalAmount, getReputation(msg.sender));
         cachedVotePower[msg.sender] = votePower;
 
         // Update delegation state
-        delegatedTo[msg.sender] = delegate;
-        delegatedAmount[msg.sender] = amount;
-        _delegators[delegate].push(msg.sender);
+        delegatedAmount[msg.sender] = newTotalAmount;
         totalDelegatedPower[delegate] += votePower;
         allocatedRose[msg.sender] += amount;
 
-        emit DelegatedTo(msg.sender, delegate, amount);
+        // Only set delegatedTo and add to delegators array for NEW delegations
+        if (!isIncrease) {
+            delegatedTo[msg.sender] = delegate;
+            _delegators[delegate].push(msg.sender);
+        }
+
+        emit DelegatedTo(msg.sender, delegate, newTotalAmount);
     }
 
     /**

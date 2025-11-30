@@ -447,13 +447,73 @@ describe("RoseGovernance", function () {
         .to.be.revertedWithCustomError(governance, "IneligibleToDelegate");
     });
 
-    it("Should revert if already delegating", async function () {
+    it("Should allow increasing allocation to same delegate", async function () {
       const amount = ethers.parseEther("250");
 
+      // First delegation
       await governance.connect(user2).allocateToDelegate(user1.address, amount);
 
+      const allocatedBefore = await governance.allocatedRose(user2.address);
+      const delegatedAmountBefore = await governance.delegatedAmount(user2.address);
+      const totalPowerBefore = await governance.totalDelegatedPower(user1.address);
+
+      // Second delegation to same delegate (increase)
+      await governance.connect(user2).allocateToDelegate(user1.address, amount);
+
+      const allocatedAfter = await governance.allocatedRose(user2.address);
+      const delegatedAmountAfter = await governance.delegatedAmount(user2.address);
+      const totalPowerAfter = await governance.totalDelegatedPower(user1.address);
+
+      // Check amounts doubled
+      expect(allocatedAfter).to.equal(allocatedBefore + amount);
+      expect(delegatedAmountAfter).to.equal(delegatedAmountBefore + amount);
+      // Vote power should increase (quadratic, so not exactly double)
+      expect(totalPowerAfter).to.be.greaterThan(totalPowerBefore);
+    });
+
+    it("Should emit DelegatedTo with new total amount on increase", async function () {
+      const amount = ethers.parseEther("250");
+
+      // First delegation
+      await governance.connect(user2).allocateToDelegate(user1.address, amount);
+
+      // Second delegation to same delegate (increase)
       await expect(governance.connect(user2).allocateToDelegate(user1.address, amount))
+        .to.emit(governance, "DelegatedTo")
+        .withArgs(user2.address, user1.address, ethers.parseEther("500")); // Total = 250 + 250
+    });
+
+    it("Should revert if delegating to different address while already delegating", async function () {
+      const amount = ethers.parseEther("250");
+
+      // Set up another eligible delegate
+      await setupEligibleProposer(owner);
+
+      // First delegation to user1
+      await governance.connect(user2).allocateToDelegate(user1.address, amount);
+
+      // Try to delegate to owner (different address) - should fail
+      await expect(governance.connect(user2).allocateToDelegate(owner.address, amount))
         .to.be.revertedWithCustomError(governance, "AlreadyDelegating");
+    });
+
+    it("Should correctly recalculate vote power on increase", async function () {
+      const amount1 = ethers.parseEther("100");
+      const amount2 = ethers.parseEther("300");
+
+      // First delegation of 100
+      await governance.connect(user2).allocateToDelegate(user1.address, amount1);
+      const power1 = await governance.cachedVotePower(user2.address);
+
+      // Increase by 300 (total 400)
+      await governance.connect(user2).allocateToDelegate(user1.address, amount2);
+      const power2 = await governance.cachedVotePower(user2.address);
+
+      // Vote power should be based on total amount (400), not just increase
+      // sqrt(100) = 10, sqrt(400) = 20, so power should roughly double
+      expect(power2).to.be.greaterThan(power1);
+      // With same reputation, power should scale with sqrt of total
+      // power2 / power1 should be approximately sqrt(400) / sqrt(100) = 2
     });
 
     describe("Undelegation", function () {

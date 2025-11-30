@@ -16,6 +16,7 @@ const DelegateCard = ({
   onDelegate,
   loading = false,
   isCurrentDelegate = false,
+  currentDelegationAmount = '0',
 }) => {
   const [delegateAmount, setDelegateAmount] = useState('');
   const [showDelegateForm, setShowDelegateForm] = useState(false);
@@ -132,12 +133,12 @@ const DelegateCard = ({
           className="p-2 rounded-lg mb-4 text-sm text-center"
           style={{ backgroundColor: 'rgba(212, 175, 140, 0.1)', color: 'var(--accent)' }}
         >
-          Currently delegating to this address
+          Currently delegating {parseFloat(currentDelegationAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} ROSE
         </div>
       )}
 
-      {/* Delegation Form or Button */}
-      {!isCurrentDelegate && canReceiveDelegation && (
+      {/* Delegation Form or Button - show for both new and increase allocation */}
+      {canReceiveDelegation && (
         <>
           {showDelegateForm ? (
             <div className="space-y-3">
@@ -146,7 +147,7 @@ const DelegateCard = ({
                   type="number"
                   value={delegateAmount}
                   onChange={(e) => setDelegateAmount(e.target.value)}
-                  placeholder="Amount to delegate"
+                  placeholder={isCurrentDelegate ? "Additional amount" : "Amount to delegate"}
                   min="0"
                   step="0.01"
                   className="flex-1 px-3 py-2 rounded-lg text-sm"
@@ -166,7 +167,7 @@ const DelegateCard = ({
                   className="btn-primary flex-1 text-sm py-2"
                   style={{ opacity: loading ? 0.5 : 1 }}
                 >
-                  {loading ? 'Delegating...' : 'Confirm'}
+                  {loading ? (isCurrentDelegate ? 'Increasing...' : 'Delegating...') : 'Confirm'}
                 </button>
                 <button
                   onClick={() => setShowDelegateForm(false)}
@@ -181,7 +182,7 @@ const DelegateCard = ({
               onClick={() => setShowDelegateForm(true)}
               className="btn-primary w-full text-sm"
             >
-              Delegate to this user
+              {isCurrentDelegate ? 'Increase Allocation' : 'Delegate to this user'}
             </button>
           )}
         </>

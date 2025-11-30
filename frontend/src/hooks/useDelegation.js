@@ -197,8 +197,10 @@ export const useDelegation = () => {
         throw new Error('Cannot delegate to yourself');
       }
 
-      if (parsedDelegation?.isDelegating) {
-        throw new Error('Already delegating. Undelegate first.');
+      // Allow increasing allocation to same delegate, block different delegate
+      if (parsedDelegation?.isDelegating &&
+          parsedDelegation.delegatedTo.toLowerCase() !== delegateAddress.toLowerCase()) {
+        throw new Error('Already delegating to someone else. Undelegate first.');
       }
 
       if (parsedDelegation && amountWei > parsedDelegation.unallocatedRoseRaw) {
