@@ -25,7 +25,7 @@ const ProposalFilters = ({ filters, setFilters }) => {
   ];
 
   return (
-    <div className="flex flex-wrap gap-4 mb-6">
+    <div className="flex flex-wrap gap-4 mb-6 card">
       {/* Status Filter */}
       <div className="flex-1 min-w-[200px]">
         <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
