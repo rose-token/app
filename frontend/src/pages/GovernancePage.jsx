@@ -133,10 +133,13 @@ const GovernancePage = () => {
             {/* Create Proposal CTA */}
             <div
               className="card flex items-center justify-between"
-              style={{ backgroundColor: 'rgba(212, 175, 140, 0.1)', borderColor: 'var(--accent)' }}
+              style={{
+                    background: 'rgba(212, 175, 140, 0.05)',
+                    border: '1px solid rgba(251, 191, 36, 0.25)'
+                    }}
             >
               <div>
-                <h3 className="font-semibold mb-1">Have an idea?</h3>
+                <h3 className="font-semibold mb-1" style={{ color: 'var(--rose-gold-light)'}} >Have an idea?</h3>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                   {canPropose
                     ? 'Create a proposal to fund work from the DAO treasury'

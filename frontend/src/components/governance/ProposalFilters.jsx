@@ -73,8 +73,8 @@ const ProposalFilters = ({ filters, setFilters }) => {
         </select>
       </div>
 
-      {/* My Proposals Toggle */}
-      <div className="flex items-end">
+      {/* Checkbox Filters */}
+      <div className="w-full flex items-center gap-6 pt-2">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -85,10 +85,6 @@ const ProposalFilters = ({ filters, setFilters }) => {
           />
           <span className="text-sm">My Proposals</span>
         </label>
-      </div>
-
-      {/* My Votes Toggle */}
-      <div className="flex items-end">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
