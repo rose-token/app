@@ -31,46 +31,54 @@ const VotePanel = ({
   const [voteType, setVoteType] = useState(null);
   const [showAddMore, setShowAddMore] = useState(false);
 
-  // Calculate total available voting power
+  // Calculate total available voting power (all in VP units)
   const totalAvailable = useMemo(() => {
-    const ownAvailable = parseFloat(unallocatedRose || 0);
-    const delegatedAvailable = parseFloat(availableDelegatedPower || 0);
+    // Convert own ROSE to VP using quadratic formula
+    const ownRose = parseFloat(unallocatedRose || 0);
+    const ownVP = calculateVotePower(ownRose * 1e18, reputationRaw || 6000);
+    // Delegated power is already in VP units
+    const delegatedVP = parseFloat(availableDelegatedPower || 0);
     return {
-      own: ownAvailable,
-      delegated: delegatedAvailable,
-      total: ownAvailable + delegatedAvailable,
+      ownRose,      // Keep ROSE for display
+      ownVP,        // VP for calculations
+      delegatedVP,  // Already VP
+      totalVP: ownVP + delegatedVP,  // VP + VP = valid
     };
-  }, [unallocatedRose, availableDelegatedPower]);
+  }, [unallocatedRose, availableDelegatedPower, reputationRaw]);
 
-  // Calculate how input amount splits between own and delegated
+  // Calculate how input amount splits between own ROSE and delegated VP
   const amountSplit = useMemo(() => {
     const inputAmount = parseFloat(amount || 0);
-    if (inputAmount <= 0) return { own: 0, delegated: 0, isValid: true };
+    if (inputAmount <= 0) return { ownRose: 0, ownVP: 0, delegatedVP: 0, totalVP: 0, isValid: true };
 
-    const ownToUse = Math.min(inputAmount, totalAvailable.own);
-    const delegatedToUse = Math.max(0, inputAmount - ownToUse);
+    // User input is ROSE for own stake, then VP for delegated
+    const ownRoseToUse = Math.min(inputAmount, totalAvailable.ownRose);
+    const ownVPFromInput = calculateVotePower(ownRoseToUse * 1e18, reputationRaw || 6000);
+
+    // Remaining input goes to delegated (in VP units directly)
+    const remainingInput = Math.max(0, inputAmount - ownRoseToUse);
+    const delegatedVPToUse = Math.min(remainingInput, totalAvailable.delegatedVP);
+
+    const totalVPUsed = ownVPFromInput + delegatedVPToUse;
 
     return {
-      own: ownToUse,
-      delegated: Math.min(delegatedToUse, totalAvailable.delegated),
-      isValid: inputAmount <= totalAvailable.total,
-      exceedsAvailable: inputAmount > totalAvailable.total,
+      ownRose: ownRoseToUse,
+      ownVP: ownVPFromInput,
+      delegatedVP: delegatedVPToUse,
+      totalVP: totalVPUsed,
+      isValid: totalVPUsed <= totalAvailable.totalVP + 0.001, // Small epsilon for float comparison
+      exceedsAvailable: totalVPUsed > totalAvailable.totalVP + 0.001,
     };
-  }, [amount, totalAvailable]);
+  }, [amount, totalAvailable, reputationRaw]);
 
-  // Calculate preview vote power for both parts
+  // Preview vote power is now directly from amountSplit (already calculated)
   const previewVotePower = useMemo(() => {
-    const ownPower = amountSplit.own > 0
-      ? calculateVotePower(amountSplit.own * 1e18, reputationRaw || 6000)
-      : 0;
-    // Delegated power is already in VP units (converted in hook)
-    const delegatedPower = amountSplit.delegated;
     return {
-      own: ownPower,
-      delegated: delegatedPower,
-      total: ownPower + delegatedPower,
+      own: amountSplit.ownVP,
+      delegated: amountSplit.delegatedVP,
+      total: amountSplit.totalVP,
     };
-  }, [amountSplit, reputationRaw]);
+  }, [amountSplit]);
 
   // Determine existing vote direction (for add-more validation)
   const existingVoteDirection = useMemo(() => {
@@ -97,8 +105,8 @@ const VotePanel = ({
           proposalId,
           amount,
           support,
-          totalAvailable.own.toString(),
-          totalAvailable.delegated.toString()
+          totalAvailable.ownRose.toString(),
+          totalAvailable.delegatedVP.toString()
         );
       } else {
         // Fallback to regular vote if combined not available
@@ -120,7 +128,8 @@ const VotePanel = ({
   };
 
   const handleMax = () => {
-    setAmount(totalAvailable.total.toString());
+    // Max is own ROSE + delegated VP (user enters ROSE first, then VP overflows to delegated)
+    setAmount((totalAvailable.ownRose + totalAvailable.delegatedVP).toString());
   };
 
   // Handle adding more to existing vote
@@ -134,8 +143,8 @@ const VotePanel = ({
           proposalId,
           amount,
           existingVoteDirection,
-          totalAvailable.own.toString(),
-          totalAvailable.delegated.toString()
+          totalAvailable.ownRose.toString(),
+          totalAvailable.delegatedVP.toString()
         );
       } else {
         await onVote(proposalId, amount, existingVoteDirection);
@@ -200,7 +209,7 @@ const VotePanel = ({
         </div>
 
         {/* Add More Section */}
-        {isActive && totalAvailable.total > 0 && !showAddMore && (
+        {isActive && totalAvailable.totalVP > 0 && !showAddMore && (
           <div className="flex gap-2">
             <button
               onClick={() => setShowAddMore(true)}
@@ -232,18 +241,22 @@ const VotePanel = ({
 
             {/* Available Power Summary */}
             <div className="text-xs mb-3 p-2 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-              {totalAvailable.own > 0 && (
+              {totalAvailable.ownRose > 0 && (
                 <div className="flex justify-between">
-                  <span style={{ color: 'var(--text-muted)' }}>Own ROSE available:</span>
-                  <span>{totalAvailable.own.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
+                  <span>{totalAvailable.ownRose.toLocaleString()} → {formatVotePower(totalAvailable.ownVP)} VP</span>
                 </div>
               )}
-              {totalAvailable.delegated > 0 && (
+              {totalAvailable.delegatedVP > 0 && (
                 <div className="flex justify-between">
-                  <span style={{ color: 'var(--text-muted)' }}>Delegated VP available:</span>
-                  <span>{totalAvailable.delegated.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Delegated:</span>
+                  <span>{formatVotePower(totalAvailable.delegatedVP)} VP</span>
                 </div>
               )}
+              <div className="flex justify-between font-semibold mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                <span>Total:</span>
+                <span>{formatVotePower(totalAvailable.totalVP)} VP</span>
+              </div>
             </div>
 
             <div className="flex gap-2 mb-2">
@@ -273,18 +286,22 @@ const VotePanel = ({
             {amount && parseFloat(amount) > 0 && (
               <div className="text-xs mb-3 p-2 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                 <p className="font-semibold mb-1">Will use:</p>
-                {amountSplit.own > 0 && (
+                {amountSplit.ownRose > 0 && (
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
-                    <span>{amountSplit.own.toLocaleString()}</span>
+                    <span>{amountSplit.ownRose.toLocaleString()} → {formatVotePower(amountSplit.ownVP)} VP</span>
                   </div>
                 )}
-                {amountSplit.delegated > 0 && (
+                {amountSplit.delegatedVP > 0 && (
                   <div className="flex justify-between">
-                    <span style={{ color: 'var(--text-muted)' }}>Delegated VP:</span>
-                    <span>{amountSplit.delegated.toLocaleString()}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Delegated:</span>
+                    <span>{formatVotePower(amountSplit.delegatedVP)} VP</span>
                   </div>
                 )}
+                <div className="flex justify-between font-semibold mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                  <span>Total VP:</span>
+                  <span>{formatVotePower(amountSplit.totalVP)}</span>
+                </div>
                 {amountSplit.exceedsAvailable && (
                   <p className="mt-1" style={{ color: 'var(--error)' }}>
                     Exceeds available voting power
@@ -345,7 +362,7 @@ const VotePanel = ({
     );
   }
 
-  if (!canVote && totalAvailable.delegated === 0) {
+  if (!canVote && totalAvailable.delegatedVP === 0) {
     return (
       <div className="card">
         <h3 className="text-lg font-semibold mb-3">Vote on Proposal</h3>
@@ -369,21 +386,21 @@ const VotePanel = ({
         <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
           Available Voting Power
         </p>
-        {totalAvailable.own > 0 && (
+        {totalAvailable.ownRose > 0 && (
           <div className="flex justify-between text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Your ROSE:</span>
-            <span>{totalAvailable.own.toLocaleString()} ROSE</span>
+            <span>{totalAvailable.ownRose.toLocaleString()} ROSE → {formatVotePower(totalAvailable.ownVP)} VP</span>
           </div>
         )}
-        {totalAvailable.delegated > 0 && (
+        {totalAvailable.delegatedVP > 0 && (
           <div className="flex justify-between text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Delegated Power:</span>
-            <span>{totalAvailable.delegated.toLocaleString()} VP</span>
+            <span>{formatVotePower(totalAvailable.delegatedVP)} VP</span>
           </div>
         )}
         <div className="flex justify-between font-semibold text-sm mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
-          <span>Total:</span>
-          <span>{totalAvailable.total.toLocaleString()}</span>
+          <span>Total VP:</span>
+          <span>{formatVotePower(totalAvailable.totalVP)} VP</span>
         </div>
       </div>
 
@@ -430,21 +447,21 @@ const VotePanel = ({
           <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
             Vote will use:
           </p>
-          {amountSplit.own > 0 && (
+          {amountSplit.ownRose > 0 && (
             <div className="flex justify-between">
               <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
-              <span>{amountSplit.own.toLocaleString()} ROSE</span>
+              <span>{amountSplit.ownRose.toLocaleString()} ROSE → {formatVotePower(amountSplit.ownVP)} VP</span>
             </div>
           )}
-          {amountSplit.delegated > 0 && (
+          {amountSplit.delegatedVP > 0 && (
             <div className="flex justify-between">
               <span style={{ color: 'var(--text-muted)' }}>Delegated Power:</span>
-              <span>{amountSplit.delegated.toLocaleString()} VP</span>
+              <span>{formatVotePower(amountSplit.delegatedVP)} VP</span>
             </div>
           )}
           <div className="flex justify-between mt-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
             <span style={{ color: 'var(--text-muted)' }}>Total Vote Power:</span>
-            <span className="font-semibold">{formatVotePower(previewVotePower.total)}</span>
+            <span className="font-semibold">{formatVotePower(previewVotePower.total)} VP</span>
           </div>
           {amountSplit.exceedsAvailable && (
             <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>
