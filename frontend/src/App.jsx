@@ -5,6 +5,11 @@ import TasksPage from './pages/TasksPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
 import VaultPage from './pages/VaultPage';
+import GovernancePage from './pages/GovernancePage';
+import ProposalDetailPage from './pages/ProposalDetailPage';
+import ProposalCreatePage from './pages/ProposalCreatePage';
+import DelegatesPage from './pages/DelegatesPage';
+import MyVotesPage from './pages/MyVotesPage';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -52,6 +57,11 @@ function App() {
                     <Routes>
                       <Route path="/" element={<TasksPage />} />
                       <Route path="/vault" element={<VaultPage />} />
+                      <Route path="/governance" element={<GovernancePage />} />
+                      <Route path="/governance/propose" element={<ProposalCreatePage />} />
+                      <Route path="/governance/my-votes" element={<MyVotesPage />} />
+                      <Route path="/governance/:id" element={<ProposalDetailPage />} />
+                      <Route path="/delegates" element={<DelegatesPage />} />
                       <Route path="/profile" element={<ProfilePage />} />
                       <Route path="/help" element={<HelpPage />} />
                     </Routes>

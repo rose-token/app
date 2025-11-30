@@ -1,11 +1,14 @@
 /**
  * Reputation hook for on-chain task completion data
  * Reads events from RoseMarketplace to calculate reputation metrics
+ * Also reads on-chain reputation score from RoseGovernance
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient, useReadContracts } from 'wagmi';
 import { parseAbi, formatUnits } from 'viem';
+import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import { CONTRACTS } from '../constants/contracts';
 
 const MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS;
 
@@ -66,6 +69,83 @@ export const useReputation = (address) => {
     loading: false,
     error: null,
   });
+
+  // Read on-chain governance data for reputation score and eligibility
+  const { data: governanceData, refetch: refetchGovernance } = useReadContracts({
+    contracts: [
+      // On-chain reputation score (0-100)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'getReputation',
+        args: [address],
+      },
+      // User stats from governance
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'userStats',
+        args: [address],
+      },
+      // Can propose (90%+ rep + 10 tasks)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canPropose',
+        args: [address],
+      },
+      // Can vote (70%+ rep)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canVote',
+        args: [address],
+      },
+      // Can be delegate (90%+ rep + 10 tasks)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canDelegate',
+        args: [address],
+      },
+    ],
+    query: {
+      enabled: !!address && !!CONTRACTS.GOVERNANCE,
+    },
+  });
+
+  // Parse governance data
+  const governanceParsed = useMemo(() => {
+    if (!governanceData) return null;
+
+    const getResult = (index) => {
+      const result = governanceData[index];
+      return result?.status === 'success' ? result.result : null;
+    };
+
+    const reputationScore = getResult(0);
+    const userStats = getResult(1);
+    const canPropose = getResult(2);
+    const canVote = getResult(3);
+    const canDelegate = getResult(4);
+
+    // Parse user stats tuple: (tasksCompleted, totalTaskValue, disputes, failedProposals, lastTaskTimestamp)
+    const stats = userStats ? {
+      tasksCompleted: Number(userStats[0] || 0),
+      totalTaskValue: userStats[1] || 0n,
+      disputes: Number(userStats[2] || 0),
+      failedProposals: Number(userStats[3] || 0),
+      lastTaskTimestamp: Number(userStats[4] || 0),
+    } : null;
+
+    return {
+      reputationScore: reputationScore !== null ? Number(reputationScore) : 60, // Default 60%
+      userStats: stats,
+      canPropose: canPropose || false,
+      canVote: canVote || false,
+      canDelegate: canDelegate || false,
+    };
+  }, [governanceData]);
 
   /**
    * Fetch reputation data from on-chain events
@@ -156,12 +236,14 @@ export const useReputation = (address) => {
       });
 
       const reputation = {
+        // Event-based task counts
         tasksAsWorker: paymentEvents.length,
         tasksAsStakeholder: stakeholderEvents.length,
         tasksAsCustomer: taskCreatedEvents.length,
         tasksClaimed: claimedEvents.length,
         totalEarned: formatUnits(totalEarned, 18),
         totalEarnedRaw: totalEarned.toString(),
+        // On-chain governance data (merged in below)
       };
 
       setCachedReputation(address, reputation);
@@ -191,11 +273,34 @@ export const useReputation = (address) => {
     fetchReputation();
   }, [fetchReputation]);
 
+  // Merge event-based reputation with on-chain governance data
+  const mergedReputation = useMemo(() => {
+    if (!state.reputation) return governanceParsed;
+
+    return {
+      ...state.reputation,
+      // On-chain reputation score (0-100%)
+      reputationScore: governanceParsed?.reputationScore ?? 60,
+      // Governance eligibility flags
+      canPropose: governanceParsed?.canPropose ?? false,
+      canVote: governanceParsed?.canVote ?? false,
+      canDelegate: governanceParsed?.canDelegate ?? false,
+      // User stats from governance contract
+      governanceStats: governanceParsed?.userStats ?? null,
+    };
+  }, [state.reputation, governanceParsed]);
+
+  // Combined refetch for both event data and governance data
+  const refetchAll = useCallback(() => {
+    refetchGovernance();
+    return refetch();
+  }, [refetch, refetchGovernance]);
+
   return {
-    reputation: state.reputation,
+    reputation: mergedReputation,
     loading: state.loading,
     error: state.error,
-    refetch,
+    refetch: refetchAll,
   };
 };
 

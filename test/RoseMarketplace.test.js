@@ -5,6 +5,8 @@ describe("RoseMarketplace", function () {
   let roseMarketplace;
   let roseToken;
   let roseTreasury;
+  let vRose;
+  let governance;
   let usdc;
   let wbtc;
   let reth;
@@ -105,7 +107,7 @@ describe("RoseMarketplace", function () {
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
-    // 7. Deploy RoseTreasury
+    // 8. Deploy RoseTreasury
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
@@ -117,7 +119,11 @@ describe("RoseMarketplace", function () {
       await swapRouter.getAddress()
     );
 
-    // 8. Deploy RoseMarketplace (Treasury is the DAO treasury, passportSigner for verification)
+    // 9. Deploy vROSE soulbound token
+    const VROSE = await ethers.getContractFactory("vROSE");
+    vRose = await VROSE.deploy();
+
+    // 10. Deploy RoseMarketplace (Treasury is the DAO treasury, passportSigner for verification)
     const RoseMarketplace = await ethers.getContractFactory("RoseMarketplace");
     roseMarketplace = await RoseMarketplace.deploy(
       await roseToken.getAddress(),
@@ -125,16 +131,43 @@ describe("RoseMarketplace", function () {
       passportSigner.address
     );
 
-    // 9. Authorize Treasury and Marketplace on RoseToken
+    // 11. Deploy RoseGovernance
+    const RoseGovernance = await ethers.getContractFactory("RoseGovernance");
+    governance = await RoseGovernance.deploy(
+      await roseToken.getAddress(),
+      await vRose.getAddress(),
+      await roseMarketplace.getAddress(),
+      await roseTreasury.getAddress(),
+      passportSigner.address
+    );
+
+    // 12. Set up vROSE with governance and marketplace
+    await vRose.setGovernance(await governance.getAddress());
+    await vRose.setMarketplace(await roseMarketplace.getAddress());
+
+    // 13. Set vROSE on marketplace
+    await roseMarketplace.setVRoseToken(await vRose.getAddress());
+
+    // 14. Set governance on marketplace
+    await roseMarketplace.setGovernance(await governance.getAddress());
+
+    // 15. Authorize Treasury, Marketplace, and Governance on RoseToken
     await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
     await roseToken.setAuthorized(await roseMarketplace.getAddress(), true);
+    await roseToken.setAuthorized(await governance.getAddress(), true);
 
-    // 10. Get ROSE tokens via Treasury deposit
+    // 16. Get ROSE tokens via Treasury deposit
     // Deposit enough USDC to get plenty of ROSE for tests
     // Initial price is $1, so 100,000 USDC -> 100,000 ROSE
     const depositAmount = ethers.parseUnits("100000", 6); // 100,000 USDC
     await getRoseTokens(customer, depositAmount);
     await getRoseTokens(stakeholder, depositAmount);
+
+    // 17. Stakeholder needs vROSE for staking - deposit ROSE to governance
+    // This gives stakeholder vROSE tokens (1:1 with ROSE deposited)
+    const stakeholderVRoseAmount = ethers.parseEther("10000");
+    await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
   });
 
   describe("Deployment", function () {
@@ -264,9 +297,10 @@ describe("RoseMarketplace", function () {
       const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
-      // Stakeholder stakes with signature
+      // Stakeholder stakes with signature (vROSE transfers to marketplace escrow)
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      // Approve marketplace to pull vROSE for escrow
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
@@ -401,7 +435,9 @@ describe("RoseMarketplace", function () {
       await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
 
       const workerBalanceBefore = await roseToken.balanceOf(worker.address);
-      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const stakeholderRoseBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const stakeholderVRoseBalanceBefore = await vRose.balanceOf(stakeholder.address);
+      const marketplaceVRoseBefore = await vRose.balanceOf(await roseMarketplace.getAddress());
       const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
 
       await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
@@ -414,12 +450,17 @@ describe("RoseMarketplace", function () {
       const totalPot = taskDeposit; // Only customer deposit, not including minted amount
       const workerAmount = (totalPot * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR);
       const stakeholderFee = (totalPot * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
-      const stakeholderStakeRefund = taskDeposit / 10n;
-      const stakeholderTotal = stakeholderStakeRefund + stakeholderFee;
+      const stakeholderDeposit = taskDeposit / 10n;
 
       // Verify distributions
+      // Worker gets 95% of task deposit in ROSE
       expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + workerAmount);
-      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderBalanceBefore + stakeholderTotal);
+      // Stakeholder gets 5% fee in ROSE (vROSE stake is returned from escrow)
+      expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderRoseBalanceBefore + stakeholderFee);
+      // Stakeholder's vROSE is returned from marketplace escrow
+      expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBalanceBefore + stakeholderDeposit);
+      expect(await vRose.balanceOf(await roseMarketplace.getAddress())).to.equal(marketplaceVRoseBefore - stakeholderDeposit);
+      // DAO treasury gets 2% minted
       expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
     });
 
@@ -572,15 +613,15 @@ describe("RoseMarketplace", function () {
       const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
-      // Stakeholder stakes
+      // Stakeholder stakes (vROSE transferred to marketplace escrow)
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
       const customerBalanceBefore = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
 
       // Customer cancels the task
       await expect(roseMarketplace.connect(customer).cancelTask(1))
@@ -593,11 +634,13 @@ describe("RoseMarketplace", function () {
       expect(task.deposit).to.equal(0);
       expect(task.stakeholderDeposit).to.equal(0);
 
-      // Check both received refunds
+      // Check customer got ROSE refund
       const customerBalanceAfter = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
       expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
-      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+
+      // Check stakeholder's vROSE was returned from escrow
+      const stakeholderVRoseAfter = await vRose.balanceOf(stakeholder.address);
+      expect(stakeholderVRoseAfter).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
     });
 
     it("Should allow stakeholder to cancel task in Open status", async function () {
@@ -607,15 +650,15 @@ describe("RoseMarketplace", function () {
       const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
-      // Stakeholder stakes
+      // Stakeholder stakes (vROSE transferred to marketplace escrow)
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
       const customerBalanceBefore = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
 
       // Stakeholder cancels the task
       await expect(roseMarketplace.connect(stakeholder).cancelTask(1))
@@ -626,11 +669,13 @@ describe("RoseMarketplace", function () {
       const task = await roseMarketplace.tasks(1);
       expect(task.status).to.equal(4); // TaskStatus.Closed
 
-      // Check both received refunds
+      // Check customer got ROSE refund
       const customerBalanceAfter = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
       expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
-      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+
+      // Check stakeholder's vROSE was returned from escrow
+      const stakeholderVRoseAfter = await vRose.balanceOf(stakeholder.address);
+      expect(stakeholderVRoseAfter).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
     });
 
     it("Should refund customer deposit when cancelled", async function () {
@@ -650,31 +695,33 @@ describe("RoseMarketplace", function () {
       expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
     });
 
-    it("Should refund both customer and stakeholder when cancelled after staking", async function () {
+    it("Should refund customer and return stakeholder vROSE when cancelled after staking", async function () {
       // Customer creates a task
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       const createExpiry = await getFutureExpiry();
       const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
-      // Stakeholder stakes
+      // Stakeholder stakes (vROSE transferred to marketplace escrow)
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
 
       const customerBalanceBefore = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+      const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
 
       // Cancel
       await roseMarketplace.connect(customer).cancelTask(1);
 
-      // Verify both refunds
+      // Verify customer ROSE refund
       const customerBalanceAfter = await roseToken.balanceOf(customer.address);
-      const stakeholderBalanceAfter = await roseToken.balanceOf(stakeholder.address);
       expect(customerBalanceAfter).to.equal(customerBalanceBefore + taskDeposit);
-      expect(stakeholderBalanceAfter).to.equal(stakeholderBalanceBefore + stakeholderDeposit);
+
+      // Verify stakeholder vROSE returned from escrow
+      const stakeholderVRoseAfter = await vRose.balanceOf(stakeholder.address);
+      expect(stakeholderVRoseAfter).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
     });
 
     it("Should NOT allow cancellation if worker has claimed", async function () {
@@ -684,8 +731,9 @@ describe("RoseMarketplace", function () {
       const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
 
+      // Stakeholder stakes (vROSE transferred to marketplace escrow)
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
@@ -745,14 +793,14 @@ describe("RoseMarketplace", function () {
         .to.emit(roseMarketplace, "TaskCancelled")
         .withArgs(1, customer.address, taskDeposit, 0);
 
-      // Test 2: Cancellation after stakeholder stakes
+      // Test 2: Cancellation after stakeholder stakes (vROSE escrow)
       await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
       const expiry2 = await getFutureExpiry();
       const sig2 = await generatePassportSignature(customer.address, "createTask", expiry2);
       await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, expiry2, sig2);
 
       const stakeholderDeposit = taskDeposit / 10n;
-      await roseToken.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stakeExpiry = await getFutureExpiry();
       const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
       await roseMarketplace.connect(stakeholder).stakeholderStake(2, stakeholderDeposit, stakeExpiry, stakeSig);

@@ -182,6 +182,14 @@ async function main() {
   const roseTokenAddress = await roseToken.getAddress();
   console.log("RoseToken deployed to:", roseTokenAddress);
 
+  // ============ Step 1a: Deploy vROSE ============
+  console.log("\n--- Step 1a: Deploying vROSE ---");
+  const VROSE = await hre.ethers.getContractFactory("vROSE");
+  const vRose = await VROSE.deploy();
+  await vRose.waitForDeployment();
+  const vRoseAddress = await vRose.getAddress();
+  console.log("vROSE deployed to:", vRoseAddress);
+
   // ============ Step 1.5: Configure ROSE on Mock Router (Testnet) ============
   if (isTestnet && addresses.mockRouter) {
     console.log("\n--- Step 1.5: Configuring ROSE on Mock Router ---");
@@ -235,8 +243,22 @@ async function main() {
   const marketplaceAddress = await roseMarketplace.getAddress();
   console.log("RoseMarketplace deployed to:", marketplaceAddress);
 
-  // ============ Step 4: Wire up authorizations ============
-  console.log("\n--- Step 4: Setting up authorizations ---");
+  // ============ Step 4: Deploy RoseGovernance ============
+  console.log("\n--- Step 4: Deploying RoseGovernance ---");
+  const RoseGovernance = await hre.ethers.getContractFactory("RoseGovernance");
+  const roseGovernance = await RoseGovernance.deploy(
+    roseTokenAddress,
+    vRoseAddress,
+    marketplaceAddress,
+    treasuryAddress,
+    passportSignerAddress
+  );
+  await roseGovernance.waitForDeployment();
+  const governanceAddress = await roseGovernance.getAddress();
+  console.log("RoseGovernance deployed to:", governanceAddress);
+
+  // ============ Step 5: Wire up authorizations ============
+  console.log("\n--- Step 5: Setting up authorizations ---");
 
   // Authorize Treasury to mint/burn ROSE
   console.log("Authorizing Treasury for mint/burn...");
@@ -250,11 +272,35 @@ async function main() {
   await authMarketplaceTx.wait();
   console.log("Marketplace authorized ✓");
 
+  // Authorize Governance to mint/burn ROSE
+  console.log("Authorizing Governance for mint/burn...");
+  const authGovernanceTx = await roseToken.setAuthorized(governanceAddress, true);
+  await authGovernanceTx.wait();
+  console.log("Governance authorized ✓");
+
   // Set marketplace in treasury (for task posting)
   console.log("Setting marketplace in Treasury...");
   const setMarketplaceTx = await roseTreasury.setMarketplace(marketplaceAddress);
   await setMarketplaceTx.wait();
   console.log("Marketplace set in Treasury ✓");
+
+  // Set vROSE governance and marketplace
+  console.log("Setting vROSE governance...");
+  await (await vRose.setGovernance(governanceAddress)).wait();
+  console.log("vROSE governance set ✓");
+
+  console.log("Setting vROSE marketplace...");
+  await (await vRose.setMarketplace(marketplaceAddress)).wait();
+  console.log("vROSE marketplace set ✓");
+
+  // Set marketplace vROSE and governance references
+  console.log("Setting marketplace vROSE token...");
+  await (await roseMarketplace.setVRoseToken(vRoseAddress)).wait();
+  console.log("Marketplace vROSE set ✓");
+
+  console.log("Setting marketplace governance...");
+  await (await roseMarketplace.setGovernance(governanceAddress)).wait();
+  console.log("Marketplace governance set ✓");
 
   // For testnet, set allocation to diversified RWA + ROSE reserve
   if (isTestnet) {
@@ -314,8 +360,10 @@ async function main() {
   console.log("        DEPLOYMENT COMPLETE");
   console.log("========================================");
   console.log("RoseToken:       ", roseTokenAddress);
+  console.log("vROSE:           ", vRoseAddress);
   console.log("RoseTreasury:    ", treasuryAddress);
   console.log("RoseMarketplace: ", marketplaceAddress);
+  console.log("RoseGovernance:  ", governanceAddress);
   console.log("========================================");
 
   // Display final balance and gas consumed
@@ -333,13 +381,17 @@ async function main() {
     deployer: deployer.address,
     contracts: {
       roseToken: roseTokenAddress,
+      vRose: vRoseAddress,
       roseTreasury: treasuryAddress,
       roseMarketplace: marketplaceAddress,
+      roseGovernance: governanceAddress,
     },
     // Legacy field names for backward compatibility with frontend
     tokenAddress: roseTokenAddress,
+    vRoseAddress: vRoseAddress,
     treasuryAddress: treasuryAddress,
     marketplaceAddress: marketplaceAddress,
+    governanceAddress: governanceAddress,
     passportSignerAddress: passportSignerAddress,
     externalAddresses: addresses,
     timestamp: new Date().toISOString(),
