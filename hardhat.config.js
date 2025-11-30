@@ -10,7 +10,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200
+            runs: 10000
           },
           viaIR: true
         }
@@ -20,7 +20,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200
+            runs: 10000
           },
           viaIR: true
         }
