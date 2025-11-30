@@ -114,38 +114,22 @@ export const useProposals = (options = {}) => {
             const p = result.result;
             const proposalId = specificProposalId || index + 1;
 
-            // Parse proposal tuple
-            const [
-              proposer,
-              title,
-              descriptionHash,
-              value,
-              deadline,
-              deliverables,
-              createdAt,
-              votingEndsAt,
-              yayVotes,
-              nayVotes,
-              totalAllocated,
-              status,
-              editCount,
-              taskId,
-            ] = Array.isArray(p) ? p : [
-              p.proposer,
-              p.title,
-              p.descriptionHash,
-              p.value,
-              p.deadline,
-              p.deliverables,
-              p.createdAt,
-              p.votingEndsAt,
-              p.yayVotes,
-              p.nayVotes,
-              p.totalAllocated,
-              p.status,
-              p.editCount,
-              p.taskId,
-            ];
+            // Extract proposal fields using direct property access
+            // This ensures correct values regardless of how viem returns the struct
+            const proposer = p.proposer;
+            const title = p.title;
+            const descriptionHash = p.descriptionHash;
+            const value = p.value;
+            const deadline = p.deadline;
+            const deliverables = p.deliverables;
+            const createdAt = p.createdAt;
+            const votingEndsAt = p.votingEndsAt;
+            const yayVotes = p.yayVotes;
+            const nayVotes = p.nayVotes;
+            const totalAllocated = p.totalAllocated;
+            const status = p.status;
+            const editCount = p.editCount;
+            const taskId = p.taskId;
 
             // Get user's vote for this proposal
             const userVote = votesData?.[index]?.status === 'success' ? votesData[index].result : null;
