@@ -320,6 +320,15 @@ div[data-rk] {
 
 /* Utility classes for the new design system */
 @layer utilities {
+  .card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-card);
+  }
+
   .glass {
     background: var(--bg-card);
     backdrop-filter: blur(20px);
