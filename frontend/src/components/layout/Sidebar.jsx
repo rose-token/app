@@ -114,6 +114,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             Vault
           </NavLink>
 
+          <NavLink
+            to="/governance"
+            className={({ isActive }) => getNavLinkClasses(isActive)}
+            style={({ isActive }) => getNavLinkStyle(isActive)}
+            onClick={() => window.innerWidth < 768 && toggleSidebar()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 opacity-80">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+            Governance
+          </NavLink>
+
           {isConnected && (
             <NavLink
               to="/profile"

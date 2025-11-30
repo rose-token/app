@@ -1,0 +1,383 @@
+/**
+ * ProposalCreatePage - Create a new governance proposal
+ * Form to submit proposals for DAO funding
+ */
+
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAccount, useReadContract } from 'wagmi';
+import { formatUnits } from 'viem';
+import RoseTreasuryABI from '../contracts/RoseTreasuryABI.json';
+import { CONTRACTS, GOVERNANCE_CONSTANTS } from '../constants/contracts';
+import { SKILLS } from '../constants/skills';
+import useProposals from '../hooks/useProposals';
+import useGovernance from '../hooks/useGovernance';
+import ReputationBadge from '../components/governance/ReputationBadge';
+import WalletNotConnected from '../components/wallet/WalletNotConnected';
+
+const ProposalCreatePage = () => {
+  const navigate = useNavigate();
+  const { address: account, isConnected } = useAccount();
+  const { createProposal, actionLoading, error: proposalError, setError } = useProposals();
+  const { reputation, canPropose, userStats } = useGovernance();
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    value: '',
+    deadline: '',
+    deliverables: '',
+    skills: [],
+  });
+  const [formErrors, setFormErrors] = useState({});
+
+  // Get treasury balance for gating
+  const { data: treasuryBreakdown } = useReadContract({
+    address: CONTRACTS.TREASURY,
+    abi: RoseTreasuryABI,
+    functionName: 'getVaultBreakdown',
+    query: {
+      enabled: !!CONTRACTS.TREASURY,
+    },
+  });
+
+  // Parse treasury total USD value
+  const treasuryValue = treasuryBreakdown
+    ? parseFloat(formatUnits(treasuryBreakdown[4] || 0n, 18)) // totalUsdValue
+    : 0;
+
+  // Handle input changes
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
+  // Handle skill toggle
+  const toggleSkill = (skill) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skill)
+        ? prev.skills.filter(s => s !== skill)
+        : [...prev.skills, skill],
+    }));
+  };
+
+  // Validate form
+  const validateForm = () => {
+    const errors = {};
+
+    if (!formData.title.trim()) {
+      errors.title = 'Title is required';
+    } else if (formData.title.length > 100) {
+      errors.title = 'Title must be 100 characters or less';
+    }
+
+    if (!formData.description.trim()) {
+      errors.description = 'Description is required';
+    }
+
+    if (!formData.value || parseFloat(formData.value) <= 0) {
+      errors.value = 'Value must be greater than 0';
+    } else if (parseFloat(formData.value) > treasuryValue) {
+      errors.value = `Value exceeds treasury balance (${treasuryValue.toLocaleString()} ROSE)`;
+    }
+
+    if (!formData.deadline) {
+      errors.deadline = 'Deadline is required';
+    } else {
+      const deadlineDate = new Date(formData.deadline);
+      const minDeadline = new Date();
+      minDeadline.setDate(minDeadline.getDate() + 7); // Minimum 1 week
+      if (deadlineDate < minDeadline) {
+        errors.deadline = 'Deadline must be at least 1 week from now';
+      }
+    }
+
+    if (!formData.deliverables.trim()) {
+      errors.deliverables = 'Deliverables are required';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!validateForm()) return;
+
+    try {
+      await createProposal(formData);
+      navigate('/governance');
+    } catch (err) {
+      console.error('Failed to create proposal:', err);
+    }
+  };
+
+  // Calculate minimum deadline (1 week from now)
+  const minDeadline = new Date();
+  minDeadline.setDate(minDeadline.getDate() + 7);
+  const minDeadlineStr = minDeadline.toISOString().split('T')[0];
+
+  if (!isConnected) {
+    return (
+      <div className="animate-fade-in">
+        <WalletNotConnected />
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-fade-in max-w-3xl mx-auto">
+      {/* Back Link */}
+      <Link
+        to="/governance"
+        className="inline-flex items-center gap-1 text-sm mb-6 hover:text-accent transition-colors"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        &larr; Back to Governance
+      </Link>
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Create Proposal</h1>
+        <p style={{ color: 'var(--text-muted)' }}>
+          Submit a proposal to fund work from the DAO treasury
+        </p>
+      </div>
+
+      {/* Eligibility Check */}
+      {!canPropose && (
+        <div
+          className="card mb-6"
+          style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'var(--error)' }}
+        >
+          <h3 className="font-semibold mb-2" style={{ color: 'var(--error)' }}>
+            Not Eligible to Propose
+          </h3>
+          <p className="text-sm mb-3">
+            You need 90%+ reputation to create proposals.
+          </p>
+          <div className="flex items-center gap-2">
+            <span style={{ color: 'var(--text-muted)' }}>Your reputation:</span>
+            <ReputationBadge
+              score={reputation || 60}
+              tasksCompleted={userStats?.tasksCompleted}
+              disputes={userStats?.disputes}
+              failedProposals={userStats?.failedProposals}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Treasury Info */}
+      <div className="card mb-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Available Treasury</p>
+            <p className="text-xl font-bold gradient-text">
+              {treasuryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE
+            </p>
+          </div>
+          <p className="text-xs max-w-xs" style={{ color: 'var(--text-muted)' }}>
+            Proposal value cannot exceed treasury balance
+          </p>
+        </div>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Display */}
+        {proposalError && (
+          <div
+            className="p-4 rounded-lg flex justify-between items-center"
+            style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)' }}
+          >
+            <span>{proposalError}</span>
+            <button type="button" onClick={() => setError(null)} className="font-bold">&times;</button>
+          </div>
+        )}
+
+        {/* Title */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Title <span style={{ color: 'var(--error)' }}>*</span>
+          </label>
+          <input
+            type="text"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="Brief, descriptive title for your proposal"
+            maxLength={100}
+            className="w-full px-4 py-3 rounded-lg"
+            style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              border: formErrors.title ? '1px solid var(--error)' : '1px solid var(--border-color)',
+            }}
+          />
+          <div className="flex justify-between mt-1">
+            {formErrors.title && (
+              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.title}</span>
+            )}
+            <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+              {formData.title.length}/100
+            </span>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Description <span style={{ color: 'var(--error)' }}>*</span>
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            placeholder="Detailed description of the work to be done, why it's important, and how it benefits the ecosystem"
+            rows={6}
+            className="w-full px-4 py-3 rounded-lg resize-none"
+            style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              border: formErrors.description ? '1px solid var(--error)' : '1px solid var(--border-color)',
+            }}
+          />
+          {formErrors.description && (
+            <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.description}</span>
+          )}
+        </div>
+
+        {/* Value and Deadline */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="card">
+            <label className="block font-medium mb-2">
+              Value (ROSE) <span style={{ color: 'var(--error)' }}>*</span>
+            </label>
+            <input
+              type="number"
+              name="value"
+              value={formData.value}
+              onChange={handleChange}
+              placeholder="0"
+              min="0"
+              step="1"
+              className="w-full px-4 py-3 rounded-lg"
+              style={{
+                backgroundColor: 'var(--bg-tertiary)',
+                border: formErrors.value ? '1px solid var(--error)' : '1px solid var(--border-color)',
+              }}
+            />
+            {formErrors.value && (
+              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.value}</span>
+            )}
+          </div>
+
+          <div className="card">
+            <label className="block font-medium mb-2">
+              Deadline <span style={{ color: 'var(--error)' }}>*</span>
+            </label>
+            <input
+              type="date"
+              name="deadline"
+              value={formData.deadline}
+              onChange={handleChange}
+              min={minDeadlineStr}
+              className="w-full px-4 py-3 rounded-lg"
+              style={{
+                backgroundColor: 'var(--bg-tertiary)',
+                border: formErrors.deadline ? '1px solid var(--error)' : '1px solid var(--border-color)',
+              }}
+            />
+            {formErrors.deadline && (
+              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.deadline}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Deliverables */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Deliverables <span style={{ color: 'var(--error)' }}>*</span>
+          </label>
+          <textarea
+            name="deliverables"
+            value={formData.deliverables}
+            onChange={handleChange}
+            placeholder="What specific outcomes will be delivered? How will completion be verified?"
+            rows={3}
+            className="w-full px-4 py-3 rounded-lg resize-none"
+            style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              border: formErrors.deliverables ? '1px solid var(--error)' : '1px solid var(--border-color)',
+            }}
+          />
+          {formErrors.deliverables && (
+            <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.deliverables}</span>
+          )}
+        </div>
+
+        {/* Skills */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Skills Needed
+          </label>
+          <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
+            Select the skills required for this work (optional)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {SKILLS.map(skill => (
+              <button
+                key={skill.id}
+                type="button"
+                onClick={() => toggleSkill(skill.id)}
+                className="px-3 py-1.5 rounded-full text-sm transition-all"
+                style={{
+                  backgroundColor: formData.skills.includes(skill.id)
+                    ? `${skill.color}30`
+                    : 'var(--bg-tertiary)',
+                  border: `1px solid ${formData.skills.includes(skill.id) ? skill.color : 'var(--border-color)'}`,
+                  color: formData.skills.includes(skill.id) ? skill.color : 'var(--text-secondary)',
+                }}
+              >
+                {skill.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className="flex justify-end gap-4">
+          <Link to="/governance" className="btn-secondary">
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={!canPropose || actionLoading.create}
+            className="btn-primary"
+            style={{ opacity: !canPropose || actionLoading.create ? 0.5 : 1 }}
+          >
+            {actionLoading.create ? 'Creating...' : 'Create Proposal'}
+          </button>
+        </div>
+
+        {/* Info */}
+        <div className="card text-sm" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+          <strong>How it works:</strong>
+          <ul className="mt-2 list-disc list-inside space-y-1">
+            <li>Proposals have a 2-week voting period</li>
+            <li>Requires 33% quorum and 7/12 (58.33%) approval to pass</li>
+            <li>Passed proposals create marketplace tasks funded by the treasury</li>
+            <li>You will act as the "customer" for the resulting task</li>
+            <li>Failed proposals result in a small reputation penalty</li>
+          </ul>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default ProposalCreatePage;
