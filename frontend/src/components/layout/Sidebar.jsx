@@ -93,10 +93,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             onClick={() => window.innerWidth < 768 && toggleSidebar()}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 opacity-80">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
+              <path d="M3 9l2.5-5h13L21 9" />
+              <path d="M3 9h18v12H3z" />
+              <path d="M9 21V13h6v8" />
             </svg>
             Marketplace
           </NavLink>
@@ -108,8 +107,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             onClick={() => window.innerWidth < 768 && toggleSidebar()}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 opacity-80">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              <path d="M6 3h12l4 6-10 12L2 9l4-6z" />
+              <path d="M2 9h20" />
+              <path d="M12 21L6 9l6-6 6 6-6 12" />
             </svg>
             Vault
           </NavLink>
@@ -121,9 +121,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             onClick={() => window.innerWidth < 768 && toggleSidebar()}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 opacity-80">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
+              <path d="M12 3v18M3 9l3-6 3 6M15 9l3-6 3 6" />
+              <path d="M3 9h6M15 9h6" />
+              <path d="M8 21H4M20 21h-4" />
             </svg>
             Governance
           </NavLink>
@@ -149,7 +149,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             style={({ isActive }) => getNavLinkStyle(isActive)}
             onClick={() => window.innerWidth < 768 && toggleSidebar()}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 opacity-80">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-5 h-5 opacity-80">
               <circle cx="12" cy="12" r="10" />
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
