@@ -179,7 +179,7 @@ export const useGovernance = () => {
       vRoseBalanceRaw: vRoseBalance,
       roseBalance: formatUnits(roseBalance, 18),
       roseBalanceRaw: roseBalance,
-      reputation: Number(reputation) / 100, // Convert from basis points to percentage
+      reputation: Number(reputation), // Contract returns 0-100 percentage
       reputationRaw: Number(reputation),
       delegatedTo: delegatedTo && delegatedTo !== '0x0000000000000000000000000000000000000000' ? delegatedTo : null,
       delegatedAmount: formatUnits(delegatedAmount, 18),
