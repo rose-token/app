@@ -60,9 +60,9 @@ export const ProposalStatusColors = {
 
 /**
  * Calculate vote power using quadratic voting formula
- * votePower = sqrt(stakedAmount) * (reputation / 10000)
+ * votePower = sqrt(stakedAmount) * (reputation / 100)
  * @param {bigint|string} stakedAmount - Amount of ROSE staked (in wei)
- * @param {number} reputation - Reputation score in basis points (0-10000)
+ * @param {number} reputation - Reputation score as percentage (0-100)
  * @returns {number} Vote power
  */
 export const calculateVotePower = (stakedAmount, reputation) => {
@@ -70,7 +70,7 @@ export const calculateVotePower = (stakedAmount, reputation) => {
   // Convert to number for sqrt calculation (lose precision for very large amounts)
   const stakedNumber = Number(staked) / 1e18;
   const sqrtStaked = Math.sqrt(stakedNumber);
-  const repMultiplier = (reputation || 0) / 10000;
+  const repMultiplier = (reputation || 0) / 100;
   return sqrtStaked * repMultiplier;
 };
 

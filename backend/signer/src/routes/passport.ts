@@ -16,6 +16,8 @@ function getThreshold(action: Action): number {
       return config.thresholds.stake;
     case 'claim':
       return config.thresholds.claim;
+    case 'propose':
+      return config.thresholds.propose;
     default:
       return 20;
   }
@@ -28,7 +30,7 @@ function isValidAddress(address: string): boolean {
 
 // Validate action
 function isValidAction(action: string): action is Action {
-  return ['createTask', 'stake', 'claim'].includes(action);
+  return ['createTask', 'stake', 'claim', 'propose'].includes(action);
 }
 
 /**
