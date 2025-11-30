@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IvROSE.sol";
 import "./interfaces/IRoseGovernance.sol";
 
@@ -26,6 +27,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // ============ Token References ============
     IERC20 public immutable roseToken;
@@ -42,7 +44,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Delegation (single-depth, cached) ============
     mapping(address => address) public delegatedTo;
-    mapping(address => address[]) internal _delegators;
+    mapping(address => EnumerableSet.AddressSet) internal _delegators;
     mapping(address => uint256) public cachedVotePower;
     mapping(address => uint256) public totalDelegatedPower;
     mapping(address => uint256) public delegatedAmount;  // Amount user has delegated
@@ -153,7 +155,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     function delegators(address delegate) external view returns (address[] memory) {
-        return _delegators[delegate];
+        return _delegators[delegate].values();
     }
 
     /**
@@ -356,10 +358,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         totalDelegatedPower[delegate] += votePower;
         allocatedRose[msg.sender] += amount;
 
-        // Only set delegatedTo and add to delegators array for NEW delegations
+        // Only set delegatedTo and add to delegators set for NEW delegations
         if (!isIncrease) {
             delegatedTo[msg.sender] = delegate;
-            _delegators[delegate].push(msg.sender);
+            _delegators[delegate].add(msg.sender);
         }
 
         emit DelegatedTo(msg.sender, delegate, newTotalAmount);
@@ -800,14 +802,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     function _removeDelegator(address delegate, address delegator) internal {
-        address[] storage dels = _delegators[delegate];
-        for (uint256 i = 0; i < dels.length; i++) {
-            if (dels[i] == delegator) {
-                dels[i] = dels[dels.length - 1];
-                dels.pop();
-                break;
-            }
-        }
+        _delegators[delegate].remove(delegator);
     }
 
     function _getAllocatedToDelegate(address user) internal view returns (uint256) {
