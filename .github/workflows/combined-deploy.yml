@@ -68,6 +68,13 @@ jobs:
           PASSPORT_SIGNER_ADDRESS: ${{ secrets.PASSPORT_SIGNER_ADDRESS }}
         run: npx hardhat run scripts/deploy.js --network arbitrumSepolia
 
+      - name: Seed Reputation (Testnet)
+        if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
+        env:
+          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: npx hardhat run scripts/seed-reputation.js --network arbitrumSepolia
+
       - name: Save Contract Addresses
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
         run: |
