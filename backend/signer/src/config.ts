@@ -35,11 +35,13 @@ export const config = {
     pool: {
       max: parseInt(process.env.DB_POOL_MAX || '10'),
       min: parseInt(process.env.DB_POOL_MIN || '2'),
+      connectionTimeoutMs: parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || '15000'),
     },
     retry: {
       maxRetries: parseInt(process.env.DB_MAX_RETRIES || '15'),
       initialDelayMs: parseInt(process.env.DB_RETRY_INITIAL_DELAY_MS || '2000'),
       maxDelayMs: parseInt(process.env.DB_RETRY_MAX_DELAY_MS || '60000'),
+      startupDelayMs: parseInt(process.env.DB_STARTUP_DELAY_MS || '0'),
     },
   },
 

@@ -15,7 +15,7 @@ export function getPool(): Pool {
       max: config.database.pool.max,
       min: config.database.pool.min,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: config.database.pool.connectionTimeoutMs,
     });
 
     pool.on('error', (err) => {
@@ -50,14 +50,34 @@ export async function closePool(): Promise<void> {
 }
 
 /**
+ * Resets the pool by destroying it. Used during connection retries
+ * to avoid cached bad state in the Pool object.
+ */
+export function resetPool(): void {
+  if (pool) {
+    pool.end().catch(() => {}); // Best effort cleanup, don't block
+    pool = null;
+  }
+}
+
+/**
  * Waits for database to be available with exponential backoff retry.
  * Use this at startup before running migrations.
  */
 export async function waitForDatabase(): Promise<void> {
   console.log('Waiting for database connection...');
 
+  // Optional startup delay to let postgres initialize (useful for Akash where depends_on doesn't wait for health)
+  const startupDelay = config.database.retry.startupDelayMs;
+  if (startupDelay > 0) {
+    console.log(`Waiting ${startupDelay}ms for database to start...`);
+    await new Promise((resolve) => setTimeout(resolve, startupDelay));
+  }
+
   await withRetry(
     async () => {
+      // Reset pool before each attempt to avoid cached bad state
+      resetPool();
       const p = getPool();
       const client = await p.connect();
       try {
