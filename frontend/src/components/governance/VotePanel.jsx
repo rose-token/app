@@ -1,12 +1,13 @@
 /**
- * VotePanel - Voting interface for proposals
- * Allows users to vote Yay/Nay with a specified amount of ROSE
- * Supports increasing vote allocation on existing votes (same direction only)
+ * VotePanel - Combined voting interface for proposals
+ * Allows users to vote with own ROSE + delegated power in a single UI
+ * Auto-splits amounts: own ROSE first, then delegated power
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { formatVotePower, calculateVotePower } from '../../constants/contracts';
 import useGovernance from '../../hooks/useGovernance';
+import { useDelegationForProposal } from '../../hooks/useDelegation';
 
 const VotePanel = ({
   proposalId,
@@ -15,23 +16,94 @@ const VotePanel = ({
   isProposer,
   isActive,
   onVote,
+  onVoteCombined,
   onUnvote,
   loading = false,
 }) => {
-  const { unallocatedRose, reputationRaw, canVote } = useGovernance();
+  const { unallocatedRose, reputationRaw, canVote, totalDelegatedPower } = useGovernance();
+  const {
+    availableDelegatedPower,
+    delegatedVoteRecord,
+    hasDelegatedVote,
+  } = useDelegationForProposal(proposalId);
+
   const [amount, setAmount] = useState('');
-  const [voteType, setVoteType] = useState(null); // 'yay' or 'nay'
-  const [showAddMore, setShowAddMore] = useState(false); // Toggle for adding more to existing vote
+  const [voteType, setVoteType] = useState(null);
+  const [showAddMore, setShowAddMore] = useState(false);
 
-  // Calculate preview vote power
-  const previewVotePower = amount
-    ? calculateVotePower(parseFloat(amount) * 1e18, reputationRaw || 6000)
-    : 0;
+  // Calculate total available voting power
+  const totalAvailable = useMemo(() => {
+    const ownAvailable = parseFloat(unallocatedRose || 0);
+    const delegatedAvailable = parseFloat(availableDelegatedPower || 0);
+    return {
+      own: ownAvailable,
+      delegated: delegatedAvailable,
+      total: ownAvailable + delegatedAvailable,
+    };
+  }, [unallocatedRose, availableDelegatedPower]);
 
-  const handleVote = async () => {
+  // Calculate how input amount splits between own and delegated
+  const amountSplit = useMemo(() => {
+    const inputAmount = parseFloat(amount || 0);
+    if (inputAmount <= 0) return { own: 0, delegated: 0, isValid: true };
+
+    const ownToUse = Math.min(inputAmount, totalAvailable.own);
+    const delegatedToUse = Math.max(0, inputAmount - ownToUse);
+
+    return {
+      own: ownToUse,
+      delegated: Math.min(delegatedToUse, totalAvailable.delegated),
+      isValid: inputAmount <= totalAvailable.total,
+      exceedsAvailable: inputAmount > totalAvailable.total,
+    };
+  }, [amount, totalAvailable]);
+
+  // Calculate preview vote power for both parts
+  const previewVotePower = useMemo(() => {
+    const ownPower = amountSplit.own > 0
+      ? calculateVotePower(amountSplit.own * 1e18, reputationRaw || 6000)
+      : 0;
+    // Delegated power is already in VP units (converted in hook)
+    const delegatedPower = amountSplit.delegated;
+    return {
+      own: ownPower,
+      delegated: delegatedPower,
+      total: ownPower + delegatedPower,
+    };
+  }, [amountSplit, reputationRaw]);
+
+  // Determine existing vote direction (for add-more validation)
+  const existingVoteDirection = useMemo(() => {
+    if (hasVoted && userVote) return userVote.support;
+    if (hasDelegatedVote && delegatedVoteRecord) return delegatedVoteRecord.support;
+    return null;
+  }, [hasVoted, userVote, hasDelegatedVote, delegatedVoteRecord]);
+
+  // Handle combined vote
+  const handleVote = async (support) => {
     if (!amount || parseFloat(amount) <= 0) return;
+    if (!amountSplit.isValid) return;
+
+    // Check direction consistency if already voted
+    if (existingVoteDirection !== null && existingVoteDirection !== support) {
+      console.error('Cannot change vote direction');
+      return;
+    }
+
     try {
-      await onVote(proposalId, amount, voteType === 'yay');
+      setVoteType(support ? 'yay' : 'nay');
+      if (onVoteCombined) {
+        await onVoteCombined(
+          proposalId,
+          amount,
+          support,
+          totalAvailable.own.toString(),
+          totalAvailable.delegated.toString()
+        );
+      } else {
+        // Fallback to regular vote if combined not available
+        await onVote(proposalId, amount, support);
+      }
       setAmount('');
       setVoteType(null);
     } catch (err) {
@@ -48,15 +120,26 @@ const VotePanel = ({
   };
 
   const handleMax = () => {
-    setAmount(unallocatedRose || '0');
+    setAmount(totalAvailable.total.toString());
   };
 
   // Handle adding more to existing vote
   const handleAddMore = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
+    if (existingVoteDirection === null) return;
+
     try {
-      // Use existing vote direction
-      await onVote(proposalId, amount, userVote.support);
+      if (onVoteCombined) {
+        await onVoteCombined(
+          proposalId,
+          amount,
+          existingVoteDirection,
+          totalAvailable.own.toString(),
+          totalAvailable.delegated.toString()
+        );
+      } else {
+        await onVote(proposalId, amount, existingVoteDirection);
+      }
       setAmount('');
       setShowAddMore(false);
     } catch (err) {
@@ -64,70 +147,105 @@ const VotePanel = ({
     }
   };
 
-  // Calculate new vote power preview when adding to existing vote
-  const newTotalAmount = hasVoted && userVote && amount
-    ? parseFloat(userVote.allocatedAmount) + parseFloat(amount)
-    : parseFloat(amount || '0');
-  const newVotePower = newTotalAmount > 0
-    ? calculateVotePower(newTotalAmount * 1e18, reputationRaw || 6000)
-    : 0;
-
-  // Already voted - show status and option to add more
-  if (hasVoted && userVote) {
+  // Already voted - show combined status and option to add more
+  if (hasVoted || hasDelegatedVote) {
     return (
       <div className="card">
         <h3 className="text-lg font-semibold mb-3">Your Vote</h3>
+
+        {/* Vote Summary */}
         <div
           className="p-4 rounded-lg mb-4"
           style={{
-            backgroundColor: userVote.support ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            backgroundColor: existingVoteDirection
+              ? 'rgba(16, 185, 129, 0.1)'
+              : 'rgba(239, 68, 68, 0.1)',
           }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <span
-                className="text-lg font-semibold"
-                style={{ color: userVote.support ? 'var(--success)' : 'var(--error)' }}
-              >
-                {userVote.support ? 'Yay' : 'Nay'}
-              </span>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                {parseFloat(userVote.allocatedAmount).toLocaleString()} ROSE allocated
-              </p>
+          <div className="flex items-center justify-between mb-2">
+            <span
+              className="text-lg font-semibold"
+              style={{ color: existingVoteDirection ? 'var(--success)' : 'var(--error)' }}
+            >
+              {existingVoteDirection ? 'Yay' : 'Nay'}
+            </span>
+          </div>
+
+          {/* Own vote details */}
+          {hasVoted && userVote && (
+            <div className="flex justify-between text-sm mb-1">
+              <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
+              <span>{parseFloat(userVote.allocatedAmount).toLocaleString()} ROSE ({formatVotePower(parseFloat(userVote.votePower))} VP)</span>
             </div>
-            <div className="text-right">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Vote Power</p>
-              <p className="font-semibold">{formatVotePower(parseFloat(userVote.votePower))}</p>
+          )}
+
+          {/* Delegated vote details */}
+          {hasDelegatedVote && delegatedVoteRecord && (
+            <div className="flex justify-between text-sm mb-1">
+              <span style={{ color: 'var(--text-muted)' }}>Delegated Power:</span>
+              <span>{parseFloat(delegatedVoteRecord.totalPowerUsed).toLocaleString()} VP</span>
             </div>
+          )}
+
+          {/* Combined vote power */}
+          <div className="flex justify-between text-sm mt-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Total Vote Power:</span>
+            <span className="font-semibold">
+              {formatVotePower(
+                (hasVoted ? parseFloat(userVote?.votePower || 0) : 0) +
+                (hasDelegatedVote ? parseFloat(delegatedVoteRecord?.totalPowerUsed || 0) : 0)
+              )}
+            </span>
           </div>
         </div>
 
-        {isActive && !showAddMore && (
+        {/* Add More Section */}
+        {isActive && totalAvailable.total > 0 && !showAddMore && (
           <div className="flex gap-2">
             <button
               onClick={() => setShowAddMore(true)}
-              disabled={loading || parseFloat(unallocatedRose || 0) <= 0}
+              disabled={loading}
               className="btn-primary flex-1"
-              style={{ opacity: loading || parseFloat(unallocatedRose || 0) <= 0 ? 0.5 : 1 }}
+              style={{ opacity: loading ? 0.5 : 1 }}
             >
               Add More
             </button>
-            <button
-              onClick={handleUnvote}
-              disabled={loading}
-              className="btn-secondary flex-1"
-              style={{ opacity: loading ? 0.5 : 1 }}
-            >
-              {loading ? 'Processing...' : 'Unallocate'}
-            </button>
+            {hasVoted && (
+              <button
+                onClick={handleUnvote}
+                disabled={loading}
+                className="btn-secondary flex-1"
+                style={{ opacity: loading ? 0.5 : 1 }}
+              >
+                {loading ? 'Processing...' : 'Unallocate'}
+              </button>
+            )}
           </div>
         )}
 
+        {/* Add More Form */}
         {isActive && showAddMore && (
           <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-              Add more ROSE to your {userVote.support ? 'Yay' : 'Nay'} vote:
+              Add more to your {existingVoteDirection ? 'Yay' : 'Nay'} vote:
             </p>
+
+            {/* Available Power Summary */}
+            <div className="text-xs mb-3 p-2 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+              {totalAvailable.own > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>Own ROSE available:</span>
+                  <span>{totalAvailable.own.toLocaleString()}</span>
+                </div>
+              )}
+              {totalAvailable.delegated > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>Delegated VP available:</span>
+                  <span>{totalAvailable.delegated.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 mb-2">
               <input
                 type="number"
@@ -139,43 +257,53 @@ const VotePanel = ({
                 className="flex-1 px-3 py-2 rounded-lg"
                 style={{
                   backgroundColor: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-color)',
+                  border: `1px solid ${amountSplit.exceedsAvailable ? 'var(--error)' : 'var(--border-color)'}`,
                 }}
               />
               <button
-                onClick={() => setAmount(unallocatedRose || '0')}
+                onClick={handleMax}
                 className="px-3 py-2 rounded-lg text-sm"
                 style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}
               >
                 Max
               </button>
             </div>
-            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
-              Available: {parseFloat(unallocatedRose || 0).toLocaleString()} ROSE
-            </p>
+
+            {/* Split Preview */}
             {amount && parseFloat(amount) > 0 && (
               <div className="text-xs mb-3 p-2 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                <div className="flex justify-between">
-                  <span style={{ color: 'var(--text-muted)' }}>New total:</span>
-                  <span>{newTotalAmount.toLocaleString()} ROSE</span>
-                </div>
-                <div className="flex justify-between">
-                  <span style={{ color: 'var(--text-muted)' }}>New vote power:</span>
-                  <span className="font-semibold">{formatVotePower(newVotePower)}</span>
-                </div>
+                <p className="font-semibold mb-1">Will use:</p>
+                {amountSplit.own > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
+                    <span>{amountSplit.own.toLocaleString()}</span>
+                  </div>
+                )}
+                {amountSplit.delegated > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-muted)' }}>Delegated VP:</span>
+                    <span>{amountSplit.delegated.toLocaleString()}</span>
+                  </div>
+                )}
+                {amountSplit.exceedsAvailable && (
+                  <p className="mt-1" style={{ color: 'var(--error)' }}>
+                    Exceeds available voting power
+                  </p>
+                )}
               </div>
             )}
+
             <div className="flex gap-2">
               <button
                 onClick={handleAddMore}
-                disabled={loading || !amount || parseFloat(amount) <= 0}
+                disabled={loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable}
                 className="btn-primary flex-1"
                 style={{
-                  backgroundColor: userVote.support ? 'var(--success)' : 'var(--error)',
-                  opacity: loading || !amount || parseFloat(amount) <= 0 ? 0.5 : 1,
+                  backgroundColor: existingVoteDirection ? 'var(--success)' : 'var(--error)',
+                  opacity: loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable ? 0.5 : 1,
                 }}
               >
-                {loading ? 'Adding...' : `Add ${userVote.support ? 'Yay' : 'Nay'} Vote`}
+                {loading ? 'Adding...' : `Add ${existingVoteDirection ? 'Yay' : 'Nay'} Vote`}
               </button>
               <button
                 onClick={() => { setShowAddMore(false); setAmount(''); }}
@@ -217,13 +345,14 @@ const VotePanel = ({
     );
   }
 
-  if (!canVote) {
+  if (!canVote && totalAvailable.delegated === 0) {
     return (
       <div className="card">
         <h3 className="text-lg font-semibold mb-3">Vote on Proposal</h3>
         <div className="p-4 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-secondary)' }}>
           <p style={{ color: 'var(--text-muted)' }}>
-            You need staked ROSE and 70%+ reputation to vote
+            You need staked ROSE and 70%+ reputation to vote with your own tokens.
+            {parseFloat(totalDelegatedPower || 0) > 0 && ' You can still vote with delegated power.'}
           </p>
         </div>
       </div>
@@ -235,10 +364,33 @@ const VotePanel = ({
     <div className="card">
       <h3 className="text-lg font-semibold mb-3">Vote on Proposal</h3>
 
+      {/* Available Power Summary */}
+      <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
+          Available Voting Power
+        </p>
+        {totalAvailable.own > 0 && (
+          <div className="flex justify-between text-sm">
+            <span style={{ color: 'var(--text-muted)' }}>Your ROSE:</span>
+            <span>{totalAvailable.own.toLocaleString()} ROSE</span>
+          </div>
+        )}
+        {totalAvailable.delegated > 0 && (
+          <div className="flex justify-between text-sm">
+            <span style={{ color: 'var(--text-muted)' }}>Delegated Power:</span>
+            <span>{totalAvailable.delegated.toLocaleString()} VP</span>
+          </div>
+        )}
+        <div className="flex justify-between font-semibold text-sm mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
+          <span>Total:</span>
+          <span>{totalAvailable.total.toLocaleString()}</span>
+        </div>
+      </div>
+
       {/* Amount Input */}
       <div className="mb-4">
         <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>
-          Amount to Allocate
+          Amount to Vote With
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -252,15 +404,9 @@ const VotePanel = ({
               className="w-full px-3 py-2 rounded-lg"
               style={{
                 backgroundColor: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-color)',
+                border: `1px solid ${amountSplit.exceedsAvailable ? 'var(--error)' : 'var(--border-color)'}`,
               }}
             />
-            <span
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              ROSE
-            </span>
           </div>
           <button
             onClick={handleMax}
@@ -273,57 +419,65 @@ const VotePanel = ({
             Max
           </button>
         </div>
-        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-          Available: {parseFloat(unallocatedRose || 0).toLocaleString()} ROSE
-        </p>
       </div>
 
-      {/* Vote Power Preview */}
+      {/* Split Preview */}
       {amount && parseFloat(amount) > 0 && (
         <div
           className="p-3 rounded-lg mb-4 text-sm"
           style={{ backgroundColor: 'var(--bg-secondary)' }}
         >
-          <div className="flex justify-between">
-            <span style={{ color: 'var(--text-muted)' }}>Your vote power:</span>
-            <span className="font-semibold">{formatVotePower(previewVotePower)}</span>
-          </div>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            sqrt({amount} ROSE) x {((reputationRaw || 6000) / 100).toFixed(0)}% reputation
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
+            Vote will use:
           </p>
+          {amountSplit.own > 0 && (
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--text-muted)' }}>Own ROSE:</span>
+              <span>{amountSplit.own.toLocaleString()} ROSE</span>
+            </div>
+          )}
+          {amountSplit.delegated > 0 && (
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--text-muted)' }}>Delegated Power:</span>
+              <span>{amountSplit.delegated.toLocaleString()} VP</span>
+            </div>
+          )}
+          <div className="flex justify-between mt-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Total Vote Power:</span>
+            <span className="font-semibold">{formatVotePower(previewVotePower.total)}</span>
+          </div>
+          {amountSplit.exceedsAvailable && (
+            <p className="text-xs mt-2" style={{ color: 'var(--error)' }}>
+              Amount exceeds available voting power
+            </p>
+          )}
         </div>
       )}
 
       {/* Vote Buttons */}
       <div className="grid grid-cols-2 gap-3">
         <button
-          onClick={() => {
-            setVoteType('yay');
-            handleVote();
-          }}
-          disabled={loading || !amount || parseFloat(amount) <= 0}
+          onClick={() => handleVote(true)}
+          disabled={loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable}
           className="py-3 px-4 rounded-lg font-semibold transition-all"
           style={{
             backgroundColor: voteType === 'yay' ? 'var(--success)' : 'rgba(16, 185, 129, 0.1)',
             color: voteType === 'yay' ? 'white' : 'var(--success)',
             border: '2px solid var(--success)',
-            opacity: loading || !amount || parseFloat(amount) <= 0 ? 0.5 : 1,
+            opacity: loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable ? 0.5 : 1,
           }}
         >
           {loading && voteType === 'yay' ? 'Voting...' : 'Vote Yay'}
         </button>
         <button
-          onClick={() => {
-            setVoteType('nay');
-            handleVote();
-          }}
-          disabled={loading || !amount || parseFloat(amount) <= 0}
+          onClick={() => handleVote(false)}
+          disabled={loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable}
           className="py-3 px-4 rounded-lg font-semibold transition-all"
           style={{
             backgroundColor: voteType === 'nay' ? 'var(--error)' : 'rgba(239, 68, 68, 0.1)',
             color: voteType === 'nay' ? 'white' : 'var(--error)',
             border: '2px solid var(--error)',
-            opacity: loading || !amount || parseFloat(amount) <= 0 ? 0.5 : 1,
+            opacity: loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable ? 0.5 : 1,
           }}
         >
           {loading && voteType === 'nay' ? 'Voting...' : 'Vote Nay'}

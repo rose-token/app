@@ -928,30 +928,92 @@ describe("RoseGovernance", function () {
     });
 
     describe("Delegated Voting", function () {
+      let delegatedPower;
+
       beforeEach(async function () {
         // Set up user1 as delegate
         await setupEligibleProposer(user1);
 
         // user2 delegates to user1
         await governance.connect(user2).allocateToDelegate(user1.address, ethers.parseEther("2000"));
+
+        // Get the total delegated power for user1
+        delegatedPower = await governance.totalDelegatedPower(user1.address);
       });
 
-      it("Should allow delegate to cast delegated vote", async function () {
-        await governance.connect(user1).castDelegatedVote(proposalId, true);
+      it("Should allow delegate to cast delegated vote with partial amount", async function () {
+        // Cast with half the delegated power
+        const halfPower = delegatedPower / 2n;
+        await governance.connect(user1).castDelegatedVote(proposalId, halfPower, true);
 
         const proposal = await governance.proposals(proposalId);
-        expect(proposal.yayVotes).to.be.greaterThan(0);
+        expect(proposal.yayVotes).to.equal(halfPower);
+
+        // Should have remaining power available
+        const available = await governance.getAvailableDelegatedPower(user1.address, proposalId);
+        expect(available).to.equal(delegatedPower - halfPower);
+      });
+
+      it("Should allow delegate to cast full delegated vote", async function () {
+        await governance.connect(user1).castDelegatedVote(proposalId, delegatedPower, true);
+
+        const proposal = await governance.proposals(proposalId);
+        expect(proposal.yayVotes).to.equal(delegatedPower);
       });
 
       it("Should emit DelegatedVoteCast event", async function () {
-        await expect(governance.connect(user1).castDelegatedVote(proposalId, true))
+        await expect(governance.connect(user1).castDelegatedVote(proposalId, delegatedPower, true))
           .to.emit(governance, "DelegatedVoteCast");
+      });
+
+      it("Should allow increasing delegated vote (same direction)", async function () {
+        const halfPower = delegatedPower / 2n;
+        await governance.connect(user1).castDelegatedVote(proposalId, halfPower, true);
+
+        // Get remaining available power
+        const remainingPower = await governance.getAvailableDelegatedPower(user1.address, proposalId);
+
+        // Add the rest to the vote
+        await expect(governance.connect(user1).castDelegatedVote(proposalId, remainingPower, true))
+          .to.emit(governance, "DelegatedVoteIncreased");
+
+        const proposal = await governance.proposals(proposalId);
+        // Total should equal halfPower + remainingPower (which together equal delegatedPower)
+        expect(proposal.yayVotes).to.equal(halfPower + remainingPower);
+      });
+
+      it("Should revert if changing delegated vote direction", async function () {
+        const halfPower = delegatedPower / 2n;
+        await governance.connect(user1).castDelegatedVote(proposalId, halfPower, true);
+
+        // Try to vote Nay after voting Yay
+        await expect(governance.connect(user1).castDelegatedVote(proposalId, halfPower, false))
+          .to.be.revertedWithCustomError(governance, "CannotChangeVoteDirection");
+      });
+
+      it("Should revert if exceeding available delegated power", async function () {
+        const doublePower = delegatedPower * 2n;
+        await expect(governance.connect(user1).castDelegatedVote(proposalId, doublePower, true))
+          .to.be.revertedWithCustomError(governance, "InsufficientDelegatedPower");
       });
 
       it("Should revert if no delegated power", async function () {
         // user3 has no delegated power
-        await expect(governance.connect(user3).castDelegatedVote(proposalId, true))
+        await expect(governance.connect(user3).castDelegatedVote(proposalId, ethers.parseEther("100"), true))
+          .to.be.revertedWithCustomError(governance, "InsufficientDelegatedPower");
+      });
+
+      it("Should revert if zero amount", async function () {
+        await expect(governance.connect(user1).castDelegatedVote(proposalId, 0, true))
           .to.be.revertedWithCustomError(governance, "ZeroAmount");
+      });
+
+      it("Should track delegator vote power per proposal", async function () {
+        await governance.connect(user1).castDelegatedVote(proposalId, delegatedPower, true);
+
+        // Check that user2's power was used
+        const user2PowerUsed = await governance.getDelegatorVotePower(proposalId, user1.address, user2.address);
+        expect(user2PowerUsed).to.be.greaterThan(0);
       });
     });
   });

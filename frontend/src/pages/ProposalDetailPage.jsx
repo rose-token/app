@@ -30,6 +30,7 @@ const ProposalDetailPage = () => {
     error,
     actionLoading,
     vote,
+    voteCombined,
     unvote,
     finalizeProposal,
     executeProposal,
@@ -272,6 +273,7 @@ const ProposalDetailPage = () => {
             isProposer={proposal.isProposer}
             isActive={isActive}
             onVote={vote}
+            onVoteCombined={voteCombined}
             onUnvote={unvote}
             loading={actionLoading[`vote-${proposal.id}`] || actionLoading[`unvote-${proposal.id}`]}
           />

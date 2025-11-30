@@ -293,11 +293,12 @@ export const useDelegation = () => {
   }, [isConnected, parsedDelegation, writeContractAsync, publicClient, refetchDelegation]);
 
   /**
-   * Cast delegated votes on a proposal
+   * Cast delegated votes on a proposal with partial amount
    * @param {number} proposalId - Proposal ID
+   * @param {string} amount - Amount of delegated power to use
    * @param {boolean} support - true for Yay, false for Nay
    */
-  const castDelegatedVote = useCallback(async (proposalId, support) => {
+  const castDelegatedVote = useCallback(async (proposalId, amount, support) => {
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
@@ -306,12 +307,14 @@ export const useDelegation = () => {
     setError(null);
 
     try {
-      console.log(`Casting delegated vote ${support ? 'Yay' : 'Nay'} on proposal ${proposalId}...`);
+      const amountWei = parseUnits(amount.toString(), 18);
+
+      console.log(`Casting delegated vote ${support ? 'Yay' : 'Nay'} with ${amount} VP on proposal ${proposalId}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'castDelegatedVote',
-        args: [BigInt(proposalId), support],
+        args: [BigInt(proposalId), amountWei, support],
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -326,6 +329,10 @@ export const useDelegation = () => {
       console.error('Delegated vote error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
+        : err.message.includes('InsufficientDelegatedPower')
+        ? 'Insufficient delegated power available'
+        : err.message.includes('CannotChangeVoteDirection')
+        ? 'Cannot change vote direction on existing delegated vote'
         : 'Failed to cast delegated vote';
       setError(message);
       throw new Error(message);
@@ -396,6 +403,90 @@ export const useDelegation = () => {
       await refetchDelegation();
       await refetchDelegators();
     },
+  };
+};
+
+/**
+ * Hook for proposal-specific delegation data
+ * Returns available delegated power and existing delegated vote for a specific proposal
+ * @param {number} proposalId - Proposal ID
+ * @returns {Object} Proposal-specific delegation state
+ */
+export const useDelegationForProposal = (proposalId) => {
+  const { address: account, isConnected } = useAccount();
+
+  const { data, refetch } = useReadContracts({
+    contracts: [
+      // Available delegated power for this proposal
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'getAvailableDelegatedPower',
+        args: [account, BigInt(proposalId || 0)],
+      },
+      // Existing delegated vote record
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'getDelegatedVote',
+        args: [BigInt(proposalId || 0), account],
+      },
+      // Total delegated power (for display)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'totalDelegatedPower',
+        args: [account],
+      },
+    ],
+    query: {
+      enabled: isConnected && !!account && !!proposalId && !!CONTRACTS.GOVERNANCE,
+    },
+  });
+
+  const availableDelegatedPower = useMemo(() => {
+    if (!data?.[0] || data[0].status !== 'success') return '0';
+    // Convert from wei-based VP to readable format
+    const rawValue = data[0].result || 0n;
+    return (Number(rawValue) / 1e9).toString();
+  }, [data]);
+
+  const availableDelegatedPowerRaw = useMemo(() => {
+    if (!data?.[0] || data[0].status !== 'success') return 0n;
+    return data[0].result || 0n;
+  }, [data]);
+
+  const delegatedVoteRecord = useMemo(() => {
+    if (!data?.[1] || data[1].status !== 'success' || !data[1].result) return null;
+    const result = data[1].result;
+    // DelegatedVoteRecord struct: [hasVoted, support, totalPowerUsed]
+    return {
+      hasVoted: result[0] || false,
+      support: result[1] || false,
+      totalPowerUsed: (Number(result[2] || 0n) / 1e9).toString(),
+      totalPowerUsedRaw: result[2] || 0n,
+    };
+  }, [data]);
+
+  const totalDelegatedPower = useMemo(() => {
+    if (!data?.[2] || data[2].status !== 'success') return '0';
+    const rawValue = data[2].result || 0n;
+    return (Number(rawValue) / 1e9).toString();
+  }, [data]);
+
+  const totalDelegatedPowerRaw = useMemo(() => {
+    if (!data?.[2] || data[2].status !== 'success') return 0n;
+    return data[2].result || 0n;
+  }, [data]);
+
+  return {
+    availableDelegatedPower,
+    availableDelegatedPowerRaw,
+    delegatedVoteRecord,
+    hasDelegatedVote: delegatedVoteRecord?.hasVoted || false,
+    totalDelegatedPower,
+    totalDelegatedPowerRaw,
+    refetch,
   };
 };
 

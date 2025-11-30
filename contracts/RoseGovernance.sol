@@ -67,6 +67,16 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Pending Rewards ============
     mapping(address => uint256) public pendingRewards;
 
+    // ============ Delegated Voting Tracking ============
+    // Track how much delegated power each delegate has used per proposal
+    mapping(uint256 => mapping(address => uint256)) public delegatedVoteAllocated;
+    // Delegated vote records (direction, total power used)
+    mapping(uint256 => mapping(address => DelegatedVoteRecord)) internal _delegatedVotes;
+    // Per-delegator power usage (for proportional rewards)
+    mapping(uint256 => mapping(address => mapping(address => uint256))) internal _delegatorVotePower;
+    // Delegates who voted on each proposal
+    mapping(uint256 => address[]) internal _proposalDelegates;
+
     // ============ Signature Replay Protection ============
     mapping(bytes32 => bool) public usedSignatures;
 
@@ -277,6 +287,36 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (totalVotes == 0) return (0, 0);
         yayPercent = (p.yayVotes * BASIS_POINTS) / totalVotes;
         nayPercent = (p.nayVotes * BASIS_POINTS) / totalVotes;
+    }
+
+    /**
+     * @dev Get available delegated power for voting on a proposal
+     */
+    function getAvailableDelegatedPower(address delegate, uint256 proposalId) public view returns (uint256) {
+        uint256 total = totalDelegatedPower[delegate];
+        uint256 used = delegatedVoteAllocated[proposalId][delegate];
+        return total > used ? total - used : 0;
+    }
+
+    /**
+     * @dev Get delegated vote record for a delegate on a proposal
+     */
+    function getDelegatedVote(uint256 proposalId, address delegate) external view returns (DelegatedVoteRecord memory) {
+        return _delegatedVotes[proposalId][delegate];
+    }
+
+    /**
+     * @dev Get how much of a delegator's power was used in a delegated vote
+     */
+    function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256) {
+        return _delegatorVotePower[proposalId][delegate][delegator];
+    }
+
+    /**
+     * @dev Get all delegates who voted on a proposal (for iteration)
+     */
+    function getProposalDelegates(uint256 proposalId) external view returns (address[] memory) {
+        return _proposalDelegates[proposalId];
     }
 
     // ============ Staking Functions ============
@@ -497,25 +537,99 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev Delegate casts vote with all delegated power
+     * @dev Delegate casts vote with partial delegated power
+     * Can be called multiple times to increase vote (same direction only)
      */
-    function castDelegatedVote(uint256 proposalId, bool support) external nonReentrant {
+    function castDelegatedVote(uint256 proposalId, uint256 amount, bool support) external nonReentrant {
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
+        if (amount == 0) revert ZeroAmount();
 
-        uint256 delegatedPower = totalDelegatedPower[msg.sender];
-        if (delegatedPower == 0) revert ZeroAmount();
+        // Check available delegated power
+        uint256 available = getAvailableDelegatedPower(msg.sender, proposalId);
+        if (amount > available) revert InsufficientDelegatedPower();
+
+        DelegatedVoteRecord storage record = _delegatedVotes[proposalId][msg.sender];
+
+        // Check vote direction consistency
+        if (record.hasVoted) {
+            if (record.support != support) revert CannotChangeVoteDirection();
+        }
+
+        // Allocate power from delegators proportionally
+        _allocateDelegatorPower(proposalId, amount);
+
+        // Update tracking
+        delegatedVoteAllocated[proposalId][msg.sender] += amount;
+
+        if (!record.hasVoted) {
+            record.hasVoted = true;
+            record.support = support;
+            _proposalDelegates[proposalId].push(msg.sender);
+            emit DelegatedVoteCast(proposalId, msg.sender, support, amount);
+        } else {
+            emit DelegatedVoteIncreased(proposalId, msg.sender, amount, record.totalPowerUsed + amount);
+        }
+
+        record.totalPowerUsed += amount;
 
         // Update proposal tallies
         if (support) {
-            p.yayVotes += delegatedPower;
+            p.yayVotes += amount;
         } else {
-            p.nayVotes += delegatedPower;
+            p.nayVotes += amount;
+        }
+    }
+
+    /**
+     * @dev Internal function to allocate delegated power from delegators proportionally
+     */
+    function _allocateDelegatorPower(uint256 proposalId, uint256 amount) internal {
+        address[] memory delegatorList = _delegators[msg.sender].values();
+        uint256 totalPower = totalDelegatedPower[msg.sender];
+        uint256 remainingToAllocate = amount;
+
+        for (uint256 i = 0; i < delegatorList.length && remainingToAllocate > 0; i++) {
+            address delegator = delegatorList[i];
+            uint256 delegatorPower = cachedVotePower[delegator];
+
+            // Calculate proportional share
+            uint256 proportionalShare = (amount * delegatorPower) / totalPower;
+
+            // Check what's still available from this delegator
+            uint256 alreadyUsedFromDelegator = _delegatorVotePower[proposalId][msg.sender][delegator];
+            uint256 availableFromDelegator = delegatorPower > alreadyUsedFromDelegator
+                ? delegatorPower - alreadyUsedFromDelegator
+                : 0;
+
+            uint256 toUse = proportionalShare > availableFromDelegator
+                ? availableFromDelegator
+                : proportionalShare;
+            toUse = toUse > remainingToAllocate ? remainingToAllocate : toUse;
+
+            if (toUse > 0) {
+                _delegatorVotePower[proposalId][msg.sender][delegator] += toUse;
+                remainingToAllocate -= toUse;
+            }
         }
 
-        emit DelegatedVoteCast(proposalId, msg.sender, support, delegatedPower);
+        // Handle any remainder due to rounding - assign to first delegator with capacity
+        if (remainingToAllocate > 0) {
+            for (uint256 i = 0; i < delegatorList.length && remainingToAllocate > 0; i++) {
+                address delegator = delegatorList[i];
+                uint256 delegatorPower = cachedVotePower[delegator];
+                uint256 used = _delegatorVotePower[proposalId][msg.sender][delegator];
+                uint256 availableFromDelegator = delegatorPower > used ? delegatorPower - used : 0;
+
+                if (availableFromDelegator > 0) {
+                    uint256 toUse = availableFromDelegator > remainingToAllocate ? remainingToAllocate : availableFromDelegator;
+                    _delegatorVotePower[proposalId][msg.sender][delegator] += toUse;
+                    remainingToAllocate -= toUse;
+                }
+            }
+        }
     }
 
     // ============ Proposal Functions ============
@@ -763,6 +877,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         Proposal storage p = _proposals[proposalId];
         if (p.yayVotes == 0) return;
 
+        // Distribute to direct voters
         address[] memory voters = _proposalVoters[proposalId];
         for (uint256 i = 0; i < voters.length; i++) {
             Vote storage v = _votes[proposalId][voters[i]];
@@ -771,6 +886,9 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
                 IRoseToken(address(roseToken)).mint(voters[i], voterReward);
             }
         }
+
+        // Distribute to delegators whose power was used in Yay delegated votes
+        _distributeDelegatorRewards(proposalId, totalReward, p.yayVotes, true);
     }
 
     function _distributeNayRewards(uint256 proposalId) internal {
@@ -778,13 +896,49 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (p.nayVotes == 0) return;
 
         uint256 totalReward = (p.value * NAY_VOTER_REWARD) / BASIS_POINTS;
-        address[] memory voters = _proposalVoters[proposalId];
 
+        // Distribute to direct voters
+        address[] memory voters = _proposalVoters[proposalId];
         for (uint256 i = 0; i < voters.length; i++) {
             Vote storage v = _votes[proposalId][voters[i]];
             if (v.hasVoted && !v.support) {
                 uint256 voterReward = (totalReward * v.votePower) / p.nayVotes;
                 IRoseToken(address(roseToken)).mint(voters[i], voterReward);
+            }
+        }
+
+        // Distribute to delegators whose power was used in Nay delegated votes
+        _distributeDelegatorRewards(proposalId, totalReward, p.nayVotes, false);
+    }
+
+    /**
+     * @dev Distribute rewards to delegators based on their used power
+     */
+    function _distributeDelegatorRewards(
+        uint256 proposalId,
+        uint256 totalReward,
+        uint256 totalVotes,
+        bool forYay
+    ) internal {
+        address[] memory delegates = _proposalDelegates[proposalId];
+
+        for (uint256 i = 0; i < delegates.length; i++) {
+            address delegate = delegates[i];
+            DelegatedVoteRecord storage record = _delegatedVotes[proposalId][delegate];
+
+            if (record.hasVoted && record.support == forYay) {
+                // Distribute to each delegator based on their contribution
+                address[] memory delegatorList = _delegators[delegate].values();
+
+                for (uint256 j = 0; j < delegatorList.length; j++) {
+                    address delegator = delegatorList[j];
+                    uint256 powerUsed = _delegatorVotePower[proposalId][delegate][delegator];
+
+                    if (powerUsed > 0) {
+                        uint256 delegatorReward = (totalReward * powerUsed) / totalVotes;
+                        IRoseToken(address(roseToken)).mint(delegator, delegatorReward);
+                    }
+                }
             }
         }
     }

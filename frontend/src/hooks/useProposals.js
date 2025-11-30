@@ -360,6 +360,101 @@ export const useProposals = (options = {}) => {
   }, [isConnected, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
 
   /**
+   * Combined vote using both own ROSE and delegated power
+   * Auto-splits: uses own ROSE first, then delegated power
+   * @param {number} proposalId - Proposal ID
+   * @param {string} totalAmount - Total amount to vote with
+   * @param {boolean} support - true for Yay, false for Nay
+   * @param {string} ownAvailable - Available own ROSE (unallocated)
+   * @param {string} delegatedAvailable - Available delegated power for this proposal
+   */
+  const voteCombined = useCallback(async (proposalId, totalAmount, support, ownAvailable, delegatedAvailable) => {
+    if (!isConnected || !CONTRACTS.GOVERNANCE) {
+      throw new Error('Not connected');
+    }
+
+    setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
+    setError(null);
+
+    try {
+      const totalWei = parseUnits(totalAmount.toString(), 18);
+      const ownAvailableWei = parseUnits(ownAvailable.toString(), 18);
+      const delegatedAvailableWei = parseUnits(delegatedAvailable.toString(), 18);
+
+      // Calculate split: use own ROSE first, then delegated
+      let ownToUse = 0n;
+      let delegatedToUse = 0n;
+
+      if (totalWei <= ownAvailableWei) {
+        ownToUse = totalWei;
+      } else {
+        ownToUse = ownAvailableWei;
+        delegatedToUse = totalWei - ownAvailableWei;
+
+        if (delegatedToUse > delegatedAvailableWei) {
+          throw new Error('Insufficient total voting power');
+        }
+      }
+
+      const results = [];
+
+      // Vote with own ROSE if any
+      if (ownToUse > 0n) {
+        console.log(`Voting with ${formatUnits(ownToUse, 18)} own ROSE...`);
+        const ownHash = await writeContractAsync({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'allocateToProposal',
+          args: [BigInt(proposalId), ownToUse, support],
+        });
+
+        await publicClient.waitForTransactionReceipt({
+          hash: ownHash,
+          confirmations: 1,
+        });
+        results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 18) });
+      }
+
+      // Vote with delegated power if any
+      if (delegatedToUse > 0n) {
+        console.log(`Voting with ${formatUnits(delegatedToUse, 18)} delegated power...`);
+        const delegatedHash = await writeContractAsync({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'castDelegatedVote',
+          args: [BigInt(proposalId), delegatedToUse, support],
+        });
+
+        await publicClient.waitForTransactionReceipt({
+          hash: delegatedHash,
+          confirmations: 1,
+        });
+        results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 18) });
+      }
+
+      console.log('Combined vote successful!');
+      await refetchProposals();
+      await refetchVotes();
+      return { success: true, results };
+    } catch (err) {
+      console.error('Combined vote error:', err);
+      const message = err.message.includes('User rejected')
+        ? 'Transaction rejected'
+        : err.message.includes('CannotChangeVoteDirection')
+        ? 'Cannot change vote direction on existing vote'
+        : err.message.includes('Insufficient')
+        ? err.message
+        : err.message.includes('InsufficientDelegatedPower')
+        ? 'Insufficient delegated power for this proposal'
+        : 'Failed to cast vote';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
+    }
+  }, [isConnected, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
+
+  /**
    * Create a new proposal
    * @param {Object} proposalData - Proposal data
    */
@@ -590,6 +685,7 @@ export const useProposals = (options = {}) => {
     setError,
     // Actions
     vote,
+    voteCombined,
     unvote,
     createProposal,
     finalizeProposal,

@@ -56,6 +56,12 @@ interface IRoseGovernance {
         bool isDispute;
     }
 
+    struct DelegatedVoteRecord {
+        bool hasVoted;
+        bool support;
+        uint256 totalPowerUsed;
+    }
+
     // ============ Events ============
 
     event Deposited(address indexed user, uint256 amount);
@@ -71,6 +77,7 @@ interface IRoseGovernance {
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 votePower);
     event VoteIncreased(uint256 indexed proposalId, address indexed voter, uint256 additionalAmount, uint256 newVotePower);
     event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower);
+    event DelegatedVoteIncreased(uint256 indexed proposalId, address indexed delegate, uint256 additionalPower, uint256 newTotalPower);
     event VoteUnallocated(uint256 indexed proposalId, address indexed voter, uint256 amount);
     event RewardsDistributed(uint256 indexed proposalId, uint256 totalRewards);
     event RewardClaimed(address indexed user, uint256 amount);
@@ -110,6 +117,7 @@ interface IRoseGovernance {
     error QuorumNotMet();
     error TaskNotFromProposal();
     error CannotChangeVoteDirection();
+    error InsufficientDelegatedPower();
 
     // ============ View Functions ============
 
@@ -132,6 +140,10 @@ interface IRoseGovernance {
     function getQuorumProgress(uint256 proposalId) external view returns (uint256 current, uint256 required);
     function getVoteResult(uint256 proposalId) external view returns (uint256 yayPercent, uint256 nayPercent);
     function getTaskHistory(address user) external view returns (TaskRecord[] memory);
+    function getAvailableDelegatedPower(address delegate, uint256 proposalId) external view returns (uint256);
+    function getDelegatedVote(uint256 proposalId, address delegate) external view returns (DelegatedVoteRecord memory);
+    function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256);
+    function getProposalDelegates(uint256 proposalId) external view returns (address[] memory);
 
     // ============ Staking Functions ============
 
@@ -148,7 +160,7 @@ interface IRoseGovernance {
 
     function allocateToProposal(uint256 proposalId, uint256 amount, bool support) external;
     function unallocateFromProposal(uint256 proposalId) external;
-    function castDelegatedVote(uint256 proposalId, bool support) external;
+    function castDelegatedVote(uint256 proposalId, uint256 amount, bool support) external;
 
     // ============ Proposal Functions ============
 
