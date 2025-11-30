@@ -14,6 +14,8 @@ import ProposalFilters from '../components/governance/ProposalFilters';
 import StakingPanel from '../components/governance/StakingPanel';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
+import { usePassport } from '../hooks/usePassport';
+import { PASSPORT_THRESHOLDS } from '../constants/passport';
 
 const GovernancePage = () => {
   const { isConnected } = useAccount();
@@ -34,6 +36,12 @@ const GovernancePage = () => {
     canPropose,
     userStats,
   } = useGovernance();
+
+  const { score: passportScore, loading: passportLoading } = usePassport();
+
+  // Combined eligibility: must have 90%+ reputation AND 25+ passport score
+  const meetsPassportThreshold = passportScore !== null && passportScore >= PASSPORT_THRESHOLDS.PROPOSE;
+  const canCreateProposal = canPropose && meetsPassportThreshold;
 
   const [filters, setFilters] = useState({
     status: 'all',
@@ -141,17 +149,19 @@ const GovernancePage = () => {
               <div>
                 <h3 className="font-semibold mb-1" style={{ color: 'var(--rose-gold-light)'}} >Have an idea?</h3>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  {canPropose
+                  {canCreateProposal
                     ? 'Create a proposal to fund work from the DAO treasury'
-                    : 'Earn 90%+ reputation to create proposals'}
+                    : !canPropose
+                      ? 'Earn 90%+ reputation to create proposals'
+                      : 'Build your Passport score to 25+ to create proposals'}
                 </p>
               </div>
               <Link
                 to="/governance/propose"
-                className={`btn-primary ${!canPropose ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={(e) => !canPropose && e.preventDefault()}
+                className={`btn-primary ${!canCreateProposal ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={(e) => !canCreateProposal && e.preventDefault()}
               >
-                Create Proposal
+                {passportLoading ? 'Checking...' : 'Create Proposal'}
               </Link>
             </div>
 
@@ -211,6 +221,12 @@ const GovernancePage = () => {
                   <span style={{ color: 'var(--text-muted)' }}>Can Propose</span>
                   <span style={{ color: canPropose ? 'var(--success)' : 'var(--text-muted)' }}>
                     {canPropose ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span style={{ color: 'var(--text-muted)' }}>Passport Score</span>
+                  <span style={{ color: meetsPassportThreshold ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {passportLoading ? '...' : passportScore !== null ? passportScore.toFixed(1) : 'N/A'}
                   </span>
                 </div>
               </div>
