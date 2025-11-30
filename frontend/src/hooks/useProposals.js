@@ -3,7 +3,7 @@
  * Handles proposal lifecycle: create, vote, finalize, execute
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
@@ -214,15 +214,35 @@ export const useProposals = (options = {}) => {
     processProposals();
   }, [proposalsData, votesData, account, specificProposalId]);
 
-  // Watch for proposal events
+  // Debounced refetch to prevent multiple rapid refetches from events
+  const refetchTimeoutRef = useRef(null);
+  const debouncedRefetch = useCallback((includeCounter = false, includeVotes = false) => {
+    if (refetchTimeoutRef.current) {
+      clearTimeout(refetchTimeoutRef.current);
+    }
+    refetchTimeoutRef.current = setTimeout(() => {
+      if (includeCounter) refetchCounter();
+      refetchProposals();
+      if (includeVotes) refetchVotes();
+      refetchTimeoutRef.current = null;
+    }, 500); // 500ms debounce
+  }, [refetchCounter, refetchProposals, refetchVotes]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Watch for proposal events (all using debounced refetch)
   useWatchContractEvent({
     address: CONTRACTS.GOVERNANCE,
     abi: RoseGovernanceABI,
     eventName: 'ProposalCreated',
-    onLogs: () => {
-      refetchCounter();
-      refetchProposals();
-    },
+    onLogs: () => debouncedRefetch(true, false),
     enabled: !!CONTRACTS.GOVERNANCE,
   });
 
@@ -230,10 +250,7 @@ export const useProposals = (options = {}) => {
     address: CONTRACTS.GOVERNANCE,
     abi: RoseGovernanceABI,
     eventName: 'VoteCast',
-    onLogs: () => {
-      refetchProposals();
-      refetchVotes();
-    },
+    onLogs: () => debouncedRefetch(false, true),
     enabled: !!CONTRACTS.GOVERNANCE,
   });
 
@@ -241,9 +258,7 @@ export const useProposals = (options = {}) => {
     address: CONTRACTS.GOVERNANCE,
     abi: RoseGovernanceABI,
     eventName: 'ProposalFinalized',
-    onLogs: () => {
-      refetchProposals();
-    },
+    onLogs: () => debouncedRefetch(false, false),
     enabled: !!CONTRACTS.GOVERNANCE,
   });
 

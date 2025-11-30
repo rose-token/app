@@ -16,7 +16,7 @@ const TokenBalance = () => {
     chainId: chain?.id,
     query: {
       enabled: !!address && isConnected && !!tokenAddress,
-      refetchInterval: 30000, // Refetch every 30 seconds
+      refetchInterval: 45000, // Refetch every 45 seconds
     },
   });
 

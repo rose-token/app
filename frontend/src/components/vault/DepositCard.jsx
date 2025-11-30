@@ -47,20 +47,21 @@ const DepositCard = ({
   const [error, setError] = useState('');
   const [cooldownRemaining, setCooldownRemaining] = useState(depositCooldown);
 
-  // Live countdown timer
+  // Live countdown timer - updates every 5 seconds to reduce re-renders
+  // (cooldowns are typically hours, so second precision isn't needed)
   useEffect(() => {
     setCooldownRemaining(depositCooldown);
     if (depositCooldown <= 0) return;
 
     const interval = setInterval(() => {
       setCooldownRemaining((prev) => {
-        if (prev <= 1) {
+        if (prev <= 5) {
           clearInterval(interval);
           return 0;
         }
-        return prev - 1;
+        return prev - 5;
       });
-    }, 1000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [depositCooldown]);

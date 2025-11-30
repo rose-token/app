@@ -4,7 +4,7 @@
  * Also reads on-chain reputation score from RoseGovernance
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePublicClient, useReadContracts } from 'wagmi';
 import { parseAbi, formatUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
@@ -63,6 +63,12 @@ const setCachedReputation = (address, data) => {
  */
 export const useReputation = (address) => {
   const publicClient = usePublicClient();
+  const publicClientRef = useRef(publicClient);
+  const hasFetchedRef = useRef(false);
+  const addressRef = useRef(address);
+
+  // Keep ref updated
+  publicClientRef.current = publicClient;
 
   const [state, setState] = useState({
     reputation: null,
@@ -149,9 +155,11 @@ export const useReputation = (address) => {
 
   /**
    * Fetch reputation data from on-chain events
+   * Uses publicClientRef to avoid callback recreation on every render
    */
   const fetchReputation = useCallback(async () => {
-    if (!address || !publicClient || !MARKETPLACE_ADDRESS) {
+    const client = publicClientRef.current;
+    if (!address || !client || !MARKETPLACE_ADDRESS) {
       setState((prev) => ({ ...prev, reputation: null, loading: false }));
       return;
     }
@@ -177,7 +185,7 @@ export const useReputation = (address) => {
         stakeholderFeeEvents,
       ] = await Promise.all([
         // Payments received (as worker)
-        publicClient.getLogs({
+        client.getLogs({
           address: MARKETPLACE_ADDRESS,
           event: MARKETPLACE_EVENTS[1], // PaymentReleased
           args: { worker: address },
@@ -186,7 +194,7 @@ export const useReputation = (address) => {
         }).catch(() => []),
 
         // Tasks created (as customer)
-        publicClient.getLogs({
+        client.getLogs({
           address: MARKETPLACE_ADDRESS,
           event: MARKETPLACE_EVENTS[4], // TaskCreated
           args: { customer: address },
@@ -195,7 +203,7 @@ export const useReputation = (address) => {
         }).catch(() => []),
 
         // Stakes made (as stakeholder)
-        publicClient.getLogs({
+        client.getLogs({
           address: MARKETPLACE_ADDRESS,
           event: MARKETPLACE_EVENTS[5], // StakeholderStaked
           args: { stakeholder: address },
@@ -204,7 +212,7 @@ export const useReputation = (address) => {
         }).catch(() => []),
 
         // Tasks claimed (as worker)
-        publicClient.getLogs({
+        client.getLogs({
           address: MARKETPLACE_ADDRESS,
           event: MARKETPLACE_EVENTS[3], // TaskClaimed
           args: { worker: address },
@@ -213,7 +221,7 @@ export const useReputation = (address) => {
         }).catch(() => []),
 
         // Fees earned (as stakeholder)
-        publicClient.getLogs({
+        client.getLogs({
           address: MARKETPLACE_ADDRESS,
           event: MARKETPLACE_EVENTS[6], // StakeholderFeeEarned
           args: { stakeholder: address },
@@ -256,7 +264,7 @@ export const useReputation = (address) => {
         error: err.message || 'Failed to fetch reputation',
       }));
     }
-  }, [address, publicClient]);
+  }, [address]); // Only depends on address - publicClient accessed via ref
 
   /**
    * Refresh reputation data
@@ -269,9 +277,17 @@ export const useReputation = (address) => {
   }, [address, fetchReputation]);
 
   // Fetch reputation on mount and when address changes
+  // Only refetch if address actually changed (not on every render)
   useEffect(() => {
-    fetchReputation();
-  }, [fetchReputation]);
+    if (addressRef.current !== address) {
+      hasFetchedRef.current = false;
+      addressRef.current = address;
+    }
+    if (!hasFetchedRef.current && address) {
+      hasFetchedRef.current = true;
+      fetchReputation();
+    }
+  }, [address, fetchReputation]);
 
   // Merge event-based reputation with on-chain governance data
   const mergedReputation = useMemo(() => {

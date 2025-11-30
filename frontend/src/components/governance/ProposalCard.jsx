@@ -9,7 +9,7 @@ import { ProposalStatus, ProposalStatusLabels, ProposalStatusColors, formatVoteP
 import ProfileBadge from '../profile/ProfileBadge';
 import QuorumBar from './QuorumBar';
 
-const ProposalCard = ({ proposal, showActions = false }) => {
+const ProposalCard = React.memo(({ proposal, showActions = false }) => {
   const {
     id,
     title,
@@ -157,6 +157,8 @@ const ProposalCard = ({ proposal, showActions = false }) => {
       </div>
     </div>
   );
-};
+});
+
+ProposalCard.displayName = 'ProposalCard';
 
 export default ProposalCard;

@@ -11,7 +11,7 @@ import ProfileBadge from '../profile/ProfileBadge';
 import ReputationBadge from './ReputationBadge';
 import { useVoteAccuracy } from '../../hooks/useVoteAccuracy';
 
-const DelegateCard = ({
+const DelegateCard = React.memo(({
   address,
   onDelegate,
   loading = false,
@@ -221,6 +221,8 @@ const DelegateCard = ({
       )}
     </div>
   );
-};
+});
+
+DelegateCard.displayName = 'DelegateCard';
 
 export default DelegateCard;
