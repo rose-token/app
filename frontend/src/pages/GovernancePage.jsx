@@ -98,7 +98,7 @@ const GovernancePage = () => {
           <span className="gradient-text">Governance</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
-          Shape the future of the Rose Token ecosystem
+          Shape the Future of the Rose Token Ecosystem
         </p>
       </div>
 

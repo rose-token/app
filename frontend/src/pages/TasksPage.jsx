@@ -814,7 +814,7 @@ const TasksPage = () => {
           The Worker's <span className="gradient-text">Marketplace</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
-          Decentralized task coordination owned by workers
+          Decentralized Task Coordination Owned by Workers
         </p>
       </div>
 
