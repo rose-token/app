@@ -216,6 +216,19 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "newGovernance",
+        "type": "address"
+      }
+    ],
+    "name": "GovernanceUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "newMarketplace",
         "type": "address"
       }
@@ -803,6 +816,19 @@
   },
   {
     "inputs": [],
+    "name": "governance",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "hardAssetValueUSD",
     "outputs": [
       {
@@ -1027,6 +1053,19 @@
       }
     ],
     "name": "setAllocation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_governance",
+        "type": "address"
+      }
+    ],
+    "name": "setGovernance",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

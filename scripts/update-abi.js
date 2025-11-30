@@ -4,6 +4,8 @@ const path = require('path');
 const marketplaceArtifact = require('../artifacts/contracts/RoseMarketplace.sol/RoseMarketplace.json');
 const tokenArtifact = require('../artifacts/contracts/RoseToken.sol/RoseToken.json');
 const treasuryArtifact = require('../artifacts/contracts/RoseTreasury.sol/RoseTreasury.json');
+const vRoseArtifact = require('../artifacts/contracts/vROSE.sol/vROSE.json');
+const governanceArtifact = require('../artifacts/contracts/RoseGovernance.sol/RoseGovernance.json');
 
 const targetDir = path.join(__dirname, '../frontend/src/contracts');
 
@@ -24,6 +26,16 @@ fs.writeFileSync(
 fs.writeFileSync(
   path.join(targetDir, 'RoseTreasuryABI.json'),
   JSON.stringify(treasuryArtifact.abi, null, 2)
+);
+
+fs.writeFileSync(
+  path.join(targetDir, 'vROSEABI.json'),
+  JSON.stringify(vRoseArtifact.abi, null, 2)
+);
+
+fs.writeFileSync(
+  path.join(targetDir, 'RoseGovernanceABI.json'),
+  JSON.stringify(governanceArtifact.abi, null, 2)
 );
 
 console.log('All ABIs updated successfully');
