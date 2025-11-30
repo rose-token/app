@@ -120,13 +120,16 @@ export const useDelegation = () => {
 
     const unallocatedRose = stakedRose > allocatedRose ? stakedRose - allocatedRose : 0n;
 
+    // Contract stores totalDelegatedPower in sqrt(wei) units, divide by 1e9 to match frontend VP units
+    const totalDelegatedPowerVP = (Number(totalDelegatedPower) / 1e9).toString();
+
     return {
       delegatedTo: delegatedTo && delegatedTo !== '0x0000000000000000000000000000000000000000' ? delegatedTo : null,
       delegatedAmount: formatUnits(delegatedAmount, 18),
       delegatedAmountRaw: delegatedAmount,
       cachedVotePower: formatUnits(cachedVotePower, 18),
       cachedVotePowerRaw: cachedVotePower,
-      totalDelegatedPower: formatUnits(totalDelegatedPower, 18),
+      totalDelegatedPower: totalDelegatedPowerVP,
       totalDelegatedPowerRaw: totalDelegatedPower,
       stakedRose: formatUnits(stakedRose, 18),
       stakedRoseRaw: stakedRose,

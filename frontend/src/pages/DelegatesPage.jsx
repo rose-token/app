@@ -327,8 +327,8 @@ const DelegatesPage = () => {
                 <span className="font-semibold">{delegatorCount}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span style={{ color: 'var(--text-muted)' }}>Power Received</span>
-                <span className="font-semibold">{parseFloat(totalDelegatedPower).toLocaleString()}</span>
+                <span style={{ color: 'var(--text-muted)' }}>Delegated Power</span>
+                <span className="font-semibold">{parseFloat(totalDelegatedPower).toFixed(2)} VP</span>
               </div>
             </div>
 

@@ -5,12 +5,16 @@
 
 import React, { useState } from 'react';
 import useGovernance from '../../hooks/useGovernance';
+import useDelegation from '../../hooks/useDelegation';
+import { calculateVotePower, formatVotePower } from '../../constants/contracts';
 
 const StakingPanel = () => {
   const {
     stakedRose,
+    stakedRoseRaw,
     allocatedRose,
     unallocatedRose,
+    unallocatedRoseRaw,
     vRoseBalance,
     roseBalance,
     reputation,
@@ -21,6 +25,17 @@ const StakingPanel = () => {
     deposit,
     withdraw,
   } = useGovernance();
+
+  const {
+    isDelegating,
+    totalDelegatedPower,
+  } = useDelegation();
+
+  // Calculate voting power: sqrt(unallocatedRose) * (reputation / 100) + delegated power received
+  // If delegating to someone else, voting power is 0 (their power is with the delegate)
+  const ownPower = calculateVotePower(unallocatedRoseRaw || 0n, reputation || 60);
+  const receivedPower = parseFloat(totalDelegatedPower || '0');
+  const votingPower = isDelegating ? 0 : (ownPower + receivedPower);
 
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -61,8 +76,8 @@ const StakingPanel = () => {
           <p className="text-lg font-semibold">{parseFloat(vRoseBalance || 0).toLocaleString()}</p>
         </div>
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Available to Vote</p>
-          <p className="text-lg font-semibold">{parseFloat(unallocatedRose || 0).toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Voting Power</p>
+          <p className="text-lg font-semibold">{formatVotePower(votingPower)} VP</p>
         </div>
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Reputation</p>

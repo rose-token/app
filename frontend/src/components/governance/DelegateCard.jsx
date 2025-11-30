@@ -5,7 +5,6 @@
 
 import React, { useState } from 'react';
 import { useReadContracts } from 'wagmi';
-import { formatUnits } from 'viem';
 import RoseGovernanceABI from '../../contracts/RoseGovernanceABI.json';
 import { CONTRACTS, formatVotePower, calculateVotePower } from '../../constants/contracts';
 import ProfileBadge from '../profile/ProfileBadge';
@@ -77,7 +76,8 @@ const DelegateCard = ({
 
   // Calculate combined vote power (own power + delegated power)
   const ownVotePower = calculateVotePower(stakedRoseRaw, reputation);
-  const delegatedPower = Number(formatUnits(totalDelegatedPowerRaw, 18));
+  // Contract stores totalDelegatedPower in sqrt(wei) units, need to divide by 1e9 to match frontend VP units
+  const delegatedPower = Number(totalDelegatedPowerRaw) / 1e9;
   const totalPower = ownVotePower + delegatedPower;
 
   // Get accuracy color based on percentage
@@ -124,7 +124,7 @@ const DelegateCard = ({
           </p>
         </div>
         <div className="text-center p-2 rounded" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Power</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Voting Power</p>
           <p className="font-semibold text-sm">
             {formatVotePower(totalPower)} VP
           </p>
