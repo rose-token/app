@@ -7,7 +7,7 @@ export const PASSPORT_THRESHOLDS = {
   CREATE_TASK: 20,
   STAKE: 20,
   CLAIM_TASK: 20,
-  GOVERNANCE_VOTE: 25, // Future use
+  PROPOSE: 25,
 };
 
 export const PASSPORT_CONFIG = {

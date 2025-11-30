@@ -9,6 +9,7 @@ import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS, ProposalStatus } from '../constants/contracts';
 import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
+import { usePassportVerify } from './usePassportVerify';
 
 /**
  * Hook for fetching and managing governance proposals
@@ -21,6 +22,7 @@ export const useProposals = (options = {}) => {
   const { address: account, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { getSignature } = usePassportVerify();
 
   const [proposals, setProposals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -386,9 +388,9 @@ export const useProposals = (options = {}) => {
       const valueWei = parseUnits(value.toString(), 18);
       const deadlineTimestamp = Math.floor(new Date(deadline).getTime() / 1000);
 
-      // For now, skip passport signature (as per user request)
-      const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
-      const signature = '0x'; // Empty signature - contract should handle this
+      // Get passport signature from backend signer
+      console.log('Getting passport signature...');
+      const { expiry, signature } = await getSignature('propose');
 
       console.log('Creating proposal...');
       const hash = await writeContractAsync({
@@ -415,6 +417,10 @@ export const useProposals = (options = {}) => {
         ? 'You are not eligible to propose (check reputation requirements)'
         : err.message.includes('ProposalValueExceedsTreasury')
         ? 'Proposal value exceeds treasury balance'
+        : err.message.includes('Passport score too low')
+        ? 'Your Gitcoin Passport score is too low (25+ required to propose)'
+        : err.message.includes('InvalidSignature')
+        ? 'Passport signature verification failed'
         : 'Failed to create proposal';
       setError(message);
       throw new Error(message);

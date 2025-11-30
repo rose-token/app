@@ -58,13 +58,10 @@ const DelegateCard = ({
   // Fetch vote accuracy
   const { accuracy, votesCount } = useVoteAccuracy(address);
 
+  // Contract returns reputation as 0-100 percentage
   const reputation = delegateData?.[0]?.status === 'success'
-    ? Number(delegateData[0].result) / 100
-    : 60;
-
-  const reputationRaw = delegateData?.[0]?.status === 'success'
     ? Number(delegateData[0].result)
-    : 6000;
+    : 60;
 
   const totalDelegatedPowerRaw = delegateData?.[1]?.status === 'success'
     ? delegateData[1].result
@@ -79,7 +76,7 @@ const DelegateCard = ({
     : false;
 
   // Calculate combined vote power (own power + delegated power)
-  const ownVotePower = calculateVotePower(stakedRoseRaw, reputationRaw);
+  const ownVotePower = calculateVotePower(stakedRoseRaw, reputation);
   const delegatedPower = Number(formatUnits(totalDelegatedPowerRaw, 18));
   const totalPower = ownVotePower + delegatedPower;
 
