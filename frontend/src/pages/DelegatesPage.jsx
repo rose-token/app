@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem } from 'viem';
 import { CONTRACTS } from '../constants/contracts';
+import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
 import DelegateCard from '../components/governance/DelegateCard';
@@ -64,7 +65,23 @@ const DelegatesPage = () => {
           addr => addr && addr.toLowerCase() !== account?.toLowerCase()
         );
 
-        setPotentialDelegates(filtered);
+        // Check delegatedTo for each address - filter out those who are already delegating
+        const delegatedToResults = await publicClient.multicall({
+          contracts: filtered.map(addr => ({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'delegatedTo',
+            args: [addr],
+          })),
+        });
+
+        // Keep only addresses that are NOT delegating (delegatedTo is zero address)
+        const availableDelegates = filtered.filter((addr, index) => {
+          const delegatedTo = delegatedToResults[index].result;
+          return !delegatedTo || delegatedTo === '0x0000000000000000000000000000000000000000';
+        });
+
+        setPotentialDelegates(availableDelegates);
       } catch (err) {
         console.error('Error fetching potential delegates:', err);
       } finally {
