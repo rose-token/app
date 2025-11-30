@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
-import RoseTreasuryABI from '../contracts/RoseTreasuryABI.json';
+import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS, GOVERNANCE_CONSTANTS } from '../constants/contracts';
 import { SKILLS } from '../constants/skills';
 import useProposals from '../hooks/useProposals';
@@ -31,19 +31,20 @@ const ProposalCreatePage = () => {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Get treasury balance for gating
-  const { data: treasuryBreakdown } = useReadContract({
-    address: CONTRACTS.TREASURY,
-    abi: RoseTreasuryABI,
-    functionName: 'getVaultBreakdown',
+  // Get treasury ROSE balance for proposal limits
+  const { data: treasuryRoseBalance } = useReadContract({
+    address: CONTRACTS.TOKEN,
+    abi: RoseTokenABI,
+    functionName: 'balanceOf',
+    args: [CONTRACTS.TREASURY],
     query: {
-      enabled: !!CONTRACTS.TREASURY,
+      enabled: !!CONTRACTS.TOKEN && !!CONTRACTS.TREASURY,
     },
   });
 
-  // Parse treasury total USD value
-  const treasuryValue = treasuryBreakdown
-    ? parseFloat(formatUnits(treasuryBreakdown[4] || 0n, 18)) // totalUsdValue
+  // Parse treasury ROSE balance
+  const treasuryValue = treasuryRoseBalance
+    ? parseFloat(formatUnits(treasuryRoseBalance, 18))
     : 0;
 
   // Handle input changes

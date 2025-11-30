@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem } from 'viem';
 import { CONTRACTS } from '../constants/contracts';
+import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
 import DelegateCard from '../components/governance/DelegateCard';
@@ -38,6 +39,8 @@ const DelegatesPage = () => {
   const [potentialDelegates, setPotentialDelegates] = useState([]);
   const [isLoadingDelegates, setIsLoadingDelegates] = useState(true);
   const [searchAddress, setSearchAddress] = useState('');
+  const [increaseAmount, setIncreaseAmount] = useState('');
+  const [showIncreaseForm, setShowIncreaseForm] = useState(false);
 
   // Fetch potential delegates from on-chain events
   useEffect(() => {
@@ -62,7 +65,23 @@ const DelegatesPage = () => {
           addr => addr && addr.toLowerCase() !== account?.toLowerCase()
         );
 
-        setPotentialDelegates(filtered);
+        // Check delegatedTo for each address - filter out those who are already delegating
+        const delegatedToResults = await publicClient.multicall({
+          contracts: filtered.map(addr => ({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'delegatedTo',
+            args: [addr],
+          })),
+        });
+
+        // Keep only addresses that are NOT delegating (delegatedTo is zero address)
+        const availableDelegates = filtered.filter((addr, index) => {
+          const delegatedTo = delegatedToResults[index].result;
+          return !delegatedTo || delegatedTo === '0x0000000000000000000000000000000000000000';
+        });
+
+        setPotentialDelegates(availableDelegates);
       } catch (err) {
         console.error('Error fetching potential delegates:', err);
       } finally {
@@ -86,6 +105,17 @@ const DelegatesPage = () => {
       await undelegate();
     } catch (err) {
       console.error('Undelegation failed:', err);
+    }
+  };
+
+  const handleIncreaseAllocation = async () => {
+    if (!increaseAmount || parseFloat(increaseAmount) <= 0) return;
+    try {
+      await delegateTo(delegatedTo, increaseAmount);
+      setIncreaseAmount('');
+      setShowIncreaseForm(false);
+    } catch (err) {
+      console.error('Increase allocation failed:', err);
     }
   };
 
@@ -149,6 +179,54 @@ const DelegatesPage = () => {
                   <p className="font-semibold">{parseFloat(delegatedAmount).toLocaleString()} ROSE</p>
                 </div>
               </div>
+
+              {/* Increase Allocation Form */}
+              {showIncreaseForm ? (
+                <div className="space-y-3 mb-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={increaseAmount}
+                      onChange={(e) => setIncreaseAmount(e.target.value)}
+                      placeholder="Additional amount"
+                      min="0"
+                      step="0.01"
+                      className="flex-1 px-3 py-2 rounded-lg text-sm"
+                      style={{
+                        backgroundColor: 'var(--bg-tertiary)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    />
+                    <span className="px-2 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      ROSE
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleIncreaseAllocation}
+                      disabled={actionLoading.delegate || !increaseAmount || parseFloat(increaseAmount) <= 0}
+                      className="btn-primary flex-1 text-sm py-2"
+                      style={{ opacity: actionLoading.delegate ? 0.5 : 1 }}
+                    >
+                      {actionLoading.delegate ? 'Increasing...' : 'Confirm Increase'}
+                    </button>
+                    <button
+                      onClick={() => setShowIncreaseForm(false)}
+                      className="btn-secondary flex-1 text-sm py-2"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowIncreaseForm(true)}
+                  className="btn-primary w-full mb-3"
+                >
+                  Increase Allocation
+                </button>
+              )}
+
               <button
                 onClick={handleUndelegate}
                 disabled={actionLoading.undelegate}
@@ -215,6 +293,7 @@ const DelegatesPage = () => {
                     onDelegate={handleDelegate}
                     loading={actionLoading.delegate}
                     isCurrentDelegate={delegatedTo?.toLowerCase() === address?.toLowerCase()}
+                    currentDelegationAmount={delegatedAmount}
                   />
                 ))}
               </div>

@@ -1,21 +1,23 @@
 /**
  * DelegateCard - Preview card for eligible delegates
- * Shows reputation, delegated power, and delegation action
+ * Shows reputation, vote accuracy, total power, and delegation action
  */
 
 import React, { useState } from 'react';
 import { useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
 import RoseGovernanceABI from '../../contracts/RoseGovernanceABI.json';
-import { CONTRACTS, formatVotePower } from '../../constants/contracts';
+import { CONTRACTS, formatVotePower, calculateVotePower } from '../../constants/contracts';
 import ProfileBadge from '../profile/ProfileBadge';
 import ReputationBadge from './ReputationBadge';
+import { useVoteAccuracy } from '../../hooks/useVoteAccuracy';
 
 const DelegateCard = ({
   address,
   onDelegate,
   loading = false,
   isCurrentDelegate = false,
+  currentDelegationAmount = '0',
 }) => {
   const [delegateAmount, setDelegateAmount] = useState('');
   const [showDelegateForm, setShowDelegateForm] = useState(false);
@@ -47,39 +49,46 @@ const DelegateCard = ({
         functionName: 'canDelegate',
         args: [address],
       },
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'userStats',
-        args: [address],
-      },
     ],
     query: {
       enabled: !!address && !!CONTRACTS.GOVERNANCE,
     },
   });
 
+  // Fetch vote accuracy
+  const { accuracy, votesCount } = useVoteAccuracy(address);
+
   const reputation = delegateData?.[0]?.status === 'success'
     ? Number(delegateData[0].result) / 100
     : 60;
 
-  const totalDelegatedPower = delegateData?.[1]?.status === 'success'
-    ? formatUnits(delegateData[1].result, 18)
-    : '0';
+  const reputationRaw = delegateData?.[0]?.status === 'success'
+    ? Number(delegateData[0].result)
+    : 6000;
 
-  const stakedRose = delegateData?.[2]?.status === 'success'
-    ? formatUnits(delegateData[2].result, 18)
-    : '0';
+  const totalDelegatedPowerRaw = delegateData?.[1]?.status === 'success'
+    ? delegateData[1].result
+    : 0n;
+
+  const stakedRoseRaw = delegateData?.[2]?.status === 'success'
+    ? delegateData[2].result
+    : 0n;
 
   const canReceiveDelegation = delegateData?.[3]?.status === 'success'
     ? delegateData[3].result
     : false;
 
-  const userStats = delegateData?.[4]?.status === 'success'
-    ? delegateData[4].result
-    : null;
+  // Calculate combined vote power (own power + delegated power)
+  const ownVotePower = calculateVotePower(stakedRoseRaw, reputationRaw);
+  const delegatedPower = Number(formatUnits(totalDelegatedPowerRaw, 18));
+  const totalPower = ownVotePower + delegatedPower;
 
-  const tasksCompleted = userStats ? Number(userStats[0]) : 0;
+  // Get accuracy color based on percentage
+  const getAccuracyColor = () => {
+    if (accuracy >= 70) return 'var(--success)';
+    if (accuracy >= 50) return 'var(--warning)';
+    return 'var(--error)';
+  };
 
   const handleDelegate = async () => {
     if (!delegateAmount || parseFloat(delegateAmount) <= 0) return;
@@ -107,22 +116,21 @@ const DelegateCard = ({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="text-center p-2 rounded" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Staked</p>
-          <p className="font-semibold text-sm">
-            {parseFloat(stakedRose).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Vote Accuracy</p>
+          <p className="font-semibold text-sm" style={{ color: getAccuracyColor() }}>
+            {accuracy.toFixed(0)}%
+            <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
+              {' '}({votesCount})
+            </span>
           </p>
         </div>
         <div className="text-center p-2 rounded" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Delegated</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Power</p>
           <p className="font-semibold text-sm">
-            {formatVotePower(parseFloat(totalDelegatedPower))}
+            {formatVotePower(totalPower)} VP
           </p>
-        </div>
-        <div className="text-center p-2 rounded" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Tasks</p>
-          <p className="font-semibold text-sm">{tasksCompleted}</p>
         </div>
       </div>
 
@@ -132,12 +140,12 @@ const DelegateCard = ({
           className="p-2 rounded-lg mb-4 text-sm text-center"
           style={{ backgroundColor: 'rgba(212, 175, 140, 0.1)', color: 'var(--accent)' }}
         >
-          Currently delegating to this address
+          Currently delegating {parseFloat(currentDelegationAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} ROSE
         </div>
       )}
 
-      {/* Delegation Form or Button */}
-      {!isCurrentDelegate && canReceiveDelegation && (
+      {/* Delegation Form or Button - show for both new and increase allocation */}
+      {canReceiveDelegation && (
         <>
           {showDelegateForm ? (
             <div className="space-y-3">
@@ -146,7 +154,7 @@ const DelegateCard = ({
                   type="number"
                   value={delegateAmount}
                   onChange={(e) => setDelegateAmount(e.target.value)}
-                  placeholder="Amount to delegate"
+                  placeholder={isCurrentDelegate ? "Additional amount" : "Amount to delegate"}
                   min="0"
                   step="0.01"
                   className="flex-1 px-3 py-2 rounded-lg text-sm"
@@ -166,7 +174,7 @@ const DelegateCard = ({
                   className="btn-primary flex-1 text-sm py-2"
                   style={{ opacity: loading ? 0.5 : 1 }}
                 >
-                  {loading ? 'Delegating...' : 'Confirm'}
+                  {loading ? (isCurrentDelegate ? 'Increasing...' : 'Delegating...') : 'Confirm'}
                 </button>
                 <button
                   onClick={() => setShowDelegateForm(false)}
@@ -181,7 +189,7 @@ const DelegateCard = ({
               onClick={() => setShowDelegateForm(true)}
               className="btn-primary w-full text-sm"
             >
-              Delegate to this user
+              {isCurrentDelegate ? 'Increase Allocation' : 'Delegate to this user'}
             </button>
           )}
         </>
