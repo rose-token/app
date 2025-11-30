@@ -48,6 +48,12 @@ const DelegateCard = ({
         functionName: 'canDelegate',
         args: [address],
       },
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'allocatedRose',
+        args: [address],
+      },
     ],
     query: {
       enabled: !!address && !!CONTRACTS.GOVERNANCE,
@@ -74,11 +80,23 @@ const DelegateCard = ({
     ? delegateData[3].result
     : false;
 
-  // Calculate combined vote power (own power + delegated power)
-  const ownVotePower = calculateVotePower(stakedRoseRaw, reputation);
-  // Contract stores totalDelegatedPower in sqrt(wei) units, need to divide by 1e9 to match frontend VP units
-  const delegatedPower = Number(totalDelegatedPowerRaw) / 1e9;
-  const totalPower = ownVotePower + delegatedPower;
+  const allocatedRoseRaw = delegateData?.[4]?.status === 'success'
+    ? delegateData[4].result
+    : 0n;
+
+  // Calculate delegate's own voting power from their unallocated stake
+  // (staked ROSE minus any ROSE already allocated to votes or their own delegation)
+  const unallocatedRoseRaw = stakedRoseRaw > allocatedRoseRaw
+    ? stakedRoseRaw - allocatedRoseRaw
+    : 0n;
+  const ownVotePower = calculateVotePower(unallocatedRoseRaw, reputation);
+
+  // Power received from delegators - contract stores as final vote power (sqrt(wei) × rep/100)
+  // Divide by 1e9 to convert from wei-scale to human-readable VP units
+  const receivedDelegatedPower = Number(totalDelegatedPowerRaw) / 1e9;
+
+  // Total voting power available to this delegate
+  const totalPower = ownVotePower + receivedDelegatedPower;
 
   // Get accuracy color based on percentage
   const getAccuracyColor = () => {

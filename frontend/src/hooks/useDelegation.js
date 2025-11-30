@@ -120,14 +120,18 @@ export const useDelegation = () => {
 
     const unallocatedRose = stakedRose > allocatedRose ? stakedRose - allocatedRose : 0n;
 
-    // Contract stores totalDelegatedPower in sqrt(wei) units, divide by 1e9 to match frontend VP units
+    // Contract stores totalDelegatedPower as final vote power (sqrt(wei) × rep/100).
+    // Divide by 1e9 to convert from wei-scale to human-readable VP units.
     const totalDelegatedPowerVP = (Number(totalDelegatedPower) / 1e9).toString();
+
+    // cachedVotePower is also stored in wei-scale VP units (only set when user delegates to someone)
+    const cachedVotePowerVP = (Number(cachedVotePower) / 1e9).toString();
 
     return {
       delegatedTo: delegatedTo && delegatedTo !== '0x0000000000000000000000000000000000000000' ? delegatedTo : null,
       delegatedAmount: formatUnits(delegatedAmount, 18),
       delegatedAmountRaw: delegatedAmount,
-      cachedVotePower: formatUnits(cachedVotePower, 18),
+      cachedVotePower: cachedVotePowerVP,
       cachedVotePowerRaw: cachedVotePower,
       totalDelegatedPower: totalDelegatedPowerVP,
       totalDelegatedPowerRaw: totalDelegatedPower,
