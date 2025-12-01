@@ -243,13 +243,13 @@ export const useGovernance = () => {
     // Calculate unallocated ROSE (available for new votes/delegation)
     const unallocatedRose = stakedRose > allocatedRose ? stakedRose - allocatedRose : 0n;
 
-    // Parse user stats tuple
+    // Parse user stats struct
     const stats = userStats ? {
-      tasksCompleted: Number(userStats[0] || 0),
-      totalTaskValue: userStats[1] || 0n,
-      disputes: Number(userStats[2] || 0),
-      failedProposals: Number(userStats[3] || 0),
-      lastTaskTimestamp: Number(userStats[4] || 0),
+      tasksCompleted: Number(userStats.tasksCompleted || 0),
+      totalTaskValue: userStats.totalTaskValue || 0n,
+      disputes: Number(userStats.disputes || 0),
+      failedProposals: Number(userStats.failedProposals || 0),
+      lastTaskTimestamp: Number(userStats.lastTaskTimestamp || 0),
     } : null;
 
     return {

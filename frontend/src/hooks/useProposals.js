@@ -654,8 +654,8 @@ export const useProposals = (options = {}) => {
         functionName: 'userStats',
         args: [account],
       });
-      console.log('Tasks completed:', Number(userStats[0]));
-      console.log('Total task value:', formatUnits(userStats[1], 18));
+      console.log('Tasks completed:', Number(userStats.tasksCompleted));
+      console.log('Total task value:', formatUnits(userStats.totalTaskValue, 18));
 
       // Check 4: Treasury balance
       const treasuryBalance = await publicClient.readContract({
