@@ -1,7 +1,11 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import * as net from 'net';
+import * as dns from 'dns';
+import { promisify } from 'util';
 import { config } from '../config';
 import { withRetry } from '../utils/retry';
+
+const dnsLookup = promisify(dns.lookup);
 
 /**
  * Parse host and port from DATABASE_URL
@@ -15,6 +19,19 @@ function parseDatabaseUrl(url: string): { host: string; port: number } {
     };
   } catch {
     return { host: 'localhost', port: 5432 };
+  }
+}
+
+/**
+ * Check if hostname resolves via DNS.
+ * Returns resolved IP or null if DNS fails.
+ */
+async function checkDnsResolution(host: string): Promise<string | null> {
+  try {
+    const result = await dnsLookup(host);
+    return result.address;
+  } catch {
+    return null;
   }
 }
 
@@ -127,14 +144,21 @@ export async function waitForDatabase(): Promise<void> {
 
   await withRetry(
     async () => {
-      // First check raw TCP connectivity (faster failure detection)
-      const tcpReachable = await checkTcpConnectivity(host, port, tcpTimeout);
-      if (!tcpReachable) {
-        throw new Error(`TCP connection to ${host}:${port} failed (network unreachable)`);
+      // Step 1: Check DNS resolution
+      const resolvedIp = await checkDnsResolution(host);
+      if (!resolvedIp) {
+        throw new Error(`DNS resolution for ${host} failed`);
       }
-      console.log(`TCP connection to ${host}:${port} succeeded`);
+      console.log(`DNS resolved ${host} → ${resolvedIp}`);
 
-      // Reset pool before each attempt to avoid cached bad state
+      // Step 2: Check raw TCP connectivity (faster failure detection)
+      const tcpReachable = await checkTcpConnectivity(resolvedIp, port, tcpTimeout);
+      if (!tcpReachable) {
+        throw new Error(`TCP connection to ${resolvedIp}:${port} failed`);
+      }
+      console.log(`TCP connection to ${resolvedIp}:${port} succeeded`);
+
+      // Step 3: PostgreSQL connection test
       resetPool();
       const p = getPool();
       const client = await p.connect();
