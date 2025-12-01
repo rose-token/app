@@ -100,6 +100,14 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     event RoseBuyback(uint256 usdcSpent, uint256 roseBought);
     event MarketplaceUpdated(address indexed newMarketplace);
     event GovernanceUpdated(address indexed newGovernance);
+    event RebalanceDebug(
+        uint256 hardAssets,
+        uint256 roseValue,
+        uint256 roseBalance,
+        uint256 targetROSE,
+        uint256 roseToSell,
+        uint256 excessUSDC
+    );
 
     // ============ Errors ============
     error InvalidPrice();
@@ -359,6 +367,26 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
         uint256 currentROSE = roseValue;
 
+        // Emit debug event for diagnostics
+        {
+            uint256 roseBalance = roseToken.balanceOf(address(this));
+            uint256 roseToSellCalc = currentROSE > targetROSE && currentROSE > 0
+                ? (roseBalance * (currentROSE - targetROSE)) / currentROSE
+                : 0;
+            uint256 usdcBal = usdc.balanceOf(address(this));
+            uint256 excessUsdcCalc = usdcBal > targetUSDC
+                ? usdcBal - targetUSDC
+                : 0;
+            emit RebalanceDebug(
+                hardAssets,
+                roseValue,
+                roseBalance,
+                targetROSE,
+                roseToSellCalc,
+                excessUsdcCalc
+            );
+        }
+
         // Phase 1: Sell overweight hard assets to USDC
         if (currentBTC > targetBTC) {
             uint256 diff = currentBTC - targetBTC;
@@ -430,6 +458,49 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
             treasuryRoseValueUSD(),
             hardAssetValueUSD()
         );
+    }
+
+    /**
+     * @dev Preview what rebalance would do without executing
+     * @return hardAssets Total hard asset value in USD (6 decimals)
+     * @return roseValue Treasury ROSE value in USD (6 decimals)
+     * @return roseBalance Treasury ROSE token balance (18 decimals)
+     * @return targetROSE Target ROSE value based on allocation
+     * @return roseToSell Amount of ROSE that would be sold (0 if underweight)
+     * @return excessUSDC USDC above target that would be spent on buying
+     */
+    function getRebalancePreview() external view returns (
+        uint256 hardAssets,
+        uint256 roseValue,
+        uint256 roseBalance,
+        uint256 targetROSE,
+        uint256 roseToSell,
+        uint256 excessUSDC
+    ) {
+        hardAssets = hardAssetValueUSD();
+        roseValue = treasuryRoseValueUSD();
+        roseBalance = roseToken.balanceOf(address(this));
+
+        uint256 totalForAlloc = hardAssets + roseValue;
+        targetROSE = (totalForAlloc * allocROSE) / ALLOC_DENOMINATOR;
+
+        // Phase 2: Would we sell ROSE?
+        if (roseValue > targetROSE && roseValue > 0) {
+            uint256 diff = roseValue - targetROSE;
+            roseToSell = (roseBalance * diff) / roseValue;
+            if (roseToSell < MIN_SWAP_AMOUNT) roseToSell = 0;
+        }
+
+        // Phase 3: Would we spend USDC?
+        uint256 usdcBalance = usdc.balanceOf(address(this));
+        uint256 targetUSDC = (totalForAlloc * allocUSDC) / ALLOC_DENOMINATOR;
+        uint256 minBuffer = (totalForAlloc * 500) / ALLOC_DENOMINATOR;
+
+        if (usdcBalance > targetUSDC && usdcBalance > minBuffer) {
+            uint256 excess = usdcBalance - targetUSDC;
+            uint256 maxSpend = usdcBalance - minBuffer;
+            excessUSDC = excess > maxSpend ? maxSpend : excess;
+        }
     }
 
     // ============ Price Feed Functions ============
