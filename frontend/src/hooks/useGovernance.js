@@ -374,20 +374,7 @@ export const useGovernance = () => {
         }
       }
 
-      console.log('Simulating deposit transaction...');
-      try {
-        await publicClient.simulateContract({
-          address: CONTRACTS.GOVERNANCE,
-          abi: RoseGovernanceABI,
-          functionName: 'deposit',
-          args: [amountWei],
-          account: account,
-        });
-        console.log('Deposit simulation passed!');
-      } catch (simError) {
-        console.error('Deposit simulation FAILED:', simError);
-        throw new Error(parseSimulationError(simError));
-      }
+// Deposit simulation moved to after approval (when needed)
       // ========== END PRE-FLIGHT SIMULATION ==========
 
       // Check balance
@@ -423,8 +410,38 @@ export const useGovernance = () => {
 
         // Longer delay for RPC state sync and nonce refresh
         await new Promise(r => setTimeout(r, 2000));
+
+        // Now simulate deposit with the new allowance
+        console.log('Simulating deposit transaction (post-approval)...');
+        try {
+          await publicClient.simulateContract({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'deposit',
+            args: [amountWei],
+            account: account,
+          });
+          console.log('Deposit simulation passed!');
+        } catch (simError) {
+          console.error('Deposit simulation FAILED:', simError);
+          throw new Error(parseSimulationError(simError));
+        }
       } else {
-        console.log('Skipping approval - sufficient allowance exists');
+        // No approval needed - simulate deposit now
+        console.log('Simulating deposit transaction...');
+        try {
+          await publicClient.simulateContract({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'deposit',
+            args: [amountWei],
+            account: account,
+          });
+          console.log('Deposit simulation passed!');
+        } catch (simError) {
+          console.error('Deposit simulation FAILED:', simError);
+          throw new Error(parseSimulationError(simError));
+        }
       }
 
       // Step 2: Deposit into governance
