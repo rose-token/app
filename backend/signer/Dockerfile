@@ -6,8 +6,8 @@ RUN apk add --no-cache \
     postgresql16-contrib \
     supervisor
 
-# Create postgres data directory
-RUN mkdir -p /var/lib/postgresql/data /run/postgresql && \
+# Create postgres data directory (using subdirectory to avoid lost+found on mount)
+RUN mkdir -p /var/lib/postgresql/data/pgdata /run/postgresql && \
     chown -R postgres:postgres /var/lib/postgresql /run/postgresql
 
 # Create app directory
