@@ -50,11 +50,13 @@ function checkTcpConnectivity(host: string, port: number, timeout: number): Prom
     });
 
     socket.on('timeout', () => {
+      console.log(`TCP timeout to ${host}:${port} after ${timeout}ms`);
       socket.destroy();
       resolve(false);
     });
 
-    socket.on('error', () => {
+    socket.on('error', (err: NodeJS.ErrnoException) => {
+      console.log(`TCP error to ${host}:${port}: ${err.code} - ${err.message}`);
       socket.destroy();
       resolve(false);
     });
