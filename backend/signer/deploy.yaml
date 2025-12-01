@@ -3,7 +3,7 @@ version: "2.0"
 
 services:
   signer:
-    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest
+    image: ghcr.io/emmadorably/rose-token-v3/passport-signer:latest
     expose:
       - port: 3000
         as: 80
