@@ -21,12 +21,12 @@ export const config = getDefaultConfig({
         retryCount: 2,
         timeout: 15_000,
       }),
-      http('https://arbitrum-sepolia.blockpi.network/v1/rpc/public', {
+      http('https://arbitrum-sepolia.gateway.tenderly.co', {
         batch: { wait: 100 },
         retryCount: 2,
         timeout: 20_000,
       }),
-      http('https://arbitrum-sepolia.drpc.org', {
+      http('https://api.zan.top/arb-sepolia', {
         batch: { wait: 100 },
         retryCount: 2,
         timeout: 20_000,

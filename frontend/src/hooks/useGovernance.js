@@ -341,7 +341,6 @@ export const useGovernance = () => {
           abi: RoseTokenABI,
           functionName: 'approve',
           args: [CONTRACTS.GOVERNANCE, amountWei],
-          gas: 100_000n,
         });
         console.log('Approve tx hash:', approveHash);
 
@@ -371,7 +370,6 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'deposit',
         args: [amountWei],
-        gas: 400_000n,
       });
       console.log('Deposit tx hash:', depositHash);
 
@@ -438,7 +436,6 @@ export const useGovernance = () => {
         abi: vROSEABI,
         functionName: 'approve',
         args: [CONTRACTS.GOVERNANCE, amountWei],
-        gas: 100_000n,
       });
 
       // Wait for 2 confirmations to ensure nonce is updated
@@ -457,7 +454,6 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'withdraw',
         args: [amountWei],
-        gas: 400_000n,
       });
 
       await publicClient.waitForTransactionReceipt({
