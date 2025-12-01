@@ -222,8 +222,8 @@ export async function isProposalActive(proposalId: number): Promise<boolean> {
     const proposal = await contract.proposals(proposalId);
     const now = Math.floor(Date.now() / 1000);
 
-    // status 0 = Active
-    return proposal.status === 0 && now <= Number(proposal.votingEndsAt);
+    // status 0 = Active (ethers returns BigInt, must convert to Number for comparison)
+    return Number(proposal.status) === 0 && now <= Number(proposal.votingEndsAt);
   } catch {
     return false;
   }
