@@ -2,28 +2,8 @@
 version: "2.0"
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    expose:
-      - port: 5432
-        proto: tcp
-        to:
-          - service: signer
-    env:
-      - POSTGRES_USER=rose
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=rose
-      - PGDATA=/var/lib/postgresql/data/pgdata
-    params:
-      storage:
-        data:
-          mount: /var/lib/postgresql/data
-          readOnly: false
-
   signer:
-    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest 
-    depends_on:
-      - postgres
+    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest
     expose:
       - port: 3000
         as: 80
@@ -35,12 +15,11 @@ services:
       - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
       - VITE_GITCOIN_SCORER_ID=${VITE_GITCOIN_SCORER_ID}
       - VITE_GITCOIN_API_KEY=${VITE_GITCOIN_API_KEY}
-      - DATABASE_URL=postgresql://rose:${POSTGRES_PASSWORD}@postgres:5432/rose
-      - DB_STARTUP_DELAY_MS=3000
-      - DB_CONNECTION_TIMEOUT_MS=30000
-      - DB_MAX_RETRIES=5
-      - DB_RETRY_INITIAL_DELAY_MS=1000
-      - DB_RETRY_MAX_DELAY_MS=8000
+      - DATABASE_URL=postgresql://rose:${POSTGRES_PASSWORD}@localhost:5432/rose
+      - POSTGRES_USER=rose
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=rose
+      - DB_STARTUP_DELAY_MS=5000
       - PROFILE_CHAIN_ID=42161
       - THRESHOLD_CREATE_TASK=20
       - THRESHOLD_STAKE=20
@@ -52,15 +31,20 @@ services:
       - GOVERNANCE_ADDRESS=${GOVERNANCE_ADDRESS}
       - TREASURY_ADDRESS=${TREASURY_ADDRESS}
       - RPC_URL=${ARBITRUM_SEPOLIA_RPC_URL}
+    params:
+      storage:
+        data:
+          mount: /var/lib/postgresql/data
+          readOnly: false
 
 profiles:
   compute:
-    postgres:
+    signer:
       resources:
         cpu:
-          units: 0.25
+          units: 0.75
         memory:
-          size: 512Mi
+          size: 1Gi
         storage:
           - size: 1Gi
           - name: data
@@ -68,32 +52,17 @@ profiles:
             attributes:
               persistent: true
               class: beta3
-    signer:
-      resources:
-        cpu:
-          units: 0.5
-        memory:
-          size: 512Mi
-        storage:
-          - size: 1Gi
 
   placement:
     dcloud:
       attributes:
         host: akash
       pricing:
-        postgres:
-          denom: uakt
-          amount: 500
         signer:
           denom: uakt
-          amount: 1000
+          amount: 1500
 
 deployment:
-  postgres:
-    dcloud:
-      profile: postgres
-      count: 1
   signer:
     dcloud:
       profile: signer

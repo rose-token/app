@@ -134,7 +134,7 @@ jobs:
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
-          sed -i "s|image:.*passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
+          sed -i "s|image:.*rose-passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
           # Substitute secrets into SDL
           sed -i "s|\${SIGNER_PRIVATE_KEY}|${SIGNER_PRIVATE_KEY}|g" backend/signer/deploy.yaml
@@ -146,7 +146,7 @@ jobs:
           sed -i "s|\${TREASURY_ADDRESS}|${TREASURY_ADDRESS}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
-          cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g' | sed 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=***REDACTED***/g' | sed 's/postgresql:\/\/rose:.*/postgresql:\/\/rose:***REDACTED***@postgres:5432\/rose/g'
+          cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g' | sed 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=***REDACTED***/g' | sed 's/postgresql:\/\/rose:.*/postgresql:\/\/rose:***REDACTED***@localhost:5432\/rose/g'
 
           SDL_CONTENT=$(cat backend/signer/deploy.yaml)
 

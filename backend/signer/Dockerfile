@@ -1,40 +1,37 @@
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
+# Install PostgreSQL and supervisord
+RUN apk add --no-cache \
+    postgresql16 \
+    postgresql16-contrib \
+    supervisor
+
+# Create postgres data directory
+RUN mkdir -p /var/lib/postgresql/data /run/postgresql && \
+    chown -R postgres:postgres /var/lib/postgresql /run/postgresql
+
+# Create app directory
 WORKDIR /app
 
+# Copy and build node app
 COPY package*.json ./
 RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
-
 RUN npm run build
-
-# Production stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Security: non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-COPY --from=builder /app/package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
-COPY --from=builder /app/dist ./dist
-
-# Copy whitelist config file directly from source
 COPY src/config/whitelist.json ./dist/config/whitelist.json
-
-# Copy database migrations
 COPY migrations ./migrations
 
-USER nodejs
+# Copy supervisord config and scripts
+COPY supervisord.conf /etc/supervisord.conf
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY start-signer.sh /app/start-signer.sh
+RUN chmod +x /docker-entrypoint.sh /app/start-signer.sh
 
 EXPOSE 3000
 
-ENV NODE_ENV=production
-
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]
