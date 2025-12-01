@@ -118,11 +118,11 @@ async function main() {
     addresses.xauUsdFeed = await mockXauFeed.getAddress();
     console.log("Mock XAU/USD feed deployed to:", addresses.xauUsdFeed, "(price: $2,000)");
 
-    // Deploy mock ROSE/USD feed ($1.00 with 8 decimals)
-    const mockRoseFeed = await MockAggregator.deploy(8, 100000000n);
+    // Deploy mock ROSE/USD feed ($1.33 with 8 decimals)
+    const mockRoseFeed = await MockAggregator.deploy(8, 133000000n);
     await mockRoseFeed.waitForDeployment();
     addresses.roseUsdFeed = await mockRoseFeed.getAddress();
-    console.log("Mock ROSE/USD feed deployed to:", addresses.roseUsdFeed, "(price: $1.00)");
+    console.log("Mock ROSE/USD feed deployed to:", addresses.roseUsdFeed, "(price: $1.33)");
 
     // Deploy MockUniswapV3Router for testnet (real Uniswap has no liquidity for mock tokens)
     console.log("\nDeploying MockUniswapV3Router for testnet...");
@@ -198,12 +198,12 @@ async function main() {
     // Set ROSE decimals
     await (await mockRouter.setTokenDecimals(roseTokenAddress, 18)).wait();
 
-    // ROSE at $1.00
-    // USDC → ROSE: 1 USDC = 1 ROSE (rate = 1e30 to handle 6→18 decimal conversion)
-    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 1000000000000000000000000000000n)).wait();
-    // ROSE → USDC: 1 ROSE = 1 USDC (rate = 1e6 to handle 18→6 decimal conversion)
-    await (await mockRouter.setExchangeRate(roseTokenAddress, addresses.usdc, 1000000n)).wait();
-    console.log("ROSE exchange rates configured (USDC ↔ ROSE @ $1.00) ✓");
+    // ROSE at $1.33
+    // USDC → ROSE: 1 USDC = 0.7519 ROSE (rate = 1e30 / 1.33 to handle 6→18 decimal conversion)
+    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 751879699248120300751879699248n)).wait();
+    // ROSE → USDC: 1 ROSE = 1.33 USDC (rate = 1e6 * 1.33 to handle 18→6 decimal conversion)
+    await (await mockRouter.setExchangeRate(roseTokenAddress, addresses.usdc, 1330000n)).wait();
+    console.log("ROSE exchange rates configured (USDC ↔ ROSE @ $1.33) ✓");
 
     // Note: ROSE liquidity for router will be added after treasury deposit
   }
