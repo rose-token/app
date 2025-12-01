@@ -1,23 +1,40 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { arbitrumSepolia } from 'wagmi/chains';
-import { http } from 'wagmi';
+import { http, fallback } from 'viem';
 
 const arbitrumSepoliaRpcUrl = 'https://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn';
 
-// Simple default configuration that includes all popular wallets automatically
 export const config = getDefaultConfig({
   appName: 'Rose Token',
   projectId: '95be0fbf27f06934c74d670d57f44939',
   chains: [arbitrumSepolia],
   pollingInterval: 30_000,
   transports: {
-    [arbitrumSepolia.id]: http(arbitrumSepoliaRpcUrl, {
-      batch: {
-        wait: 100,
-      },
+    [arbitrumSepolia.id]: fallback([
+      http(arbitrumSepoliaRpcUrl, {
+        batch: { wait: 100 },
+        retryCount: 2,
+        timeout: 15_000,
+      }),
+      http('https://sepolia-rollup.arbitrum.io/rpc', {
+        batch: { wait: 100 },
+        retryCount: 2,
+        timeout: 15_000,
+      }),
+      http('https://arbitrum-sepolia.blockpi.network/v1/rpc/public', {
+        batch: { wait: 100 },
+        retryCount: 2,
+        timeout: 20_000,
+      }),
+      http('https://arbitrum-sepolia.drpc.org', {
+        batch: { wait: 100 },
+        retryCount: 2,
+        timeout: 20_000,
+      }),
+    ], {
+      rank: true,
       retryCount: 3,
-      timeout: 30_000,
     }),
   },
-  ssr: false, // Disable server-side rendering for client-only app
+  ssr: false,
 });
