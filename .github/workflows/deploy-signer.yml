@@ -133,7 +133,7 @@ jobs:
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}" 
           sed -i "s|image:.*passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
           # Substitute secrets into SDL
