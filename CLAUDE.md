@@ -110,6 +110,18 @@ Max 4 edit cycles              Passed → Execute → DAO Task Created
 - Users can increase existing vote allocation (same direction only)
 - Cannot change vote direction after voting
 
+**Delegated Voting (Gas-Optimized):**
+- Delegates cast votes using `castDelegatedVoteWithSignature()`
+- Backend computes per-delegator allocations off-chain, signs approval
+- Contract verifies signature and stores aggregate + allocations hash
+- Avoids O(n) on-chain loops over delegators
+
+**Voter Rewards Claim System:**
+- Rewards pooled at proposal resolution (O(1) gas, no voter loops)
+- Users claim via `claimVoterRewards()` with backend signature
+- Supports both direct votes and delegated votes in single batch claim
+- Rewards added to stakedRose balance (can vote or withdraw)
+
 **Frontend Pages:**
 - `/governance` - Proposal dashboard
 - `/governance/propose` - Create proposal (90% rep + passport required)
@@ -119,9 +131,15 @@ Max 4 edit cycles              Passed → Execute → DAO Task Created
 
 **Frontend Hooks:**
 - `useGovernance` - Staking, vROSE balance, eligibility
-- `useDelegation` - Delegate management
+- `useDelegation` - Delegate management, delegated voting, reward claims
 - `useProposals` - Proposal CRUD operations
 - `useReputation` - On-chain reputation score + event-based task counts
+
+**Frontend Governance Components:**
+- `StakingPanel.jsx` - Deposit/withdraw ROSE for governance
+- `ClaimRewardsPanel.jsx` - View and claim pending voter rewards
+- `VotePanel.jsx` - Vote on proposals with own/delegated power
+- `DelegateCard.jsx` - Delegate profile and delegation form
 
 ## Task Status Flow
 
@@ -228,9 +246,18 @@ Tests use mock contracts to simulate external dependencies:
 
 **Security:** CORS whitelist, rate limiting (30/min), Helmet headers, address validation
 
+**Delegation API Endpoints:**
+- `POST /api/delegation/vote-signature` - Get signed approval for delegated vote
+- `GET /api/delegation/available-power/:delegate/:proposalId` - Get available delegated power
+- `POST /api/delegation/claim-signature` - Get signed approval for claiming rewards
+- `GET /api/delegation/claimable/:user` - Get claimable rewards (display only)
+- `GET /api/delegation/signer` - Get delegation signer address
+
 **Key Files:**
-- `src/routes/passport.ts` - API endpoint handlers
+- `src/routes/passport.ts` - Passport API endpoint handlers
+- `src/routes/delegation.ts` - Delegation API endpoint handlers
 - `src/services/signer.ts` - ECDSA signing with ethers.js
+- `src/services/delegation.ts` - Delegation allocation computation, claim signature generation
 - `src/services/gitcoin.ts` - Gitcoin Passport API integration
 - `src/config.ts` - Environment configuration
 
@@ -273,6 +300,8 @@ PASSPORT_SIGNER_ADDRESS=0x...  # Address of passport signer wallet
 VITE_MARKETPLACE_ADDRESS=0x...
 VITE_TOKEN_ADDRESS=0x...
 VITE_TREASURY_ADDRESS=0x...
+VITE_GOVERNANCE_ADDRESS=0x...         # RoseGovernance contract address
+VITE_VROSE_ADDRESS=0x...              # vROSE token address
 VITE_PINATA_API_KEY=...
 VITE_PINATA_SECRET_API_KEY=...
 VITE_PINATA_JWT=...
@@ -292,6 +321,8 @@ THRESHOLD_CLAIM=20                 # Min score for claim
 SIGNATURE_TTL=3600                 # Signature validity (seconds)
 RATE_LIMIT_WINDOW_MS=60000         # Rate limit window (ms)
 RATE_LIMIT_MAX_REQUESTS=30         # Max requests per window
+GOVERNANCE_ADDRESS=0x...           # RoseGovernance contract address
+RPC_URL=...                        # Blockchain RPC endpoint for delegation queries
 ```
 
 ## Key Technical Details
