@@ -128,3 +128,38 @@ export interface DelegationErrorResponse {
   availablePower?: string;
   requestedAmount?: string;
 }
+
+// Claim types (must match contract's ClaimType enum)
+export enum ClaimType {
+  DirectVoter = 0,
+  Delegator = 1,
+}
+
+export interface ClaimData {
+  proposalId: number;
+  claimType: ClaimType;
+  delegate: string;    // ZeroAddress for direct voters
+  votePower: string;   // BigInt as string
+}
+
+export interface ClaimableRewardsRequest {
+  user: string;
+}
+
+export interface ClaimableRewardsResponse {
+  user: string;
+  claims: ClaimData[];
+  totalClaimable: string;  // Estimated total in ROSE wei
+  expiry: number;
+  signature: string;
+}
+
+export interface ClaimableRewardsDisplayResponse {
+  user: string;
+  claims: ClaimData[];
+  totalClaimable: string;
+}
+
+export interface ClaimErrorResponse {
+  error: string;
+}

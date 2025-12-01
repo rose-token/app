@@ -84,6 +84,10 @@ interface IRoseGovernance {
     event UserStatsUpdated(address indexed user, uint256 tasksCompleted, uint256 totalTaskValue);
     event PassportSignerUpdated(address indexed newSigner);
     event DelegationSignerUpdated(address indexed newSigner);
+    event VoterRewardPoolCreated(uint256 indexed proposalId, uint256 poolAmount, uint256 totalVotes, bool support);
+    event DirectVoterRewardClaimed(uint256 indexed proposalId, address indexed voter, uint256 amount);
+    event DelegatorRewardClaimed(uint256 indexed proposalId, address indexed delegate, address indexed delegator, uint256 amount);
+    event TotalRewardsClaimed(address indexed user, uint256 totalAmount);
 
     // ============ Errors ============
 
@@ -121,6 +125,22 @@ interface IRoseGovernance {
     error InsufficientDelegatedPower();
     error InvalidDelegationSignature();
     error ZeroAddressDelegationSigner();
+    error NoRewardPool();
+    error AlreadyClaimed();
+    error EmptyClaims();
+
+    // ============ Enums for Claims ============
+
+    enum ClaimType { DirectVoter, Delegator }
+
+    // ============ Structs for Claims ============
+
+    struct ClaimData {
+        uint256 proposalId;
+        ClaimType claimType;
+        address delegate;      // Only used if claimType == Delegator
+        uint256 votePower;     // Vote power for direct voters, powerUsed for delegators
+    }
 
     // ============ View Functions ============
 
@@ -169,6 +189,14 @@ interface IRoseGovernance {
         uint256 amount,
         bool support,
         bytes32 allocationsHash,
+        uint256 expiry,
+        bytes calldata signature
+    ) external;
+
+    // ============ Claim Functions ============
+
+    function claimVoterRewards(
+        ClaimData[] calldata claims,
         uint256 expiry,
         bytes calldata signature
     ) external;

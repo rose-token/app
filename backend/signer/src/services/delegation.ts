@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
-import { DelegationAllocation } from '../types';
+import { DelegationAllocation, ClaimData, ClaimType } from '../types';
 
 // Minimal ABI for reading delegation data from RoseGovernance
 const GOVERNANCE_ABI = [
@@ -10,6 +10,16 @@ const GOVERNANCE_ABI = [
   'function delegatedVoteAllocated(uint256 proposalId, address delegate) external view returns (uint256)',
   'function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
   'function proposals(uint256 proposalId) external view returns (tuple(address proposer, string title, string descriptionHash, uint256 value, uint256 deadline, string deliverables, uint256 createdAt, uint256 votingEndsAt, uint256 yayVotes, uint256 nayVotes, uint256 totalAllocated, uint8 status, uint256 editCount, uint256 taskId))',
+  // Claim-related functions
+  'function voterRewardPool(uint256 proposalId) external view returns (uint256)',
+  'function voterRewardTotalVotes(uint256 proposalId) external view returns (uint256)',
+  'function voterRewardOutcome(uint256 proposalId) external view returns (bool)',
+  'function directVoterRewardClaimed(uint256 proposalId, address voter) external view returns (bool)',
+  'function delegatorRewardClaimed(uint256 proposalId, address delegate, address delegator) external view returns (bool)',
+  'function votes(uint256 proposalId, address voter) external view returns (tuple(bool hasVoted, bool support, uint256 votePower, uint256 allocatedAmount))',
+  'function proposalCounter() external view returns (uint256)',
+  'function delegatedTo(address user) external view returns (address)',
+  'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
 ];
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
@@ -237,4 +247,106 @@ export async function getAvailableDelegatedPower(
   const used = BigInt(usedRaw);
 
   return total > used ? total - used : 0n;
+}
+
+// ============ Claim Functions ============
+
+/**
+ * Get all claimable rewards for a user (both direct votes and delegated)
+ */
+export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
+  const contract = getGovernanceContract();
+  const claims: ClaimData[] = [];
+
+  // Get proposal count
+  const proposalCount = await contract.proposalCounter();
+
+  // Check each proposal for claimable rewards
+  for (let i = 1; i <= Number(proposalCount); i++) {
+    const pool = await contract.voterRewardPool(i);
+    if (BigInt(pool) === 0n) continue; // No reward pool
+
+    const outcome = await contract.voterRewardOutcome(i);
+
+    // Check direct vote
+    const vote = await contract.votes(i, user);
+    if (vote.hasVoted && BigInt(vote.votePower) > 0n) {
+      // Check if vote was on winning side
+      const votedYay = vote.support;
+      if (votedYay === outcome) {
+        // Check if already claimed
+        const claimed = await contract.directVoterRewardClaimed(i, user);
+        if (!claimed) {
+          claims.push({
+            proposalId: i,
+            claimType: ClaimType.DirectVoter,
+            delegate: ethers.ZeroAddress,
+            votePower: vote.votePower.toString(),
+          });
+        }
+      }
+    }
+
+    // Check delegated votes (if user delegated to someone who voted)
+    const delegatedTo = await contract.delegatedTo(user);
+    if (delegatedTo !== ethers.ZeroAddress) {
+      const delegateVote = await contract.getDelegatedVote(i, delegatedTo);
+      if (delegateVote.hasVoted && delegateVote.support === outcome) {
+        // Check if user's portion is claimed
+        const claimed = await contract.delegatorRewardClaimed(i, delegatedTo, user);
+        if (!claimed) {
+          // Get user's power used for this proposal
+          const powerUsed = await contract.getDelegatorVotePower(i, delegatedTo, user);
+          if (BigInt(powerUsed) > 0n) {
+            claims.push({
+              proposalId: i,
+              claimType: ClaimType.Delegator,
+              delegate: delegatedTo,
+              votePower: powerUsed.toString(),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return claims;
+}
+
+/**
+ * Sign claim approval matching contract's verification format:
+ * keccak256(abi.encodePacked("claimVoterRewards", msg.sender, abi.encode(claims), expiry))
+ */
+export async function signClaimApproval(
+  user: string,
+  claims: ClaimData[],
+  expiry: number
+): Promise<string> {
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+
+  // Encode claims as tuple array matching Solidity struct
+  // ClaimData struct: (uint256 proposalId, ClaimType claimType, address delegate, uint256 votePower)
+  const encodedClaims = abiCoder.encode(
+    ['tuple(uint256,uint8,address,uint256)[]'],
+    [claims.map(c => [c.proposalId, c.claimType, c.delegate, BigInt(c.votePower)])]
+  );
+
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'bytes', 'uint256'],
+    ['claimVoterRewards', user, encodedClaims, expiry]
+  );
+
+  return await wallet.signMessage(ethers.getBytes(messageHash));
+}
+
+/**
+ * Calculate estimated reward amount for a claim
+ */
+export async function calculateRewardAmount(claim: ClaimData): Promise<bigint> {
+  const contract = getGovernanceContract();
+  const pool = await contract.voterRewardPool(claim.proposalId);
+  const totalVotes = await contract.voterRewardTotalVotes(claim.proposalId);
+
+  if (BigInt(totalVotes) === 0n) return 0n;
+  return (BigInt(pool) * BigInt(claim.votePower)) / BigInt(totalVotes);
 }

@@ -12,6 +12,7 @@ import useGovernance from '../hooks/useGovernance';
 import ProposalCard from '../components/governance/ProposalCard';
 import ProposalFilters from '../components/governance/ProposalFilters';
 import StakingPanel from '../components/governance/StakingPanel';
+import ClaimRewardsPanel from '../components/governance/ClaimRewardsPanel';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { usePassport } from '../hooks/usePassport';
@@ -243,6 +244,9 @@ const GovernancePage = () => {
 
             {/* Staking Panel */}
             <StakingPanel />
+
+            {/* Claim Rewards Panel */}
+            <ClaimRewardsPanel />
 
             {/* Quick Links */}
             <div className="card">

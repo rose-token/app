@@ -7,11 +7,18 @@ import {
   isProposalActive,
   getAvailableDelegatedPower,
   getSignerAddress,
+  getClaimableRewards,
+  signClaimApproval,
+  calculateRewardAmount,
 } from '../services/delegation';
 import {
   DelegationVoteRequest,
   DelegationVoteResponse,
   DelegationErrorResponse,
+  ClaimableRewardsRequest,
+  ClaimableRewardsResponse,
+  ClaimableRewardsDisplayResponse,
+  ClaimErrorResponse,
 } from '../types';
 
 const router = Router();
@@ -169,6 +176,92 @@ router.get('/available-power/:delegate/:proposalId', async (req: Request, res: R
  */
 router.get('/signer', (_req: Request, res: Response) => {
   res.json({ signer: getSignerAddress() });
+});
+
+/**
+ * POST /api/delegation/claim-signature
+ * Get signed approval for claiming voter rewards
+ */
+router.post('/claim-signature', async (req: Request, res: Response) => {
+  try {
+    const { user } = req.body as ClaimableRewardsRequest;
+
+    if (!user || !isValidAddress(user)) {
+      return res.status(400).json({ error: 'Invalid user address' } as ClaimErrorResponse);
+    }
+
+    // Check if governance contract is configured
+    if (!config.contracts.governance) {
+      return res.status(500).json({ error: 'Governance contract not configured' } as ClaimErrorResponse);
+    }
+
+    // Get all claimable rewards
+    const claims = await getClaimableRewards(user);
+
+    if (claims.length === 0) {
+      return res.status(400).json({ error: 'No claimable rewards' } as ClaimErrorResponse);
+    }
+
+    // Calculate total claimable
+    let totalClaimable = 0n;
+    for (const claim of claims) {
+      totalClaimable += await calculateRewardAmount(claim);
+    }
+
+    // Generate expiry and signature
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+    const signature = await signClaimApproval(user, claims, expiry);
+
+    const response: ClaimableRewardsResponse = {
+      user,
+      claims,
+      totalClaimable: totalClaimable.toString(),
+      expiry,
+      signature,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('Claim signature error:', error);
+    return res.status(500).json({ error: 'Internal server error' } as ClaimErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/claimable/:user
+ * Get list of claimable rewards (no signature - for display only)
+ */
+router.get('/claimable/:user', async (req: Request, res: Response) => {
+  try {
+    const { user } = req.params;
+
+    if (!isValidAddress(user)) {
+      return res.status(400).json({ error: 'Invalid user address' } as ClaimErrorResponse);
+    }
+
+    // Check if governance contract is configured
+    if (!config.contracts.governance) {
+      return res.status(500).json({ error: 'Governance contract not configured' } as ClaimErrorResponse);
+    }
+
+    const claims = await getClaimableRewards(user);
+
+    let totalClaimable = 0n;
+    for (const claim of claims) {
+      totalClaimable += await calculateRewardAmount(claim);
+    }
+
+    const response: ClaimableRewardsDisplayResponse = {
+      user,
+      claims,
+      totalClaimable: totalClaimable.toString(),
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('Get claimable error:', error);
+    return res.status(500).json({ error: 'Internal server error' } as ClaimErrorResponse);
+  }
 });
 
 export default router;

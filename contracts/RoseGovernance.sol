@@ -85,6 +85,15 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // Store allocation hashes for future payout verification
     mapping(uint256 => mapping(address => bytes32)) public allocationHashes;  // proposalId => delegate => hash
 
+    // ============ Voter Reward Pools (for gas-efficient payout) ============
+    mapping(uint256 => uint256) public voterRewardPool;       // proposalId => total reward pool
+    mapping(uint256 => uint256) public voterRewardTotalVotes; // proposalId => total votes for winning side
+    mapping(uint256 => bool) public voterRewardOutcome;       // proposalId => true=yay won, false=nay won
+
+    // ============ Claim Tracking ============
+    mapping(uint256 => mapping(address => bool)) public directVoterRewardClaimed;  // proposalId => voter => claimed
+    mapping(uint256 => mapping(address => mapping(address => bool))) public delegatorRewardClaimed;  // proposalId => delegate => delegator => claimed
+
     // ============ Constants ============
     uint256 public constant VOTING_PERIOD = 2 weeks;
     uint256 public constant QUORUM_THRESHOLD = 3300;      // 33% in basis points
@@ -942,6 +951,78 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         emit RewardsDistributed(proposalId, daoReward + yayReward + proposerReward);
     }
 
+    // ============ Claim Functions ============
+
+    /**
+     * @dev Claim voter rewards for multiple proposals in a single transaction
+     * Works for both direct voters and delegators
+     * @param claims Array of claim data (proposalId, claimType, delegate, votePower)
+     * @param expiry Signature expiration timestamp
+     * @param signature Backend signer approval
+     */
+    function claimVoterRewards(
+        ClaimData[] calldata claims,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        if (claims.length == 0) revert EmptyClaims();
+        if (block.timestamp > expiry) revert SignatureExpired();
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+
+        // 1. Verify signature
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "claimVoterRewards",
+            msg.sender,
+            abi.encode(claims),
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        // 2. Process all claims
+        uint256 totalReward = 0;
+        for (uint256 i = 0; i < claims.length; i++) {
+            ClaimData calldata c = claims[i];
+
+            // Skip if no pool
+            if (voterRewardPool[c.proposalId] == 0) continue;
+
+            uint256 reward;
+            if (c.claimType == ClaimType.DirectVoter) {
+                // Direct voter claim
+                if (directVoterRewardClaimed[c.proposalId][msg.sender]) continue;
+
+                reward = (voterRewardPool[c.proposalId] * c.votePower)
+                        / voterRewardTotalVotes[c.proposalId];
+
+                directVoterRewardClaimed[c.proposalId][msg.sender] = true;
+                emit DirectVoterRewardClaimed(c.proposalId, msg.sender, reward);
+            } else {
+                // Delegator claim
+                if (delegatorRewardClaimed[c.proposalId][c.delegate][msg.sender]) continue;
+
+                reward = (voterRewardPool[c.proposalId] * c.votePower)
+                        / voterRewardTotalVotes[c.proposalId];
+
+                delegatorRewardClaimed[c.proposalId][c.delegate][msg.sender] = true;
+                emit DelegatorRewardClaimed(c.proposalId, c.delegate, msg.sender, reward);
+            }
+
+            totalReward += reward;
+        }
+
+        // 3. Add total to staked balance (tokens already in contract from pool mint)
+        if (totalReward > 0) {
+            stakedRose[msg.sender] += totalReward;
+            emit TotalRewardsClaimed(msg.sender, totalReward);
+        }
+    }
+
     // ============ Admin Functions ============
 
     function setPassportSigner(address _signer) external onlyOwner {
@@ -977,18 +1058,15 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         Proposal storage p = _proposals[proposalId];
         if (p.yayVotes == 0) return;
 
-        // Distribute to direct voters
-        address[] memory voters = _proposalVoters[proposalId];
-        for (uint256 i = 0; i < voters.length; i++) {
-            Vote storage v = _votes[proposalId][voters[i]];
-            if (v.hasVoted && v.support) {
-                uint256 voterReward = (totalReward * v.votePower) / p.yayVotes;
-                IRoseToken(address(roseToken)).mint(voters[i], voterReward);
-            }
-        }
+        // Mint ENTIRE pool to contract - NO LOOPS!
+        IRoseToken(address(roseToken)).mint(address(this), totalReward);
 
-        // Distribute to delegators whose power was used in Yay delegated votes
-        _distributeDelegatorRewards(proposalId, totalReward, p.yayVotes, true);
+        // Store pool info for claims
+        voterRewardPool[proposalId] = totalReward;
+        voterRewardTotalVotes[proposalId] = p.yayVotes;
+        voterRewardOutcome[proposalId] = true; // yay won
+
+        emit VoterRewardPoolCreated(proposalId, totalReward, p.yayVotes, true);
     }
 
     function _distributeNayRewards(uint256 proposalId) internal {
@@ -997,50 +1075,15 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
         uint256 totalReward = (p.value * NAY_VOTER_REWARD) / BASIS_POINTS;
 
-        // Distribute to direct voters
-        address[] memory voters = _proposalVoters[proposalId];
-        for (uint256 i = 0; i < voters.length; i++) {
-            Vote storage v = _votes[proposalId][voters[i]];
-            if (v.hasVoted && !v.support) {
-                uint256 voterReward = (totalReward * v.votePower) / p.nayVotes;
-                IRoseToken(address(roseToken)).mint(voters[i], voterReward);
-            }
-        }
+        // Mint ENTIRE pool to contract - NO LOOPS!
+        IRoseToken(address(roseToken)).mint(address(this), totalReward);
 
-        // Distribute to delegators whose power was used in Nay delegated votes
-        _distributeDelegatorRewards(proposalId, totalReward, p.nayVotes, false);
-    }
+        // Store pool info for claims
+        voterRewardPool[proposalId] = totalReward;
+        voterRewardTotalVotes[proposalId] = p.nayVotes;
+        voterRewardOutcome[proposalId] = false; // nay won
 
-    /**
-     * @dev Distribute rewards to delegators based on their used power
-     */
-    function _distributeDelegatorRewards(
-        uint256 proposalId,
-        uint256 totalReward,
-        uint256 totalVotes,
-        bool forYay
-    ) internal {
-        address[] memory delegates = _proposalDelegates[proposalId];
-
-        for (uint256 i = 0; i < delegates.length; i++) {
-            address delegate = delegates[i];
-            DelegatedVoteRecord storage record = _delegatedVotes[proposalId][delegate];
-
-            if (record.hasVoted && record.support == forYay) {
-                // Distribute to each delegator based on their contribution
-                address[] memory delegatorList = _delegators[delegate].values();
-
-                for (uint256 j = 0; j < delegatorList.length; j++) {
-                    address delegator = delegatorList[j];
-                    uint256 powerUsed = _delegatorVotePower[proposalId][delegate][delegator];
-
-                    if (powerUsed > 0) {
-                        uint256 delegatorReward = (totalReward * powerUsed) / totalVotes;
-                        IRoseToken(address(roseToken)).mint(delegator, delegatorReward);
-                    }
-                }
-            }
-        }
+        emit VoterRewardPoolCreated(proposalId, totalReward, p.nayVotes, false);
     }
 
     function _resetProposalVotes(uint256 proposalId) internal {

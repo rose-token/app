@@ -27,6 +27,10 @@ export const useDelegation = () => {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState({});
 
+  // Claimable rewards state
+  const [claimableRewards, setClaimableRewards] = useState(null);
+  const [claimableLoading, setClaimableLoading] = useState(false);
+
   // Get user's delegation info
   const { data: delegationData, refetch: refetchDelegation } = useReadContracts({
     contracts: [
@@ -439,6 +443,111 @@ export const useDelegation = () => {
     }
   }, [isConnected, writeContractAsync, publicClient, refetchDelegation, refetchDelegators]);
 
+  /**
+   * Fetch claimable voter rewards from backend
+   */
+  const fetchClaimableRewards = useCallback(async () => {
+    if (!account) return;
+
+    setClaimableLoading(true);
+    try {
+      const res = await fetch(`${SIGNER_URL}/api/delegation/claimable/${account}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch claimable rewards');
+      }
+      const data = await res.json();
+      setClaimableRewards(data);
+    } catch (error) {
+      console.error('Failed to fetch claimable rewards:', error);
+      setClaimableRewards(null);
+    } finally {
+      setClaimableLoading(false);
+    }
+  }, [account]);
+
+  /**
+   * Claim all pending voter rewards
+   * Gets signed approval from backend and calls contract
+   */
+  const claimAllRewards = useCallback(async () => {
+    if (!isConnected || !account) {
+      throw new Error('Not connected');
+    }
+
+    setActionLoading(prev => ({ ...prev, claimRewards: true }));
+    setError(null);
+
+    try {
+      console.log('Requesting claim signature from backend...');
+
+      // Step 1: Get signature from backend
+      const response = await fetch(`${SIGNER_URL}/api/delegation/claim-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: account }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get claim signature');
+      }
+
+      const { claims, expiry, signature } = await response.json();
+
+      if (!claims || claims.length === 0) {
+        throw new Error('No rewards to claim');
+      }
+
+      console.log(`Claiming ${claims.length} reward(s)...`);
+
+      // Step 2: Call contract with batch claim
+      const hash = await writeContractAsync({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'claimVoterRewards',
+        args: [
+          claims.map(c => ({
+            proposalId: BigInt(c.proposalId),
+            claimType: c.claimType,
+            delegate: c.delegate,
+            votePower: BigInt(c.votePower),
+          })),
+          BigInt(expiry),
+          signature,
+        ],
+      });
+
+      await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+
+      console.log('Rewards claimed successfully!');
+
+      // Refresh data
+      await fetchClaimableRewards();
+      await refetchDelegation();
+
+      return { success: true, hash };
+    } catch (err) {
+      console.error('Claim rewards error:', err);
+      const message = err.message.includes('User rejected')
+        ? 'Transaction rejected'
+        : err.message.includes('NoRewardsToClaim')
+        ? 'No rewards available to claim'
+        : err.message.includes('SignatureExpired')
+        ? 'Signature expired - please try again'
+        : err.message.includes('InvalidClaimSignature')
+        ? 'Invalid signature - please try again'
+        : err.message || 'Failed to claim rewards';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, claimRewards: false }));
+    }
+  }, [isConnected, account, writeContractAsync, publicClient, fetchClaimableRewards, refetchDelegation]);
+
   return {
     // State
     isConnected,
@@ -450,11 +559,16 @@ export const useDelegation = () => {
     error,
     actionLoading,
     setError,
+    // Claimable rewards
+    claimableRewards,
+    claimableLoading,
     // Actions
     delegateTo,
     undelegate,
     castDelegatedVote,
     refreshDelegation,
+    fetchClaimableRewards,
+    claimAllRewards,
     refetch: async () => {
       await refetchDelegation();
       await refetchDelegators();

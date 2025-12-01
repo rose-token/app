@@ -54,6 +54,20 @@ describe("RoseGovernance", function () {
     );
   }
 
+  // Helper to create claim signature for voter rewards
+  async function createClaimSignature(signer, claimer, claims, expiry) {
+    const abiCoder = new ethers.AbiCoder();
+    const encodedClaims = abiCoder.encode(
+      ["tuple(uint256,uint8,address,uint256)[]"],
+      [claims.map(c => [c.proposalId, c.claimType, c.delegate, c.votePower])]
+    );
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "bytes", "uint256"],
+      ["claimVoterRewards", claimer, encodedClaims, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
   // Helper to set up an eligible proposer (10+ tasks, 90%+ reputation)
   async function setupEligibleProposer(user) {
     // Set up as eligible via marketplace callback (10 tasks, no disputes)
@@ -1524,6 +1538,440 @@ describe("RoseGovernance", function () {
             false
           )
         ).to.be.revertedWithCustomError(governance, "NotMarketplace");
+      });
+    });
+  });
+
+  describe("Voter Reward Claims", function () {
+    let proposalId;
+    let mockMarketplaceContract;
+    const CLAIM_TYPE_DIRECT = 0;
+    const CLAIM_TYPE_DELEGATOR = 1;
+
+    beforeEach(async function () {
+      // Deploy MockMarketplace for yay reward tests
+      const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
+      mockMarketplaceContract = await MockMarketplace.deploy();
+      await mockMarketplaceContract.setGovernance(await governance.getAddress());
+
+      // Set up proposer as eligible
+      await setupEligibleProposer(proposer);
+
+      // Set up voters as eligible
+      await setupEligibleVoter(user1);
+      await setupEligibleVoter(user2);
+
+      // Fund treasury so proposals can be created
+      await roseToken.connect(owner).mint(owner.address, ethers.parseEther("10000"));
+
+      // Give users ROSE tokens (enough to meet quorum - 33% of total staked)
+      const mintAmount = ethers.parseEther("5000");
+      await roseToken.connect(owner).mint(user1.address, mintAmount);
+      await roseToken.connect(owner).mint(user2.address, mintAmount);
+      await roseToken.connect(owner).mint(proposer.address, mintAmount);
+
+      // Users stake tokens
+      await roseToken.connect(user1).approve(await governance.getAddress(), mintAmount);
+      await governance.connect(user1).deposit(mintAmount);
+
+      await roseToken.connect(user2).approve(await governance.getAddress(), mintAmount);
+      await governance.connect(user2).deposit(mintAmount);
+
+      // Create proposal
+      const latestTime = await time.latest();
+      const expiry = latestTime + 3600;
+      const signature = await createSignature(passportSigner, proposer.address, "propose", expiry);
+
+      const tx = await governance.connect(proposer).propose(
+        "Test Proposal",
+        "QmTest",
+        ethers.parseEther("100"),
+        latestTime + 30 * 24 * 60 * 60,
+        "Test deliverables",
+        expiry,
+        signature
+      );
+      const receipt = await tx.wait();
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = governance.interface.parseLog(log);
+          return parsed.name === "ProposalCreated";
+        } catch { return false; }
+      });
+      proposalId = governance.interface.parseLog(event).args.proposalId;
+    });
+
+    describe("Pool Creation", function () {
+      it("Should create reward pool on proposal pass (yay)", async function () {
+        // Deploy a complete test environment with MockMarketplace
+        // 1. Deploy fresh vROSE
+        const vROSE = await ethers.getContractFactory("vROSE");
+        const testVRose = await vROSE.deploy();
+
+        // 2. Deploy RoseGovernance with MockMarketplace
+        const RoseGovernance = await ethers.getContractFactory("RoseGovernance");
+        const testGovernance = await RoseGovernance.deploy(
+          await roseToken.getAddress(),
+          await testVRose.getAddress(),
+          await mockMarketplaceContract.getAddress(),
+          mockTreasury.address,
+          passportSigner.address
+        );
+
+        // 3. Set up vROSE to trust the new governance
+        await testVRose.setGovernance(await testGovernance.getAddress());
+        await testVRose.setMarketplace(await mockMarketplaceContract.getAddress());
+
+        // 4. Set up governance
+        await testGovernance.setDelegationSigner(delegationSigner.address);
+        await mockMarketplaceContract.setGovernance(await testGovernance.getAddress());
+
+        // 5. Authorize testGovernance to mint roseToken (for distributing rewards)
+        await roseToken.connect(owner).setAuthorized(await testGovernance.getAddress(), true);
+
+        // Set up proposer and voter (via mockMarketplaceContract which forwards to governance)
+        for (let i = 0; i < 10; i++) {
+          await mockMarketplaceContract.updateUserStats(proposer.address, ethers.parseEther("100"), false);
+          await mockMarketplaceContract.updateUserStats(user1.address, ethers.parseEther("100"), false);
+        }
+
+        // Fund and stake
+        const stakeAmount = ethers.parseEther("5000");
+        await roseToken.connect(owner).mint(user1.address, stakeAmount);
+        await roseToken.connect(user1).approve(await testGovernance.getAddress(), stakeAmount);
+        await testGovernance.connect(user1).deposit(stakeAmount);
+
+        // Create proposal
+        const latestTime = await time.latest();
+        const expiry = latestTime + 3600;
+        const signature = await createSignature(passportSigner, proposer.address, "propose", expiry);
+
+        const tx = await testGovernance.connect(proposer).propose(
+          "Test Proposal",
+          "QmTest",
+          ethers.parseEther("100"),
+          latestTime + 30 * 24 * 60 * 60,
+          "Test deliverables",
+          expiry,
+          signature
+        );
+        const receipt = await tx.wait();
+        const event = receipt.logs.find(log => {
+          try {
+            const parsed = testGovernance.interface.parseLog(log);
+            return parsed.name === "ProposalCreated";
+          } catch { return false; }
+        });
+        const testProposalId = testGovernance.interface.parseLog(event).args.proposalId;
+
+        // Vote yay with enough to meet quorum (33% of 5000 = 1650)
+        await testGovernance.connect(user1).allocateToProposal(testProposalId, ethers.parseEther("2000"), true);
+
+        // Fast forward past voting period
+        await time.increase(VOTING_PERIOD + 1);
+
+        // Finalize (should pass)
+        await testGovernance.finalizeProposal(testProposalId);
+
+        // Execute proposal (creates DAO task via MockMarketplace)
+        await testGovernance.executeProposal(testProposalId);
+
+        // Complete task via MockMarketplace (triggers onTaskComplete -> _distributeYayRewards)
+        const proposal = await testGovernance.proposals(testProposalId);
+        await mockMarketplaceContract.completeTask(proposal.taskId);
+
+        // Check pool was created
+        const poolAmount = await testGovernance.voterRewardPool(testProposalId);
+        expect(poolAmount).to.be.gt(0);
+
+        const totalVotes = await testGovernance.voterRewardTotalVotes(testProposalId);
+        expect(totalVotes).to.be.gt(0);
+
+        const outcome = await testGovernance.voterRewardOutcome(testProposalId);
+        expect(outcome).to.equal(true); // yay won
+      });
+
+      it("Should create reward pool on proposal fail (nay)", async function () {
+        // Vote nay with enough to meet quorum (33% of 10000 = 3300)
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("2000"), false);
+        await governance.connect(user2).allocateToProposal(proposalId, ethers.parseEther("2000"), false);
+
+        // Fast forward past voting period
+        await time.increase(VOTING_PERIOD + 1);
+
+        // Finalize (should fail due to nay majority)
+        await governance.finalizeProposal(proposalId);
+
+        // Check pool was created for nay voters
+        const poolAmount = await governance.voterRewardPool(proposalId);
+        expect(poolAmount).to.be.gt(0);
+
+        const outcome = await governance.voterRewardOutcome(proposalId);
+        expect(outcome).to.equal(false); // nay won
+      });
+
+      it("Should emit VoterRewardPoolCreated event", async function () {
+        // Vote nay with enough to meet quorum
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("4000"), false);
+        await time.increase(VOTING_PERIOD + 1);
+
+        await expect(governance.finalizeProposal(proposalId))
+          .to.emit(governance, "VoterRewardPoolCreated");
+      });
+    });
+
+    describe("Direct Voter Claims", function () {
+      beforeEach(async function () {
+        // Vote nay with enough to meet quorum (33% of 10000 = 3300)
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("4000"), false);
+        await time.increase(VOTING_PERIOD + 1);
+        await governance.finalizeProposal(proposalId);
+      });
+
+      it("Should allow direct voter to claim rewards with valid signature", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+        const stakedBefore = await governance.stakedRose(user1.address);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await governance.connect(user1).claimVoterRewards(claims, expiry, signature);
+
+        const stakedAfter = await governance.stakedRose(user1.address);
+        expect(stakedAfter).to.be.gt(stakedBefore);
+      });
+
+      it("Should emit DirectVoterRewardClaimed event", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.emit(governance, "DirectVoterRewardClaimed");
+      });
+
+      it("Should emit TotalRewardsClaimed event", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.emit(governance, "TotalRewardsClaimed");
+      });
+
+      it("Should prevent double claim", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await governance.connect(user1).claimVoterRewards(claims, expiry, signature);
+
+        // Second claim should skip (signature replay protection)
+        const expiry2 = (await time.latest()) + 7200;
+        const signature2 = await createClaimSignature(delegationSigner, user1.address, claims, expiry2);
+
+        const stakedBefore = await governance.stakedRose(user1.address);
+        await governance.connect(user1).claimVoterRewards(claims, expiry2, signature2);
+        const stakedAfter = await governance.stakedRose(user1.address);
+
+        // Staked should not change (claim skipped due to already claimed flag)
+        expect(stakedAfter).to.equal(stakedBefore);
+      });
+    });
+
+    describe("Signature Validation", function () {
+      beforeEach(async function () {
+        // Vote nay with enough to meet quorum (33% of 10000 = 3300)
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("4000"), false);
+        await time.increase(VOTING_PERIOD + 1);
+        await governance.finalizeProposal(proposalId);
+      });
+
+      it("Should revert with expired signature", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) - 3600; // Past expiry
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.be.revertedWithCustomError(governance, "SignatureExpired");
+      });
+
+      it("Should revert with invalid signer", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        // Sign with wrong signer (user2 instead of delegationSigner)
+        const signature = await createClaimSignature(user2, user1.address, claims, expiry);
+
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.be.revertedWithCustomError(governance, "InvalidDelegationSignature");
+      });
+
+      it("Should revert with replay attack (same signature)", async function () {
+        const votePower = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [{
+          proposalId: proposalId,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: votePower
+        }];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await governance.connect(user1).claimVoterRewards(claims, expiry, signature);
+
+        // Same exact signature should fail
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.be.revertedWithCustomError(governance, "SignatureAlreadyUsed");
+      });
+
+      it("Should revert with empty claims", async function () {
+        const expiry = (await time.latest()) + 3600;
+        const claims = [];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await expect(governance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.be.revertedWithCustomError(governance, "EmptyClaims");
+      });
+
+      it("Should revert if delegation signer not set", async function () {
+        // Deploy fresh governance without delegation signer
+        const Governance = await ethers.getContractFactory("RoseGovernance");
+        const freshGovernance = await Governance.deploy(
+          await roseToken.getAddress(),
+          await vRose.getAddress(),
+          user3.address,           // marketplace
+          owner.address,           // treasury
+          passportSigner.address   // passportSigner
+        );
+        // Intentionally NOT setting delegation signer
+
+        const claims = [{
+          proposalId: 1,
+          claimType: CLAIM_TYPE_DIRECT,
+          delegate: ethers.ZeroAddress,
+          votePower: 1000
+        }];
+        const expiry = (await time.latest()) + 3600;
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await expect(freshGovernance.connect(user1).claimVoterRewards(claims, expiry, signature))
+          .to.be.revertedWithCustomError(freshGovernance, "ZeroAddressDelegationSigner");
+      });
+    });
+
+    describe("Batch Claims", function () {
+      let proposalId2;
+
+      beforeEach(async function () {
+        // First proposal - nay (with enough to meet quorum)
+        await governance.connect(user1).allocateToProposal(proposalId, ethers.parseEther("4000"), false);
+        await time.increase(VOTING_PERIOD + 1);
+        await governance.finalizeProposal(proposalId);
+
+        // Create second proposal
+        const expiry = (await time.latest()) + 3600;
+        const signature = await createSignature(passportSigner, proposer.address, "propose", expiry);
+
+        const tx = await governance.connect(proposer).propose(
+          "Test Proposal 2",
+          "QmTest2",
+          ethers.parseEther("50"),
+          (await time.latest()) + 30 * 24 * 60 * 60,
+          "Test deliverables 2",
+          expiry,
+          signature
+        );
+        const receipt = await tx.wait();
+        const event = receipt.logs.find(log => {
+          try {
+            const parsed = governance.interface.parseLog(log);
+            return parsed.name === "ProposalCreated";
+          } catch { return false; }
+        });
+        proposalId2 = governance.interface.parseLog(event).args.proposalId;
+
+        // After first proposal finalized, user1 needs to unallocate to get stake back
+        await governance.connect(user1).unallocateFromProposal(proposalId);
+
+        // Second proposal - nay (with enough to meet quorum)
+        await governance.connect(user1).allocateToProposal(proposalId2, ethers.parseEther("4000"), false);
+        await time.increase(VOTING_PERIOD + 1);
+        await governance.finalizeProposal(proposalId2);
+      });
+
+      it("Should allow batch claim across multiple proposals", async function () {
+        const votePower1 = await governance.votes(proposalId, user1.address).then(v => v.votePower);
+        const votePower2 = await governance.votes(proposalId2, user1.address).then(v => v.votePower);
+
+        const stakedBefore = await governance.stakedRose(user1.address);
+
+        const expiry = (await time.latest()) + 3600;
+        const claims = [
+          {
+            proposalId: proposalId,
+            claimType: CLAIM_TYPE_DIRECT,
+            delegate: ethers.ZeroAddress,
+            votePower: votePower1
+          },
+          {
+            proposalId: proposalId2,
+            claimType: CLAIM_TYPE_DIRECT,
+            delegate: ethers.ZeroAddress,
+            votePower: votePower2
+          }
+        ];
+        const signature = await createClaimSignature(delegationSigner, user1.address, claims, expiry);
+
+        await governance.connect(user1).claimVoterRewards(claims, expiry, signature);
+
+        const stakedAfter = await governance.stakedRose(user1.address);
+        expect(stakedAfter).to.be.gt(stakedBefore);
+
+        // Both should be marked as claimed
+        expect(await governance.directVoterRewardClaimed(proposalId, user1.address)).to.equal(true);
+        expect(await governance.directVoterRewardClaimed(proposalId2, user1.address)).to.equal(true);
       });
     });
   });
