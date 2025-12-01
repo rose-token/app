@@ -6,6 +6,7 @@ services:
     image: postgres:16-alpine
     expose:
       - port: 5432
+        proto: tcp
         to:
           - service: signer
     env:
