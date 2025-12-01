@@ -2,9 +2,9 @@ import cron from 'node-cron';
 import { config } from '../config';
 import { executeRebalance } from '../services/treasury';
 
-// Quarterly: Jan 1, Apr 1, Jul 1, Oct 1 at 00:00 UTC
+// Monthly: 1st of every month at 00:00 UTC
 // Cron format: minute hour day-of-month month day-of-week
-const QUARTERLY_SCHEDULE = '0 0 1 1,4,7,10 *';
+const MONTHLY_SCHEDULE = '0 0 1 * *';
 
 // Retry configuration for failed rebalances
 const RETRY_INTERVAL_HOURS = 6;
@@ -63,12 +63,12 @@ export function startRebalanceCron(): void {
   }
 
   cron.schedule(
-    QUARTERLY_SCHEDULE,
+    MONTHLY_SCHEDULE,
     async () => {
       const timestamp = new Date().toISOString();
-      console.log(`[Cron] Quarterly rebalance triggered at ${timestamp}`);
+      console.log(`[Cron] Monthly rebalance triggered at ${timestamp}`);
 
-      // Cancel any previous retry task from last quarter
+      // Cancel any previous retry task from last month
       stopRetryTask();
 
       try {
@@ -83,5 +83,5 @@ export function startRebalanceCron(): void {
     { timezone: 'UTC' }
   );
 
-  console.log('[Cron] Quarterly treasury rebalance scheduled (Jan 1, Apr 1, Jul 1, Oct 1 at 00:00 UTC)');
+  console.log('[Cron] Monthly treasury rebalance scheduled (1st of every month at 00:00 UTC)');
 }
