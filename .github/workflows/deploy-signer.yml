@@ -6,6 +6,10 @@ on:
     paths:
       - 'backend/signer/**'
       - '.github/workflows/deploy-signer.yml'
+  workflow_run:
+    workflows: ["Combined Deployment Workflow"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       deploy_to_akash:
@@ -70,10 +74,38 @@ jobs:
           echo "Image tags: ${{ steps.meta.outputs.tags }}"
           echo "Image digest: ${{ steps.build.outputs.digest }}"
 
-  deploy-akash:
-    needs: build-and-push
+  get-contract-addresses:
     runs-on: ubuntu-latest
-    if: github.event.inputs.deploy_to_akash == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    outputs:
+      governance_address: ${{ steps.extract.outputs.governance_address }}
+    steps:
+      - name: Download artifact from combined-deploy
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: combined-deploy.yml
+          name: contract-addresses
+          path: ./
+        continue-on-error: true
+
+      - name: Extract governance address
+        id: extract
+        run: |
+          if [ -f contract-addresses.json ]; then
+            GOVERNANCE_ADDRESS=$(jq -r '.governanceAddress' contract-addresses.json)
+            echo "Found governance address: $GOVERNANCE_ADDRESS"
+            echo "governance_address=$GOVERNANCE_ADDRESS" >> $GITHUB_OUTPUT
+          else
+            echo "No contract-addresses.json found, will use secret fallback"
+            echo "governance_address=" >> $GITHUB_OUTPUT
+          fi
+
+  deploy-akash:
+    needs: [build-and-push, get-contract-addresses]
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.deploy_to_akash == 'true' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Checkout repository
@@ -88,6 +120,8 @@ jobs:
           VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
           VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
+          GOVERNANCE_ADDRESS: ${{ needs.get-contract-addresses.outputs.governance_address || secrets.GOVERNANCE_ADDRESS }}
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -99,6 +133,8 @@ jobs:
           sed -i "s|\${VITE_GITCOIN_SCORER_ID}|${VITE_GITCOIN_SCORER_ID}|g" backend/signer/deploy.yaml
           sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" backend/signer/deploy.yaml
           sed -i "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" backend/signer/deploy.yaml
+          sed -i "s|\${ARBITRUM_SEPOLIA_RPC_URL}|${ARBITRUM_SEPOLIA_RPC_URL}|g" backend/signer/deploy.yaml
+          sed -i "s|\${GOVERNANCE_ADDRESS}|${GOVERNANCE_ADDRESS}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g' | sed 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=***REDACTED***/g' | sed 's/postgresql:\/\/rose:.*/postgresql:\/\/rose:***REDACTED***@postgres:5432\/rose/g'
