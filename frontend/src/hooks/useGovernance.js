@@ -4,42 +4,12 @@
  */
 
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { useAccount, useReadContract, useReadContracts, useWriteContract, usePublicClient } from 'wagmi';
+import { useAccount, useReadContracts, useWriteContract, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import vROSEABI from '../contracts/vROSEABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS } from '../constants/contracts';
-
-/**
- * Parse simulation errors into user-friendly messages
- */
-function parseSimulationError(err) {
-  const msg = err?.message || err?.shortMessage || '';
-
-  // Custom errors from RoseGovernance/vROSE
-  if (msg.includes('NotGovernance')) {
-    return 'vROSE contract not configured - governance address not set on vROSE contract';
-  }
-  if (msg.includes('ZeroAmount')) {
-    return 'Amount cannot be zero';
-  }
-  if (msg.includes('InsufficientBalance') || msg.includes('transfer amount exceeds balance')) {
-    return 'Insufficient ROSE balance';
-  }
-  if (msg.includes('InsufficientAllowance') || msg.includes('allowance')) {
-    return 'Token approval required';
-  }
-  if (msg.includes('InsufficientUnallocated')) {
-    return 'Insufficient unallocated ROSE - unallocate from votes/delegation first';
-  }
-  if (msg.includes('InsufficientVRose')) {
-    return 'Insufficient vROSE balance - may be locked in marketplace tasks';
-  }
-
-  // Return original message if no match
-  return msg || 'Transaction simulation failed';
-}
 
 /**
  * Parse transaction errors into user-friendly messages
@@ -351,31 +321,8 @@ export const useGovernance = () => {
       }
       // ========== END DEBUG LOGGING ==========
 
-      // ========== PRE-FLIGHT SIMULATION ==========
-      // Simulate BOTH transactions before executing either to catch issues early
-      setDepositStep('simulating');
       const needsApproval = currentAllowance < amountWei;
       console.log('Needs approval:', needsApproval, '(current:', formatUnits(currentAllowance, 18), ', needed:', amount, ')');
-
-      if (needsApproval) {
-        console.log('Simulating approve transaction...');
-        try {
-          await publicClient.simulateContract({
-            address: CONTRACTS.TOKEN,
-            abi: RoseTokenABI,
-            functionName: 'approve',
-            args: [CONTRACTS.GOVERNANCE, amountWei],
-            account: account,
-          });
-          console.log('Approve simulation passed!');
-        } catch (simError) {
-          console.error('Approve simulation FAILED:', simError);
-          throw new Error('Approval would fail: ' + parseSimulationError(simError));
-        }
-      }
-
-// Deposit simulation moved to after approval (when needed)
-      // ========== END PRE-FLIGHT SIMULATION ==========
 
       // Check balance
       if (parsed && amountWei > parsed.roseBalanceRaw) {
@@ -394,6 +341,7 @@ export const useGovernance = () => {
           abi: RoseTokenABI,
           functionName: 'approve',
           args: [CONTRACTS.GOVERNANCE, amountWei],
+          gas: 100_000n,
         });
         console.log('Approve tx hash:', approveHash);
 
@@ -410,38 +358,6 @@ export const useGovernance = () => {
 
         // Longer delay for RPC state sync and nonce refresh
         await new Promise(r => setTimeout(r, 2000));
-
-        // Now simulate deposit with the new allowance
-        console.log('Simulating deposit transaction (post-approval)...');
-        try {
-          await publicClient.simulateContract({
-            address: CONTRACTS.GOVERNANCE,
-            abi: RoseGovernanceABI,
-            functionName: 'deposit',
-            args: [amountWei],
-            account: account,
-          });
-          console.log('Deposit simulation passed!');
-        } catch (simError) {
-          console.error('Deposit simulation FAILED:', simError);
-          throw new Error(parseSimulationError(simError));
-        }
-      } else {
-        // No approval needed - simulate deposit now
-        console.log('Simulating deposit transaction...');
-        try {
-          await publicClient.simulateContract({
-            address: CONTRACTS.GOVERNANCE,
-            abi: RoseGovernanceABI,
-            functionName: 'deposit',
-            args: [amountWei],
-            account: account,
-          });
-          console.log('Deposit simulation passed!');
-        } catch (simError) {
-          console.error('Deposit simulation FAILED:', simError);
-          throw new Error(parseSimulationError(simError));
-        }
       }
 
       // Step 2: Deposit into governance
@@ -455,6 +371,7 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'deposit',
         args: [amountWei],
+        gas: 400_000n,
       });
       console.log('Deposit tx hash:', depositHash);
 
@@ -521,6 +438,7 @@ export const useGovernance = () => {
         abi: vROSEABI,
         functionName: 'approve',
         args: [CONTRACTS.GOVERNANCE, amountWei],
+        gas: 100_000n,
       });
 
       // Wait for 2 confirmations to ensure nonce is updated
@@ -539,6 +457,7 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'withdraw',
         args: [amountWei],
+        gas: 400_000n,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -568,7 +487,7 @@ export const useGovernance = () => {
     loading,
     error,
     setError,
-    depositStep, // Current step: null, 'checking', 'simulating', 'approving', 'approved', 'depositing', 'complete'
+    depositStep, // Current step: null, 'checking', 'approving', 'approved', 'depositing', 'complete'
     // Actions
     deposit,
     withdraw,
