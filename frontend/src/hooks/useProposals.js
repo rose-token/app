@@ -14,6 +14,42 @@ import { usePassportVerify } from './usePassportVerify';
 // Backend signer URL
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
+// Need RoseTokenABI for debug logging
+import RoseTokenABI from '../contracts/RoseTokenABI.json';
+
+/**
+ * Parse simulation errors into user-friendly messages (for propose)
+ */
+function parseSimulationError(err) {
+  const msg = err?.message || err?.shortMessage || '';
+
+  // Custom errors from RoseGovernance
+  if (msg.includes('IneligibleToPropose')) {
+    return 'Not eligible to propose. Requires 90% reputation and 10+ completed tasks.';
+  }
+  if (msg.includes('SignatureExpired')) {
+    return 'Passport signature expired. Please try again.';
+  }
+  if (msg.includes('SignatureAlreadyUsed')) {
+    return 'Passport signature already used. Please get a new signature.';
+  }
+  if (msg.includes('InvalidSignature')) {
+    return 'Invalid passport signature. Backend signer may be misconfigured.';
+  }
+  if (msg.includes('ProposalValueExceedsTreasury')) {
+    return 'Proposal value exceeds treasury balance.';
+  }
+  if (msg.includes('ZeroAmount')) {
+    return 'Title or value cannot be empty/zero.';
+  }
+  if (msg.includes('NotGovernance')) {
+    return 'Contract configuration error - contact admin.';
+  }
+
+  // Return original message if no match
+  return msg || 'Transaction simulation failed';
+}
+
 /**
  * Parse transaction errors into user-friendly messages
  */
@@ -581,6 +617,83 @@ export const useProposals = (options = {}) => {
       console.log('Getting passport signature...');
       const { expiry, signature } = await getSignature('propose');
 
+      // ========== DEBUG LOGGING ==========
+      console.log('=== CREATE PROPOSAL DEBUG ===');
+      console.log('Account:', account);
+      console.log('Title:', title);
+      console.log('Value:', value, 'ROSE');
+      console.log('Value Wei:', valueWei.toString());
+      console.log('Deadline timestamp:', deadlineTimestamp);
+      console.log('Deliverables:', deliverables);
+      console.log('IPFS Hash:', descriptionHash);
+      console.log('Signature expiry:', expiry, '(', new Date(Number(expiry) * 1000).toISOString(), ')');
+      console.log('Signature:', signature);
+
+      // Check 1: canPropose
+      const canProposeResult = await publicClient.readContract({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canPropose',
+        args: [account],
+      });
+      console.log('canPropose:', canProposeResult);
+
+      // Check 2: Reputation
+      const reputation = await publicClient.readContract({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'getReputation',
+        args: [account],
+      });
+      console.log('Reputation:', Number(reputation), '%');
+
+      // Check 3: User stats (tasks completed)
+      const userStats = await publicClient.readContract({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'userStats',
+        args: [account],
+      });
+      console.log('Tasks completed:', Number(userStats[0]));
+      console.log('Total task value:', formatUnits(userStats[1], 18));
+
+      // Check 4: Treasury balance
+      const treasuryBalance = await publicClient.readContract({
+        address: CONTRACTS.TOKEN,
+        abi: RoseTokenABI,
+        functionName: 'balanceOf',
+        args: [CONTRACTS.TREASURY],
+      });
+      console.log('Treasury balance:', formatUnits(treasuryBalance, 18), 'ROSE');
+      console.log('Requested value:', value, 'ROSE');
+      const valueExceedsTreasury = valueWei > treasuryBalance;
+      console.log('Value exceeds treasury:', valueExceedsTreasury);
+
+      // Check 5: Passport signer address
+      const passportSigner = await publicClient.readContract({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'passportSigner',
+      });
+      console.log('Contract passportSigner:', passportSigner);
+
+      // Simulate the propose call BEFORE executing
+      console.log('Simulating propose transaction...');
+      try {
+        await publicClient.simulateContract({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'propose',
+          args: [title, descriptionHash, valueWei, BigInt(deadlineTimestamp), deliverables, BigInt(expiry), signature],
+          account: account,
+        });
+        console.log('Propose simulation passed!');
+      } catch (simError) {
+        console.error('Propose simulation FAILED:', simError);
+        throw new Error(parseSimulationError(simError));
+      }
+      // ========== END DEBUG LOGGING ==========
+
       console.log('Creating proposal...');
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
@@ -608,7 +721,7 @@ export const useProposals = (options = {}) => {
       createProposalInProgress.current = false;
       setActionLoading(prev => ({ ...prev, create: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals, getSignature]);
+  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals, getSignature, account]);
 
   /**
    * Finalize a proposal (after voting period ends)

@@ -26,7 +26,8 @@ export default defineConfig({
     include: /src\/.*\.jsx?$/,
     exclude: [],
     // Strip console.log in production builds for performance
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    // TEMPORARILY DISABLED for debugging governance deposit/propose errors
+    drop: [], // process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
   optimizeDeps: {
     esbuildOptions: {

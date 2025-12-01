@@ -12,6 +12,36 @@ import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS } from '../constants/contracts';
 
 /**
+ * Parse simulation errors into user-friendly messages
+ */
+function parseSimulationError(err) {
+  const msg = err?.message || err?.shortMessage || '';
+
+  // Custom errors from RoseGovernance/vROSE
+  if (msg.includes('NotGovernance')) {
+    return 'vROSE contract not configured - governance address not set on vROSE contract';
+  }
+  if (msg.includes('ZeroAmount')) {
+    return 'Amount cannot be zero';
+  }
+  if (msg.includes('InsufficientBalance') || msg.includes('transfer amount exceeds balance')) {
+    return 'Insufficient ROSE balance';
+  }
+  if (msg.includes('InsufficientAllowance') || msg.includes('allowance')) {
+    return 'Token approval required';
+  }
+  if (msg.includes('InsufficientUnallocated')) {
+    return 'Insufficient unallocated ROSE - unallocate from votes/delegation first';
+  }
+  if (msg.includes('InsufficientVRose')) {
+    return 'Insufficient vROSE balance - may be locked in marketplace tasks';
+  }
+
+  // Return original message if no match
+  return msg || 'Transaction simulation failed';
+}
+
+/**
  * Parse transaction errors into user-friendly messages
  */
 function parseTransactionError(err) {
@@ -250,6 +280,50 @@ export const useGovernance = () => {
     try {
       const amountWei = parseUnits(amount, 18);
 
+      // ========== DEBUG LOGGING ==========
+      console.log('=== DEPOSIT DEBUG ===');
+      console.log('Amount:', amount);
+      console.log('Amount Wei:', amountWei.toString());
+      console.log('Account:', account);
+      console.log('Governance contract:', CONTRACTS.GOVERNANCE);
+      console.log('Token contract:', CONTRACTS.TOKEN);
+      console.log('vROSE contract:', CONTRACTS.VROSE);
+
+      // Check 1: ROSE balance
+      const roseBalance = await publicClient.readContract({
+        address: CONTRACTS.TOKEN,
+        abi: RoseTokenABI,
+        functionName: 'balanceOf',
+        args: [account],
+      });
+      console.log('ROSE Balance:', formatUnits(roseBalance, 18));
+
+      // Check 2: Current ROSE allowance for governance
+      const currentAllowance = await publicClient.readContract({
+        address: CONTRACTS.TOKEN,
+        abi: RoseTokenABI,
+        functionName: 'allowance',
+        args: [account, CONTRACTS.GOVERNANCE],
+      });
+      console.log('Current ROSE Allowance for Governance:', formatUnits(currentAllowance, 18));
+
+      // Check 3: vROSE governance address (CRITICAL!)
+      const vRoseGovernance = await publicClient.readContract({
+        address: CONTRACTS.VROSE,
+        abi: vROSEABI,
+        functionName: 'governance',
+      });
+      console.log('vROSE governance address:', vRoseGovernance);
+      console.log('Expected governance:', CONTRACTS.GOVERNANCE);
+      const governanceMatch = vRoseGovernance?.toLowerCase() === CONTRACTS.GOVERNANCE?.toLowerCase();
+      console.log('Governance addresses match:', governanceMatch);
+
+      if (!governanceMatch) {
+        console.error('CRITICAL: vROSE governance address mismatch! Deposit will fail.');
+        throw new Error('vROSE contract not configured - governance address not set. Contact admin.');
+      }
+      // ========== END DEBUG LOGGING ==========
+
       // Check balance
       if (parsed && amountWei > parsed.roseBalanceRaw) {
         throw new Error('Insufficient ROSE balance');
@@ -272,6 +346,22 @@ export const useGovernance = () => {
 
       // Longer delay for RPC state sync and nonce refresh
       await new Promise(r => setTimeout(r, 2000));
+
+      // Simulate the deposit call BEFORE executing
+      console.log('Simulating deposit transaction...');
+      try {
+        await publicClient.simulateContract({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'deposit',
+          args: [amountWei],
+          account: account,
+        });
+        console.log('Deposit simulation passed!');
+      } catch (simError) {
+        console.error('Deposit simulation FAILED:', simError);
+        throw new Error(parseSimulationError(simError));
+      }
 
       // Step 2: Deposit into governance
       console.log('Depositing ROSE into governance...');
@@ -299,7 +389,7 @@ export const useGovernance = () => {
       depositInProgress.current = false;
       setLoading(prev => ({ ...prev, deposit: false }));
     }
-  }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance]);
+  }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance, account]);
 
   /**
    * Withdraw ROSE from governance (burns vROSE)
