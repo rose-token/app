@@ -76,6 +76,8 @@ jobs:
 
   get-contract-addresses:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
     outputs:
       governance_address: ${{ steps.extract.outputs.governance_address }}
     steps:
