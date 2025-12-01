@@ -98,3 +98,33 @@ export interface ProfileErrorResponse {
   invalid?: string[];
   details?: Record<string, string>;
 }
+
+// Delegation vote types
+export interface DelegationAllocation {
+  delegator: string;
+  powerUsed: string; // BigInt as string
+}
+
+export interface DelegationVoteRequest {
+  delegate: string;
+  proposalId: number;
+  amount: string; // BigInt as string
+  support: boolean;
+}
+
+export interface DelegationVoteResponse {
+  delegate: string;
+  proposalId: number;
+  amount: string;
+  support: boolean;
+  allocationsHash: string;
+  allocations: DelegationAllocation[];
+  expiry: number;
+  signature: string;
+}
+
+export interface DelegationErrorResponse {
+  error: string;
+  availablePower?: string;
+  requestedAmount?: string;
+}

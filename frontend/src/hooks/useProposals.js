@@ -11,6 +11,9 @@ import { CONTRACTS, ProposalStatus } from '../constants/contracts';
 import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
 import { usePassportVerify } from './usePassportVerify';
 
+// Backend signer URL
+const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
+
 /**
  * Hook for fetching and managing governance proposals
  * @param {Object} options - Options
@@ -414,14 +417,51 @@ export const useProposals = (options = {}) => {
         results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 18) });
       }
 
-      // Vote with delegated power if any
+      // Vote with delegated power if any (uses backend signing)
       if (delegatedToUse > 0n) {
+        console.log(`Requesting delegated vote signature for ${formatUnits(delegatedToUse, 18)} VP...`);
+
+        // Get signature from backend
+        const response = await fetch(`${SIGNER_URL}/api/delegation/vote-signature`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delegate: account,
+            proposalId: Number(proposalId),
+            amount: delegatedToUse.toString(),
+            support,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Backend error: ${response.status}`);
+        }
+
+        const signatureData = await response.json();
+        console.log('Got delegation signature from backend');
+
+        // Store allocations for future payout reference
+        try {
+          const storageKey = `delegatedVoteAllocations_${proposalId}_${account}`;
+          localStorage.setItem(storageKey, JSON.stringify(signatureData.allocations));
+        } catch (storageErr) {
+          console.warn('Failed to store allocations:', storageErr);
+        }
+
         console.log(`Voting with ${formatUnits(delegatedToUse, 18)} delegated power...`);
         const delegatedHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
-          functionName: 'castDelegatedVote',
-          args: [BigInt(proposalId), delegatedToUse, support],
+          functionName: 'castDelegatedVoteWithSignature',
+          args: [
+            BigInt(proposalId),
+            BigInt(signatureData.amount),
+            support,
+            signatureData.allocationsHash,
+            BigInt(signatureData.expiry),
+            signatureData.signature,
+          ],
         });
 
         await publicClient.waitForTransactionReceipt({
@@ -445,13 +485,21 @@ export const useProposals = (options = {}) => {
         ? err.message
         : err.message.includes('InsufficientDelegatedPower')
         ? 'Insufficient delegated power for this proposal'
+        : err.message.includes('InvalidDelegationSignature')
+        ? 'Invalid delegation signature - please try again'
+        : err.message.includes('SignatureExpired')
+        ? 'Signature expired - please try again'
+        : err.message.includes('Proposal is not active')
+        ? 'Proposal is not active or voting has ended'
+        : err.message.includes('Backend error')
+        ? err.message
         : 'Failed to cast vote';
       setError(message);
       throw new Error(message);
     } finally {
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
 
   /**
    * Create a new proposal

@@ -10,6 +10,7 @@ describe("RoseGovernance", function () {
   let mockTreasury;
   let owner;
   let passportSigner;
+  let delegationSigner;
   let user1;
   let user2;
   let user3;
@@ -27,6 +28,30 @@ describe("RoseGovernance", function () {
       [address, action, expiry]
     );
     return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Helper to create delegation vote signature
+  async function createDelegationSignature(signer, delegate, proposalId, amount, support, allocationsHash, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["address", "uint256", "uint256", "bool", "bytes32", "uint256"],
+      [delegate, proposalId, amount, support, allocationsHash, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Helper to compute allocations hash (matches backend logic)
+  function computeAllocationsHash(proposalId, delegate, allocations) {
+    const abiCoder = new ethers.AbiCoder();
+    // Sort allocations by delegator address (lowercase)
+    const sorted = [...allocations].sort((a, b) =>
+      a.delegator.toLowerCase().localeCompare(b.delegator.toLowerCase())
+    );
+    return ethers.keccak256(
+      abiCoder.encode(
+        ["uint256", "address", "tuple(address,uint256)[]"],
+        [proposalId, delegate, sorted.map(a => [a.delegator, a.powerUsed])]
+      )
+    );
   }
 
   // Helper to set up an eligible proposer (10+ tasks, 90%+ reputation)
@@ -54,7 +79,8 @@ describe("RoseGovernance", function () {
   }
 
   beforeEach(async function () {
-    [owner, passportSigner, user1, user2, user3, proposer] = await ethers.getSigners();
+    const signers = await ethers.getSigners();
+    [owner, passportSigner, delegationSigner, user1, user2, user3, proposer] = signers;
 
     // Deploy RoseToken
     const RoseToken = await ethers.getContractFactory("RoseToken");
@@ -87,6 +113,9 @@ describe("RoseGovernance", function () {
 
     // Authorize governance to mint ROSE (for rewards)
     await roseToken.setAuthorized(await governance.getAddress(), true);
+
+    // Set delegation signer for signature-based delegated voting
+    await governance.setDelegationSigner(delegationSigner.address);
 
     // Create a mock marketplace using user3 as the signer
     mockMarketplace = user3;
@@ -1014,6 +1043,265 @@ describe("RoseGovernance", function () {
         // Check that user2's power was used
         const user2PowerUsed = await governance.getDelegatorVotePower(proposalId, user1.address, user2.address);
         expect(user2PowerUsed).to.be.greaterThan(0);
+      });
+    });
+
+    describe("Signature-Based Delegated Voting", function () {
+      let delegatedPower;
+
+      beforeEach(async function () {
+        // Set up user1 as delegate
+        await setupEligibleProposer(user1);
+
+        // user2 delegates to user1
+        await governance.connect(user2).allocateToDelegate(user1.address, ethers.parseEther("2000"));
+
+        // Get the total delegated power for user1
+        delegatedPower = await governance.totalDelegatedPower(user1.address);
+      });
+
+      it("Should allow delegate to cast vote with valid signature", async function () {
+        const expiry = (await time.latest()) + 3600;
+
+        // Compute allocations (user2 delegates all their power)
+        const allocations = [{ delegator: user2.address, powerUsed: delegatedPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        await governance.connect(user1).castDelegatedVoteWithSignature(
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry,
+          signature
+        );
+
+        const proposal = await governance.proposals(proposalId);
+        expect(proposal.yayVotes).to.equal(delegatedPower);
+
+        // Check that allocation hash was stored
+        const storedHash = await governance.allocationHashes(proposalId, user1.address);
+        expect(storedHash).to.equal(allocationsHash);
+      });
+
+      it("Should emit DelegatedVoteCast event", async function () {
+        const expiry = (await time.latest()) + 3600;
+        const allocations = [{ delegator: user2.address, powerUsed: delegatedPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        await expect(
+          governance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            delegatedPower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.emit(governance, "DelegatedVoteCast");
+      });
+
+      it("Should revert with expired signature", async function () {
+        const expiry = (await time.latest()) - 1; // Already expired
+        const allocations = [{ delegator: user2.address, powerUsed: delegatedPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        await expect(
+          governance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            delegatedPower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.be.revertedWithCustomError(governance, "SignatureExpired");
+      });
+
+      it("Should revert with invalid signature (wrong signer)", async function () {
+        const expiry = (await time.latest()) + 3600;
+        const allocations = [{ delegator: user2.address, powerUsed: delegatedPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        // Use wrong signer (passportSigner instead of delegationSigner)
+        const signature = await createDelegationSignature(
+          passportSigner,
+          user1.address,
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        await expect(
+          governance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            delegatedPower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.be.revertedWithCustomError(governance, "InvalidDelegationSignature");
+      });
+
+      it("Should revert with replay attack (same signature used twice)", async function () {
+        const expiry = (await time.latest()) + 3600;
+        const halfPower = delegatedPower / 2n;
+        const allocations = [{ delegator: user2.address, powerUsed: halfPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          halfPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        // First use should succeed
+        await governance.connect(user1).castDelegatedVoteWithSignature(
+          proposalId,
+          halfPower,
+          true,
+          allocationsHash,
+          expiry,
+          signature
+        );
+
+        // Second use should fail
+        await expect(
+          governance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            halfPower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.be.revertedWithCustomError(governance, "SignatureAlreadyUsed");
+      });
+
+      it("Should revert if exceeding available delegated power", async function () {
+        const expiry = (await time.latest()) + 3600;
+        const doublePower = delegatedPower * 2n;
+        const allocations = [{ delegator: user2.address, powerUsed: doublePower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          doublePower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        await expect(
+          governance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            doublePower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.be.revertedWithCustomError(governance, "InsufficientDelegatedPower");
+      });
+
+      it("Should revert if delegation signer not set", async function () {
+        // Deploy a new governance without delegation signer set
+        const RoseGovernance = await ethers.getContractFactory("RoseGovernance");
+        const newGovernance = await RoseGovernance.deploy(
+          await roseToken.getAddress(),
+          await vRose.getAddress(),
+          user3.address, // mockMarketplace
+          owner.address, // mockTreasury
+          passportSigner.address
+        );
+        await newGovernance.waitForDeployment();
+
+        const expiry = (await time.latest()) + 3600;
+        const allocations = [{ delegator: user2.address, powerUsed: delegatedPower }];
+        const allocationsHash = computeAllocationsHash(proposalId, user1.address, allocations);
+
+        const signature = await createDelegationSignature(
+          delegationSigner,
+          user1.address,
+          proposalId,
+          delegatedPower,
+          true,
+          allocationsHash,
+          expiry
+        );
+
+        // Note: This will fail because governance is not set up, but testing the signer check
+        await expect(
+          newGovernance.connect(user1).castDelegatedVoteWithSignature(
+            proposalId,
+            delegatedPower,
+            true,
+            allocationsHash,
+            expiry,
+            signature
+          )
+        ).to.be.revertedWithCustomError(newGovernance, "ZeroAddressDelegationSigner");
+      });
+
+      it("Should allow owner to set delegation signer", async function () {
+        const newSigner = user3.address;
+
+        await expect(governance.setDelegationSigner(newSigner))
+          .to.emit(governance, "DelegationSignerUpdated")
+          .withArgs(newSigner);
+
+        expect(await governance.delegationSigner()).to.equal(newSigner);
+      });
+
+      it("Should revert if non-owner tries to set delegation signer", async function () {
+        await expect(
+          governance.connect(user1).setDelegationSigner(user3.address)
+        ).to.be.revertedWithCustomError(governance, "NotOwner");
+      });
+
+      it("Should revert if setting delegation signer to zero address", async function () {
+        await expect(
+          governance.setDelegationSigner(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(governance, "ZeroAddressDelegationSigner");
       });
     });
   });

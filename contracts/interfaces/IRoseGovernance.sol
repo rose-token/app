@@ -83,6 +83,7 @@ interface IRoseGovernance {
     event RewardClaimed(address indexed user, uint256 amount);
     event UserStatsUpdated(address indexed user, uint256 tasksCompleted, uint256 totalTaskValue);
     event PassportSignerUpdated(address indexed newSigner);
+    event DelegationSignerUpdated(address indexed newSigner);
 
     // ============ Errors ============
 
@@ -118,6 +119,8 @@ interface IRoseGovernance {
     error TaskNotFromProposal();
     error CannotChangeVoteDirection();
     error InsufficientDelegatedPower();
+    error InvalidDelegationSignature();
+    error ZeroAddressDelegationSigner();
 
     // ============ View Functions ============
 
@@ -161,6 +164,14 @@ interface IRoseGovernance {
     function allocateToProposal(uint256 proposalId, uint256 amount, bool support) external;
     function unallocateFromProposal(uint256 proposalId) external;
     function castDelegatedVote(uint256 proposalId, uint256 amount, bool support) external;
+    function castDelegatedVoteWithSignature(
+        uint256 proposalId,
+        uint256 amount,
+        bool support,
+        bytes32 allocationsHash,
+        uint256 expiry,
+        bytes calldata signature
+    ) external;
 
     // ============ Proposal Functions ============
 
@@ -195,4 +206,5 @@ interface IRoseGovernance {
     // ============ Admin Functions ============
 
     function setPassportSigner(address _signer) external;
+    function setDelegationSigner(address _signer) external;
 }

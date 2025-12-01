@@ -9,6 +9,9 @@ import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS } from '../constants/contracts';
 
+// Backend signer URL
+const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
+
 /**
  * Hook for managing vote delegation
  * @returns {Object} Delegation state and actions
@@ -298,8 +301,9 @@ export const useDelegation = () => {
 
   /**
    * Cast delegated votes on a proposal with partial amount
+   * Uses backend signing to avoid expensive on-chain delegator loops
    * @param {number} proposalId - Proposal ID
-   * @param {string} amount - Amount of delegated power to use
+   * @param {string} amount - Amount of delegated power to use (as VP string, will be converted to wei-scale)
    * @param {boolean} support - true for Yay, false for Nay
    */
   const castDelegatedVote = useCallback(async (proposalId, amount, support) => {
@@ -311,14 +315,54 @@ export const useDelegation = () => {
     setError(null);
 
     try {
-      const amountWei = parseUnits(amount.toString(), 18);
+      // Convert VP amount to wei-scale (multiply by 1e9)
+      // Note: The backend expects raw wei-scale amounts
+      const amountWeiScale = BigInt(Math.floor(parseFloat(amount) * 1e9));
 
+      console.log(`Requesting delegated vote signature for ${amount} VP on proposal ${proposalId}...`);
+
+      // Step 1: Get signature from backend
+      const response = await fetch(`${SIGNER_URL}/api/delegation/vote-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegate: account,
+          proposalId: Number(proposalId),
+          amount: amountWeiScale.toString(),
+          support,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend error: ${response.status}`);
+      }
+
+      const signatureData = await response.json();
+      console.log('Got signature from backend:', signatureData);
+
+      // Store allocations in localStorage for future payout reference
+      try {
+        const storageKey = `delegatedVoteAllocations_${proposalId}_${account}`;
+        localStorage.setItem(storageKey, JSON.stringify(signatureData.allocations));
+      } catch (storageErr) {
+        console.warn('Failed to store allocations in localStorage:', storageErr);
+      }
+
+      // Step 2: Call contract with signature
       console.log(`Casting delegated vote ${support ? 'Yay' : 'Nay'} with ${amount} VP on proposal ${proposalId}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'castDelegatedVote',
-        args: [BigInt(proposalId), amountWei, support],
+        functionName: 'castDelegatedVoteWithSignature',
+        args: [
+          BigInt(proposalId),
+          BigInt(signatureData.amount),
+          support,
+          signatureData.allocationsHash,
+          BigInt(signatureData.expiry),
+          signatureData.signature,
+        ],
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -328,22 +372,30 @@ export const useDelegation = () => {
 
       console.log('Delegated vote cast successfully!');
       await refetchDelegation();
-      return { success: true, hash };
+      return { success: true, hash, allocations: signatureData.allocations };
     } catch (err) {
       console.error('Delegated vote error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
         : err.message.includes('InsufficientDelegatedPower')
         ? 'Insufficient delegated power available'
+        : err.message.includes('Insufficient delegated power')
+        ? err.message
         : err.message.includes('CannotChangeVoteDirection')
         ? 'Cannot change vote direction on existing delegated vote'
-        : 'Failed to cast delegated vote';
+        : err.message.includes('Proposal is not active')
+        ? 'Proposal is not active or voting has ended'
+        : err.message.includes('InvalidDelegationSignature')
+        ? 'Invalid signature - please try again'
+        : err.message.includes('SignatureExpired')
+        ? 'Signature expired - please try again'
+        : err.message || 'Failed to cast delegated vote';
       setError(message);
       throw new Error(message);
     } finally {
       setActionLoading(prev => ({ ...prev, [`delegatedVote-${proposalId}`]: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchDelegation]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchDelegation]);
 
   /**
    * Refresh delegation power (recalculates based on current reputation)

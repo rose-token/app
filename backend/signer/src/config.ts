@@ -52,6 +52,16 @@ export const config = {
       .filter((id) => !isNaN(id)),
     timestampTtl: parseInt(process.env.PROFILE_TIMESTAMP_TTL || '300'), // 5 minutes
   },
+
+  // Blockchain RPC for reading contract data
+  rpc: {
+    url: process.env.RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
+  },
+
+  // Contract addresses
+  contracts: {
+    governance: process.env.GOVERNANCE_ADDRESS || '',
+  },
 };
 
 // Validate required env vars

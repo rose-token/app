@@ -80,6 +80,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Signature Replay Protection ============
     mapping(bytes32 => bool) public usedSignatures;
 
+    // ============ Delegation Signer (for gas-efficient delegated voting) ============
+    address public delegationSigner;
+    // Store allocation hashes for future payout verification
+    mapping(uint256 => mapping(address => bytes32)) public allocationHashes;  // proposalId => delegate => hash
+
     // ============ Constants ============
     uint256 public constant VOTING_PERIOD = 2 weeks;
     uint256 public constant QUORUM_THRESHOLD = 3300;      // 33% in basis points
@@ -584,6 +589,95 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
+     * @dev Delegate casts vote with backend-signed allocation data (gas-efficient)
+     * Backend computes per-delegator allocations off-chain and signs them
+     * Contract verifies signature and stores only aggregate data + hash
+     *
+     * @param proposalId The proposal to vote on
+     * @param amount Total delegated vote power to use
+     * @param support True for Yay, false for Nay
+     * @param allocationsHash Hash of per-delegator allocations (computed by backend)
+     * @param expiry Signature expiration timestamp
+     * @param signature Backend signer's ECDSA signature
+     */
+    function castDelegatedVoteWithSignature(
+        uint256 proposalId,
+        uint256 amount,
+        bool support,
+        bytes32 allocationsHash,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        // Verify delegation signer is set
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+
+        // Verify signature expiry
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        // Verify signature
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            msg.sender,
+            proposalId,
+            amount,
+            support,
+            allocationsHash,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        // Replay protection
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        // Standard proposal validations
+        Proposal storage p = _proposals[proposalId];
+        if (p.status != ProposalStatus.Active) revert ProposalNotActive();
+        if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
+        if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
+        if (amount == 0) revert ZeroAmount();
+
+        // Check available delegated power
+        uint256 available = getAvailableDelegatedPower(msg.sender, proposalId);
+        if (amount > available) revert InsufficientDelegatedPower();
+
+        DelegatedVoteRecord storage record = _delegatedVotes[proposalId][msg.sender];
+
+        // Check vote direction consistency
+        if (record.hasVoted) {
+            if (record.support != support) revert CannotChangeVoteDirection();
+        }
+
+        // Store allocation hash for future payout verification
+        // Note: For subsequent votes (increasing), the hash gets overwritten
+        // Backend should provide cumulative allocations hash
+        allocationHashes[proposalId][msg.sender] = allocationsHash;
+
+        // Update tracking (NO _allocateDelegatorPower() call - that's the gas savings!)
+        delegatedVoteAllocated[proposalId][msg.sender] += amount;
+
+        if (!record.hasVoted) {
+            record.hasVoted = true;
+            record.support = support;
+            _proposalDelegates[proposalId].push(msg.sender);
+            emit DelegatedVoteCast(proposalId, msg.sender, support, amount);
+        } else {
+            emit DelegatedVoteIncreased(proposalId, msg.sender, amount, record.totalPowerUsed + amount);
+        }
+
+        record.totalPowerUsed += amount;
+
+        // Update proposal tallies
+        if (support) {
+            p.yayVotes += amount;
+        } else {
+            p.nayVotes += amount;
+        }
+    }
+
+    /**
      * @dev Internal function to allocate delegated power from delegators proportionally
      */
     function _allocateDelegatorPower(uint256 proposalId, uint256 amount) internal {
@@ -854,6 +948,12 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (_signer == address(0)) revert ZeroAddressSigner();
         passportSigner = _signer;
         emit PassportSignerUpdated(_signer);
+    }
+
+    function setDelegationSigner(address _signer) external onlyOwner {
+        if (_signer == address(0)) revert ZeroAddressDelegationSigner();
+        delegationSigner = _signer;
+        emit DelegationSignerUpdated(_signer);
     }
 
     function setMarketplace(address _marketplace) external onlyOwner {
