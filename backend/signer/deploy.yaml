@@ -20,7 +20,7 @@ services:
           readOnly: false
 
   signer:
-    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest
+    image: ghcr.io/emmadorably/rose-token-v3/rose-passport-signer:latest 
     depends_on:
       - postgres
     expose:
