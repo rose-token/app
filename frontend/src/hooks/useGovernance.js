@@ -46,18 +46,33 @@ function parseSimulationError(err) {
  */
 function parseTransactionError(err) {
   const msg = err?.message || '';
+  const shortMsg = err?.shortMessage || '';
+  const cause = err?.cause?.message || '';
+
+  // Log full error for debugging
+  console.log('Parsing transaction error:', { msg, shortMsg, cause, fullError: err });
 
   if (msg.includes('User rejected') || msg.includes('user rejected')) {
-    return 'Transaction rejected';
+    return 'Transaction rejected by user';
   }
   if (msg.includes('nonce too low')) {
-    return 'Transaction conflict - please refresh the page and try again';
+    return 'Nonce conflict - please refresh the page and wait 30 seconds before trying again';
   }
   if (msg.includes('replacement transaction underpriced')) {
-    return 'Pending transaction conflict - wait for it to complete or cancel in wallet';
+    return 'Pending transaction conflict - wait for previous transaction to complete or speed up/cancel in MetaMask';
   }
   if (msg.includes('32603') || msg.includes('Internal JSON-RPC')) {
-    return 'Transaction failed - if you have pending transactions, wait for them to complete';
+    // Try to extract more specific info
+    if (cause.includes('insufficient funds')) {
+      return 'Insufficient ETH for gas fees';
+    }
+    if (cause.includes('execution reverted')) {
+      return 'Transaction would fail - contract rejected the call';
+    }
+    return 'RPC error - try refreshing the page, waiting 30 seconds, and trying again. If the issue persists, the network may be congested.';
+  }
+  if (msg.includes('insufficient funds') || msg.includes('Insufficient funds')) {
+    return 'Insufficient ETH for gas fees';
   }
   if (msg.includes('Insufficient') || msg.includes('insufficient')) {
     return msg;
@@ -65,8 +80,11 @@ function parseTransactionError(err) {
   if (msg.includes('already in progress')) {
     return msg;
   }
+  if (msg.includes('timeout') || msg.includes('Timeout')) {
+    return 'Request timed out - network may be slow. Please check your transaction history in MetaMask.';
+  }
 
-  return 'Transaction failed - please try again';
+  return 'Transaction failed - please try again. Check MetaMask for transaction status.';
 }
 
 /**
@@ -83,6 +101,10 @@ export const useGovernance = () => {
     withdraw: false,
   });
   const [error, setError] = useState(null);
+
+  // Deposit step tracking for UI progress indicator
+  // Steps: null, 'checking', 'simulating', 'approving', 'approved', 'depositing', 'complete'
+  const [depositStep, setDepositStep] = useState(null);
 
   // Mutex refs to prevent concurrent transactions
   const depositInProgress = useRef(false);
@@ -276,6 +298,7 @@ export const useGovernance = () => {
     depositInProgress.current = true;
     setLoading(prev => ({ ...prev, deposit: true }));
     setError(null);
+    setDepositStep('checking');
 
     try {
       const amountWei = parseUnits(amount, 18);
@@ -288,6 +311,10 @@ export const useGovernance = () => {
       console.log('Governance contract:', CONTRACTS.GOVERNANCE);
       console.log('Token contract:', CONTRACTS.TOKEN);
       console.log('vROSE contract:', CONTRACTS.VROSE);
+
+      // Check nonce for debugging
+      const initialNonce = await publicClient.getTransactionCount({ address: account });
+      console.log('Initial nonce:', initialNonce);
 
       // Check 1: ROSE balance
       const roseBalance = await publicClient.readContract({
@@ -324,30 +351,29 @@ export const useGovernance = () => {
       }
       // ========== END DEBUG LOGGING ==========
 
-      // Check balance
-      if (parsed && amountWei > parsed.roseBalanceRaw) {
-        throw new Error('Insufficient ROSE balance');
+      // ========== PRE-FLIGHT SIMULATION ==========
+      // Simulate BOTH transactions before executing either to catch issues early
+      setDepositStep('simulating');
+      const needsApproval = currentAllowance < amountWei;
+      console.log('Needs approval:', needsApproval, '(current:', formatUnits(currentAllowance, 18), ', needed:', amount, ')');
+
+      if (needsApproval) {
+        console.log('Simulating approve transaction...');
+        try {
+          await publicClient.simulateContract({
+            address: CONTRACTS.TOKEN,
+            abi: RoseTokenABI,
+            functionName: 'approve',
+            args: [CONTRACTS.GOVERNANCE, amountWei],
+            account: account,
+          });
+          console.log('Approve simulation passed!');
+        } catch (simError) {
+          console.error('Approve simulation FAILED:', simError);
+          throw new Error('Approval would fail: ' + parseSimulationError(simError));
+        }
       }
 
-      // Step 1: Approve ROSE transfer
-      console.log('Approving ROSE for governance deposit...');
-      const approveHash = await writeContractAsync({
-        address: CONTRACTS.TOKEN,
-        abi: RoseTokenABI,
-        functionName: 'approve',
-        args: [CONTRACTS.GOVERNANCE, amountWei],
-      });
-
-      // Wait for 2 confirmations to ensure nonce is updated
-      await publicClient.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: 2,
-      });
-
-      // Longer delay for RPC state sync and nonce refresh
-      await new Promise(r => setTimeout(r, 2000));
-
-      // Simulate the deposit call BEFORE executing
       console.log('Simulating deposit transaction...');
       try {
         await publicClient.simulateContract({
@@ -362,22 +388,68 @@ export const useGovernance = () => {
         console.error('Deposit simulation FAILED:', simError);
         throw new Error(parseSimulationError(simError));
       }
+      // ========== END PRE-FLIGHT SIMULATION ==========
+
+      // Check balance
+      if (parsed && amountWei > parsed.roseBalanceRaw) {
+        throw new Error('Insufficient ROSE balance');
+      }
+
+      // Step 1: Approve ROSE transfer (skip if allowance already sufficient)
+      if (needsApproval) {
+        setDepositStep('approving');
+        console.log('Approving ROSE for governance deposit...');
+        const nonceBeforeApprove = await publicClient.getTransactionCount({ address: account });
+        console.log('Nonce before approve:', nonceBeforeApprove);
+
+        const approveHash = await writeContractAsync({
+          address: CONTRACTS.TOKEN,
+          abi: RoseTokenABI,
+          functionName: 'approve',
+          args: [CONTRACTS.GOVERNANCE, amountWei],
+        });
+        console.log('Approve tx hash:', approveHash);
+
+        // Wait for 2 confirmations to ensure nonce is updated
+        await publicClient.waitForTransactionReceipt({
+          hash: approveHash,
+          confirmations: 2,
+        });
+        console.log('Approve confirmed');
+        setDepositStep('approved');
+
+        const nonceAfterApprove = await publicClient.getTransactionCount({ address: account });
+        console.log('Nonce after approve:', nonceAfterApprove);
+
+        // Longer delay for RPC state sync and nonce refresh
+        await new Promise(r => setTimeout(r, 2000));
+      } else {
+        console.log('Skipping approval - sufficient allowance exists');
+      }
 
       // Step 2: Deposit into governance
+      setDepositStep('depositing');
       console.log('Depositing ROSE into governance...');
+      const nonceBeforeDeposit = await publicClient.getTransactionCount({ address: account });
+      console.log('Nonce before deposit:', nonceBeforeDeposit);
+
       const depositHash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'deposit',
         args: [amountWei],
       });
+      console.log('Deposit tx hash:', depositHash);
 
       await publicClient.waitForTransactionReceipt({
         hash: depositHash,
         confirmations: 2,
       });
 
+      const nonceAfterDeposit = await publicClient.getTransactionCount({ address: account });
+      console.log('Nonce after deposit:', nonceAfterDeposit);
       console.log('Deposit successful!');
+      setDepositStep('complete');
       await refetchGovernance();
       return { success: true, hash: depositHash };
     } catch (err) {
@@ -388,6 +460,8 @@ export const useGovernance = () => {
     } finally {
       depositInProgress.current = false;
       setLoading(prev => ({ ...prev, deposit: false }));
+      // Clear step after a short delay so user can see 'complete' or error
+      setTimeout(() => setDepositStep(null), 2000);
     }
   }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance, account]);
 
@@ -477,6 +551,7 @@ export const useGovernance = () => {
     loading,
     error,
     setError,
+    depositStep, // Current step: null, 'checking', 'simulating', 'approving', 'approved', 'depositing', 'complete'
     // Actions
     deposit,
     withdraw,
