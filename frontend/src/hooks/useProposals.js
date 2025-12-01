@@ -15,6 +15,46 @@ import { usePassportVerify } from './usePassportVerify';
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 /**
+ * Parse transaction errors into user-friendly messages
+ */
+function parseTransactionError(err) {
+  const msg = err?.message || '';
+
+  if (msg.includes('User rejected') || msg.includes('user rejected')) {
+    return 'Transaction rejected';
+  }
+  if (msg.includes('nonce too low')) {
+    return 'Transaction conflict - please refresh the page and try again';
+  }
+  if (msg.includes('replacement transaction underpriced')) {
+    return 'Pending transaction conflict - wait for it to complete or cancel in wallet';
+  }
+  if (msg.includes('32603') || msg.includes('Internal JSON-RPC')) {
+    return 'Transaction failed - if you have pending transactions, wait for them to complete';
+  }
+  if (msg.includes('Insufficient') || msg.includes('insufficient')) {
+    return msg;
+  }
+  if (msg.includes('already in progress')) {
+    return msg;
+  }
+  if (msg.includes('IneligibleToPropose')) {
+    return 'You are not eligible to propose (check reputation requirements)';
+  }
+  if (msg.includes('ProposalValueExceedsTreasury')) {
+    return 'Proposal value exceeds treasury balance';
+  }
+  if (msg.includes('Passport score too low')) {
+    return 'Your Gitcoin Passport score is too low (25+ required to propose)';
+  }
+  if (msg.includes('InvalidSignature')) {
+    return 'Passport signature verification failed';
+  }
+
+  return 'Transaction failed - please try again';
+}
+
+/**
  * Hook for fetching and managing governance proposals
  * @param {Object} options - Options
  * @param {number} options.proposalId - Specific proposal ID to fetch (optional)
@@ -31,6 +71,10 @@ export const useProposals = (options = {}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState({});
+
+  // Mutex refs to prevent concurrent transactions (nonce conflict prevention)
+  const createProposalInProgress = useRef(false);
+  const voteCombinedInProgress = useRef(false);
 
   // Get proposal counter
   const { data: proposalCounter, refetch: refetchCounter } = useReadContract({
@@ -371,10 +415,16 @@ export const useProposals = (options = {}) => {
    * @param {string} delegatedAvailable - Available delegated power for this proposal
    */
   const voteCombined = useCallback(async (proposalId, totalAmount, support, ownAvailable, delegatedAvailable) => {
+    // Prevent concurrent voting (nonce conflict prevention)
+    if (voteCombinedInProgress.current) {
+      throw new Error('Vote transaction already in progress');
+    }
+
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
 
+    voteCombinedInProgress.current = true;
     setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
     setError(null);
 
@@ -410,11 +460,17 @@ export const useProposals = (options = {}) => {
           args: [BigInt(proposalId), ownToUse, support],
         });
 
+        // Wait for 2 confirmations before next transaction
         await publicClient.waitForTransactionReceipt({
           hash: ownHash,
-          confirmations: 1,
+          confirmations: 2,
         });
         results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 18) });
+
+        // Delay between transactions to allow nonce refresh
+        if (delegatedToUse > 0n) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
 
       // Vote with delegated power if any (uses backend signing)
@@ -466,7 +522,7 @@ export const useProposals = (options = {}) => {
 
         await publicClient.waitForTransactionReceipt({
           hash: delegatedHash,
-          confirmations: 1,
+          confirmations: 2,
         });
         results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 18) });
       }
@@ -477,26 +533,11 @@ export const useProposals = (options = {}) => {
       return { success: true, results };
     } catch (err) {
       console.error('Combined vote error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('CannotChangeVoteDirection')
-        ? 'Cannot change vote direction on existing vote'
-        : err.message.includes('Insufficient')
-        ? err.message
-        : err.message.includes('InsufficientDelegatedPower')
-        ? 'Insufficient delegated power for this proposal'
-        : err.message.includes('InvalidDelegationSignature')
-        ? 'Invalid delegation signature - please try again'
-        : err.message.includes('SignatureExpired')
-        ? 'Signature expired - please try again'
-        : err.message.includes('Proposal is not active')
-        ? 'Proposal is not active or voting has ended'
-        : err.message.includes('Backend error')
-        ? err.message
-        : 'Failed to cast vote';
+      const message = parseTransactionError(err);
       setError(message);
       throw new Error(message);
     } finally {
+      voteCombinedInProgress.current = false;
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
     }
   }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
@@ -506,10 +547,16 @@ export const useProposals = (options = {}) => {
    * @param {Object} proposalData - Proposal data
    */
   const createProposal = useCallback(async (proposalData) => {
+    // Prevent concurrent proposal creation (nonce conflict prevention)
+    if (createProposalInProgress.current) {
+      throw new Error('Proposal creation already in progress');
+    }
+
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
 
+    createProposalInProgress.current = true;
     setActionLoading(prev => ({ ...prev, create: true }));
     setError(null);
 
@@ -542,9 +589,10 @@ export const useProposals = (options = {}) => {
         args: [title, descriptionHash, valueWei, BigInt(deadlineTimestamp), deliverables, BigInt(expiry), signature],
       });
 
+      // Wait for 2 confirmations
       await publicClient.waitForTransactionReceipt({
         hash,
-        confirmations: 1,
+        confirmations: 2,
       });
 
       console.log('Proposal created successfully!');
@@ -553,23 +601,14 @@ export const useProposals = (options = {}) => {
       return { success: true, hash };
     } catch (err) {
       console.error('Create proposal error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('IneligibleToPropose')
-        ? 'You are not eligible to propose (check reputation requirements)'
-        : err.message.includes('ProposalValueExceedsTreasury')
-        ? 'Proposal value exceeds treasury balance'
-        : err.message.includes('Passport score too low')
-        ? 'Your Gitcoin Passport score is too low (25+ required to propose)'
-        : err.message.includes('InvalidSignature')
-        ? 'Passport signature verification failed'
-        : 'Failed to create proposal';
+      const message = parseTransactionError(err);
       setError(message);
       throw new Error(message);
     } finally {
+      createProposalInProgress.current = false;
       setActionLoading(prev => ({ ...prev, create: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals]);
+  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals, getSignature]);
 
   /**
    * Finalize a proposal (after voting period ends)

@@ -3,13 +3,41 @@
  * Handles deposit/withdraw operations and tracks user's governance position
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import vROSEABI from '../contracts/vROSEABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS } from '../constants/contracts';
+
+/**
+ * Parse transaction errors into user-friendly messages
+ */
+function parseTransactionError(err) {
+  const msg = err?.message || '';
+
+  if (msg.includes('User rejected') || msg.includes('user rejected')) {
+    return 'Transaction rejected';
+  }
+  if (msg.includes('nonce too low')) {
+    return 'Transaction conflict - please refresh the page and try again';
+  }
+  if (msg.includes('replacement transaction underpriced')) {
+    return 'Pending transaction conflict - wait for it to complete or cancel in wallet';
+  }
+  if (msg.includes('32603') || msg.includes('Internal JSON-RPC')) {
+    return 'Transaction failed - if you have pending transactions, wait for them to complete';
+  }
+  if (msg.includes('Insufficient') || msg.includes('insufficient')) {
+    return msg;
+  }
+  if (msg.includes('already in progress')) {
+    return msg;
+  }
+
+  return 'Transaction failed - please try again';
+}
 
 /**
  * Hook for governance staking and vROSE management
@@ -25,6 +53,10 @@ export const useGovernance = () => {
     withdraw: false,
   });
   const [error, setError] = useState(null);
+
+  // Mutex refs to prevent concurrent transactions
+  const depositInProgress = useRef(false);
+  const withdrawInProgress = useRef(false);
 
   // Batch read governance state
   const { data: governanceData, refetch: refetchGovernance } = useReadContracts({
@@ -202,10 +234,16 @@ export const useGovernance = () => {
    * @param {string} amount - Amount in ROSE (human readable)
    */
   const deposit = useCallback(async (amount) => {
+    // Prevent concurrent deposit transactions (nonce conflict prevention)
+    if (depositInProgress.current) {
+      throw new Error('Deposit transaction already in progress');
+    }
+
     if (!isConnected || !CONTRACTS.GOVERNANCE || !CONTRACTS.TOKEN) {
       throw new Error('Not connected or contracts not configured');
     }
 
+    depositInProgress.current = true;
     setLoading(prev => ({ ...prev, deposit: true }));
     setError(null);
 
@@ -226,13 +264,14 @@ export const useGovernance = () => {
         args: [CONTRACTS.GOVERNANCE, amountWei],
       });
 
+      // Wait for 2 confirmations to ensure nonce is updated
       await publicClient.waitForTransactionReceipt({
         hash: approveHash,
-        confirmations: 1,
+        confirmations: 2,
       });
 
-      // Small delay for RPC sync
-      await new Promise(r => setTimeout(r, 1000));
+      // Longer delay for RPC state sync and nonce refresh
+      await new Promise(r => setTimeout(r, 2000));
 
       // Step 2: Deposit into governance
       console.log('Depositing ROSE into governance...');
@@ -245,7 +284,7 @@ export const useGovernance = () => {
 
       await publicClient.waitForTransactionReceipt({
         hash: depositHash,
-        confirmations: 1,
+        confirmations: 2,
       });
 
       console.log('Deposit successful!');
@@ -253,14 +292,11 @@ export const useGovernance = () => {
       return { success: true, hash: depositHash };
     } catch (err) {
       console.error('Deposit error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('Insufficient')
-        ? err.message
-        : 'Failed to deposit ROSE';
+      const message = parseTransactionError(err);
       setError(message);
       throw new Error(message);
     } finally {
+      depositInProgress.current = false;
       setLoading(prev => ({ ...prev, deposit: false }));
     }
   }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance]);
@@ -271,10 +307,16 @@ export const useGovernance = () => {
    * @param {string} amount - Amount in ROSE (human readable)
    */
   const withdraw = useCallback(async (amount) => {
+    // Prevent concurrent withdraw transactions (nonce conflict prevention)
+    if (withdrawInProgress.current) {
+      throw new Error('Withdraw transaction already in progress');
+    }
+
     if (!isConnected || !CONTRACTS.GOVERNANCE || !CONTRACTS.VROSE) {
       throw new Error('Not connected or contracts not configured');
     }
 
+    withdrawInProgress.current = true;
     setLoading(prev => ({ ...prev, withdraw: true }));
     setError(null);
 
@@ -300,13 +342,14 @@ export const useGovernance = () => {
         args: [CONTRACTS.GOVERNANCE, amountWei],
       });
 
+      // Wait for 2 confirmations to ensure nonce is updated
       await publicClient.waitForTransactionReceipt({
         hash: approveHash,
-        confirmations: 1,
+        confirmations: 2,
       });
 
-      // Small delay
-      await new Promise(r => setTimeout(r, 1000));
+      // Longer delay for RPC state sync and nonce refresh
+      await new Promise(r => setTimeout(r, 2000));
 
       // Step 2: Withdraw
       console.log('Withdrawing from governance...');
@@ -319,7 +362,7 @@ export const useGovernance = () => {
 
       await publicClient.waitForTransactionReceipt({
         hash: withdrawHash,
-        confirmations: 1,
+        confirmations: 2,
       });
 
       console.log('Withdrawal successful!');
@@ -327,16 +370,11 @@ export const useGovernance = () => {
       return { success: true, hash: withdrawHash };
     } catch (err) {
       console.error('Withdraw error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('Insufficient')
-        ? err.message
-        : err.message.includes('allocated')
-        ? err.message
-        : 'Failed to withdraw ROSE';
+      const message = parseTransactionError(err);
       setError(message);
       throw new Error(message);
     } finally {
+      withdrawInProgress.current = false;
       setLoading(prev => ({ ...prev, withdraw: false }));
     }
   }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance]);

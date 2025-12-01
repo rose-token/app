@@ -32,7 +32,9 @@ async function main() {
 
   // 3. Create throwaway wallets for customer & stakeholder
   // Use STAKEHOLDER_PRIVATE_KEY from env if provided, otherwise create throwaway
-  const customer = hre.ethers.Wallet.createRandom().connect(hre.ethers.provider);
+  const customer = process.env.CUSTOMER_PRIVATE_KEY
+    ? new hre.ethers.Wallet(process.env.CUSTOMER_PRIVATE_KEY, hre.ethers.provider)
+    : hre.ethers.Wallet.createRandom().connect(hre.ethers.provider);
   const stakeholder = process.env.STAKEHOLDER_PRIVATE_KEY
     ? new hre.ethers.Wallet(process.env.STAKEHOLDER_PRIVATE_KEY, hre.ethers.provider)
     : hre.ethers.Wallet.createRandom().connect(hre.ethers.provider);
