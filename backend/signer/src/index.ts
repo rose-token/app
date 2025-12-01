@@ -10,6 +10,7 @@ import delegationRoutes from './routes/delegation';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
+import { startRebalanceCron } from './cron/rebalance';
 
 const app = express();
 
@@ -80,6 +81,9 @@ async function start() {
   } else {
     console.log('DATABASE_URL not configured, skipping migrations');
   }
+
+  // Start scheduled tasks
+  startRebalanceCron();
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);
