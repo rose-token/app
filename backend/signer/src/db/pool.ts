@@ -1,6 +1,50 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
+import * as net from 'net';
 import { config } from '../config';
 import { withRetry } from '../utils/retry';
+
+/**
+ * Parse host and port from DATABASE_URL
+ */
+function parseDatabaseUrl(url: string): { host: string; port: number } {
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parseInt(parsed.port) || 5432,
+    };
+  } catch {
+    return { host: 'localhost', port: 5432 };
+  }
+}
+
+/**
+ * Check raw TCP connectivity to a host:port.
+ * Returns true if connection succeeds, false otherwise.
+ */
+function checkTcpConnectivity(host: string, port: number, timeout: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(timeout);
+
+    socket.on('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.on('error', () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, host);
+  });
+}
 
 let pool: Pool | null = null;
 
@@ -16,6 +60,9 @@ export function getPool(): Pool {
       min: config.database.pool.min,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: config.database.pool.connectionTimeoutMs,
+      // TCP keepalive to detect dead connections faster
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
     });
 
     pool.on('error', (err) => {
@@ -62,6 +109,7 @@ export function resetPool(): void {
 
 /**
  * Waits for database to be available with exponential backoff retry.
+ * First checks TCP connectivity, then attempts PostgreSQL connection.
  * Use this at startup before running migrations.
  */
 export async function waitForDatabase(): Promise<void> {
@@ -74,8 +122,18 @@ export async function waitForDatabase(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, startupDelay));
   }
 
+  const { host, port } = parseDatabaseUrl(config.database.url);
+  const tcpTimeout = 5000; // 5 second TCP check timeout
+
   await withRetry(
     async () => {
+      // First check raw TCP connectivity (faster failure detection)
+      const tcpReachable = await checkTcpConnectivity(host, port, tcpTimeout);
+      if (!tcpReachable) {
+        throw new Error(`TCP connection to ${host}:${port} failed (network unreachable)`);
+      }
+      console.log(`TCP connection to ${host}:${port} succeeded`);
+
       // Reset pool before each attempt to avoid cached bad state
       resetPool();
       const p = getPool();
