@@ -199,8 +199,8 @@ async function main() {
     await (await mockRouter.setTokenDecimals(roseTokenAddress, 18)).wait();
 
     // ROSE at $1.00
-    // USDC → ROSE: 1 USDC = 1 ROSE (rate = 1e12 to handle 6→18 decimal conversion)
-    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 1000000000000n)).wait();
+    // USDC → ROSE: 1 USDC = 1 ROSE (rate = 1e30 to handle 6→18 decimal conversion)
+    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 1000000000000000000000000000000n)).wait();
     // ROSE → USDC: 1 ROSE = 1 USDC (rate = 1e6 to handle 18→6 decimal conversion)
     await (await mockRouter.setExchangeRate(roseTokenAddress, addresses.usdc, 1000000n)).wait();
     console.log("ROSE exchange rates configured (USDC ↔ ROSE @ $1.00) ✓");
