@@ -111,7 +111,7 @@ Max 4 edit cycles              Passed → Execute → DAO Task Created
 - Cannot change vote direction after voting
 
 **Delegated Voting (Gas-Optimized):**
-- Delegates cast votes using `castDelegatedVoteWithSignature()`
+- Delegates cast votes using `castDelegatedVote()`
 - Backend computes per-delegator allocations off-chain, signs approval
 - Contract verifies signature and stores aggregate + allocations hash
 - Avoids O(n) on-chain loops over delegators
@@ -140,6 +140,31 @@ Max 4 edit cycles              Passed → Execute → DAO Task Created
 - `ClaimRewardsPanel.jsx` - View and claim pending voter rewards
 - `VotePanel.jsx` - Vote on proposals with own/delegated power
 - `DelegateCard.jsx` - Delegate profile and delegation form
+- `ProposalCard.jsx` - Compact proposal display card
+- `ProposalFilters.jsx` - Status/sort/personal filters
+- `QuorumBar.jsx` - Visual quorum progress indicator
+- `ReputationBadge.jsx` - Color-coded reputation display
+
+**Governance Hooks (Detailed):**
+
+`useGovernance` - Core governance state
+- State: `{ stakedRose, votingPower, availableVP, delegatedOut, proposalVPLocked, vRoseBalance, reputation, totalSystemVP }`
+- Methods: `deposit(amount)`, `withdraw(amount)`, `refetch()`
+- Data sources: Backend `/api/governance/vp` + contract calls
+
+`useProposals` - Proposal lifecycle
+- State: `{ proposals, userVotes, loading }`
+- Methods: `createProposal(data)`, `vote(proposalId, vpAmount, support)`, `voteCombined(proposalId, totalVP, support, ownAvailable, delegatedAvailable)`, `freeVP(proposalId)`, `finalizeProposal(proposalId)`, `executeProposal(proposalId)`, `cancelProposal(proposalId)`
+- Filters: active, passed, executed, failed, myProposals, myVotes
+
+`useDelegation` - Multi-delegation management
+- State: `{ delegations, receivedDelegations, availableDelegatedPower }`
+- Methods: `delegateTo(address, vpAmount)`, `undelegateFrom(address, vpAmount)`, `undelegateAll()`, `castDelegatedVote(...)`, `fetchClaimableRewards()`, `claimAllRewards()`
+- Supports multi-delegation (different VP amounts to multiple delegates)
+
+`useReputation` - Reputation and eligibility
+- Returns: `{ reputation: { tasksAsWorker, tasksAsStakeholder, tasksAsCustomer, totalEarned, reputationScore, canPropose, canVote, canDelegate }, loading }`
+- Sources: Contract `getReputation()` + RoseMarketplace events
 
 ## Task Status Flow
 
@@ -156,11 +181,12 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
 **Key directories:**
-- `frontend/src/pages/` - 4 pages (TasksPage, VaultPage, ProfilePage, HelpPage)
+- `frontend/src/pages/` - 9 pages (TasksPage, VaultPage, ProfilePage, HelpPage, GovernancePage, ProposalCreatePage, ProposalDetailPage, DelegatesPage, MyVotesPage)
 - `frontend/src/components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm
 - `frontend/src/components/vault/` - VaultStats, VaultAllocation, DepositCard, RedeemCard, TransactionHistory
+- `frontend/src/components/governance/` - StakingPanel, VotePanel, ClaimRewardsPanel, ProposalCard, DelegateCard, QuorumBar
 - `frontend/src/components/wallet/` - TokenBalance, NetworkSelector
-- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData, usePassport, usePassportVerify
+- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation
 - `frontend/src/utils/ipfs/` - pinataService.js for IPFS integration
 - `frontend/src/contracts/` - Auto-generated ABIs (via update-abi script)
 
@@ -253,11 +279,35 @@ Tests use mock contracts to simulate external dependencies:
 - `GET /api/delegation/claimable/:user` - Get claimable rewards (display only)
 - `GET /api/delegation/signer` - Get delegation signer address
 
+**Governance API Endpoints:**
+- `GET /api/governance/vp/:address` - Get VP breakdown
+  - Response: `{ stakedRose, votingPower, availableVP, delegatedOut, proposalVPLocked, activeProposal }`
+- `GET /api/governance/total-vp` - Get total system voting power
+  - Response: `{ totalVP: string }`
+- `GET /api/governance/available/:address` - Get available VP (not delegated/locked)
+  - Response: `{ availableVP: string }`
+- `GET /api/governance/delegations/:address` - Get user's outgoing delegations
+  - Response: `{ delegations: [{ delegate, vpAmount }] }`
+- `GET /api/governance/received/:delegate` - Get VP delegated to user
+  - Response: `{ delegators: [{ delegator, vpAmount }] }`
+- `GET /api/governance/reputation/:address` - Get reputation score
+  - Response: `{ address, reputation: number }`
+- `POST /api/governance/vote-signature` - Get signed approval for direct vote
+  - Request: `{ voter, proposalId, vpAmount, support }`
+  - Response: `{ voter, proposalId, vpAmount, support, expiry, signature }`
+- `POST /api/governance/refresh-vp` - Get signed VP refresh after reputation change
+  - Request: `{ user, newRep }`
+  - Response: `{ user, newRep, expiry, signature }`
+- `GET /api/governance/signer` - Get governance signer address
+  - Response: `{ signer: string }`
+
 **Key Files:**
 - `src/routes/passport.ts` - Passport API endpoint handlers
 - `src/routes/delegation.ts` - Delegation API endpoint handlers
+- `src/routes/governance.ts` - Governance API endpoint handlers
 - `src/services/signer.ts` - ECDSA signing with ethers.js
 - `src/services/delegation.ts` - Delegation allocation computation, claim signature generation
+- `src/services/governance.ts` - VP calculations, reputation queries
 - `src/services/gitcoin.ts` - Gitcoin Passport API integration
 - `src/config.ts` - Environment configuration
 
@@ -318,6 +368,8 @@ ALLOWED_ORIGINS=http://localhost:5173,https://yourapp.com
 THRESHOLD_CREATE_TASK=20           # Min score for createTask
 THRESHOLD_STAKE=20                 # Min score for stake
 THRESHOLD_CLAIM=20                 # Min score for claim
+THRESHOLD_VOTE=20                  # Min score for voting
+THRESHOLD_PROPOSE=25               # Min score for creating proposals
 SIGNATURE_TTL=3600                 # Signature validity (seconds)
 RATE_LIMIT_WINDOW_MS=60000         # Rate limit window (ms)
 RATE_LIMIT_MAX_REQUESTS=30         # Max requests per window
