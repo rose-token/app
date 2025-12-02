@@ -236,7 +236,7 @@ const DelegatesPage = () => {
               </div>
 
               <div className="space-y-3">
-                {delegations.map(({ delegate, vpAmount }) => (
+                {(delegations || []).filter(d => d && d.delegate).map(({ delegate, vpAmount }) => (
                   <div
                     key={delegate}
                     className="p-3 rounded-lg flex items-center justify-between"
@@ -402,7 +402,7 @@ const DelegatesPage = () => {
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Your Delegators</h3>
               <div className="space-y-2">
-                {receivedDelegations.map(({ delegator, vpAmount }) => (
+                {(receivedDelegations || []).filter(d => d && d.delegator).map(({ delegator, vpAmount }) => (
                   <div
                     key={delegator}
                     className="p-2 rounded-lg flex justify-between items-center text-sm"
