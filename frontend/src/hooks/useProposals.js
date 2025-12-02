@@ -515,6 +515,11 @@ export const useProposals = (options = {}) => {
 
       // Vote with delegated power if any (uses backend signing)
       if (delegatedToUse > 0n) {
+        // Convert from wei scale (10^18) to wei-scale VP (10^9) for backend
+        // delegatedToUse was calculated as VP * 10^18 (via parseUnits),
+        // but backend expects VP * 10^9 (wei-scale vote power)
+        const delegatedAmountWeiScaleVP = delegatedToUse / 1000000000n;
+
         console.log(`Requesting delegated vote signature for ${formatUnits(delegatedToUse, 18)} VP...`);
 
         // Get signature from backend
@@ -524,7 +529,7 @@ export const useProposals = (options = {}) => {
           body: JSON.stringify({
             delegate: account,
             proposalId: Number(proposalId),
-            amount: delegatedToUse.toString(),
+            amount: delegatedAmountWeiScaleVP.toString(),
             support,
           }),
         });
