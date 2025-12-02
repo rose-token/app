@@ -74,6 +74,7 @@ jobs:
           ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           STAKEHOLDER_PRIVATE_KEY: ${{ secrets.STAKEHOLDER_PRIVATE_KEY }}
+          CUSTOMER_PRIVATE_KEY: ${{ secrets.CUSTOMER_PRIVATE_KEY }}
         run: npx hardhat run scripts/seed-reputation.js --network arbitrumSepolia
 
       - name: Save Contract Addresses
