@@ -140,8 +140,8 @@ const DelegatesPage = () => {
 
   // Get user's delegation to a specific delegate
   const getDelegationToDelegate = (delegateAddr) => {
-    const delegation = delegations.find(
-      d => d.delegate.toLowerCase() === delegateAddr.toLowerCase()
+    const delegation = (delegations || []).find(
+      d => d.delegate?.toLowerCase() === delegateAddr.toLowerCase()
     );
     return delegation?.vpAmount || '0';
   };
@@ -409,7 +409,7 @@ const DelegatesPage = () => {
                     style={{ backgroundColor: 'var(--bg-secondary)' }}
                   >
                     <span className="font-mono">
-                      {delegator.slice(0, 6)}...{delegator.slice(-4)}
+                      {delegator?.slice(0, 6)}...{delegator?.slice(-4)}
                     </span>
                     <span className="text-green-500">
                       {formatVotePower(parseFloat(vpAmount))} VP

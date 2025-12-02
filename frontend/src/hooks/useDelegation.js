@@ -551,6 +551,9 @@ export const useDelegation = () => {
     isConnected,
     account,
     ...parsedDelegation,
+    // Always return state arrays (override parsedDelegation to ensure defined)
+    delegations,
+    receivedDelegations,
     isLoading,
     error,
     actionLoading,
