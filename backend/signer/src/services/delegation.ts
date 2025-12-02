@@ -29,6 +29,10 @@ const GOVERNANCE_ABI = [
   'function voterRewardOutcome(uint256 proposalId) external view returns (bool)',
   'function directVoterRewardClaimed(uint256 proposalId, address voter) external view returns (bool)',
   'function delegatorRewardClaimed(uint256 proposalId, address delegate, address delegator) external view returns (bool)',
+
+  // Events for tracking delegation history
+  'event DelegationChanged(address indexed delegator, address indexed delegate, uint256 vpAmount, bool isDelegating)',
+  'event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower)',
 ];
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
@@ -293,18 +297,83 @@ export async function getDelegatedVote(
 // ============ Claim Functions ============
 
 /**
- * Get all delegates a user has delegated to (for multi-delegation)
- * Returns delegates where user has delegatedVP > 0
+ * Get all delegates a user has ever delegated to by querying DelegationChanged events
+ * Returns unique delegates where user delegated (isDelegating = true)
  */
 export async function getUserDelegates(user: string): Promise<string[]> {
-  // In multi-delegation, we need to check all potential delegates
-  // This would ideally be tracked via events or an enumerable set on-chain
-  // For now, we'll need to emit DelegationChanged events and index them
-  // or query a subgraph
+  const contract = getGovernanceContract();
 
-  // Placeholder: Return empty array - actual implementation needs event indexing
-  // This should be replaced with proper event indexing or subgraph query
-  return [];
+  // Query DelegationChanged events where user is the delegator
+  // Filter topic: DelegationChanged(delegator indexed, delegate indexed, vpAmount, isDelegating)
+  const filter = contract.filters.DelegationChanged(user);
+
+  try {
+    // Query events from a reasonable block range (last 90 days ~= 2M blocks on Arbitrum)
+    const currentBlock = await getProvider().getBlockNumber();
+    const fromBlock = Math.max(0, currentBlock - 2_000_000);
+
+    const events = await contract.queryFilter(filter, fromBlock, currentBlock);
+
+    // Track delegates and their current status
+    const delegateStatus = new Map<string, boolean>();
+
+    for (const event of events) {
+      if ('args' in event && event.args) {
+        const delegate = event.args.delegate as string;
+        const isDelegating = event.args.isDelegating as boolean;
+        delegateStatus.set(delegate.toLowerCase(), isDelegating);
+      }
+    }
+
+    // Return only delegates where user still has active delegation
+    // (most recent event was isDelegating = true)
+    const activeDelegates: string[] = [];
+    for (const [delegate, isActive] of delegateStatus) {
+      if (isActive) {
+        activeDelegates.push(delegate);
+      }
+    }
+
+    return activeDelegates;
+  } catch (error) {
+    console.error('Error querying delegation events:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all proposals a delegate has voted on using DelegatedVoteCast events
+ */
+export async function getDelegateVotedProposals(
+  delegate: string
+): Promise<Array<{ proposalId: number; support: boolean }>> {
+  const contract = getGovernanceContract();
+
+  // Query DelegatedVoteCast events where this address is the delegate
+  const filter = contract.filters.DelegatedVoteCast(null, delegate);
+
+  try {
+    const currentBlock = await getProvider().getBlockNumber();
+    const fromBlock = Math.max(0, currentBlock - 2_000_000);
+
+    const events = await contract.queryFilter(filter, fromBlock, currentBlock);
+
+    const votedProposals: Array<{ proposalId: number; support: boolean }> = [];
+
+    for (const event of events) {
+      if ('args' in event && event.args) {
+        votedProposals.push({
+          proposalId: Number(event.args.proposalId),
+          support: event.args.support as boolean,
+        });
+      }
+    }
+
+    return votedProposals;
+  } catch (error) {
+    console.error('Error querying delegate vote events:', error);
+    return [];
+  }
 }
 
 /**
@@ -317,7 +386,7 @@ export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
   // Get proposal count
   const proposalCount = await contract.proposalCounter();
 
-  // Check each proposal for claimable rewards
+  // Check each proposal for direct vote claimable rewards
   for (let i = 1; i <= Number(proposalCount); i++) {
     const pool = await contract.voterRewardPool(i);
     if (BigInt(pool) === 0n) continue; // No reward pool
@@ -342,15 +411,42 @@ export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
         }
       }
     }
+  }
 
-    // Check delegated votes (user delegated to multiple delegates in multi-delegation)
-    // For each delegate user has delegated to, check if that delegate voted on winning side
-    // and if user's delegated VP was used
-    const delegators = await contract.delegators(user); // Check if user IS a delegator to anyone
-    // This approach doesn't work well - need proper event indexing for multi-delegation
+  // Check delegated vote rewards
+  // Get all delegates user has delegated to via event querying
+  const userDelegates = await getUserDelegates(user);
 
-    // Alternative: Check getDelegatorVotePower for known delegates
-    // This requires knowing which delegates exist - needs event indexing
+  for (const delegate of userDelegates) {
+    // Get all proposals this delegate voted on
+    const votedProposals = await getDelegateVotedProposals(delegate);
+
+    for (const { proposalId, support } of votedProposals) {
+      // Check if this proposal has a reward pool
+      const pool = await contract.voterRewardPool(proposalId);
+      if (BigInt(pool) === 0n) continue;
+
+      const outcome = await contract.voterRewardOutcome(proposalId);
+
+      // Check if delegate's vote was on winning side
+      if (support !== outcome) continue;
+
+      // Check if user's VP was used for this delegate's vote on this proposal
+      const userPowerUsed = await contract.delegatorPowerUsed(proposalId, delegate, user);
+      if (BigInt(userPowerUsed) === 0n) continue;
+
+      // Check if user already claimed this delegated reward
+      const claimed = await contract.delegatorRewardClaimed(proposalId, delegate, user);
+      if (claimed) continue;
+
+      // Add delegated vote claim
+      claims.push({
+        proposalId,
+        claimType: ClaimType.Delegator,
+        delegate,
+        votePower: userPowerUsed.toString(),
+      });
+    }
   }
 
   return claims;

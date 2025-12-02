@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ethers } from 'ethers';
 import { config } from '../config';
+import { getPassportScore } from '../services/gitcoin';
 import {
   computeAllocations,
   signDelegatedVote,
@@ -66,6 +67,16 @@ router.post('/vote-signature', async (req: Request, res: Response) => {
     // Check if governance contract is configured
     if (!config.contracts.governance) {
       return res.status(500).json({ error: 'Governance contract not configured' } as DelegationErrorResponse);
+    }
+
+    // Verify delegate passport score meets threshold
+    const passportScore = await getPassportScore(delegate);
+    if (passportScore < config.thresholds.delegate) {
+      return res.status(403).json({
+        error: 'Insufficient passport score for delegation',
+        score: passportScore,
+        threshold: config.thresholds.delegate,
+      } as DelegationErrorResponse);
     }
 
     // Check if proposal is active

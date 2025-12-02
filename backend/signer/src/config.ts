@@ -19,6 +19,8 @@ export const config = {
     stake: parseInt(process.env.THRESHOLD_STAKE || '20'),
     claim: parseInt(process.env.THRESHOLD_CLAIM || '20'),
     propose: parseInt(process.env.THRESHOLD_PROPOSE || '25'),
+    vote: parseInt(process.env.THRESHOLD_VOTE || '25'),
+    delegate: parseInt(process.env.THRESHOLD_DELEGATE || '25'),
   },
 
   signatureTtl: parseInt(process.env.SIGNATURE_TTL || '3600'),

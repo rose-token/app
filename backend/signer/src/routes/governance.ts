@@ -20,8 +20,8 @@ const router = Router();
 // Get signer for signing
 const wallet = new ethers.Wallet(config.signer.privateKey);
 
-// Threshold for voting (can be same as stake threshold)
-const THRESHOLD_VOTE = config.thresholds.stake;
+// Threshold for voting - passport score required to vote
+const THRESHOLD_VOTE = config.thresholds.vote;
 
 /**
  * GET /api/governance/vp/:address
