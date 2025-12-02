@@ -10,6 +10,7 @@ import { TaskStatus } from '../utils/taskStatus';
 import { usePassport } from '../hooks/usePassport';
 import { usePassportVerify } from '../hooks/usePassportVerify';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
+import { GAS_SETTINGS } from '../constants/gas';
 
 // Import ABIs directly
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
@@ -263,6 +264,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'claimTask',
         args: [BigInt(taskId), BigInt(expiry), signature],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Claim task transaction sent:', hash);
@@ -305,6 +307,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'unclaimTask',
         args: [BigInt(taskId)],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Unclaim task transaction sent:', hash);
@@ -345,6 +348,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'markTaskCompleted',
         args: [BigInt(taskId), prUrl],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Complete task transaction sent:', hash);
@@ -390,6 +394,7 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByCustomer',
           args: [BigInt(taskId)],
+          ...GAS_SETTINGS,
         });
       } else if (role === 'stakeholder') {
         console.log("⛽ Approving as stakeholder for task:", taskId);
@@ -399,6 +404,7 @@ const TasksPage = () => {
           abi: RoseMarketplaceABI,
           functionName: 'approveCompletionByStakeholder',
           args: [BigInt(taskId)],
+          ...GAS_SETTINGS,
         });
       }
 
@@ -439,6 +445,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'acceptPayment',
         args: [BigInt(taskId)],
+        ...GAS_SETTINGS,
       });
 
       console.log("✅ Accept payment transaction sent:", hash);
@@ -520,6 +527,7 @@ const TasksPage = () => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
+        ...GAS_SETTINGS,
       });
       console.log("✅ Token approval transaction sent:", approveHash);
       console.log('⏳ Waiting for approval confirmation...');
@@ -546,6 +554,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'stakeholderStake',
         args: [BigInt(taskId), depositAmount, BigInt(expiry), signature],
+        ...GAS_SETTINGS,
       });
 
       console.log("✅ Stake transaction sent:", stakeHash);
@@ -615,6 +624,7 @@ const TasksPage = () => {
         abi: RoseMarketplaceABI,
         functionName: 'cancelTask',
         args: [BigInt(taskId)],
+        ...GAS_SETTINGS,
       });
 
       console.log("✅ Cancel transaction sent:", hash);
