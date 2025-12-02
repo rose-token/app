@@ -26,7 +26,7 @@ const DelegatesPage = () => {
     delegations,            // Array of {delegate, vpAmount}
     receivedDelegations,    // Array of {delegator, vpAmount}
     totalReceivedVP,        // Total VP received as delegate
-    loading: delegationLoading,
+    actionLoading: delegationLoading,
     error,
     setError,
     delegateTo,
