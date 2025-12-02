@@ -16,12 +16,12 @@ import "./interfaces/IRoseGovernance.sol";
  *
  * Features:
  * - ROSE staking with vROSE receipt tokens
- * - Reputation-weighted quadratic voting
- * - Single-depth liquid democracy (delegation)
- * - DAO-sourced tasks funded by treasury
- * - Cached delegation with manual refresh
+ * - VP (Voting Power) calculated at deposit time: sqrt(ROSE) * (reputation / 100)
+ * - Multi-delegation: users can split VP across multiple delegates
+ * - VP locked to ONE proposal at a time
+ * - All O(n) calculations moved to backend
  *
- * Vote Power = sqrt(allocated ROSE) * (reputation / 100)
+ * Vote Power = sqrt(staked ROSE) * (reputation / 100)
  */
 contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -37,23 +37,26 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     address public passportSigner;
     address public owner;
 
-    // ============ User Staking ============
-    mapping(address => uint256) public stakedRose;
-    mapping(address => uint256) public allocatedRose;
-    uint256 public totalStakedRose;
+    // ============ Core VP Tracking ============
+    mapping(address => uint256) public stakedRose;          // ROSE deposited
+    mapping(address => uint256) public votingPower;         // VP calculated at deposit time
+    uint256 public totalStakedRose;                         // Total ROSE staked
+    uint256 public totalVotingPower;                        // Total system VP
 
-    // ============ Delegation (single-depth, cached) ============
-    mapping(address => address) public delegatedTo;
-    mapping(address => EnumerableSet.AddressSet) internal _delegators;
-    mapping(address => uint256) public cachedVotePower;
-    mapping(address => uint256) public totalDelegatedPower;
-    mapping(address => uint256) public delegatedAmount;  // Amount user has delegated
+    // ============ Multi-Delegation ============
+    // delegator => delegate => VP amount
+    mapping(address => mapping(address => uint256)) public delegatedVP;
+    mapping(address => uint256) public totalDelegatedOut;   // Total VP user delegated out
+    mapping(address => uint256) public totalDelegatedIn;    // Total VP delegate received
+    mapping(address => address[]) internal _delegationTargets; // List of user's delegates
+    mapping(address => EnumerableSet.AddressSet) internal _delegators; // Who delegates to this user
+
+    // ============ Proposal Allocation (VP locked to ONE proposal) ============
+    mapping(address => uint256) public allocatedToProposal; // Which proposal (0 = none)
+    mapping(address => uint256) public proposalVPLocked;    // VP locked to that proposal
 
     // ============ Reputation Tracking ============
     mapping(address => UserStats) internal _userStats;
-
-    // ============ Task History (for reputation decay) ============
-    // TaskRecord struct is inherited from IRoseGovernance
     mapping(address => TaskRecord[]) internal _taskHistory;
 
     // ============ Proposals ============
@@ -68,31 +71,25 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     mapping(address => uint256) public pendingRewards;
 
     // ============ Delegated Voting Tracking ============
-    // Track how much delegated power each delegate has used per proposal
     mapping(uint256 => mapping(address => uint256)) public delegatedVoteAllocated;
-    // Delegated vote records (direction, total power used)
     mapping(uint256 => mapping(address => DelegatedVoteRecord)) internal _delegatedVotes;
-    // Per-delegator power usage (for proportional rewards)
-    mapping(uint256 => mapping(address => mapping(address => uint256))) internal _delegatorVotePower;
-    // Delegates who voted on each proposal
     mapping(uint256 => address[]) internal _proposalDelegates;
 
     // ============ Signature Replay Protection ============
     mapping(bytes32 => bool) public usedSignatures;
 
-    // ============ Delegation Signer (for gas-efficient delegated voting) ============
+    // ============ Signers ============
     address public delegationSigner;
-    // Store allocation hashes for future payout verification
-    mapping(uint256 => mapping(address => bytes32)) public allocationHashes;  // proposalId => delegate => hash
+    mapping(uint256 => mapping(address => bytes32)) public allocationHashes;
 
-    // ============ Voter Reward Pools (for gas-efficient payout) ============
-    mapping(uint256 => uint256) public voterRewardPool;       // proposalId => total reward pool
-    mapping(uint256 => uint256) public voterRewardTotalVotes; // proposalId => total votes for winning side
-    mapping(uint256 => bool) public voterRewardOutcome;       // proposalId => true=yay won, false=nay won
+    // ============ Voter Reward Pools ============
+    mapping(uint256 => uint256) public voterRewardPool;
+    mapping(uint256 => uint256) public voterRewardTotalVotes;
+    mapping(uint256 => bool) public voterRewardOutcome;
 
     // ============ Claim Tracking ============
-    mapping(uint256 => mapping(address => bool)) public directVoterRewardClaimed;  // proposalId => voter => claimed
-    mapping(uint256 => mapping(address => mapping(address => bool))) public delegatorRewardClaimed;  // proposalId => delegate => delegator => claimed
+    mapping(uint256 => mapping(address => bool)) public directVoterRewardClaimed;
+    mapping(uint256 => mapping(address => mapping(address => bool))) public delegatorRewardClaimed;
 
     // ============ Constants ============
     uint256 public constant VOTING_PERIOD = 2 weeks;
@@ -105,8 +102,8 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     uint256 public constant DELEGATE_REP_THRESHOLD = 90;
     uint256 public constant DEFAULT_REPUTATION = 60;
     uint256 public constant BASIS_POINTS = 10000;
-    uint256 public constant TASK_DECAY_PERIOD = 365 days;    // Tasks count for 1 year
-    uint256 public constant DISPUTE_DECAY_PERIOD = 1095 days; // Disputes count for 3 years
+    uint256 public constant TASK_DECAY_PERIOD = 365 days;
+    uint256 public constant DISPUTE_DECAY_PERIOD = 1095 days;
 
     // Reward percentages (basis points)
     uint256 public constant DAO_MINT_PERCENT = 200;       // 2%
@@ -178,27 +175,21 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         return _votes[proposalId][voter];
     }
 
-    function delegators(address delegate) external view returns (address[] memory) {
-        return _delegators[delegate].values();
+    function delegators(address delegateAddr) external view returns (address[] memory) {
+        return _delegators[delegateAddr].values();
     }
 
-    /**
-     * @dev Get task history for a user (for frontend display/debugging)
-     */
     function getTaskHistory(address user) external view returns (TaskRecord[] memory) {
         return _taskHistory[user];
     }
 
     /**
      * @dev Get reputation score (0-100) with time-based decay
-     * Tasks count for 1 year, disputes count for 3 years
-     * Returns default (60) if cold start not complete
      */
     function getReputation(address user) public view returns (uint256) {
         TaskRecord[] memory history = _taskHistory[user];
         uint256 failedProposals = _userStats[user].failedProposals;
 
-        // Calculate cutoff timestamps
         uint256 taskCutoff = block.timestamp > TASK_DECAY_PERIOD
             ? block.timestamp - TASK_DECAY_PERIOD
             : 0;
@@ -206,7 +197,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             ? block.timestamp - DISPUTE_DECAY_PERIOD
             : 0;
 
-        // Count recent tasks and disputes
         uint256 recentTaskCount = 0;
         uint256 recentTaskValue = 0;
         uint256 recentDisputes = 0;
@@ -215,12 +205,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             TaskRecord memory record = history[i];
 
             if (record.isDispute) {
-                // Disputes count for 3 years
                 if (record.timestamp >= disputeCutoff) {
                     recentDisputes++;
                 }
             } else {
-                // Tasks count for 1 year
                 if (record.timestamp >= taskCutoff) {
                     recentTaskCount++;
                     recentTaskValue += record.value;
@@ -228,18 +216,14 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             }
         }
 
-        // Cold start: return 60% if less than 10 recent tasks
         if (recentTaskCount < COLD_START_TASKS) {
             return DEFAULT_REPUTATION;
         }
 
-        // No recent task value
         if (recentTaskValue == 0) {
             return DEFAULT_REPUTATION;
         }
 
-        // Calculate: ((totalValue - penalties * avgValue) * 100) / totalValue
-        // failedProposals count at 0.2x weight
         uint256 penalties = recentDisputes + (failedProposals / 5);
         if (penalties >= recentTaskCount) {
             return 0;
@@ -259,42 +243,50 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev Check if user can propose
+     * @dev Get available VP (not delegated, not on proposals)
      */
+    function getAvailableVP(address user) public view returns (uint256) {
+        uint256 currentVP = votingPower[user];
+        uint256 lockedVP = totalDelegatedOut[user] + proposalVPLocked[user];
+        return currentVP > lockedVP ? currentVP - lockedVP : 0;
+    }
+
+    /**
+     * @dev Get user's delegation targets and amounts
+     */
+    function getUserDelegations(address user) external view returns (
+        address[] memory delegates,
+        uint256[] memory amounts
+    ) {
+        delegates = _delegationTargets[user];
+        amounts = new uint256[](delegates.length);
+        for (uint256 i = 0; i < delegates.length; i++) {
+            amounts[i] = delegatedVP[user][delegates[i]];
+        }
+    }
+
     function canPropose(address user) public view returns (bool) {
         UserStats memory stats = _userStats[user];
         if (stats.tasksCompleted < COLD_START_TASKS) return false;
         return getReputation(user) >= PROPOSER_REP_THRESHOLD;
     }
 
-    /**
-     * @dev Check if user can vote
-     */
     function canVote(address user) public view returns (bool) {
         return getReputation(user) >= VOTER_REP_THRESHOLD;
     }
 
-    /**
-     * @dev Check if user can be a delegate
-     */
     function canDelegate(address user) public view returns (bool) {
         UserStats memory stats = _userStats[user];
         if (stats.tasksCompleted < COLD_START_TASKS) return false;
         return getReputation(user) >= DELEGATE_REP_THRESHOLD;
     }
 
-    /**
-     * @dev Get quorum progress for a proposal
-     */
     function getQuorumProgress(uint256 proposalId) public view returns (uint256 current, uint256 required) {
         Proposal memory p = _proposals[proposalId];
-        current = p.totalAllocated;
-        required = (totalStakedRose * QUORUM_THRESHOLD) / BASIS_POINTS;
+        current = p.yayVotes + p.nayVotes;
+        required = (totalVotingPower * QUORUM_THRESHOLD) / BASIS_POINTS;
     }
 
-    /**
-     * @dev Get vote result percentages
-     */
     function getVoteResult(uint256 proposalId) public view returns (uint256 yayPercent, uint256 nayPercent) {
         Proposal memory p = _proposals[proposalId];
         uint256 totalVotes = p.yayVotes + p.nayVotes;
@@ -303,32 +295,16 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         nayPercent = (p.nayVotes * BASIS_POINTS) / totalVotes;
     }
 
-    /**
-     * @dev Get available delegated power for voting on a proposal
-     */
-    function getAvailableDelegatedPower(address delegate, uint256 proposalId) public view returns (uint256) {
-        uint256 total = totalDelegatedPower[delegate];
-        uint256 used = delegatedVoteAllocated[proposalId][delegate];
+    function getAvailableDelegatedPower(address delegateAddr, uint256 proposalId) public view returns (uint256) {
+        uint256 total = totalDelegatedIn[delegateAddr];
+        uint256 used = delegatedVoteAllocated[proposalId][delegateAddr];
         return total > used ? total - used : 0;
     }
 
-    /**
-     * @dev Get delegated vote record for a delegate on a proposal
-     */
-    function getDelegatedVote(uint256 proposalId, address delegate) external view returns (DelegatedVoteRecord memory) {
-        return _delegatedVotes[proposalId][delegate];
+    function getDelegatedVote(uint256 proposalId, address delegateAddr) external view returns (DelegatedVoteRecord memory) {
+        return _delegatedVotes[proposalId][delegateAddr];
     }
 
-    /**
-     * @dev Get how much of a delegator's power was used in a delegated vote
-     */
-    function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256) {
-        return _delegatorVotePower[proposalId][delegate][delegator];
-    }
-
-    /**
-     * @dev Get all delegates who voted on a proposal (for iteration)
-     */
     function getProposalDelegates(uint256 proposalId) external view returns (address[] memory) {
         return _proposalDelegates[proposalId];
     }
@@ -337,6 +313,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     /**
      * @dev Deposit ROSE to governance, receive vROSE 1:1
+     * VP is calculated at deposit time using current reputation
      */
     function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
@@ -344,236 +321,325 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         roseToken.safeTransferFrom(msg.sender, address(this), amount);
         vRoseToken.mint(msg.sender, amount);
 
-        stakedRose[msg.sender] += amount;
-        totalStakedRose += amount;
+        // Calculate VP at deposit time
+        uint256 rep = getReputation(msg.sender);
+        uint256 newTotalStaked = stakedRose[msg.sender] + amount;
+        uint256 newVP = getVotePower(newTotalStaked, rep);
+        uint256 oldVP = votingPower[msg.sender];
+        uint256 vpIncrease = newVP - oldVP;
 
+        // Update state
+        stakedRose[msg.sender] = newTotalStaked;
+        votingPower[msg.sender] = newVP;
+        totalStakedRose += amount;
+        totalVotingPower += vpIncrease;
+
+        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, rep);
+        emit TotalVPUpdated(totalVotingPower);
         emit Deposited(msg.sender, amount);
     }
 
     /**
      * @dev Withdraw ROSE from governance, burn vROSE
-     * Requires: unallocated ROSE + vROSE balance (not in marketplace escrow)
+     * Requires sufficient available VP (not delegated, not on proposals)
      */
     function withdraw(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        if (stakedRose[msg.sender] < amount) revert InsufficientStake();
 
-        uint256 unallocated = stakedRose[msg.sender] - allocatedRose[msg.sender];
-        if (unallocated < amount) revert InsufficientUnallocated();
+        // Calculate available VP
+        uint256 currentVP = votingPower[msg.sender];
+        uint256 lockedVP = totalDelegatedOut[msg.sender] + proposalVPLocked[msg.sender];
+        uint256 availableVP = currentVP > lockedVP ? currentVP - lockedVP : 0;
 
-        // vROSE in marketplace escrow is not in user's balance, so this naturally
-        // prevents withdrawing when vROSE is staked in active tasks
+        // Calculate VP being withdrawn
+        uint256 newTotalStaked = stakedRose[msg.sender] - amount;
+        uint256 rep = getReputation(msg.sender);
+        uint256 newVP = getVotePower(newTotalStaked, rep);
+        uint256 vpDecrease = currentVP - newVP;
+
+        if (availableVP < vpDecrease) revert VPLocked();
+
+        // Check vROSE balance
         uint256 vRoseBalance = vRoseToken.balanceOf(msg.sender);
         if (vRoseBalance < amount) revert InsufficientVRose();
 
         vRoseToken.burn(msg.sender, amount);
 
-        stakedRose[msg.sender] -= amount;
+        // Update state
+        stakedRose[msg.sender] = newTotalStaked;
+        votingPower[msg.sender] = newVP;
         totalStakedRose -= amount;
+        totalVotingPower -= vpDecrease;
 
         roseToken.safeTransfer(msg.sender, amount);
 
+        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, rep);
+        emit TotalVPUpdated(totalVotingPower);
         emit Withdrawn(msg.sender, amount);
     }
 
-    // ============ Delegation Functions ============
+    // ============ Multi-Delegation Functions ============
 
     /**
-     * @dev Delegate voting power to another user
+     * @dev Delegate VP to another user (supports multi-delegation)
+     * @param delegateAddr Address to delegate to
+     * @param vpAmount Amount of VP to delegate
      */
-    function allocateToDelegate(address delegate, uint256 amount) external nonReentrant {
-        if (delegate == address(0)) revert ZeroAddress();
-        if (delegate == msg.sender) revert CannotDelegateToSelf();
-        if (amount == 0) revert ZeroAmount();
-        if (!canDelegate(delegate)) revert IneligibleToDelegate();
-        // Allow increasing allocation to same delegate, block different delegate
-        if (delegatedTo[msg.sender] != address(0) && delegatedTo[msg.sender] != delegate) {
-            revert AlreadyDelegating();
-        }
-        if (delegatedTo[delegate] != address(0)) revert DelegationChainNotAllowed();
+    function delegate(address delegateAddr, uint256 vpAmount) external nonReentrant {
+        if (delegateAddr == address(0)) revert ZeroAddress();
+        if (delegateAddr == msg.sender) revert CannotDelegateToSelf();
+        if (vpAmount == 0) revert ZeroAmount();
+        if (!canVote(msg.sender)) revert IneligibleToVote();
+        if (!canDelegate(delegateAddr)) revert IneligibleToDelegate();
 
-        uint256 unallocated = stakedRose[msg.sender] - allocatedRose[msg.sender];
-        if (unallocated < amount) revert InsufficientUnallocated();
+        // Check available VP
+        uint256 availableVP = getAvailableVP(msg.sender);
+        if (availableVP < vpAmount) revert InsufficientAvailableVP();
 
-        // Track if this is an increase to existing delegation
-        bool isIncrease = delegatedTo[msg.sender] == delegate;
-
-        // For increases: subtract old power first
-        if (isIncrease) {
-            totalDelegatedPower[delegate] -= cachedVotePower[msg.sender];
+        // Track new delegation target
+        if (delegatedVP[msg.sender][delegateAddr] == 0) {
+            _delegationTargets[msg.sender].push(delegateAddr);
+            _delegators[delegateAddr].add(msg.sender);
         }
 
-        // Calculate new total amount and vote power
-        uint256 newTotalAmount = delegatedAmount[msg.sender] + amount;
-        uint256 votePower = getVotePower(newTotalAmount, getReputation(msg.sender));
-        cachedVotePower[msg.sender] = votePower;
+        // Update delegation
+        delegatedVP[msg.sender][delegateAddr] += vpAmount;
+        totalDelegatedOut[msg.sender] += vpAmount;
+        totalDelegatedIn[delegateAddr] += vpAmount;
 
-        // Update delegation state
-        delegatedAmount[msg.sender] = newTotalAmount;
-        totalDelegatedPower[delegate] += votePower;
-        allocatedRose[msg.sender] += amount;
-
-        // Only set delegatedTo and add to delegators set for NEW delegations
-        if (!isIncrease) {
-            delegatedTo[msg.sender] = delegate;
-            _delegators[delegate].add(msg.sender);
-        }
-
-        emit DelegatedTo(msg.sender, delegate, newTotalAmount);
+        emit DelegationChanged(msg.sender, delegateAddr, vpAmount, true);
     }
 
     /**
-     * @dev Remove delegation
+     * @dev Remove delegation from a specific delegate (partial undelegate supported)
+     * @param delegateAddr Address to undelegate from
+     * @param vpAmount Amount of VP to undelegate
      */
-    function unallocateFromDelegate() external nonReentrant {
-        address delegate = delegatedTo[msg.sender];
-        if (delegate == address(0)) revert NotDelegating();
+    function undelegate(address delegateAddr, uint256 vpAmount) external nonReentrant {
+        if (vpAmount == 0) revert ZeroAmount();
+        if (delegatedVP[msg.sender][delegateAddr] < vpAmount) revert InsufficientDelegated();
 
-        uint256 votePower = cachedVotePower[msg.sender];
-        uint256 amount = delegatedAmount[msg.sender];
+        delegatedVP[msg.sender][delegateAddr] -= vpAmount;
+        totalDelegatedOut[msg.sender] -= vpAmount;
+        totalDelegatedIn[delegateAddr] -= vpAmount;
 
-        // Update totals
-        totalDelegatedPower[delegate] -= votePower;
-        allocatedRose[msg.sender] -= amount;
+        // Remove from targets if fully undelegated
+        if (delegatedVP[msg.sender][delegateAddr] == 0) {
+            _removeDelegationTarget(msg.sender, delegateAddr);
+            _delegators[delegateAddr].remove(msg.sender);
+        }
 
-        // Clear delegation
-        cachedVotePower[msg.sender] = 0;
-        delegatedTo[msg.sender] = address(0);
-        delegatedAmount[msg.sender] = 0;
-        _removeDelegator(delegate, msg.sender);
-
-        emit Undelegated(msg.sender, delegate, amount);
+        emit DelegationChanged(msg.sender, delegateAddr, vpAmount, false);
     }
 
     /**
-     * @dev Refresh cached vote power for a delegator
-     * Callable by anyone (permissionless)
+     * @dev Refresh VP when reputation changes (backend-triggered)
+     * @param user Address to refresh VP for
+     * @param newRep New reputation value
+     * @param expiry Signature expiration
+     * @param signature Backend signer signature
      */
-    function refreshDelegation(address user) external {
-        address delegate = delegatedTo[user];
-        if (delegate == address(0)) return;
+    function refreshVP(
+        address user,
+        uint256 newRep,
+        uint256 expiry,
+        bytes calldata signature
+    ) external {
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+        if (block.timestamp > expiry) revert SignatureExpired();
 
-        uint256 oldPower = cachedVotePower[user];
-        uint256 amount = delegatedAmount[user];
-        uint256 newPower = getVotePower(amount, getReputation(user));
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "refreshVP",
+            user,
+            newRep,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
 
-        cachedVotePower[user] = newPower;
-        totalDelegatedPower[delegate] = totalDelegatedPower[delegate] - oldPower + newPower;
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
 
-        emit DelegationRefreshed(user, oldPower, newPower);
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        uint256 staked = stakedRose[user];
+        uint256 oldVP = votingPower[user];
+        uint256 newVP = getVotePower(staked, newRep);
+
+        votingPower[user] = newVP;
+
+        if (newVP >= oldVP) {
+            totalVotingPower += (newVP - oldVP);
+        } else {
+            totalVotingPower -= (oldVP - newVP);
+        }
+
+        emit VotingPowerChanged(user, staked, newVP, newRep);
+        emit TotalVPUpdated(totalVotingPower);
     }
 
     // ============ Voting Functions ============
 
     /**
-     * @dev Vote on a proposal by allocating ROSE
-     * Can be called multiple times to increase allocation (same direction only)
+     * @dev Vote on a proposal with VP (requires passport signature)
+     * VP is locked to ONE proposal at a time
+     * @param proposalId Proposal to vote on
+     * @param vpAmount VP to allocate
+     * @param support True for Yay, false for Nay
+     * @param expiry Signature expiration
+     * @param signature Passport signer signature
      */
-    function allocateToProposal(uint256 proposalId, uint256 amount, bool support) external nonReentrant {
+    function vote(
+        uint256 proposalId,
+        uint256 vpAmount,
+        bool support,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        // Verify passport signature
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "vote",
+            msg.sender,
+            proposalId,
+            vpAmount,
+            support,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != passportSigner) revert InvalidSignature();
+
+        // Proposal validations
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
         if (!canVote(msg.sender)) revert IneligibleToVote();
-        if (amount == 0) revert ZeroAmount();
+        if (vpAmount == 0) revert ZeroAmount();
 
-        uint256 unallocated = stakedRose[msg.sender] - allocatedRose[msg.sender];
-        if (unallocated < amount) revert InsufficientUnallocated();
-
-        Vote storage existingVote = _votes[proposalId][msg.sender];
-
-        if (existingVote.hasVoted) {
-            // User already voted - allow adding to existing vote (same direction only)
-            if (existingVote.support != support) revert CannotChangeVoteDirection();
-
-            // Calculate additional vote power using new total amount
-            uint256 newTotalAmount = existingVote.allocatedAmount + amount;
-            uint256 oldVotePower = existingVote.votePower;
-            uint256 newVotePower = getVotePower(newTotalAmount, getReputation(msg.sender));
-            uint256 additionalPower = newVotePower - oldVotePower;
-
-            // Update vote record
-            existingVote.votePower = newVotePower;
-            existingVote.allocatedAmount = newTotalAmount;
-
-            // Update proposal tallies
-            if (support) {
-                p.yayVotes += additionalPower;
-            } else {
-                p.nayVotes += additionalPower;
-            }
-            p.totalAllocated += amount;
-            allocatedRose[msg.sender] += amount;
-
-            emit VoteIncreased(proposalId, msg.sender, amount, newVotePower);
-        } else {
-            // First vote
-            uint256 votePower = getVotePower(amount, getReputation(msg.sender));
-
-            // Record vote
-            _votes[proposalId][msg.sender] = Vote({
-                hasVoted: true,
-                support: support,
-                votePower: votePower,
-                allocatedAmount: amount
-            });
-            _proposalVoters[proposalId].push(msg.sender);
-
-            // Update proposal tallies
-            if (support) {
-                p.yayVotes += votePower;
-            } else {
-                p.nayVotes += votePower;
-            }
-            p.totalAllocated += amount;
-            allocatedRose[msg.sender] += amount;
-
-            emit VoteCast(proposalId, msg.sender, support, votePower);
+        // Check VP not locked to another proposal
+        uint256 existingProposal = allocatedToProposal[msg.sender];
+        if (existingProposal != 0 && existingProposal != proposalId) {
+            revert VPLockedToAnotherProposal();
         }
+
+        // Check available VP
+        uint256 availableVP = getAvailableVP(msg.sender);
+        if (availableVP < vpAmount) revert InsufficientAvailableVP();
+
+        Vote storage v = _votes[proposalId][msg.sender];
+        if (v.hasVoted) {
+            if (v.support != support) revert CannotChangeVoteDirection();
+        }
+
+        // Lock VP to proposal
+        allocatedToProposal[msg.sender] = proposalId;
+        proposalVPLocked[msg.sender] += vpAmount;
+
+        // Record vote
+        if (!v.hasVoted) {
+            v.hasVoted = true;
+            v.support = support;
+            _proposalVoters[proposalId].push(msg.sender);
+            emit VoteCast(proposalId, msg.sender, support, vpAmount);
+        } else {
+            emit VoteIncreased(proposalId, msg.sender, vpAmount, v.votePower + vpAmount);
+        }
+        v.votePower += vpAmount;
+
+        // Update proposal
+        if (support) {
+            p.yayVotes += vpAmount;
+        } else {
+            p.nayVotes += vpAmount;
+        }
+
+        emit VPAllocatedToProposal(proposalId, msg.sender, vpAmount, support, false);
     }
 
     /**
-     * @dev Unallocate ROSE from a finished proposal
+     * @dev Free VP after proposal resolves
+     * @param proposalId Proposal to free VP from
      */
-    function unallocateFromProposal(uint256 proposalId) external nonReentrant {
+    function freeVP(uint256 proposalId) external nonReentrant {
         Proposal storage p = _proposals[proposalId];
         if (p.status == ProposalStatus.Active && block.timestamp <= p.votingEndsAt) {
             revert ProposalNotEnded();
         }
 
         Vote storage v = _votes[proposalId][msg.sender];
-        if (!v.hasVoted || v.allocatedAmount == 0) revert ZeroAmount();
+        if (v.votePower > 0 && allocatedToProposal[msg.sender] == proposalId) {
+            uint256 vpToFree = v.votePower;
+            proposalVPLocked[msg.sender] -= vpToFree;
+            allocatedToProposal[msg.sender] = 0;
 
-        uint256 amount = v.allocatedAmount;
-        allocatedRose[msg.sender] -= amount;
-        v.allocatedAmount = 0;
-
-        emit VoteUnallocated(proposalId, msg.sender, amount);
+            emit VPFreedFromProposal(proposalId, msg.sender, vpToFree);
+        }
     }
 
     /**
-     * @dev Delegate casts vote with partial delegated power
-     * Can be called multiple times to increase vote (same direction only)
+     * @dev Delegate casts vote with received VP (backend-signed)
+     * @param proposalId Proposal to vote on
+     * @param amount VP amount to use
+     * @param support True for Yay, false for Nay
+     * @param allocationsHash Hash of per-delegator allocations
+     * @param expiry Signature expiration
+     * @param signature Backend signer signature
      */
-    function castDelegatedVote(uint256 proposalId, uint256 amount, bool support) external nonReentrant {
+    function castDelegatedVote(
+        uint256 proposalId,
+        uint256 amount,
+        bool support,
+        bytes32 allocationsHash,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "delegatedVote",
+            msg.sender,
+            proposalId,
+            amount,
+            support,
+            allocationsHash,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        // Proposal validations
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
         if (amount == 0) revert ZeroAmount();
 
-        // Check available delegated power
+        // Check delegate has enough received VP
         uint256 available = getAvailableDelegatedPower(msg.sender, proposalId);
         if (amount > available) revert InsufficientDelegatedPower();
 
         DelegatedVoteRecord storage record = _delegatedVotes[proposalId][msg.sender];
 
-        // Check vote direction consistency
         if (record.hasVoted) {
             if (record.support != support) revert CannotChangeVoteDirection();
         }
 
-        // Allocate power from delegators proportionally
-        _allocateDelegatorPower(proposalId, amount);
+        // Store allocation hash for reward verification
+        allocationHashes[proposalId][msg.sender] = allocationsHash;
 
         // Update tracking
         delegatedVoteAllocated[proposalId][msg.sender] += amount;
@@ -589,157 +655,18 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
         record.totalPowerUsed += amount;
 
-        // Update proposal tallies
+        // Update proposal
         if (support) {
             p.yayVotes += amount;
         } else {
             p.nayVotes += amount;
         }
-    }
 
-    /**
-     * @dev Delegate casts vote with backend-signed allocation data (gas-efficient)
-     * Backend computes per-delegator allocations off-chain and signs them
-     * Contract verifies signature and stores only aggregate data + hash
-     *
-     * @param proposalId The proposal to vote on
-     * @param amount Total delegated vote power to use
-     * @param support True for Yay, false for Nay
-     * @param allocationsHash Hash of per-delegator allocations (computed by backend)
-     * @param expiry Signature expiration timestamp
-     * @param signature Backend signer's ECDSA signature
-     */
-    function castDelegatedVoteWithSignature(
-        uint256 proposalId,
-        uint256 amount,
-        bool support,
-        bytes32 allocationsHash,
-        uint256 expiry,
-        bytes calldata signature
-    ) external nonReentrant {
-        // Verify delegation signer is set
-        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
-
-        // Verify signature expiry
-        if (block.timestamp > expiry) revert SignatureExpired();
-
-        // Verify signature
-        bytes32 messageHash = keccak256(abi.encodePacked(
-            msg.sender,
-            proposalId,
-            amount,
-            support,
-            allocationsHash,
-            expiry
-        ));
-        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
-
-        // Replay protection
-        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
-        usedSignatures[ethSignedHash] = true;
-
-        address recovered = ethSignedHash.recover(signature);
-        if (recovered != delegationSigner) revert InvalidDelegationSignature();
-
-        // Standard proposal validations
-        Proposal storage p = _proposals[proposalId];
-        if (p.status != ProposalStatus.Active) revert ProposalNotActive();
-        if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
-        if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
-        if (amount == 0) revert ZeroAmount();
-
-        // Check available delegated power
-        uint256 available = getAvailableDelegatedPower(msg.sender, proposalId);
-        if (amount > available) revert InsufficientDelegatedPower();
-
-        DelegatedVoteRecord storage record = _delegatedVotes[proposalId][msg.sender];
-
-        // Check vote direction consistency
-        if (record.hasVoted) {
-            if (record.support != support) revert CannotChangeVoteDirection();
-        }
-
-        // Store allocation hash for future payout verification
-        // Note: For subsequent votes (increasing), the hash gets overwritten
-        // Backend should provide cumulative allocations hash
-        allocationHashes[proposalId][msg.sender] = allocationsHash;
-
-        // Update tracking (NO _allocateDelegatorPower() call - that's the gas savings!)
-        delegatedVoteAllocated[proposalId][msg.sender] += amount;
-
-        if (!record.hasVoted) {
-            record.hasVoted = true;
-            record.support = support;
-            _proposalDelegates[proposalId].push(msg.sender);
-            emit DelegatedVoteCast(proposalId, msg.sender, support, amount);
-        } else {
-            emit DelegatedVoteIncreased(proposalId, msg.sender, amount, record.totalPowerUsed + amount);
-        }
-
-        record.totalPowerUsed += amount;
-
-        // Update proposal tallies
-        if (support) {
-            p.yayVotes += amount;
-        } else {
-            p.nayVotes += amount;
-        }
-    }
-
-    /**
-     * @dev Internal function to allocate delegated power from delegators proportionally
-     */
-    function _allocateDelegatorPower(uint256 proposalId, uint256 amount) internal {
-        address[] memory delegatorList = _delegators[msg.sender].values();
-        uint256 totalPower = totalDelegatedPower[msg.sender];
-        uint256 remainingToAllocate = amount;
-
-        for (uint256 i = 0; i < delegatorList.length && remainingToAllocate > 0; i++) {
-            address delegator = delegatorList[i];
-            uint256 delegatorPower = cachedVotePower[delegator];
-
-            // Calculate proportional share
-            uint256 proportionalShare = (amount * delegatorPower) / totalPower;
-
-            // Check what's still available from this delegator
-            uint256 alreadyUsedFromDelegator = _delegatorVotePower[proposalId][msg.sender][delegator];
-            uint256 availableFromDelegator = delegatorPower > alreadyUsedFromDelegator
-                ? delegatorPower - alreadyUsedFromDelegator
-                : 0;
-
-            uint256 toUse = proportionalShare > availableFromDelegator
-                ? availableFromDelegator
-                : proportionalShare;
-            toUse = toUse > remainingToAllocate ? remainingToAllocate : toUse;
-
-            if (toUse > 0) {
-                _delegatorVotePower[proposalId][msg.sender][delegator] += toUse;
-                remainingToAllocate -= toUse;
-            }
-        }
-
-        // Handle any remainder due to rounding - assign to first delegator with capacity
-        if (remainingToAllocate > 0) {
-            for (uint256 i = 0; i < delegatorList.length && remainingToAllocate > 0; i++) {
-                address delegator = delegatorList[i];
-                uint256 delegatorPower = cachedVotePower[delegator];
-                uint256 used = _delegatorVotePower[proposalId][msg.sender][delegator];
-                uint256 availableFromDelegator = delegatorPower > used ? delegatorPower - used : 0;
-
-                if (availableFromDelegator > 0) {
-                    uint256 toUse = availableFromDelegator > remainingToAllocate ? remainingToAllocate : availableFromDelegator;
-                    _delegatorVotePower[proposalId][msg.sender][delegator] += toUse;
-                    remainingToAllocate -= toUse;
-                }
-            }
-        }
+        emit VPAllocatedToProposal(proposalId, msg.sender, amount, support, true);
     }
 
     // ============ Proposal Functions ============
 
-    /**
-     * @dev Create a new proposal
-     */
     function propose(
         string calldata title,
         string calldata descriptionHash,
@@ -753,7 +680,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (bytes(title).length == 0) revert ZeroAmount();
         if (value == 0) revert ZeroAmount();
 
-        // Check treasury has enough ROSE
         uint256 treasuryBalance = roseToken.balanceOf(treasury);
         if (value > treasuryBalance) revert ProposalValueExceedsTreasury();
 
@@ -781,9 +707,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         return proposalId;
     }
 
-    /**
-     * @dev Edit a proposal (resets votes, restarts timer)
-     */
     function editProposal(
         uint256 proposalId,
         string calldata title,
@@ -799,14 +722,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         }
         if (p.editCount >= MAX_EDIT_CYCLES) revert MaxEditCyclesReached();
 
-        // Check treasury has enough ROSE
         uint256 treasuryBalance = roseToken.balanceOf(treasury);
         if (value > treasuryBalance) revert ProposalValueExceedsTreasury();
 
-        // Reset votes - unallocate all voters
         _resetProposalVotes(proposalId);
 
-        // Update proposal
         p.title = title;
         p.descriptionHash = descriptionHash;
         p.value = value;
@@ -822,9 +742,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         emit ProposalEdited(proposalId, p.editCount);
     }
 
-    /**
-     * @dev Cancel a proposal
-     */
     function cancelProposal(uint256 proposalId) external {
         Proposal storage p = _proposals[proposalId];
         if (p.proposer != msg.sender) revert OnlyProposerCanCancel();
@@ -836,26 +753,20 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         emit ProposalCancelled(proposalId);
     }
 
-    /**
-     * @dev Finalize a proposal after voting ends
-     * Permissionless - anyone can call
-     */
     function finalizeProposal(uint256 proposalId) external {
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp <= p.votingEndsAt) revert ProposalNotEnded();
 
-        // Check quorum
-        uint256 requiredQuorum = (totalStakedRose * QUORUM_THRESHOLD) / BASIS_POINTS;
-        if (p.totalAllocated < requiredQuorum) {
-            // Quorum not met - reset timer for edit
+        // Check quorum based on total VP
+        uint256 totalVotes = p.yayVotes + p.nayVotes;
+        uint256 requiredQuorum = (totalVotingPower * QUORUM_THRESHOLD) / BASIS_POINTS;
+        if (totalVotes < requiredQuorum) {
             p.votingEndsAt = block.timestamp + VOTING_PERIOD;
             emit ProposalFinalized(proposalId, ProposalStatus.Active);
             return;
         }
 
-        // Calculate result
-        uint256 totalVotes = p.yayVotes + p.nayVotes;
         uint256 yayPercent = totalVotes > 0 ? (p.yayVotes * BASIS_POINTS) / totalVotes : 0;
 
         if (yayPercent >= PASS_THRESHOLD) {
@@ -863,22 +774,16 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             emit ProposalFinalized(proposalId, ProposalStatus.Passed);
         } else {
             p.status = ProposalStatus.Failed;
-            // Proposer takes reputation hit
             _userStats[p.proposer].failedProposals++;
-            // Distribute rewards to Nay voters
             _distributeNayRewards(proposalId);
             emit ProposalFinalized(proposalId, ProposalStatus.Failed);
         }
     }
 
-    /**
-     * @dev Execute a passed proposal - creates DAO task
-     */
     function executeProposal(uint256 proposalId) external nonReentrant {
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Passed) revert ProposalNotActive();
 
-        // Create task in marketplace
         uint256 taskId = IRoseMarketplace(marketplace).createDAOTask(
             p.proposer,
             p.title,
@@ -897,20 +802,13 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Marketplace Integration ============
 
-    /**
-     * @dev Update user stats when task completes
-     * Called by marketplace
-     * Records task in history for time-based reputation decay
-     */
     function updateUserStats(address user, uint256 taskValue, bool isDispute) external onlyMarketplace {
-        // Add to task history for time-based decay
         _taskHistory[user].push(TaskRecord({
             timestamp: block.timestamp,
             value: taskValue,
             isDispute: isDispute
         }));
 
-        // Keep aggregate counters for gas-efficient reads when decay not needed
         UserStats storage stats = _userStats[user];
         if (isDispute) {
             stats.disputes++;
@@ -923,10 +821,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         emit UserStatsUpdated(user, stats.tasksCompleted, stats.totalTaskValue);
     }
 
-    /**
-     * @dev Handle DAO task completion - distribute rewards
-     * Called by marketplace
-     */
     function onTaskComplete(uint256 taskId) external onlyMarketplace {
         uint256 proposalId = _taskToProposal[taskId];
         if (proposalId == 0) revert TaskNotFromProposal();
@@ -934,18 +828,12 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         Proposal storage p = _proposals[proposalId];
         uint256 value = p.value;
 
-        // Mint rewards
         uint256 daoReward = (value * DAO_MINT_PERCENT) / BASIS_POINTS;
         uint256 yayReward = (value * YAY_VOTER_REWARD) / BASIS_POINTS;
         uint256 proposerReward = (value * PROPOSER_REWARD) / BASIS_POINTS;
 
-        // Mint to treasury (2%)
         IRoseToken(address(roseToken)).mint(treasury, daoReward);
-
-        // Mint to proposer (1%)
         IRoseToken(address(roseToken)).mint(p.proposer, proposerReward);
-
-        // Distribute to Yay voters (2%)
         _distributeYayRewards(proposalId, yayReward);
 
         emit RewardsDistributed(proposalId, daoReward + yayReward + proposerReward);
@@ -953,13 +841,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Claim Functions ============
 
-    /**
-     * @dev Claim voter rewards for multiple proposals in a single transaction
-     * Works for both direct voters and delegators
-     * @param claims Array of claim data (proposalId, claimType, delegate, votePower)
-     * @param expiry Signature expiration timestamp
-     * @param signature Backend signer approval
-     */
     function claimVoterRewards(
         ClaimData[] calldata claims,
         uint256 expiry,
@@ -969,7 +850,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (block.timestamp > expiry) revert SignatureExpired();
         if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
 
-        // 1. Verify signature
         bytes32 messageHash = keccak256(abi.encodePacked(
             "claimVoterRewards",
             msg.sender,
@@ -984,17 +864,14 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         address recovered = ethSignedHash.recover(signature);
         if (recovered != delegationSigner) revert InvalidDelegationSignature();
 
-        // 2. Process all claims
         uint256 totalReward = 0;
         for (uint256 i = 0; i < claims.length; i++) {
             ClaimData calldata c = claims[i];
 
-            // Skip if no pool
             if (voterRewardPool[c.proposalId] == 0) continue;
 
             uint256 reward;
             if (c.claimType == ClaimType.DirectVoter) {
-                // Direct voter claim
                 if (directVoterRewardClaimed[c.proposalId][msg.sender]) continue;
 
                 reward = (voterRewardPool[c.proposalId] * c.votePower)
@@ -1003,7 +880,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
                 directVoterRewardClaimed[c.proposalId][msg.sender] = true;
                 emit DirectVoterRewardClaimed(c.proposalId, msg.sender, reward);
             } else {
-                // Delegator claim
                 if (delegatorRewardClaimed[c.proposalId][c.delegate][msg.sender]) continue;
 
                 reward = (voterRewardPool[c.proposalId] * c.votePower)
@@ -1016,9 +892,17 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             totalReward += reward;
         }
 
-        // 3. Add total to staked balance (tokens already in contract from pool mint)
         if (totalReward > 0) {
             stakedRose[msg.sender] += totalReward;
+            // Recalculate VP with new staked amount
+            uint256 rep = getReputation(msg.sender);
+            uint256 newVP = getVotePower(stakedRose[msg.sender], rep);
+            uint256 oldVP = votingPower[msg.sender];
+            votingPower[msg.sender] = newVP;
+            totalVotingPower = totalVotingPower - oldVP + newVP;
+
+            emit VotingPowerChanged(msg.sender, stakedRose[msg.sender], newVP, rep);
+            emit TotalVPUpdated(totalVotingPower);
             emit TotalRewardsClaimed(msg.sender, totalReward);
         }
     }
@@ -1058,13 +942,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         Proposal storage p = _proposals[proposalId];
         if (p.yayVotes == 0) return;
 
-        // Mint ENTIRE pool to contract - NO LOOPS!
         IRoseToken(address(roseToken)).mint(address(this), totalReward);
 
-        // Store pool info for claims
         voterRewardPool[proposalId] = totalReward;
         voterRewardTotalVotes[proposalId] = p.yayVotes;
-        voterRewardOutcome[proposalId] = true; // yay won
+        voterRewardOutcome[proposalId] = true;
 
         emit VoterRewardPoolCreated(proposalId, totalReward, p.yayVotes, true);
     }
@@ -1075,13 +957,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
         uint256 totalReward = (p.value * NAY_VOTER_REWARD) / BASIS_POINTS;
 
-        // Mint ENTIRE pool to contract - NO LOOPS!
         IRoseToken(address(roseToken)).mint(address(this), totalReward);
 
-        // Store pool info for claims
         voterRewardPool[proposalId] = totalReward;
         voterRewardTotalVotes[proposalId] = p.nayVotes;
-        voterRewardOutcome[proposalId] = false; // nay won
+        voterRewardOutcome[proposalId] = false;
 
         emit VoterRewardPoolCreated(proposalId, totalReward, p.nayVotes, false);
     }
@@ -1090,25 +970,29 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         address[] memory voters = _proposalVoters[proposalId];
         for (uint256 i = 0; i < voters.length; i++) {
             Vote storage v = _votes[proposalId][voters[i]];
-            if (v.allocatedAmount > 0) {
-                allocatedRose[voters[i]] -= v.allocatedAmount;
-                v.allocatedAmount = 0;
+            if (v.votePower > 0) {
+                // Free VP for voters
+                if (allocatedToProposal[voters[i]] == proposalId) {
+                    proposalVPLocked[voters[i]] -= v.votePower;
+                    allocatedToProposal[voters[i]] = 0;
+                }
+                v.votePower = 0;
             }
         }
         delete _proposalVoters[proposalId];
     }
 
-    function _removeDelegator(address delegate, address delegator) internal {
-        _delegators[delegate].remove(delegator);
+    function _removeDelegationTarget(address delegator, address delegateAddr) internal {
+        address[] storage targets = _delegationTargets[delegator];
+        for (uint256 i = 0; i < targets.length; i++) {
+            if (targets[i] == delegateAddr) {
+                targets[i] = targets[targets.length - 1];
+                targets.pop();
+                break;
+            }
+        }
     }
 
-    function _getAllocatedToDelegate(address user) internal view returns (uint256) {
-        return delegatedAmount[user];
-    }
-
-    /**
-     * @dev Integer square root using Babylonian method
-     */
     function _sqrt(uint256 x) internal pure returns (uint256) {
         if (x == 0) return 0;
         uint256 z = (x + 1) / 2;

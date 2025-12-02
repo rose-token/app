@@ -1,24 +1,27 @@
 /**
  * StakingPanel - Deposit/Withdraw ROSE for governance participation
- * Shows current staking position and vROSE balance
+ * Shows current staking position, VP breakdown, and vROSE balance
+ *
+ * VP-centric model: VP is calculated at deposit time and stored on-chain.
+ * VP = sqrt(stakedRose) * (reputation/100)
  */
 
 import React, { useState } from 'react';
 import useGovernance from '../../hooks/useGovernance';
-import useDelegation from '../../hooks/useDelegation';
-import { calculateVotePower, formatVotePower } from '../../constants/contracts';
+import { formatVotePower } from '../../constants/contracts';
 
 const StakingPanel = () => {
   const {
     stakedRose,
-    stakedRoseRaw,
-    allocatedRose,
-    unallocatedRose,
-    unallocatedRoseRaw,
+    votingPower,
+    availableVP,
+    delegatedOut,
+    proposalVPLocked,
+    activeProposal,
     vRoseBalance,
     roseBalance,
     reputation,
-    pendingRewards,
+    totalDelegatedIn,
     loading,
     error,
     setError,
@@ -39,17 +42,6 @@ const StakingPanel = () => {
       default: return null;
     }
   };
-
-  const {
-    isDelegating,
-    totalDelegatedPower,
-  } = useDelegation();
-
-  // Calculate voting power: sqrt(unallocatedRose) * (reputation / 100) + delegated power received
-  // If delegating to someone else, voting power is 0 (their power is with the delegate)
-  const ownPower = calculateVotePower(unallocatedRoseRaw || 0n, reputation || 60);
-  const receivedPower = parseFloat(totalDelegatedPower || '0');
-  const votingPower = isDelegating ? 0 : (ownPower + receivedPower);
 
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -75,6 +67,12 @@ const StakingPanel = () => {
     }
   };
 
+  // Calculate total received VP for display
+  const receivedVP = parseFloat(totalDelegatedIn || '0');
+
+  // Check if VP is locked
+  const hasLockedVP = parseFloat(delegatedOut || '0') > 0 || parseFloat(proposalVPLocked || '0') > 0;
+
   return (
     <div className="card">
       <h3 className="text-lg font-semibold mb-4">Governance Staking</h3>
@@ -86,12 +84,12 @@ const StakingPanel = () => {
           <p className="text-lg font-semibold">{parseFloat(stakedRose || 0).toLocaleString()}</p>
         </div>
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>vROSE Balance</p>
-          <p className="text-lg font-semibold">{parseFloat(vRoseBalance || 0).toLocaleString()}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total VP</p>
+          <p className="text-lg font-semibold">{formatVotePower(parseFloat(votingPower || 0))} VP</p>
         </div>
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Voting Power</p>
-          <p className="text-lg font-semibold">{formatVotePower(votingPower)} VP</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Available VP</p>
+          <p className="text-lg font-semibold text-green-500">{formatVotePower(parseFloat(availableVP || 0))} VP</p>
         </div>
         <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Reputation</p>
@@ -99,24 +97,44 @@ const StakingPanel = () => {
         </div>
       </div>
 
-      {/* Allocated Warning */}
-      {parseFloat(allocatedRose || 0) > 0 && (
+      {/* VP Breakdown */}
+      {(parseFloat(delegatedOut || '0') > 0 || parseFloat(proposalVPLocked || '0') > 0 || receivedVP > 0) && (
+        <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+          <p className="font-medium mb-2">VP Breakdown:</p>
+          <div className="space-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {parseFloat(delegatedOut || '0') > 0 && (
+              <p>Delegated out: <span className="text-yellow-500">{formatVotePower(parseFloat(delegatedOut))} VP</span></p>
+            )}
+            {parseFloat(proposalVPLocked || '0') > 0 && (
+              <p>
+                On proposal #{activeProposal}: <span className="text-blue-500">{formatVotePower(parseFloat(proposalVPLocked))} VP</span>
+              </p>
+            )}
+            {receivedVP > 0 && (
+              <p>Received (as delegate): <span className="text-green-500">+{formatVotePower(receivedVP)} VP</span></p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* vROSE Balance */}
+      <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+        <div className="flex justify-between items-center">
+          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>vROSE Balance</span>
+          <span className="font-medium">{parseFloat(vRoseBalance || 0).toLocaleString()}</span>
+        </div>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+          Used as stakeholder collateral in marketplace tasks
+        </p>
+      </div>
+
+      {/* VP Locked Warning */}
+      {hasLockedVP && (
         <div
           className="p-3 rounded-lg mb-4 text-sm"
           style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' }}
         >
-          {parseFloat(allocatedRose).toLocaleString()} ROSE allocated to votes/delegation.
-          Unallocate before withdrawing.
-        </div>
-      )}
-
-      {/* Pending Rewards */}
-      {parseFloat(pendingRewards || 0) > 0 && (
-        <div
-          className="p-3 rounded-lg mb-4 text-sm"
-          style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}
-        >
-          {parseFloat(pendingRewards).toLocaleString()} ROSE in pending rewards
+          VP is locked in delegation or proposals. Free VP before withdrawing the corresponding ROSE.
         </div>
       )}
 
@@ -159,7 +177,7 @@ const StakingPanel = () => {
       {activeTab === 'deposit' && (
         <div>
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-            Deposit ROSE to participate in governance. You'll receive vROSE 1:1 which can be used as stakeholder collateral.
+            Deposit ROSE to gain Voting Power. VP = sqrt(ROSE) x (reputation/100). You'll receive vROSE 1:1 for marketplace collateral.
           </p>
 
           <div className="flex gap-2 mb-3">
@@ -241,7 +259,7 @@ const StakingPanel = () => {
       {activeTab === 'withdraw' && (
         <div>
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-            Withdraw ROSE from governance. Requires vROSE returned (not locked in tasks) and ROSE unallocated from votes.
+            Withdraw ROSE from governance. Requires vROSE returned and VP not locked in delegation or proposals.
           </p>
 
           <div className="flex gap-2 mb-3">
@@ -267,10 +285,11 @@ const StakingPanel = () => {
               </span>
             </div>
             <button
-              onClick={() => setWithdrawAmount(Math.min(
-                parseFloat(unallocatedRose || 0),
-                parseFloat(vRoseBalance || 0)
-              ).toString())}
+              onClick={() => {
+                // Max withdrawable is limited by vROSE balance
+                // Contract will check if VP is available
+                setWithdrawAmount(vRoseBalance || '0');
+              }}
               className="px-3 py-2 rounded-lg text-sm"
               style={{
                 backgroundColor: 'var(--bg-tertiary)',
@@ -282,10 +301,7 @@ const StakingPanel = () => {
           </div>
 
           <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-            Withdrawable: {Math.min(
-              parseFloat(unallocatedRose || 0),
-              parseFloat(vRoseBalance || 0)
-            ).toLocaleString()} ROSE
+            vROSE available: {parseFloat(vRoseBalance || 0).toLocaleString()} | VP available: {formatVotePower(parseFloat(availableVP || 0))}
           </p>
 
           <button
@@ -301,12 +317,13 @@ const StakingPanel = () => {
 
       {/* Info Box */}
       <div className="mt-4 p-3 rounded-lg text-xs" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-        <strong>How it works:</strong>
+        <strong>How VP Works:</strong>
         <ul className="mt-1 list-disc list-inside space-y-1">
-          <li>Deposit ROSE to receive vROSE 1:1</li>
-          <li>Staked ROSE can be allocated to votes or delegates</li>
-          <li>vROSE can be used as stakeholder collateral in tasks</li>
-          <li>Withdraw requires both vROSE returned AND ROSE unallocated</li>
+          <li>VP = sqrt(stakedROSE) x (reputation / 100)</li>
+          <li>VP is calculated once at deposit time</li>
+          <li>Use VP to vote on proposals or delegate to others</li>
+          <li>VP can only be on ONE proposal at a time</li>
+          <li>Free VP from resolved proposals before using elsewhere</li>
         </ul>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { apiLimiter } from './middleware/rateLimit';
 import passportRoutes from './routes/passport';
 import profileRoutes from './routes/profile';
 import delegationRoutes from './routes/delegation';
+import governanceRoutes from './routes/governance';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -42,6 +43,7 @@ app.use('/api/', apiLimiter);
 app.use('/api/passport', passportRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/delegation', delegationRoutes);
+app.use('/api/governance', governanceRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

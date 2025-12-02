@@ -163,3 +163,58 @@ export interface ClaimableRewardsDisplayResponse {
 export interface ClaimErrorResponse {
   error: string;
 }
+
+// Governance VP types
+export interface VPDataResponse {
+  stakedRose: string;
+  votingPower: string;
+  availableVP: string;
+  delegatedOut: string;
+  proposalVPLocked: string;
+  activeProposal: number;
+}
+
+export interface TotalVPResponse {
+  totalVP: string;
+}
+
+export interface DelegationsResponse {
+  delegations: Array<{
+    delegate: string;
+    vpAmount: string;
+  }>;
+}
+
+export interface ReceivedDelegationsResponse {
+  delegators: Array<{
+    delegator: string;
+    vpAmount: string;
+  }>;
+}
+
+export interface VoteSignatureRequest {
+  voter: string;
+  proposalId: number;
+  vpAmount: string;
+  support: boolean;
+}
+
+export interface VoteSignatureResponse {
+  voter: string;
+  proposalId: number;
+  vpAmount: string;
+  support: boolean;
+  expiry: number;
+  signature: string;
+}
+
+export interface RefreshVPRequest {
+  user: string;
+}
+
+export interface RefreshVPResponse {
+  user: string;
+  newRep: number;
+  expiry: number;
+  signature: string;
+}

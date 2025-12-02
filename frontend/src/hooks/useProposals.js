@@ -347,12 +347,13 @@ export const useProposals = (options = {}) => {
   });
 
   /**
-   * Vote on a proposal
+   * Vote on a proposal with VP (requires passport signature)
+   * VP-centric model: vote with VP, not ROSE amounts
    * @param {number} proposalId - Proposal ID
-   * @param {string} amount - Amount of ROSE to allocate
+   * @param {string} vpAmount - Amount of VP to vote with
    * @param {boolean} support - true for Yay, false for Nay
    */
-  const vote = useCallback(async (proposalId, amount, support) => {
+  const vote = useCallback(async (proposalId, vpAmount, support) => {
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
@@ -361,14 +362,45 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const amountWei = parseUnits(amount, 18);
+      const vpWei = parseUnits(vpAmount, 18);
 
-      console.log(`Voting ${support ? 'Yay' : 'Nay'} with ${amount} ROSE on proposal ${proposalId}...`);
+      console.log(`Requesting vote signature for ${vpAmount} VP on proposal ${proposalId}...`);
+
+      // Get passport signature from backend
+      const response = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voter: account,
+          proposalId: Number(proposalId),
+          vpAmount: vpWei.toString(),
+          support,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error?.includes('Insufficient passport score')) {
+          throw new Error(`Passport score too low (${errorData.score}/${errorData.threshold} required)`);
+        }
+        throw new Error(errorData.error || `Backend error: ${response.status}`);
+      }
+
+      const signatureData = await response.json();
+      console.log('Got vote signature from backend');
+
+      console.log(`Voting ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP on proposal ${proposalId}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'allocateToProposal',
-        args: [BigInt(proposalId), amountWei, support],
+        functionName: 'vote',
+        args: [
+          BigInt(proposalId),
+          BigInt(signatureData.vpAmount),
+          support,
+          BigInt(signatureData.expiry),
+          signatureData.signature,
+        ],
         ...GAS_SETTINGS,
       });
 
@@ -385,40 +417,45 @@ export const useProposals = (options = {}) => {
       console.error('Vote error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
-        : err.message.includes('AlreadyVoted')
-        ? 'You have already voted on this proposal'
         : err.message.includes('CannotVoteOnOwnProposal')
         ? 'You cannot vote on your own proposal'
         : err.message.includes('IneligibleToVote')
         ? 'You are not eligible to vote (check reputation requirements)'
         : err.message.includes('ProposalNotActive')
         ? 'Proposal is no longer active'
+        : err.message.includes('VPLockedToAnotherProposal')
+        ? 'Your VP is locked to another proposal'
+        : err.message.includes('InsufficientAvailableVP')
+        ? 'Insufficient available VP'
+        : err.message.includes('Passport score too low')
+        ? err.message
         : 'Failed to cast vote';
       setError(message);
       throw new Error(message);
     } finally {
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
 
   /**
-   * Unallocate vote from a proposal
+   * Free VP from a resolved proposal
+   * VP can only be freed after proposal is no longer active (passed/failed)
    * @param {number} proposalId - Proposal ID
    */
-  const unvote = useCallback(async (proposalId) => {
+  const freeVP = useCallback(async (proposalId) => {
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
 
-    setActionLoading(prev => ({ ...prev, [`unvote-${proposalId}`]: true }));
+    setActionLoading(prev => ({ ...prev, [`freeVP-${proposalId}`]: true }));
     setError(null);
 
     try {
-      console.log(`Unallocating vote from proposal ${proposalId}...`);
+      console.log(`Freeing VP from proposal ${proposalId}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'unallocateFromProposal',
+        functionName: 'freeVP',
         args: [BigInt(proposalId)],
         ...GAS_SETTINGS,
       });
@@ -428,32 +465,34 @@ export const useProposals = (options = {}) => {
         confirmations: 1,
       });
 
-      console.log('Vote unallocated successfully!');
+      console.log('VP freed successfully!');
       await refetchProposals();
       await refetchVotes();
       return { success: true, hash };
     } catch (err) {
-      console.error('Unvote error:', err);
+      console.error('Free VP error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
-        : 'Failed to unallocate vote';
+        : err.message.includes('ProposalStillActive')
+        ? 'Proposal is still active - VP can only be freed after voting ends'
+        : 'Failed to free VP';
       setError(message);
       throw new Error(message);
     } finally {
-      setActionLoading(prev => ({ ...prev, [`unvote-${proposalId}`]: false }));
+      setActionLoading(prev => ({ ...prev, [`freeVP-${proposalId}`]: false }));
     }
   }, [isConnected, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
 
   /**
-   * Combined vote using both own ROSE and delegated power
-   * Auto-splits: uses own ROSE first, then delegated power
+   * Combined vote using both own VP and delegated VP
+   * Auto-splits: uses own VP first, then delegated VP
    * @param {number} proposalId - Proposal ID
-   * @param {string} totalAmount - Total amount to vote with
+   * @param {string} totalVP - Total VP to vote with
    * @param {boolean} support - true for Yay, false for Nay
-   * @param {string} ownAvailable - Available own ROSE (unallocated)
-   * @param {string} delegatedAvailable - Available delegated power for this proposal
+   * @param {string} ownAvailable - Available own VP
+   * @param {string} delegatedAvailable - Available delegated VP for this proposal
    */
-  const voteCombined = useCallback(async (proposalId, totalAmount, support, ownAvailable, delegatedAvailable) => {
+  const voteCombined = useCallback(async (proposalId, totalVP, support, ownAvailable, delegatedAvailable) => {
     // Prevent concurrent voting (nonce conflict prevention)
     if (voteCombinedInProgress.current) {
       throw new Error('Vote transaction already in progress');
@@ -468,11 +507,11 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const totalWei = parseUnits(totalAmount.toString(), 18);
+      const totalWei = parseUnits(totalVP.toString(), 18);
       const ownAvailableWei = parseUnits(ownAvailable.toString(), 18);
       const delegatedAvailableWei = parseUnits(delegatedAvailable.toString(), 18);
 
-      // Calculate split: use own ROSE first, then delegated
+      // Calculate split: use own VP first, then delegated
       let ownToUse = 0n;
       let delegatedToUse = 0n;
 
@@ -489,18 +528,45 @@ export const useProposals = (options = {}) => {
 
       const results = [];
 
-      // Vote with own ROSE if any
+      // Vote with own VP if any (requires passport signature)
       if (ownToUse > 0n) {
-        console.log(`Voting with ${formatUnits(ownToUse, 18)} own ROSE...`);
+        console.log(`Requesting vote signature for ${formatUnits(ownToUse, 18)} own VP...`);
+
+        // Get passport signature from backend
+        const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            voter: account,
+            proposalId: Number(proposalId),
+            vpAmount: ownToUse.toString(),
+            support,
+          }),
+        });
+
+        if (!voteResponse.ok) {
+          const errorData = await voteResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || `Backend error: ${voteResponse.status}`);
+        }
+
+        const voteSignatureData = await voteResponse.json();
+        console.log('Got vote signature from backend');
+
+        console.log(`Voting with ${formatUnits(ownToUse, 18)} own VP...`);
         const ownHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
-          functionName: 'allocateToProposal',
-          args: [BigInt(proposalId), ownToUse, support],
+          functionName: 'vote',
+          args: [
+            BigInt(proposalId),
+            BigInt(voteSignatureData.vpAmount),
+            support,
+            BigInt(voteSignatureData.expiry),
+            voteSignatureData.signature,
+          ],
           ...GAS_SETTINGS,
         });
 
-        // Wait for 2 confirmations before next transaction
         await publicClient.waitForTransactionReceipt({
           hash: ownHash,
           confirmations: 1,
@@ -513,13 +579,8 @@ export const useProposals = (options = {}) => {
         }
       }
 
-      // Vote with delegated power if any (uses backend signing)
+      // Vote with delegated VP if any (uses backend signing)
       if (delegatedToUse > 0n) {
-        // Convert from wei scale (10^18) to wei-scale VP (10^9) for backend
-        // delegatedToUse was calculated as VP * 10^18 (via parseUnits),
-        // but backend expects VP * 10^9 (wei-scale vote power)
-        const delegatedAmountWeiScaleVP = delegatedToUse / 1000000000n;
-
         console.log(`Requesting delegated vote signature for ${formatUnits(delegatedToUse, 18)} VP...`);
 
         // Get signature from backend
@@ -529,7 +590,7 @@ export const useProposals = (options = {}) => {
           body: JSON.stringify({
             delegate: account,
             proposalId: Number(proposalId),
-            amount: delegatedAmountWeiScaleVP.toString(),
+            amount: delegatedToUse.toString(),
             support,
           }),
         });
@@ -550,11 +611,11 @@ export const useProposals = (options = {}) => {
           console.warn('Failed to store allocations:', storageErr);
         }
 
-        console.log(`Voting with ${formatUnits(delegatedToUse, 18)} delegated power...`);
+        console.log(`Voting with ${formatUnits(delegatedToUse, 18)} delegated VP...`);
         const delegatedHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
-          functionName: 'castDelegatedVoteWithSignature',
+          functionName: 'castDelegatedVote',
           args: [
             BigInt(proposalId),
             BigInt(signatureData.amount),
@@ -899,7 +960,7 @@ export const useProposals = (options = {}) => {
     // Actions
     vote,
     voteCombined,
-    unvote,
+    freeVP,
     createProposal,
     finalizeProposal,
     executeProposal,

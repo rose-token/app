@@ -101,6 +101,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee);
     event GovernanceUpdated(address indexed newGovernance);
     event VRoseTokenUpdated(address indexed newVRoseToken);
+    event ReputationChanged(address indexed user, uint256 taskValue);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -519,6 +520,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             if (governance != address(0)) {
                 IRoseGovernance(governance).updateUserStats(t.worker, taskValue, false);
                 IRoseGovernance(governance).updateUserStats(t.stakeholder, taskValue, false);
+
+                // Emit ReputationChanged events for backend to trigger VP refresh
+                emit ReputationChanged(t.worker, taskValue);
+                emit ReputationChanged(t.stakeholder, taskValue);
 
                 // If DAO-sourced task, notify governance for reward distribution
                 if (t.source == TaskSource.DAO) {

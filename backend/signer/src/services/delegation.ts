@@ -2,24 +2,33 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType } from '../types';
 
-// Minimal ABI for reading delegation data from RoseGovernance
+// Updated ABI for new VP-centric RoseGovernance
 const GOVERNANCE_ABI = [
+  // Multi-delegation VP tracking
   'function delegators(address delegate) external view returns (address[])',
-  'function cachedVotePower(address user) external view returns (uint256)',
-  'function totalDelegatedPower(address delegate) external view returns (uint256)',
-  'function delegatedVoteAllocated(uint256 proposalId, address delegate) external view returns (uint256)',
-  'function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, string title, string descriptionHash, uint256 value, uint256 deadline, string deliverables, uint256 createdAt, uint256 votingEndsAt, uint256 yayVotes, uint256 nayVotes, uint256 totalAllocated, uint8 status, uint256 editCount, uint256 taskId))',
-  // Claim-related functions
+  'function delegatedVP(address delegator, address delegate) external view returns (uint256)',
+  'function totalDelegatedIn(address delegate) external view returns (uint256)',
+  'function totalDelegatedOut(address delegator) external view returns (uint256)',
+  'function votingPower(address user) external view returns (uint256)',
+
+  // Delegated vote tracking
+  'function delegatedVotes(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
+  'function delegatorPowerUsed(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
+  'function allocationHashes(uint256 proposalId, address delegate) external view returns (bytes32)',
+
+  // Direct vote tracking
+  'function votes(uint256 proposalId, address voter) external view returns (tuple(bool hasVoted, bool support, uint256 votePower))',
+
+  // Proposal data
+  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, string title, string descriptionHash, uint256 value, uint256 deadline, string deliverables, uint256 createdAt, uint256 votingEndsAt, uint256 yayVotes, uint256 nayVotes, uint8 status, uint256 editCount, uint256 taskId))',
+  'function proposalCounter() external view returns (uint256)',
+
+  // Reward tracking
   'function voterRewardPool(uint256 proposalId) external view returns (uint256)',
   'function voterRewardTotalVotes(uint256 proposalId) external view returns (uint256)',
   'function voterRewardOutcome(uint256 proposalId) external view returns (bool)',
   'function directVoterRewardClaimed(uint256 proposalId, address voter) external view returns (bool)',
   'function delegatorRewardClaimed(uint256 proposalId, address delegate, address delegator) external view returns (bool)',
-  'function votes(uint256 proposalId, address voter) external view returns (tuple(bool hasVoted, bool support, uint256 votePower, uint256 allocatedAmount))',
-  'function proposalCounter() external view returns (uint256)',
-  'function delegatedTo(address user) external view returns (address)',
-  'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
 ];
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
@@ -53,8 +62,31 @@ export function getSignerAddress(): string {
 }
 
 /**
+ * Get all delegators and their VP amounts for a delegate
+ */
+export async function getDelegatorVPAmounts(
+  delegate: string
+): Promise<Map<string, bigint>> {
+  const contract = getGovernanceContract();
+  const delegatorList: string[] = await contract.delegators(delegate);
+
+  const vpMap = new Map<string, bigint>();
+
+  await Promise.all(
+    delegatorList.map(async (delegator) => {
+      const vp = await contract.delegatedVP(delegator, delegate);
+      if (BigInt(vp) > 0n) {
+        vpMap.set(delegator, BigInt(vp));
+      }
+    })
+  );
+
+  return vpMap;
+}
+
+/**
  * Compute per-delegator allocations for a delegated vote
- * Mirrors the logic in _allocateDelegatorPower() but off-chain
+ * Uses the new VP-based multi-delegation model
  */
 export async function computeAllocations(
   delegate: string,
@@ -63,60 +95,54 @@ export async function computeAllocations(
 ): Promise<{ allocations: DelegationAllocation[]; allocationsHash: string }> {
   const contract = getGovernanceContract();
 
-  // Get list of delegators
-  const delegatorList: string[] = await contract.delegators(delegate);
+  // Get all delegators and their VP amounts
+  const delegatorVPs = await getDelegatorVPAmounts(delegate);
 
-  if (delegatorList.length === 0) {
+  if (delegatorVPs.size === 0) {
     throw new Error('No delegators found for this delegate');
   }
 
-  // Get total delegated power
-  const totalPower: bigint = await contract.totalDelegatedPower(delegate);
+  // Get total received VP
+  const totalReceivedVP: bigint = BigInt(await contract.totalDelegatedIn(delegate));
 
-  if (totalPower === 0n) {
-    throw new Error('No delegated power available');
+  if (totalReceivedVP === 0n) {
+    throw new Error('No delegated VP available');
   }
 
-  // Get already used power for this proposal
-  const alreadyUsed: bigint = await contract.delegatedVoteAllocated(proposalId, delegate);
-  const availablePower = totalPower - alreadyUsed;
+  // Get already used VP for this proposal
+  const existingVote = await contract.delegatedVotes(proposalId, delegate);
+  const alreadyUsed: bigint = BigInt(existingVote.totalPowerUsed || 0);
+  const availableVP = totalReceivedVP - alreadyUsed;
 
-  if (amount > availablePower) {
-    throw new Error(`Insufficient delegated power. Available: ${availablePower}, Requested: ${amount}`);
+  if (amount > availableVP) {
+    throw new Error(`Insufficient delegated VP. Available: ${availableVP}, Requested: ${amount}`);
   }
 
-  // Get cached vote power for each delegator and already used power
-  const delegatorPowers: Map<string, bigint> = new Map();
+  // Get already used VP from each delegator for this proposal
   const delegatorUsed: Map<string, bigint> = new Map();
-
   await Promise.all(
-    delegatorList.map(async (delegator) => {
-      const [power, used] = await Promise.all([
-        contract.cachedVotePower(delegator),
-        contract.getDelegatorVotePower(proposalId, delegate, delegator),
-      ]);
-      delegatorPowers.set(delegator, power);
-      delegatorUsed.set(delegator, used);
+    Array.from(delegatorVPs.keys()).map(async (delegator) => {
+      const used = await contract.delegatorPowerUsed(proposalId, delegate, delegator);
+      delegatorUsed.set(delegator, BigInt(used));
     })
   );
 
-  // Compute proportional allocations (same logic as contract)
+  // Compute proportional allocations
   const allocations: DelegationAllocation[] = [];
   let remainingToAllocate = amount;
 
   // First pass: proportional allocation
-  for (const delegator of delegatorList) {
+  for (const [delegator, delegatorVP] of delegatorVPs) {
     if (remainingToAllocate === 0n) break;
 
-    const delegatorPower = delegatorPowers.get(delegator) || 0n;
     const alreadyUsedFromDelegator = delegatorUsed.get(delegator) || 0n;
 
-    // Calculate proportional share
-    const proportionalShare = (amount * delegatorPower) / totalPower;
+    // Calculate proportional share based on delegator's VP contribution
+    const proportionalShare = (amount * delegatorVP) / totalReceivedVP;
 
     // Check what's still available from this delegator
-    const availableFromDelegator = delegatorPower > alreadyUsedFromDelegator
-      ? delegatorPower - alreadyUsedFromDelegator
+    const availableFromDelegator = delegatorVP > alreadyUsedFromDelegator
+      ? delegatorVP - alreadyUsedFromDelegator
       : 0n;
 
     let toUse = proportionalShare > availableFromDelegator
@@ -135,17 +161,15 @@ export async function computeAllocations(
 
   // Second pass: handle remainder due to rounding
   if (remainingToAllocate > 0n) {
-    for (const delegator of delegatorList) {
+    for (const [delegator, delegatorVP] of delegatorVPs) {
       if (remainingToAllocate === 0n) break;
-
-      const delegatorPower = delegatorPowers.get(delegator) || 0n;
 
       // Get total used (initial + what we allocated in first pass)
       const initialUsed = delegatorUsed.get(delegator) || 0n;
       const allocatedInFirstPass = allocations.find(a => a.delegator === delegator);
       const used = initialUsed + BigInt(allocatedInFirstPass?.powerUsed || '0');
 
-      const availableFromDelegator = delegatorPower > used ? delegatorPower - used : 0n;
+      const availableFromDelegator = delegatorVP > used ? delegatorVP - used : 0n;
 
       if (availableFromDelegator > 0n) {
         const toUse = availableFromDelegator > remainingToAllocate
@@ -191,7 +215,7 @@ export async function computeAllocations(
 /**
  * Sign delegated vote approval
  * Message format matches contract's verification:
- * keccak256(abi.encodePacked(delegate, proposalId, amount, support, allocationsHash, expiry))
+ * keccak256(abi.encodePacked("delegatedVote", delegate, proposalId, amount, support, allocationsHash, expiry))
  */
 export async function signDelegatedVote(
   delegate: string,
@@ -202,8 +226,8 @@ export async function signDelegatedVote(
   expiry: number
 ): Promise<string> {
   const messageHash = ethers.solidityPackedKeccak256(
-    ['address', 'uint256', 'uint256', 'bool', 'bytes32', 'uint256'],
-    [delegate, proposalId, amount, support, allocationsHash, expiry]
+    ['string', 'address', 'uint256', 'uint256', 'bool', 'bytes32', 'uint256'],
+    ['delegatedVote', delegate, proposalId, amount, support, allocationsHash, expiry]
   );
 
   // Sign the hash (ethers adds "\x19Ethereum Signed Message:\n32" prefix)
@@ -222,7 +246,7 @@ export async function isProposalActive(proposalId: number): Promise<boolean> {
     const proposal = await contract.proposals(proposalId);
     const now = Math.floor(Date.now() / 1000);
 
-    // status 0 = Active (ethers returns BigInt, must convert to Number for comparison)
+    // status 0 = Active
     return Number(proposal.status) === 0 && now <= Number(proposal.votingEndsAt);
   } catch {
     return false;
@@ -230,7 +254,7 @@ export async function isProposalActive(proposalId: number): Promise<boolean> {
 }
 
 /**
- * Get available delegated power for a delegate on a proposal
+ * Get available delegated VP for a delegate on a proposal
  */
 export async function getAvailableDelegatedPower(
   delegate: string,
@@ -238,18 +262,50 @@ export async function getAvailableDelegatedPower(
 ): Promise<bigint> {
   const contract = getGovernanceContract();
 
-  const [totalRaw, usedRaw] = await Promise.all([
-    contract.totalDelegatedPower(delegate),
-    contract.delegatedVoteAllocated(proposalId, delegate),
+  const [totalReceivedRaw, existingVote] = await Promise.all([
+    contract.totalDelegatedIn(delegate),
+    contract.delegatedVotes(proposalId, delegate),
   ]);
 
-  const total = BigInt(totalRaw);
-  const used = BigInt(usedRaw);
+  const total = BigInt(totalReceivedRaw);
+  const used = BigInt(existingVote.totalPowerUsed || 0);
 
   return total > used ? total - used : 0n;
 }
 
+/**
+ * Get the delegated vote record for a proposal
+ */
+export async function getDelegatedVote(
+  proposalId: number,
+  delegate: string
+): Promise<{ hasVoted: boolean; support: boolean; totalPowerUsed: bigint }> {
+  const contract = getGovernanceContract();
+  const vote = await contract.delegatedVotes(proposalId, delegate);
+
+  return {
+    hasVoted: vote.hasVoted,
+    support: vote.support,
+    totalPowerUsed: BigInt(vote.totalPowerUsed || 0),
+  };
+}
+
 // ============ Claim Functions ============
+
+/**
+ * Get all delegates a user has delegated to (for multi-delegation)
+ * Returns delegates where user has delegatedVP > 0
+ */
+export async function getUserDelegates(user: string): Promise<string[]> {
+  // In multi-delegation, we need to check all potential delegates
+  // This would ideally be tracked via events or an enumerable set on-chain
+  // For now, we'll need to emit DelegationChanged events and index them
+  // or query a subgraph
+
+  // Placeholder: Return empty array - actual implementation needs event indexing
+  // This should be replaced with proper event indexing or subgraph query
+  return [];
+}
 
 /**
  * Get all claimable rewards for a user (both direct votes and delegated)
@@ -287,35 +343,21 @@ export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
       }
     }
 
-    // Check delegated votes (if user delegated to someone who voted)
-    const delegatedTo = await contract.delegatedTo(user);
-    if (delegatedTo !== ethers.ZeroAddress) {
-      const delegateVote = await contract.getDelegatedVote(i, delegatedTo);
-      if (delegateVote.hasVoted && delegateVote.support === outcome) {
-        // Check if user's portion is claimed
-        const claimed = await contract.delegatorRewardClaimed(i, delegatedTo, user);
-        if (!claimed) {
-          // Get user's power used for this proposal
-          const powerUsed = await contract.getDelegatorVotePower(i, delegatedTo, user);
-          if (BigInt(powerUsed) > 0n) {
-            claims.push({
-              proposalId: i,
-              claimType: ClaimType.Delegator,
-              delegate: delegatedTo,
-              votePower: powerUsed.toString(),
-            });
-          }
-        }
-      }
-    }
+    // Check delegated votes (user delegated to multiple delegates in multi-delegation)
+    // For each delegate user has delegated to, check if that delegate voted on winning side
+    // and if user's delegated VP was used
+    const delegators = await contract.delegators(user); // Check if user IS a delegator to anyone
+    // This approach doesn't work well - need proper event indexing for multi-delegation
+
+    // Alternative: Check getDelegatorVotePower for known delegates
+    // This requires knowing which delegates exist - needs event indexing
   }
 
   return claims;
 }
 
 /**
- * Sign claim approval matching contract's verification format:
- * keccak256(abi.encodePacked("claimVoterRewards", msg.sender, abi.encode(claims), expiry))
+ * Sign claim approval matching contract's verification format
  */
 export async function signClaimApproval(
   user: string,
@@ -325,7 +367,6 @@ export async function signClaimApproval(
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
   // Encode claims as tuple array matching Solidity struct
-  // ClaimData struct: (uint256 proposalId, ClaimType claimType, address delegate, uint256 votePower)
   const encodedClaims = abiCoder.encode(
     ['tuple(uint256,uint8,address,uint256)[]'],
     [claims.map(c => [c.proposalId, c.claimType, c.delegate, BigInt(c.votePower)])]

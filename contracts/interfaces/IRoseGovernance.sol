@@ -4,6 +4,12 @@ pragma solidity ^0.8.20;
 /**
  * @title IRoseGovernance
  * @dev Interface for the Rose Token governance contract
+ *
+ * VP-Centric Model:
+ * - VP = sqrt(staked ROSE) * (reputation / 100)
+ * - VP calculated at deposit time and stored
+ * - Multi-delegation: users can split VP across multiple delegates
+ * - VP locked to ONE proposal at a time
  */
 interface IRoseGovernance {
     // ============ Enums ============
@@ -47,7 +53,7 @@ interface IRoseGovernance {
         bool hasVoted;
         bool support;
         uint256 votePower;
-        uint256 allocatedAmount;
+        uint256 allocatedAmount;  // Legacy field, not used in VP model
     }
 
     struct TaskRecord {
@@ -64,30 +70,52 @@ interface IRoseGovernance {
 
     // ============ Events ============
 
+    // Staking events
     event Deposited(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
+
+    // VP tracking events
+    event VotingPowerChanged(address indexed user, uint256 stakedRose, uint256 votingPower, uint256 reputation);
+    event TotalVPUpdated(uint256 newTotalVP);
+
+    // Delegation events (multi-delegation)
+    event DelegationChanged(address indexed delegator, address indexed delegate, uint256 vpAmount, bool isDelegating);
+
+    // Legacy delegation events (kept for compatibility)
     event DelegatedTo(address indexed delegator, address indexed delegate, uint256 amount);
     event Undelegated(address indexed delegator, address indexed delegate, uint256 amount);
     event DelegationRefreshed(address indexed user, uint256 oldPower, uint256 newPower);
+
+    // Proposal events
     event ProposalCreated(uint256 indexed proposalId, address indexed proposer, uint256 value);
     event ProposalEdited(uint256 indexed proposalId, uint256 editCount);
     event ProposalCancelled(uint256 indexed proposalId);
     event ProposalFinalized(uint256 indexed proposalId, ProposalStatus status);
     event ProposalExecuted(uint256 indexed proposalId, uint256 taskId);
+
+    // Voting events
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 votePower);
     event VoteIncreased(uint256 indexed proposalId, address indexed voter, uint256 additionalAmount, uint256 newVotePower);
+    event VPAllocatedToProposal(uint256 indexed proposalId, address indexed voter, uint256 vpAmount, bool support, bool isDelegatedVote);
+    event VPFreedFromProposal(uint256 indexed proposalId, address indexed voter, uint256 vpAmount);
+
+    // Delegated voting events
     event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower);
     event DelegatedVoteIncreased(uint256 indexed proposalId, address indexed delegate, uint256 additionalPower, uint256 newTotalPower);
     event VoteUnallocated(uint256 indexed proposalId, address indexed voter, uint256 amount);
+
+    // Reward events
     event RewardsDistributed(uint256 indexed proposalId, uint256 totalRewards);
     event RewardClaimed(address indexed user, uint256 amount);
-    event UserStatsUpdated(address indexed user, uint256 tasksCompleted, uint256 totalTaskValue);
-    event PassportSignerUpdated(address indexed newSigner);
-    event DelegationSignerUpdated(address indexed newSigner);
     event VoterRewardPoolCreated(uint256 indexed proposalId, uint256 poolAmount, uint256 totalVotes, bool support);
     event DirectVoterRewardClaimed(uint256 indexed proposalId, address indexed voter, uint256 amount);
     event DelegatorRewardClaimed(uint256 indexed proposalId, address indexed delegate, address indexed delegator, uint256 amount);
     event TotalRewardsClaimed(address indexed user, uint256 totalAmount);
+
+    // Admin events
+    event UserStatsUpdated(address indexed user, uint256 tasksCompleted, uint256 totalTaskValue);
+    event PassportSignerUpdated(address indexed newSigner);
+    event DelegationSignerUpdated(address indexed newSigner);
 
     // ============ Errors ============
 
@@ -129,6 +157,12 @@ interface IRoseGovernance {
     error AlreadyClaimed();
     error EmptyClaims();
 
+    // New VP-related errors
+    error VPLocked();
+    error VPLockedToAnotherProposal();
+    error InsufficientAvailableVP();
+    error InsufficientDelegated();
+
     // ============ Enums for Claims ============
 
     enum ClaimType { DirectVoter, Delegator }
@@ -138,25 +172,38 @@ interface IRoseGovernance {
     struct ClaimData {
         uint256 proposalId;
         ClaimType claimType;
-        address delegate;      // Only used if claimType == Delegator
-        uint256 votePower;     // Vote power for direct voters, powerUsed for delegators
+        address delegate;
+        uint256 votePower;
     }
 
     // ============ View Functions ============
 
+    // Core state
     function stakedRose(address user) external view returns (uint256);
-    function allocatedRose(address user) external view returns (uint256);
-    function delegatedTo(address user) external view returns (address);
-    function cachedVotePower(address user) external view returns (uint256);
-    function totalDelegatedPower(address delegate) external view returns (uint256);
+    function votingPower(address user) external view returns (uint256);
+    function totalStakedRose() external view returns (uint256);
+    function totalVotingPower() external view returns (uint256);
+
+    // Delegation state (multi-delegation)
+    function delegatedVP(address delegator, address delegate) external view returns (uint256);
+    function totalDelegatedOut(address user) external view returns (uint256);
+    function totalDelegatedIn(address delegate) external view returns (uint256);
+
+    // Proposal allocation
+    function allocatedToProposal(address user) external view returns (uint256);
+    function proposalVPLocked(address user) external view returns (uint256);
+
+    // User data
     function userStats(address user) external view returns (UserStats memory);
     function proposals(uint256 proposalId) external view returns (Proposal memory);
     function votes(uint256 proposalId, address voter) external view returns (Vote memory);
     function proposalCounter() external view returns (uint256);
-    function totalStakedRose() external view returns (uint256);
 
+    // Computed values
     function getReputation(address user) external view returns (uint256);
     function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256);
+    function getAvailableVP(address user) external view returns (uint256);
+    function getUserDelegations(address user) external view returns (address[] memory delegates, uint256[] memory amounts);
     function canPropose(address user) external view returns (bool);
     function canVote(address user) external view returns (bool);
     function canDelegate(address user) external view returns (bool);
@@ -165,7 +212,6 @@ interface IRoseGovernance {
     function getTaskHistory(address user) external view returns (TaskRecord[] memory);
     function getAvailableDelegatedPower(address delegate, uint256 proposalId) external view returns (uint256);
     function getDelegatedVote(uint256 proposalId, address delegate) external view returns (DelegatedVoteRecord memory);
-    function getDelegatorVotePower(uint256 proposalId, address delegate, address delegator) external view returns (uint256);
     function getProposalDelegates(uint256 proposalId) external view returns (address[] memory);
 
     // ============ Staking Functions ============
@@ -173,18 +219,25 @@ interface IRoseGovernance {
     function deposit(uint256 amount) external;
     function withdraw(uint256 amount) external;
 
-    // ============ Delegation Functions ============
+    // ============ Delegation Functions (Multi-Delegation) ============
 
-    function allocateToDelegate(address delegate, uint256 amount) external;
-    function unallocateFromDelegate() external;
-    function refreshDelegation(address user) external;
+    function delegate(address delegate, uint256 vpAmount) external;
+    function undelegate(address delegate, uint256 vpAmount) external;
+    function refreshVP(address user, uint256 newRep, uint256 expiry, bytes calldata signature) external;
 
     // ============ Voting Functions ============
 
-    function allocateToProposal(uint256 proposalId, uint256 amount, bool support) external;
-    function unallocateFromProposal(uint256 proposalId) external;
-    function castDelegatedVote(uint256 proposalId, uint256 amount, bool support) external;
-    function castDelegatedVoteWithSignature(
+    function vote(
+        uint256 proposalId,
+        uint256 vpAmount,
+        bool support,
+        uint256 expiry,
+        bytes calldata signature
+    ) external;
+
+    function freeVP(uint256 proposalId) external;
+
+    function castDelegatedVote(
         uint256 proposalId,
         uint256 amount,
         bool support,

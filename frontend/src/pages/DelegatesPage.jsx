@@ -1,13 +1,16 @@
 /**
  * DelegatesPage - Browse and manage vote delegation
- * Shows eligible delegates and current delegation status
+ * Shows eligible delegates, current delegations (multi-delegation), and delegation status
+ *
+ * VP-centric model: Users delegate VP directly (not ROSE)
+ * Multi-delegation: Can delegate to multiple delegates simultaneously
  */
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccount, usePublicClient } from 'wagmi';
-import { parseAbiItem } from 'viem';
-import { CONTRACTS } from '../constants/contracts';
+import { parseAbiItem, formatUnits } from 'viem';
+import { CONTRACTS, formatVotePower } from '../constants/contracts';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
@@ -20,27 +23,42 @@ const DelegatesPage = () => {
   const publicClient = usePublicClient();
 
   const {
-    delegatedTo,
-    delegatedAmount,
-    isDelegating,
-    totalDelegatedPower,
-    canDelegate,
-    myDelegators,
-    delegatorCount,
-    actionLoading,
+    delegations,            // Array of {delegate, vpAmount}
+    receivedDelegations,    // Array of {delegator, vpAmount}
+    totalReceivedVP,        // Total VP received as delegate
+    loading: delegationLoading,
     error,
     setError,
     delegateTo,
-    undelegate,
+    undelegateFrom,
+    undelegateAll,
+    refetch: refetchDelegations,
   } = useDelegation();
 
-  const { reputation, userStats } = useGovernance();
+  const {
+    availableVP,
+    votingPower,
+    delegatedOut,
+    canDelegate,
+    reputation,
+    userStats,
+  } = useGovernance();
 
   const [potentialDelegates, setPotentialDelegates] = useState([]);
   const [isLoadingDelegates, setIsLoadingDelegates] = useState(true);
   const [searchAddress, setSearchAddress] = useState('');
-  const [increaseAmount, setIncreaseAmount] = useState('');
-  const [showIncreaseForm, setShowIncreaseForm] = useState(false);
+
+  // Calculate total delegated out VP
+  const totalDelegatedOutVP = delegations.reduce(
+    (sum, d) => sum + parseFloat(d.vpAmount || '0'),
+    0
+  );
+
+  // Calculate total received VP
+  const totalReceivedVPNum = parseFloat(totalReceivedVP || '0');
+
+  // Available VP for delegation
+  const availableForDelegation = parseFloat(availableVP || '0');
 
   // Fetch potential delegates from on-chain events
   useEffect(() => {
@@ -49,41 +67,69 @@ const DelegatesPage = () => {
 
       setIsLoadingDelegates(true);
       try {
-        // Get addresses that have staked (potential delegates)
-        const depositEvents = await publicClient.getLogs({
+        // Get addresses that have VP (from VotingPowerChanged events)
+        const vpEvents = await publicClient.getLogs({
           address: CONTRACTS.GOVERNANCE,
-          event: parseAbiItem('event Deposited(address indexed user, uint256 amount)'),
+          event: parseAbiItem('event VotingPowerChanged(address indexed user, uint256 stakedRose, uint256 votingPower, uint256 reputation)'),
           fromBlock: 'earliest',
           toBlock: 'latest',
         });
 
-        // Get unique addresses
-        const addresses = [...new Set(depositEvents.map(e => e.args.user))];
+        // Get unique addresses with VP > 0
+        const addressMap = new Map();
+        vpEvents.forEach(e => {
+          const addr = e.args.user;
+          const vp = e.args.votingPower;
+          // Only include if VP > 0 (not withdrawn)
+          if (vp && vp > 0n) {
+            addressMap.set(addr.toLowerCase(), addr);
+          } else {
+            addressMap.delete(addr.toLowerCase());
+          }
+        });
+
+        const addresses = [...addressMap.values()];
 
         // Filter out current user
         const filtered = addresses.filter(
           addr => addr && addr.toLowerCase() !== account?.toLowerCase()
         );
 
-        // Check delegatedTo for each address - filter out those who are already delegating
-        const delegatedToResults = await publicClient.multicall({
+        // Check canDelegate for each address
+        const canDelegateResults = await publicClient.multicall({
           contracts: filtered.map(addr => ({
             address: CONTRACTS.GOVERNANCE,
             abi: RoseGovernanceABI,
-            functionName: 'delegatedTo',
+            functionName: 'canDelegate',
             args: [addr],
           })),
         });
 
-        // Keep only addresses that are NOT delegating (delegatedTo is zero address)
-        const availableDelegates = filtered.filter((addr, index) => {
-          const delegatedTo = delegatedToResults[index].result;
-          return !delegatedTo || delegatedTo === '0x0000000000000000000000000000000000000000';
+        // Keep only addresses that can receive delegation
+        const eligibleDelegates = filtered.filter((addr, index) => {
+          return canDelegateResults[index].result === true;
         });
 
-        setPotentialDelegates(availableDelegates);
+        setPotentialDelegates(eligibleDelegates);
       } catch (err) {
         console.error('Error fetching potential delegates:', err);
+        // Fallback: try to get from Deposited events if VotingPowerChanged doesn't exist yet
+        try {
+          const depositEvents = await publicClient.getLogs({
+            address: CONTRACTS.GOVERNANCE,
+            event: parseAbiItem('event Deposited(address indexed user, uint256 amount)'),
+            fromBlock: 'earliest',
+            toBlock: 'latest',
+          });
+
+          const addresses = [...new Set(depositEvents.map(e => e.args.user))];
+          const filtered = addresses.filter(
+            addr => addr && addr.toLowerCase() !== account?.toLowerCase()
+          );
+          setPotentialDelegates(filtered);
+        } catch (fallbackErr) {
+          console.error('Fallback also failed:', fallbackErr);
+        }
       } finally {
         setIsLoadingDelegates(false);
       }
@@ -92,30 +138,38 @@ const DelegatesPage = () => {
     fetchDelegates();
   }, [CONTRACTS.GOVERNANCE, publicClient, account]);
 
-  const handleDelegate = async (address, amount) => {
+  // Get user's delegation to a specific delegate
+  const getDelegationToDelegate = (delegateAddr) => {
+    const delegation = delegations.find(
+      d => d.delegate.toLowerCase() === delegateAddr.toLowerCase()
+    );
+    return delegation?.vpAmount || '0';
+  };
+
+  const handleDelegate = async (address, vpAmount) => {
     try {
-      await delegateTo(address, amount);
+      await delegateTo(address, vpAmount);
+      await refetchDelegations();
     } catch (err) {
       console.error('Delegation failed:', err);
     }
   };
 
-  const handleUndelegate = async () => {
+  const handleUndelegate = async (address, vpAmount) => {
     try {
-      await undelegate();
+      await undelegateFrom(address, vpAmount);
+      await refetchDelegations();
     } catch (err) {
       console.error('Undelegation failed:', err);
     }
   };
 
-  const handleIncreaseAllocation = async () => {
-    if (!increaseAmount || parseFloat(increaseAmount) <= 0) return;
+  const handleUndelegateAll = async () => {
     try {
-      await delegateTo(delegatedTo, increaseAmount);
-      setIncreaseAmount('');
-      setShowIncreaseForm(false);
+      await undelegateAll();
+      await refetchDelegations();
     } catch (err) {
-      console.error('Increase allocation failed:', err);
+      console.error('Undelegate all failed:', err);
     }
   };
 
@@ -123,7 +177,8 @@ const DelegatesPage = () => {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchAddress && searchAddress.startsWith('0x') && searchAddress.length === 42) {
-      if (!potentialDelegates.includes(searchAddress)) {
+      const lowerSearch = searchAddress.toLowerCase();
+      if (!potentialDelegates.some(addr => addr.toLowerCase() === lowerSearch)) {
         setPotentialDelegates(prev => [searchAddress, ...prev]);
       }
     }
@@ -153,87 +208,67 @@ const DelegatesPage = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Delegation</h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          Delegate your voting power or receive delegations from others
+          Delegate your VP to trusted community members or receive delegations
         </p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Current Delegation Status */}
-          {isDelegating && (
-            <div
-              className="card"
-              style={{ backgroundColor: 'rgba(212, 175, 140, 0.1)', borderColor: 'var(--accent)' }}
-            >
-              <h3 className="font-semibold mb-3">Currently Delegating</h3>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Delegating to</p>
-                  <p className="font-mono text-sm">
-                    {delegatedTo?.slice(0, 6)}...{delegatedTo?.slice(-4)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Amount</p>
-                  <p className="font-semibold">{parseFloat(delegatedAmount).toLocaleString()} ROSE</p>
-                </div>
+          {/* Current Delegations Summary */}
+          {delegations.length > 0 && (
+            <div className="card">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold">Your Active Delegations</h3>
+                {delegations.length > 1 && (
+                  <button
+                    onClick={handleUndelegateAll}
+                    disabled={delegationLoading.undelegateAll}
+                    className="text-sm px-3 py-1 rounded"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      color: 'var(--error)',
+                    }}
+                  >
+                    {delegationLoading.undelegateAll ? 'Removing...' : 'Remove All'}
+                  </button>
+                )}
               </div>
 
-              {/* Increase Allocation Form */}
-              {showIncreaseForm ? (
-                <div className="space-y-3 mb-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      value={increaseAmount}
-                      onChange={(e) => setIncreaseAmount(e.target.value)}
-                      placeholder="Additional amount"
-                      min="0"
-                      step="0.01"
-                      className="flex-1 px-3 py-2 rounded-lg text-sm"
+              <div className="space-y-3">
+                {delegations.map(({ delegate, vpAmount }) => (
+                  <div
+                    key={delegate}
+                    className="p-3 rounded-lg flex items-center justify-between"
+                    style={{ backgroundColor: 'var(--bg-secondary)' }}
+                  >
+                    <div>
+                      <p className="font-mono text-sm">
+                        {delegate?.slice(0, 6)}...{delegate?.slice(-4)}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {formatVotePower(parseFloat(vpAmount))} VP delegated
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleUndelegate(delegate, vpAmount)}
+                      disabled={delegationLoading.undelegate}
+                      className="text-xs px-2 py-1 rounded"
                       style={{
-                        backgroundColor: 'var(--bg-tertiary)',
-                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: 'var(--error)',
                       }}
-                    />
-                    <span className="px-2 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                      ROSE
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleIncreaseAllocation}
-                      disabled={actionLoading.delegate || !increaseAmount || parseFloat(increaseAmount) <= 0}
-                      className="btn-primary flex-1 text-sm py-2"
-                      style={{ opacity: actionLoading.delegate ? 0.5 : 1 }}
                     >
-                      {actionLoading.delegate ? 'Increasing...' : 'Confirm Increase'}
-                    </button>
-                    <button
-                      onClick={() => setShowIncreaseForm(false)}
-                      className="btn-secondary flex-1 text-sm py-2"
-                    >
-                      Cancel
+                      Remove
                     </button>
                   </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowIncreaseForm(true)}
-                  className="btn-primary w-full mb-3"
-                >
-                  Increase Allocation
-                </button>
-              )}
+                ))}
+              </div>
 
-              <button
-                onClick={handleUndelegate}
-                disabled={actionLoading.undelegate}
-                className="btn-secondary w-full"
-              >
-                {actionLoading.undelegate ? 'Undelegating...' : 'Remove Delegation'}
-              </button>
+              <div className="mt-4 pt-4 border-t flex justify-between" style={{ borderColor: 'var(--border-color)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total Delegated Out</span>
+                <span className="font-semibold">{formatVotePower(totalDelegatedOutVP)} VP</span>
+              </div>
             </div>
           )}
 
@@ -281,7 +316,7 @@ const DelegatesPage = () => {
             ) : potentialDelegates.length === 0 ? (
               <div className="card text-center py-8">
                 <p style={{ color: 'var(--text-muted)' }}>
-                  No eligible delegates found. Users need 90%+ reputation to receive delegation.
+                  No eligible delegates found. Users need 90%+ reputation and 10+ completed tasks.
                 </p>
               </div>
             ) : (
@@ -291,9 +326,10 @@ const DelegatesPage = () => {
                     key={address}
                     address={address}
                     onDelegate={handleDelegate}
-                    loading={actionLoading.delegate}
-                    isCurrentDelegate={delegatedTo?.toLowerCase() === address?.toLowerCase()}
-                    currentDelegationAmount={delegatedAmount}
+                    onUndelegate={handleUndelegate}
+                    loading={delegationLoading.delegate || delegationLoading.undelegate}
+                    currentDelegatedVP={getDelegationToDelegate(address)}
+                    availableVP={availableForDelegation.toString()}
                   />
                 ))}
               </div>
@@ -303,18 +339,37 @@ const DelegatesPage = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Your Delegation Stats */}
+          {/* Your VP Summary */}
           <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Your Delegation Status</h3>
+            <h3 className="text-lg font-semibold mb-4">Your VP Summary</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span style={{ color: 'var(--text-muted)' }}>Can Receive Delegation</span>
+                <span style={{ color: 'var(--text-muted)' }}>Total VP</span>
+                <span className="font-semibold">{formatVotePower(parseFloat(votingPower || '0'))} VP</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span style={{ color: 'var(--text-muted)' }}>Delegated Out</span>
+                <span className="text-yellow-500">{formatVotePower(parseFloat(delegatedOut || '0'))} VP</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span style={{ color: 'var(--text-muted)' }}>Available</span>
+                <span className="text-green-500">{formatVotePower(availableForDelegation)} VP</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Your Delegation Status */}
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-4">Delegate Status</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span style={{ color: 'var(--text-muted)' }}>Can Receive</span>
                 <span style={{ color: canDelegate ? 'var(--success)' : 'var(--text-muted)' }}>
                   {canDelegate ? 'Yes' : 'No'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span style={{ color: 'var(--text-muted)' }}>Your Reputation</span>
+                <span style={{ color: 'var(--text-muted)' }}>Reputation</span>
                 <ReputationBadge
                   score={reputation || 60}
                   tasksCompleted={userStats?.tasksCompleted}
@@ -323,12 +378,12 @@ const DelegatesPage = () => {
                 />
               </div>
               <div className="flex justify-between items-center">
-                <span style={{ color: 'var(--text-muted)' }}>Delegators to You</span>
-                <span className="font-semibold">{delegatorCount}</span>
+                <span style={{ color: 'var(--text-muted)' }}>Delegators</span>
+                <span className="font-semibold">{receivedDelegations.length}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span style={{ color: 'var(--text-muted)' }}>Delegated Power</span>
-                <span className="font-semibold">{parseFloat(totalDelegatedPower).toFixed(2)} VP</span>
+                <span style={{ color: 'var(--text-muted)' }}>Received VP</span>
+                <span className="text-green-500 font-semibold">{formatVotePower(totalReceivedVPNum)} VP</span>
               </div>
             </div>
 
@@ -337,23 +392,28 @@ const DelegatesPage = () => {
                 className="mt-4 p-3 rounded-lg text-sm"
                 style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}
               >
-                Earn 90%+ reputation to receive delegations from others.
+                Need 90%+ reputation and 10+ completed tasks to receive delegations.
               </div>
             )}
           </div>
 
           {/* Your Delegators */}
-          {delegatorCount > 0 && (
+          {receivedDelegations.length > 0 && (
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Your Delegators</h3>
               <div className="space-y-2">
-                {myDelegators.map(addr => (
+                {receivedDelegations.map(({ delegator, vpAmount }) => (
                   <div
-                    key={addr}
-                    className="p-2 rounded-lg text-sm font-mono"
+                    key={delegator}
+                    className="p-2 rounded-lg flex justify-between items-center text-sm"
                     style={{ backgroundColor: 'var(--bg-secondary)' }}
                   >
-                    {addr.slice(0, 6)}...{addr.slice(-4)}
+                    <span className="font-mono">
+                      {delegator.slice(0, 6)}...{delegator.slice(-4)}
+                    </span>
+                    <span className="text-green-500">
+                      {formatVotePower(parseFloat(vpAmount))} VP
+                    </span>
                   </div>
                 ))}
               </div>
@@ -364,12 +424,12 @@ const DelegatesPage = () => {
           <div className="card text-sm" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
             <strong>How Delegation Works:</strong>
             <ul className="mt-2 list-disc list-inside space-y-1">
-              <li>Allocate staked ROSE to a delegate</li>
-              <li>Delegate votes on your behalf</li>
-              <li>Your reputation amplifies delegated power</li>
-              <li>Can undelegate anytime</li>
-              <li>No chaining (delegates can't re-delegate)</li>
-              <li>90%+ reputation required to receive delegation</li>
+              <li>Delegate VP to trusted community members</li>
+              <li>Can delegate to multiple delegates</li>
+              <li>Delegates vote on proposals using received VP</li>
+              <li>Rewards go to delegators (you), not delegates</li>
+              <li>Can add or remove VP anytime</li>
+              <li>90%+ rep + 10 tasks to receive delegation</li>
             </ul>
           </div>
         </div>
