@@ -10,6 +10,7 @@ import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS, ProposalStatus } from '../constants/contracts';
 import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
 import { usePassportVerify } from './usePassportVerify';
+import { GAS_SETTINGS } from '../constants/gas';
 
 // Backend signer URL
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
@@ -368,6 +369,7 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'allocateToProposal',
         args: [BigInt(proposalId), amountWei, support],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -418,6 +420,7 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'unallocateFromProposal',
         args: [BigInt(proposalId)],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -494,18 +497,19 @@ export const useProposals = (options = {}) => {
           abi: RoseGovernanceABI,
           functionName: 'allocateToProposal',
           args: [BigInt(proposalId), ownToUse, support],
+          ...GAS_SETTINGS,
         });
 
         // Wait for 2 confirmations before next transaction
         await publicClient.waitForTransactionReceipt({
           hash: ownHash,
-          confirmations: 2,
+          confirmations: 1,
         });
         results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 18) });
 
         // Delay between transactions to allow nonce refresh
         if (delegatedToUse > 0n) {
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, 1000));
         }
       }
 
@@ -554,11 +558,12 @@ export const useProposals = (options = {}) => {
             BigInt(signatureData.expiry),
             signatureData.signature,
           ],
+          ...GAS_SETTINGS,
         });
 
         await publicClient.waitForTransactionReceipt({
           hash: delegatedHash,
-          confirmations: 2,
+          confirmations: 1,
         });
         results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 18) });
       }
@@ -700,12 +705,13 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'propose',
         args: [title, descriptionHash, valueWei, BigInt(deadlineTimestamp), deliverables, BigInt(expiry), signature],
+        ...GAS_SETTINGS,
       });
 
       // Wait for 2 confirmations
       await publicClient.waitForTransactionReceipt({
         hash,
-        confirmations: 2,
+        confirmations: 1,
       });
 
       console.log('Proposal created successfully!');
@@ -742,6 +748,7 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'finalizeProposal',
         args: [BigInt(proposalId)],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -785,6 +792,7 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'executeProposal',
         args: [BigInt(proposalId)],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -826,6 +834,7 @@ export const useProposals = (options = {}) => {
         abi: RoseGovernanceABI,
         functionName: 'cancelProposal',
         args: [BigInt(proposalId)],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({

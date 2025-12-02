@@ -7,6 +7,7 @@ import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import PassportGate from '../passport/PassportGate';
 import { PASSPORT_THRESHOLDS } from '../../constants/passport';
 import { usePassportVerify } from '../../hooks/usePassportVerify';
+import { GAS_SETTINGS } from '../../constants/gas';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -74,6 +75,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         abi: RoseTokenABI,
         functionName: 'approve',
         args: [marketplaceAddress, tokenAmount],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Approval transaction sent:', approveHash);
@@ -98,6 +100,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         abi: RoseMarketplaceABI,
         functionName: 'createTask',
         args: [title, tokenAmount, hash, BigInt(expiry), signature],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Task creation transaction sent:', createTaskHash);

@@ -3,6 +3,7 @@ import { useAccount, useReadContract, useWriteContract, usePublicClient } from '
 import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
+import { GAS_SETTINGS } from '../../constants/gas';
 
 // Format cooldown seconds to human readable
 const formatCooldown = (seconds) => {
@@ -119,6 +120,7 @@ const RedeemCard = ({
           abi: RoseTokenABI,
           functionName: 'approve',
           args: [treasuryAddress, amountInWei],
+          ...GAS_SETTINGS,
         });
 
         console.log('✅ Approval transaction sent:', approveHash);
@@ -138,6 +140,7 @@ const RedeemCard = ({
         abi: RoseTreasuryABI,
         functionName: 'redeem',
         args: [amountInWei],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Redeem transaction sent:', redeemHash);

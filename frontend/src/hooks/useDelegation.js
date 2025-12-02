@@ -8,6 +8,7 @@ import { useAccount, useReadContract, useReadContracts, useWriteContract, usePub
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS } from '../constants/contracts';
+import { GAS_SETTINGS } from '../constants/gas';
 
 // Backend signer URL
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
@@ -227,6 +228,7 @@ export const useDelegation = () => {
         abi: RoseGovernanceABI,
         functionName: 'allocateToDelegate',
         args: [delegateAddress, amountWei],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -279,6 +281,7 @@ export const useDelegation = () => {
         abi: RoseGovernanceABI,
         functionName: 'unallocateFromDelegate',
         args: [],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -367,6 +370,7 @@ export const useDelegation = () => {
           BigInt(signatureData.expiry),
           signatureData.signature,
         ],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -420,6 +424,7 @@ export const useDelegation = () => {
         abi: RoseGovernanceABI,
         functionName: 'refreshDelegation',
         args: [userAddress],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
@@ -516,6 +521,7 @@ export const useDelegation = () => {
           BigInt(expiry),
           signature,
         ],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({

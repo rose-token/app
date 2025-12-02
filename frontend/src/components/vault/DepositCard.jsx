@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
+import { GAS_SETTINGS } from '../../constants/gas';
 
 // Format cooldown seconds to human readable
 const formatCooldown = (seconds) => {
@@ -132,6 +133,7 @@ const DepositCard = ({
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [treasuryAddress, amountInWei],
+          ...GAS_SETTINGS,
         });
 
         console.log('✅ Approval transaction sent:', approveHash);
@@ -150,6 +152,7 @@ const DepositCard = ({
         abi: RoseTreasuryABI,
         functionName: 'deposit',
         args: [amountInWei],
+        ...GAS_SETTINGS,
       });
 
       console.log('✅ Deposit transaction sent:', depositHash);

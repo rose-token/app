@@ -10,6 +10,7 @@ import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import vROSEABI from '../contracts/vROSEABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS } from '../constants/contracts';
+import { GAS_SETTINGS } from '../constants/gas';
 
 /**
  * Parse transaction errors into user-friendly messages
@@ -341,13 +342,14 @@ export const useGovernance = () => {
           abi: RoseTokenABI,
           functionName: 'approve',
           args: [CONTRACTS.GOVERNANCE, amountWei],
+          ...GAS_SETTINGS,
         });
         console.log('Approve tx hash:', approveHash);
 
         // Wait for 2 confirmations to ensure nonce is updated
         await publicClient.waitForTransactionReceipt({
           hash: approveHash,
-          confirmations: 2,
+          confirmations: 1,
         });
         console.log('Approve confirmed');
         setDepositStep('approved');
@@ -356,7 +358,7 @@ export const useGovernance = () => {
         console.log('Nonce after approve:', nonceAfterApprove);
 
         // Longer delay for RPC state sync and nonce refresh
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1000));
       }
 
       // Step 2: Deposit into governance
@@ -370,12 +372,13 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'deposit',
         args: [amountWei],
+        ...GAS_SETTINGS,
       });
       console.log('Deposit tx hash:', depositHash);
 
       await publicClient.waitForTransactionReceipt({
         hash: depositHash,
-        confirmations: 2,
+        confirmations: 1,
       });
 
       const nonceAfterDeposit = await publicClient.getTransactionCount({ address: account });
@@ -436,16 +439,17 @@ export const useGovernance = () => {
         abi: vROSEABI,
         functionName: 'approve',
         args: [CONTRACTS.GOVERNANCE, amountWei],
+        ...GAS_SETTINGS,
       });
 
       // Wait for 2 confirmations to ensure nonce is updated
       await publicClient.waitForTransactionReceipt({
         hash: approveHash,
-        confirmations: 2,
+        confirmations: 1,
       });
 
       // Longer delay for RPC state sync and nonce refresh
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
 
       // Step 2: Withdraw
       console.log('Withdrawing from governance...');
@@ -454,11 +458,12 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'withdraw',
         args: [amountWei],
+        ...GAS_SETTINGS,
       });
 
       await publicClient.waitForTransactionReceipt({
         hash: withdrawHash,
-        confirmations: 2,
+        confirmations: 1,
       });
 
       console.log('Withdrawal successful!');
