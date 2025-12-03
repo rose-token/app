@@ -1,5 +1,7 @@
 # Frontend Architecture
 
+**Parent**: [CLAUDE.md](../CLAUDE.md) | **Details**: See `details/frontend/` for comprehensive hook/constant docs
+
 ## Stack
 
 React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
@@ -188,3 +190,12 @@ Use CSS variables in `index.css` with semantic Tailwind classes:
 - `text-primary`, `text-secondary`, `text-accent`
 
 **Never use hardcoded colors** - always use semantic classes.
+
+## Deep Dive Documentation
+
+For comprehensive details, see:
+
+| Topic | Detail Document |
+|-------|-----------------|
+| All Hooks (useGovernance, useDelegation, useVaultData, etc.) | [details/frontend/hooks.md](details/frontend/hooks.md) |
+| All Constants (contracts.js, passport.js, skills.js, gas.js) | [details/frontend/constants.md](details/frontend/constants.md) |

@@ -1,5 +1,7 @@
 # Backend Architecture
 
+**Parent**: [CLAUDE.md](../CLAUDE.md) | **Details**: See `details/backend/` for service and API deep dives
+
 ## Overview
 
 Express API that verifies Gitcoin Passport scores and signs ECDSA approvals for marketplace/governance actions.
@@ -187,3 +189,12 @@ docker-compose up --build  # Port 3000
 | `src/services/treasury.ts` | Treasury operations |
 | `src/config.ts` | Environment config |
 | `src/db/pool.ts` | PostgreSQL pool |
+
+## Deep Dive Documentation
+
+For comprehensive details, see:
+
+| Topic | Detail Document |
+|-------|-----------------|
+| All Services (governance, delegation, gitcoin, profile, etc.) | [details/backend/services.md](details/backend/services.md) |
+| All API Endpoints with request/response formats | [details/backend/api-endpoints.md](details/backend/api-endpoints.md) |

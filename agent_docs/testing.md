@@ -1,5 +1,7 @@
 # Testing & CI/CD
 
+**Parent**: [CLAUDE.md](../CLAUDE.md) | **Details**: See `details/testing/` for comprehensive test and env docs
+
 ## Test Suites
 
 ```bash
@@ -194,3 +196,12 @@ npm run dev               # tsx watch mode (port 3001)
 cd backend/signer
 docker-compose up --build  # PostgreSQL + Signer on port 3000
 ```
+
+## Deep Dive Documentation
+
+For comprehensive details, see:
+
+| Topic | Detail Document |
+|-------|-----------------|
+| Test Suites, Mocks, Fixtures, Patterns | [details/testing/test-suites.md](details/testing/test-suites.md) |
+| All Environment Variables (root, frontend, backend) | [details/testing/environment.md](details/testing/environment.md) |

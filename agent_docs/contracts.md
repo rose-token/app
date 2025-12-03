@@ -1,5 +1,7 @@
 # Contract Architecture
 
+**Parent**: [CLAUDE.md](../CLAUDE.md) | **Details**: See `details/contracts/` for per-contract deep dives
+
 ## Core Contracts
 
 | Contract | Lines | Purpose |
@@ -182,3 +184,14 @@ Protected functions require ECDSA signature from trusted `passportSigner`:
 - `claimTask("claim")`
 
 Replay protection via `usedSignatures` mapping. Admin can update signer via `setPassportSigner(address)`.
+
+## Deep Dive Documentation
+
+For comprehensive details on each contract, see:
+
+| Contract | Detail Document |
+|----------|-----------------|
+| RoseToken.sol | [details/contracts/rose-token.md](details/contracts/rose-token.md) |
+| RoseTreasury.sol | [details/contracts/rose-treasury.md](details/contracts/rose-treasury.md) |
+| RoseGovernance.sol | [details/contracts/rose-governance.md](details/contracts/rose-governance.md) |
+| vROSE.sol | [details/contracts/vrose.md](details/contracts/vrose.md) |

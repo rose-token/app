@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project guidance for Claude Code. Ask clarifying questions when requirements are unclear.
+Project guidance for Claude Code. Ask clarifying questions when requirements are unclear. **Update this file with new information as your last todo step.**
 
 ## WHAT: Project Overview
 
@@ -41,7 +41,7 @@ docker-compose up --build             # Run with PostgreSQL
 
 | Layer | Stack |
 |-------|-------|
-| Contracts | Solidity 0.8.20, OpenZeppelin v5, Hardhat |
+| Contracts | Solidity 0.8.20, OpenZeppelin v5, Hardhat, Optimizer: 1 run + viaIR |
 | Frontend | React 18, Vite 7, wagmi/viem, TailwindCSS |
 | Backend | Express, TypeScript, PostgreSQL, ethers.js |
 | Networks | Arbitrum Sepolia (421614), Arbitrum One (42161) |
@@ -59,15 +59,15 @@ Feature branches → PRs → CI passes → Merge. Never push directly to main.
 
 ## Detailed Documentation
 
-For task-specific details, see `agent_docs/`:
+Progressive disclosure structure - see `agent_docs/` for overview docs, `agent_docs/details/` for deep dives:
 
-| File | Contents |
-|------|----------|
-| `agent_docs/contracts.md` | Contract architecture, deployment order, constants, custom errors, security patterns |
-| `agent_docs/frontend.md` | Routes, context providers, hooks (useVaultData, usePassport, useGovernance, etc.) |
-| `agent_docs/backend.md` | API endpoints, services, signature formats, deployment |
-| `agent_docs/governance.md` | Voting power, proposals, delegation, rewards, vROSE mechanics |
-| `agent_docs/testing.md` | Test suites, CI/CD workflows, environment variables |
+| Overview | Deep Dive Details |
+|----------|-------------------|
+| `agent_docs/contracts.md` | `details/contracts/rose-token.md`, `rose-treasury.md`, `rose-governance.md`, `vrose.md` |
+| `agent_docs/frontend.md` | `details/frontend/hooks.md`, `constants.md` |
+| `agent_docs/backend.md` | `details/backend/services.md`, `api-endpoints.md` |
+| `agent_docs/governance.md` | Covered in `details/contracts/rose-governance.md` |
+| `agent_docs/testing.md` | `details/testing/test-suites.md`, `environment.md` |
 
 ## Quick Reference
 
