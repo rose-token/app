@@ -2,6 +2,8 @@
 
 Project guidance for Claude Code. Ask clarifying questions when requirements are unclear. **Update this file with new information as your last todo step.**
 
+> **IMPORTANT**: Always ask clarifying questions when requirements are ambiguous. As your final task, update this file and relevant `agent_docs/` with any new patterns, fixes, or learnings discovered.
+
 ## WHAT: Project Overview
 
 Rose Token is a Web3 task marketplace on Arbitrum with:
