@@ -32,7 +32,13 @@ export const useDelegation = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [actionLoading, setActionLoading] = useState({});
+  const [actionLoading, setActionLoading] = useState({
+    delegate: false,
+    undelegate: false,
+    undelegateAll: false,
+    delegatedVote: false,
+    claimRewards: false,
+  });
 
   // Claimable rewards state
   const [claimableRewards, setClaimableRewards] = useState(null);

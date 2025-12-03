@@ -223,14 +223,14 @@ const DelegatesPage = () => {
                 {delegations.length > 1 && (
                   <button
                     onClick={handleUndelegateAll}
-                    disabled={delegationLoading.undelegateAll}
+                    disabled={delegationLoading?.undelegateAll}
                     className="text-sm px-3 py-1 rounded"
                     style={{
                       backgroundColor: 'rgba(239, 68, 68, 0.1)',
                       color: 'var(--error)',
                     }}
                   >
-                    {delegationLoading.undelegateAll ? 'Removing...' : 'Remove All'}
+                    {delegationLoading?.undelegateAll ? 'Removing...' : 'Remove All'}
                   </button>
                 )}
               </div>
@@ -252,7 +252,7 @@ const DelegatesPage = () => {
                     </div>
                     <button
                       onClick={() => handleUndelegate(delegate, vpAmount)}
-                      disabled={delegationLoading.undelegate}
+                      disabled={delegationLoading?.undelegate}
                       className="text-xs px-2 py-1 rounded"
                       style={{
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -327,7 +327,7 @@ const DelegatesPage = () => {
                     address={address}
                     onDelegate={handleDelegate}
                     onUndelegate={handleUndelegate}
-                    loading={delegationLoading.delegate || delegationLoading.undelegate}
+                    loading={delegationLoading?.delegate || delegationLoading?.undelegate}
                     currentDelegatedVP={getDelegationToDelegate(address)}
                     availableVP={availableForDelegation.toString()}
                   />
