@@ -48,9 +48,9 @@ const DelegatesPage = () => {
   const [isLoadingDelegates, setIsLoadingDelegates] = useState(true);
   const [searchAddress, setSearchAddress] = useState('');
 
-  // Calculate total delegated out VP
+  // Calculate total delegated out VP (vpAmount is raw with 9 decimals)
   const totalDelegatedOutVP = delegations.reduce(
-    (sum, d) => sum + parseFloat(d.vpAmount || '0'),
+    (sum, d) => sum + parseFloat(formatUnits(BigInt(d.vpAmount || '0'), 9)),
     0
   );
 
@@ -138,12 +138,12 @@ const DelegatesPage = () => {
     fetchDelegates();
   }, [CONTRACTS.GOVERNANCE, publicClient, account]);
 
-  // Get user's delegation to a specific delegate
+  // Get user's delegation to a specific delegate (converts raw to human-readable)
   const getDelegationToDelegate = (delegateAddr) => {
     const delegation = (delegations || []).find(
       d => d.delegate?.toLowerCase() === delegateAddr.toLowerCase()
     );
-    return delegation?.vpAmount || '0';
+    return delegation ? formatUnits(BigInt(delegation.vpAmount), 9) : '0';
   };
 
   const handleDelegate = async (address, vpAmount) => {
@@ -236,33 +236,36 @@ const DelegatesPage = () => {
               </div>
 
               <div className="space-y-3">
-                {(delegations || []).filter(d => d && d.delegate).map(({ delegate, vpAmount }) => (
-                  <div
-                    key={delegate}
-                    className="p-3 rounded-lg flex items-center justify-between"
-                    style={{ backgroundColor: 'var(--bg-secondary)' }}
-                  >
-                    <div>
-                      <p className="font-mono text-sm">
-                        {delegate?.slice(0, 6)}...{delegate?.slice(-4)}
-                      </p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {formatVotePower(parseFloat(vpAmount))} VP delegated
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleUndelegate(delegate, vpAmount)}
-                      disabled={delegationLoading?.undelegate}
-                      className="text-xs px-2 py-1 rounded"
-                      style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: 'var(--error)',
-                      }}
+                {(delegations || []).filter(d => d && d.delegate).map(({ delegate, vpAmount }) => {
+                  const vpHuman = formatUnits(BigInt(vpAmount), 9);
+                  return (
+                    <div
+                      key={delegate}
+                      className="p-3 rounded-lg flex items-center justify-between"
+                      style={{ backgroundColor: 'var(--bg-secondary)' }}
                     >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <p className="font-mono text-sm">
+                          {delegate?.slice(0, 6)}...{delegate?.slice(-4)}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {formatVotePower(parseFloat(vpHuman))} VP delegated
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleUndelegate(delegate, vpHuman)}
+                        disabled={delegationLoading?.undelegate}
+                        className="text-xs px-2 py-1 rounded"
+                        style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          color: 'var(--error)',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="mt-4 pt-4 border-t flex justify-between" style={{ borderColor: 'var(--border-color)' }}>
@@ -412,7 +415,7 @@ const DelegatesPage = () => {
                       {delegator?.slice(0, 6)}...{delegator?.slice(-4)}
                     </span>
                     <span className="text-green-500">
-                      {formatVotePower(parseFloat(vpAmount))} VP
+                      {formatVotePower(parseFloat(formatUnits(BigInt(vpAmount), 9)))} VP
                     </span>
                   </div>
                 ))}
