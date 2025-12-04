@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> **IMPORTANT**: Always ask clarifying questions when requirements are ambiguous. As your final task, update this file and relevant `agent_docs/` with any new patterns, fixes, or learnings discovered.
+> **IMPORTANT**: ALWAYS reference claude.md and relevant agent_docs/ before starting any planning or work. Always ask clarifying questions when requirements are ambiguous. As your final task, update this file and relevant `agent_docs/` with any new patterns, fixes, or learnings discovered.
 
 ## WHAT: Project Overview
 

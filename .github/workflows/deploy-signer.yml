@@ -224,6 +224,21 @@ jobs:
           echo "Deployment created: dseq=$DSEQ"
           echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
 
+          # Provider blacklist - unreliable or problematic providers
+          PROVIDER_BLACKLIST=(
+            "provider.gpu.subangle.com"
+          )
+
+          is_blacklisted() {
+            local provider="$1"
+            for blacklisted in "${PROVIDER_BLACKLIST[@]}"; do
+              if [ "$provider" = "$blacklisted" ]; then
+                return 0  # true, is blacklisted
+              fi
+            done
+            return 1  # false, not blacklisted
+          }
+
           # Step 3: Poll for bids
           echo "Step 3: Waiting for provider bids..."
           BID_COUNT=0
@@ -250,13 +265,35 @@ jobs:
             exit 1
           fi
 
-          # Step 4: Create lease with first bid
-          # Bids are in .data array, with provider/gseq/oseq nested in .bid.id
-          PROVIDER=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.provider')
-          GSEQ=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.gseq // 1')
-          OSEQ=$(echo "$BID_RESPONSE" | jq -r '.data[0].bid.id.oseq // 1')
+          # Step 4: Select first non-blacklisted provider
+          echo "Step 4: Selecting provider (filtering blacklist)..."
+          PROVIDER=""
+          SELECTED_INDEX=-1
+          TOTAL_BIDS=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
 
-          echo "Step 4: Creating lease with provider: $PROVIDER"
+          for i in $(seq 0 $((TOTAL_BIDS - 1))); do
+            CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
+            if is_blacklisted "$CANDIDATE"; then
+              echo "Skipping blacklisted provider: $CANDIDATE"
+            else
+              PROVIDER="$CANDIDATE"
+              SELECTED_INDEX=$i
+              break
+            fi
+          done
+
+          if [ -z "$PROVIDER" ]; then
+            echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
+            echo "Blacklisted providers:"
+            printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+            exit 1
+          fi
+
+          GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.gseq // 1")
+          OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.oseq // 1")
+          echo "Selected provider: $PROVIDER (bid #$((SELECTED_INDEX + 1)) of $TOTAL_BIDS)"
+
+          echo "Creating lease with provider: $PROVIDER"
           # Build lease payload with proper structure:
           # {manifest: string, certificate: {certPem, keyPem}, leases: [{dseq, gseq, oseq, provider}]}
           LEASE_PAYLOAD=$(jq -n \
