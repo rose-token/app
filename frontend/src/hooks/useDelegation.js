@@ -177,16 +177,16 @@ export const useDelegation = () => {
     );
 
     return {
-      // VP data
-      votingPower: formatUnits(votingPower, 18),
+      // VP data (VP has 9 decimals from sqrt calculation)
+      votingPower: formatUnits(votingPower, 9),
       votingPowerRaw: votingPower,
-      availableVP: formatUnits(availableVP, 18),
+      availableVP: formatUnits(availableVP, 9),
       availableVPRaw: availableVP,
-      totalDelegatedOut: formatUnits(totalDelegatedOut, 18),
+      totalDelegatedOut: formatUnits(totalDelegatedOut, 9),
       totalDelegatedOutRaw: totalDelegatedOut,
-      totalDelegatedIn: formatUnits(totalDelegatedIn, 18),
+      totalDelegatedIn: formatUnits(totalDelegatedIn, 9),
       totalDelegatedInRaw: totalDelegatedIn,
-      proposalVPLocked: formatUnits(proposalVPLocked, 18),
+      proposalVPLocked: formatUnits(proposalVPLocked, 9),
       proposalVPLockedRaw: proposalVPLocked,
 
       // Staking data
@@ -201,7 +201,7 @@ export const useDelegation = () => {
       // Delegation arrays
       delegations, // Outgoing delegations
       receivedDelegations, // Incoming delegations
-      totalReceivedVP: formatUnits(totalReceivedVP, 18),
+      totalReceivedVP: formatUnits(totalReceivedVP, 9),
       totalReceivedVPRaw: totalReceivedVP,
       delegatorCount: receivedDelegations.length,
 
@@ -237,7 +237,7 @@ export const useDelegation = () => {
     setError(null);
 
     try {
-      const vpWei = parseUnits(vpAmount, 18);
+      const vpWei = parseUnits(vpAmount, 9);
 
       // Validate
       if (delegateAddress.toLowerCase() === account.toLowerCase()) {
@@ -302,7 +302,7 @@ export const useDelegation = () => {
     setError(null);
 
     try {
-      const vpWei = parseUnits(vpAmount, 18);
+      const vpWei = parseUnits(vpAmount, 9);
 
       console.log(`Undelegating ${vpAmount} VP from ${delegateAddress}...`);
       const hash = await writeContractAsync({
@@ -352,7 +352,7 @@ export const useDelegation = () => {
       throw new Error('No delegation found to this delegate');
     }
 
-    return undelegateFrom(delegateAddress, formatUnits(BigInt(delegation.vpAmount), 18));
+    return undelegateFrom(delegateAddress, formatUnits(BigInt(delegation.vpAmount), 9));
   }, [delegations, undelegateFrom]);
 
   /**
@@ -371,7 +371,7 @@ export const useDelegation = () => {
     setError(null);
 
     try {
-      const vpWei = parseUnits(vpAmount, 18);
+      const vpWei = parseUnits(vpAmount, 9);
 
       console.log(`Requesting delegated vote signature for ${vpAmount} VP on proposal ${proposalId}...`);
 
@@ -624,7 +624,7 @@ export const useDelegationForProposal = (proposalId) => {
     fetch(`${SIGNER_URL}/api/delegation/available-power/${account}/${proposalId}`)
       .then(res => res.json())
       .then(data => {
-        setAvailablePower(formatUnits(BigInt(data.availablePower || '0'), 18));
+        setAvailablePower(formatUnits(BigInt(data.availablePower || '0'), 9));
       })
       .catch(err => {
         console.error('Failed to fetch available power:', err);
@@ -637,14 +637,14 @@ export const useDelegationForProposal = (proposalId) => {
     return {
       hasVoted: result.hasVoted || false,
       support: result.support || false,
-      totalPowerUsed: formatUnits(result.totalPowerUsed || 0n, 18),
+      totalPowerUsed: formatUnits(result.totalPowerUsed || 0n, 9),
       totalPowerUsedRaw: result.totalPowerUsed || 0n,
     };
   }, [data]);
 
   const totalDelegatedIn = useMemo(() => {
     if (!data?.[1] || data[1].status !== 'success') return '0';
-    return formatUnits(data[1].result || 0n, 18);
+    return formatUnits(data[1].result || 0n, 9);
   }, [data]);
 
   const totalDelegatedInRaw = useMemo(() => {
@@ -654,7 +654,7 @@ export const useDelegationForProposal = (proposalId) => {
 
   return {
     availableDelegatedPower: availablePower,
-    availableDelegatedPowerRaw: parseUnits(availablePower || '0', 18),
+    availableDelegatedPowerRaw: parseUnits(availablePower || '0', 9),
     delegatedVoteRecord,
     hasDelegatedVote: delegatedVoteRecord?.hasVoted || false,
     totalDelegatedIn,

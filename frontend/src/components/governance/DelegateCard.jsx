@@ -80,9 +80,9 @@ const DelegateCard = React.memo(({
     ? delegateData[3].result
     : false;
 
-  // Convert from raw (wei-scale) to human-readable VP
-  const ownVotingPower = Number(votingPowerRaw) / 1e18;
-  const receivedVP = Number(totalDelegatedInRaw) / 1e18;
+  // Convert from raw to human-readable VP (VP has 9 decimals from sqrt)
+  const ownVotingPower = Number(votingPowerRaw) / 1e9;
+  const receivedVP = Number(totalDelegatedInRaw) / 1e9;
   const totalVP = ownVotingPower + receivedVP;
 
   // Current delegation from user to this delegate
