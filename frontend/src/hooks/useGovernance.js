@@ -255,13 +255,13 @@ export const useGovernance = () => {
       // VP data from backend
       stakedRose: formatUnits(stakedRoseRaw, 18),
       stakedRoseRaw,
-      votingPower: formatUnits(votingPowerRaw, 18),
+      votingPower: formatUnits(votingPowerRaw, 9),
       votingPowerRaw,
-      availableVP: formatUnits(availableVPRaw, 18),
+      availableVP: formatUnits(availableVPRaw, 9),
       availableVPRaw,
-      delegatedOut: formatUnits(delegatedOutRaw, 18),
+      delegatedOut: formatUnits(delegatedOutRaw, 9),
       delegatedOutRaw,
-      proposalVPLocked: formatUnits(proposalVPLockedRaw, 18),
+      proposalVPLocked: formatUnits(proposalVPLockedRaw, 9),
       proposalVPLockedRaw,
       activeProposal: vpData.activeProposal || 0,
 
@@ -278,11 +278,11 @@ export const useGovernance = () => {
       // System totals
       totalStakedRose: formatUnits(totalStakedRose, 18),
       totalStakedRoseRaw: totalStakedRose,
-      totalSystemVP: formatUnits(BigInt(totalSystemVP || '0'), 18),
+      totalSystemVP: formatUnits(BigInt(totalSystemVP || '0'), 9),
       totalSystemVPRaw: BigInt(totalSystemVP || '0'),
 
       // Delegation (received)
-      totalDelegatedIn: formatUnits(totalDelegatedIn, 18),
+      totalDelegatedIn: formatUnits(totalDelegatedIn, 9),
       totalDelegatedInRaw: totalDelegatedIn,
 
       // Eligibility
