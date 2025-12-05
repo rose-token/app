@@ -55,6 +55,13 @@
     --usdc-blue: #2775ca;
     --eth-purple: #627eea;
 
+    /* Chart colors (for Recharts SVG) */
+    --chart-grid: rgba(255, 255, 255, 0.06);
+    --chart-axis: rgba(255, 255, 255, 0.1);
+    --chart-rose-gold: #d4af8c;
+    --chart-rose-gold-fill-start: rgba(212, 175, 140, 0.4);
+    --chart-rose-gold-fill-end: rgba(212, 175, 140, 0.05);
+
     /* Typography */
     --font-display: 'Cormorant Garamond', Georgia, serif;
     --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -283,6 +290,11 @@
   }
 
   button[data-testid="rk-chain-button"]:hover {
+    border-color: var(--border-accent) !important;
+  }
+
+  /* Vault card hover effect using CSS variable */
+  .vault-card-hover:hover {
     border-color: var(--border-accent) !important;
   }
 }
