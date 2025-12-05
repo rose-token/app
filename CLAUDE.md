@@ -36,6 +36,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Infrastructure:**
 - [Testing](#testing) - Test suites
+- [Simulation Script](#simulation-script) - Interactive testnet simulation
 - [CI/CD Workflows](#cicd-workflows) - GitHub Actions
 - [Environment Variables](#environment-variables) - All env files
 - [Token Decimals Reference](#token-decimals-reference) - Decimal handling
@@ -64,6 +65,10 @@ npx hardhat node          # Start local node
 npm run deploy:arbitrumSepolia  # Deploy to Arbitrum Sepolia testnet
 npm run deploy:arbitrum   # Deploy to Arbitrum One mainnet
 npm run update-abi        # Copy ABIs to frontend after contract changes
+
+# Simulation Script (Arbitrum Sepolia)
+npx hardhat run scripts/simulate.js --network arbitrumSepolia  # Interactive mode
+npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help  # Show CLI options
 
 # Frontend (from frontend/ directory)
 npm install               # Install dependencies
@@ -598,6 +603,53 @@ Tests use mock contracts to simulate external dependencies:
 2. Approve Treasury to spend USDC
 3. Call `roseTreasury.deposit(usdcAmount)`
 4. Treasury diversifies into RWA and mints equivalent ROSE
+
+## Simulation Script
+
+**File:** `scripts/simulate.js`
+
+Interactive CLI tool for manipulating mock contracts and simulating real-world treasury/marketplace scenarios on Arbitrum Sepolia.
+
+**Usage:**
+```bash
+# Interactive mode (menu-driven)
+npx hardhat run scripts/simulate.js --network arbitrumSepolia
+
+# Direct CLI commands
+npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --btc-price 100000
+npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
+npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
+```
+
+**CLI Options:**
+| Option | Description |
+|--------|-------------|
+| `--btc-price <USD>` | Set BTC oracle price |
+| `--gold-price <USD>` | Set Gold oracle price |
+| `--crash <PERCENT>` | Apply market crash (e.g., `--crash 20` = -20%) |
+| `--deposit <USDC>` | Deposit USDC to treasury |
+| `--redeem <ROSE>` | Redeem ROSE from treasury |
+| `--rebalance` | Force treasury rebalance |
+| `--task <ROSE>` | Run full task cycle with given value |
+| `--scenario <NAME>` | Run quick scenario |
+| `--vault` | Show vault breakdown |
+| `--balances` | Show deployer balances |
+| `--prices` | Show current oracle prices |
+
+**Quick Scenarios:**
+- `bull` - BTC +50%, Gold +20%, auto-rebalance
+- `bear` - BTC -40%, Gold -10%
+- `gold-rally` - Gold +30%, BTC flat
+- `crypto-winter` - BTC -60%, Gold +10%
+- `deposit-redeem` - Deposit 10k USDC, redeem half
+- `nav-stress` - Large deposit, price crash, redemption test
+
+**Prerequisites:**
+- Contracts deployed to Arbitrum Sepolia with mock oracles/router
+- `deployment-output.json` exists with contract addresses
+- Backend signer at `https://signer.rose-token.com` (or set `PASSPORT_SIGNER_URL`)
+- **Required env vars:** `WORKER_PRIVATE_KEY` (also used as deployer), `CUSTOMER_PRIVATE_KEY`, `STAKEHOLDER_PRIVATE_KEY`
+- All 3 wallets must have valid Gitcoin Passport scores and be different addresses
 
 ## Backend Passport Signer
 
