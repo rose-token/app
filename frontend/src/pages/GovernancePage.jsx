@@ -143,8 +143,8 @@ const GovernancePage = () => {
             <div
               className="card flex items-center justify-between"
               style={{
-                    background: 'rgba(212, 175, 140, 0.05)',
-                    border: '1px solid rgba(251, 191, 36, 0.25)'
+                    background: 'var(--card-accent-bg)',
+                    border: '1px solid var(--card-accent-border)'
                     }}
             >
               <div>

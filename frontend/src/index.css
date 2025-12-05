@@ -45,6 +45,10 @@
     --info: #60a5fa;
     --info-bg: rgba(96, 165, 250, 0.15);
 
+    /* Accent card highlight (for selected/featured cards) */
+    --card-accent-bg: rgba(212, 175, 140, 0.05);
+    --card-accent-border: rgba(251, 191, 36, 0.25);
+
     /* Asset colors (vault) */
     --btc-orange: #f7931a;
     --gold-yellow: #ffd700;

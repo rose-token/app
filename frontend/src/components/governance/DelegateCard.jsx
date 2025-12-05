@@ -133,8 +133,9 @@ const DelegateCard = React.memo(({
     <div
       className="card"
       style={{
-        borderColor: hasExistingDelegation ? 'var(--accent)' : undefined,
-        borderWidth: hasExistingDelegation ? '2px' : undefined,
+        background: hasExistingDelegation ? 'var(--card-accent-bg)' : undefined,
+        borderColor: hasExistingDelegation ? 'var(--card-accent-border)' : undefined,
+        borderWidth: hasExistingDelegation ? '1px' : undefined,
       }}
     >
       {/* Header */}
