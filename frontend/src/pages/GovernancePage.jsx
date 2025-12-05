@@ -235,8 +235,7 @@ const GovernancePage = () => {
               <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <Link
                   to="/governance/my-votes"
-                  className="text-sm hover:text-accent transition-colors"
-                  style={{ color: 'var(--accent)' }}
+                  className="btn-secondary text-sm w-full"
                 >
                   View My Votes &rarr;
                 </Link>
@@ -252,26 +251,18 @@ const GovernancePage = () => {
             {/* Quick Links */}
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Link
                   to="/delegates"
-                  className="block p-3 rounded-lg hover:bg-bg-secondary transition-colors"
-                  style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  className="btn-secondary w-full text-left"
                 >
-                  <span className="font-medium">Browse Delegates</span>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Delegate your voting power
-                  </p>
+                  Browse Delegates &rarr;
                 </Link>
                 <Link
                   to="/governance/my-votes"
-                  className="block p-3 rounded-lg hover:bg-bg-secondary transition-colors"
-                  style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  className="btn-secondary w-full text-left"
                 >
-                  <span className="font-medium">My Votes</span>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Track your governance activity
-                  </p>
+                  My Votes &rarr;
                 </Link>
               </div>
             </div>

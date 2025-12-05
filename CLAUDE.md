@@ -395,6 +395,8 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 **Styling:** Uses CSS variables in `index.css` with semantic Tailwind classes (`bg-primary`, `text-accent`, etc.). Never use hardcoded colors.
 
+**Button Styling:** Navigation links (back links, quick links, empty state CTAs) use `btn-secondary` or `btn-primary` classes. Back links use `btn-secondary inline-flex items-center gap-1 text-sm`. Action buttons (Deposit, Withdraw, Vote, Cancel) already use `btn-*` classes.
+
 ## Frontend Routes
 
 | Route | Page | Purpose |

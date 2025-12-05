@@ -149,8 +149,7 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
         <Link
           to={`/governance/${id}`}
-          className="text-sm font-medium hover:text-accent transition-colors"
-          style={{ color: 'var(--accent)' }}
+          className="btn-secondary text-sm w-full"
         >
           View Details &rarr;
         </Link>

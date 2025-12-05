@@ -104,8 +104,7 @@ const ProposalDetailPage = () => {
       {/* Back Link */}
       <Link
         to="/governance"
-        className="inline-flex items-center gap-1 text-sm mb-6 hover:text-accent transition-colors"
-        style={{ color: 'var(--text-muted)' }}
+        className="btn-secondary inline-flex items-center gap-1 text-sm mb-6"
       >
         &larr; Back to Governance
       </Link>

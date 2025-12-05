@@ -103,8 +103,7 @@ const MyVotesPage = () => {
       {/* Back Link */}
       <Link
         to="/governance"
-        className="inline-flex items-center gap-1 text-sm mb-6 hover:text-accent transition-colors"
-        style={{ color: 'var(--text-muted)' }}
+        className="btn-secondary inline-flex items-center gap-1 text-sm mb-6"
       >
         &larr; Back to Governance
       </Link>
@@ -213,9 +212,9 @@ const MyVotesPage = () => {
               </div>
             ) : myVotedProposals.length === 0 ? (
               <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-                <p>You haven't voted on any proposals yet.</p>
-                <Link to="/governance" className="text-accent hover:underline">
-                  Browse active proposals
+                <p className="mb-3">You haven't voted on any proposals yet.</p>
+                <Link to="/governance" className="btn-secondary">
+                  Browse active proposals &rarr;
                 </Link>
               </div>
             ) : (
@@ -258,10 +257,10 @@ const MyVotesPage = () => {
 
             {myCreatedProposals.length === 0 ? (
               <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-                <p>You haven't created any proposals yet.</p>
+                <p className="mb-3">You haven't created any proposals yet.</p>
                 {canPropose && (
-                  <Link to="/governance/propose" className="text-accent hover:underline">
-                    Create your first proposal
+                  <Link to="/governance/propose" className="btn-primary">
+                    Create your first proposal &rarr;
                   </Link>
                 )}
               </div>
