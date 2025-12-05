@@ -65,6 +65,12 @@ export const config = {
     governance: process.env.GOVERNANCE_ADDRESS || '',
     treasury: process.env.TREASURY_ADDRESS || '',
   },
+
+  // NAV history cron configuration
+  nav: {
+    cronSchedule: process.env.NAV_CRON_SCHEDULE || '0 0 * * *', // Daily at midnight UTC
+    snapshotOnStartup: process.env.NAV_SNAPSHOT_ON_STARTUP !== 'false',
+  },
 };
 
 // Validate required env vars

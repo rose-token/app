@@ -639,6 +639,16 @@ Tests use mock contracts to simulate external dependencies:
 - `GET /api/profile?addresses=...` - Batch fetch (max 100)
   - Response: `{ profiles: Record<address, ProfileData | null> }`
 
+**Treasury API Endpoints:**
+- `GET /api/treasury/history` - NAV snapshot history with pagination
+  - Query params: `limit`, `offset`, `startDate`, `endDate`, `interval` (raw/daily/weekly)
+  - Response: `{ snapshots: [...], pagination: { total, limit, offset, hasMore } }`
+- `GET /api/treasury/rebalances` - Rebalance event history
+  - Query params: `limit`, `offset`
+  - Response: `{ events: [...], pagination: { total, limit, offset, hasMore } }`
+- `GET /api/treasury/stats` - Aggregated NAV statistics
+  - Response: `{ current, change7d, change30d, allTimeHigh, allTimeLow }`
+
 **Profile Database Schema (PostgreSQL):**
 ```sql
 CREATE TABLE profiles (
@@ -662,6 +672,7 @@ CREATE TABLE profiles (
 - `src/routes/delegation.ts` - Delegation API endpoint handlers
 - `src/routes/governance.ts` - Governance API endpoint handlers
 - `src/routes/profile.ts` - Profile API endpoint handlers
+- `src/routes/treasury.ts` - Treasury NAV history API endpoint handlers
 - `src/services/signer.ts` - ECDSA signing with ethers.js
 - `src/services/delegation.ts` - Delegation allocation computation, claim signature generation
 - `src/services/governance.ts` - VP calculations, reputation queries
@@ -716,6 +727,14 @@ CREATE TABLE profiles (
 **`treasury.ts`:**
 - `executeRebalance()` - Call contract `forceRebalance()`
 
+**`nav.ts`:**
+- `fetchNavSnapshot()` - Fetch current NAV data from treasury contract (getVaultBreakdown, getAllocationStatus, prices)
+- `storeNavSnapshot(snapshot)` - Insert snapshot into nav_snapshots table
+- `syncRebalanceEvents()` - Query and store new Rebalanced events since last sync
+- `getNavHistory(options)` - Query historical snapshots with pagination, date filtering, interval aggregation
+- `getRebalanceHistory(options)` - Query rebalance events with pagination
+- `getNavStats()` - Get current price, 7d/30d changes, all-time high/low
+
 ## Backend Scheduled Jobs
 
 **Monthly Treasury Rebalance** (`src/cron/rebalance.ts`)
@@ -723,6 +742,14 @@ CREATE TABLE profiles (
 - Calls: `treasury.forceRebalance()` via ethers.js
 - Retry: Every 6 hours on failure (`0 */6 * * *`), max 10 attempts
 - Logs transaction hash and gas used
+
+**Daily NAV History Snapshot** (`src/cron/nav-history.ts`)
+- Schedule: `0 0 * * *` (daily at midnight UTC, configurable via NAV_CRON_SCHEDULE)
+- Captures: ROSE price, asset values (BTC/Gold/USDC/ROSE), allocations, Chainlink prices
+- Stores: `nav_snapshots` table in PostgreSQL
+- Event sync: Queries `Rebalanced` events since last sync, stores in `rebalance_events`
+- Runs initial snapshot on startup (configurable via NAV_SNAPSHOT_ON_STARTUP)
+- Tracks consecutive failures (max 5), handles stale oracle gracefully
 
 ## Signature Formats
 
@@ -843,6 +870,10 @@ DB_RETRY_MAX_DELAY_MS=60000        # Max retry delay
 # Profile EIP-712
 PROFILE_CHAIN_IDS=42161,421614     # Arbitrum mainnet + Sepolia
 PROFILE_TIMESTAMP_TTL=300          # 5 minutes
+
+# NAV History Cron
+NAV_CRON_SCHEDULE=0 0 * * *        # Daily at midnight UTC (default)
+NAV_SNAPSHOT_ON_STARTUP=true       # Run snapshot on server start (default)
 ```
 
 ## Token Decimals Reference

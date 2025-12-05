@@ -8,10 +8,12 @@ import passportRoutes from './routes/passport';
 import profileRoutes from './routes/profile';
 import delegationRoutes from './routes/delegation';
 import governanceRoutes from './routes/governance';
+import treasuryRoutes from './routes/treasury';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
 import { startRebalanceCron } from './cron/rebalance';
+import { startNavHistoryCron } from './cron/nav-history';
 
 const app = express();
 
@@ -44,6 +46,7 @@ app.use('/api/passport', passportRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/delegation', delegationRoutes);
 app.use('/api/governance', governanceRoutes);
+app.use('/api/treasury', treasuryRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -86,6 +89,7 @@ async function start() {
 
   // Start scheduled tasks
   startRebalanceCron();
+  startNavHistoryCron();
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);
