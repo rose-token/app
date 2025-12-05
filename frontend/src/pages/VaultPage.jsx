@@ -3,6 +3,7 @@ import { useAccount } from 'wagmi';
 import useVaultData from '../hooks/useVaultData';
 import VaultStats from '../components/vault/VaultStats';
 import VaultAllocation from '../components/vault/VaultAllocation';
+import NavHistoryChart from '../components/vault/NavHistoryChart';
 import DepositCard from '../components/vault/DepositCard';
 import RedeemCard from '../components/vault/RedeemCard';
 import TransactionHistory from '../components/vault/TransactionHistory';
@@ -74,6 +75,9 @@ const VaultPage = () => {
 
       {/* Vault Allocation Chart */}
       <VaultAllocation breakdown={breakdown} isLoading={isLoading} />
+
+      {/* NAV Price History Chart */}
+      <NavHistoryChart />
 
       {/* Deposit / Redeem Cards */}
       {isConnected && (

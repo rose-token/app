@@ -386,10 +386,10 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 **Key directories:**
 - `frontend/src/pages/` - 9 pages (TasksPage, VaultPage, ProfilePage, HelpPage, GovernancePage, ProposalCreatePage, ProposalDetailPage, DelegatesPage, MyVotesPage)
 - `frontend/src/components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm
-- `frontend/src/components/vault/` - VaultStats, VaultAllocation, DepositCard, RedeemCard, TransactionHistory
+- `frontend/src/components/vault/` - VaultStats, VaultAllocation, NavHistoryChart, DepositCard, RedeemCard, TransactionHistory
 - `frontend/src/components/governance/` - StakingPanel, VotePanel, ClaimRewardsPanel, ProposalCard, DelegateCard, QuorumBar
 - `frontend/src/components/wallet/` - TokenBalance, NetworkSelector
-- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation
+- `frontend/src/hooks/` - useNotifications, useProfile, useVaultData, useNavHistory, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation
 - `frontend/src/utils/ipfs/` - pinataService.js for IPFS integration
 - `frontend/src/contracts/` - Auto-generated ABIs (via update-abi script)
 
@@ -518,6 +518,21 @@ Returns: {
 }
 // Sources: RoseMarketplace events + RoseGovernance.getReputation()
 // Cache: 5-minute in-memory
+```
+
+**`useNavHistory`** - NAV price history from backend
+```javascript
+Returns: {
+  data: {
+    snapshots,        // Array of { date, price, totalAssets, circulatingRose, ...allocations }
+    pagination,       // { total, limit, offset, hasMore }
+    raw               // Original API response
+  },
+  isLoading, error, refetch
+}
+Options: { limit: 1100, interval: 'daily', startDate, endDate }
+// Fetches from: GET /api/treasury/history
+// Default: 3 years of daily snapshots
 ```
 
 ## Frontend Passport System
