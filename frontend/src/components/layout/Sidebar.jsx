@@ -124,11 +124,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             onClick={() => window.innerWidth < 768 && toggleSidebar()}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"  className="w-5 h-5 opacity-80">
-              <path d="M12 3v18" />
-              <path d="M3 7h18" />
-              <path d="M4 7L2 12a3 1.5 0 0 0 6 0L6 7" />
-              <path d="M18 7l-2 5a3 1.5 0 0 0 6 0l-2-5" />
-              <path d="M9 21h6" />
+                <path d="M12 3v18" />
+                <path d="M3 7h18" />
+                <path d="M4 7L2 12a3 1.5 0 0 0 6 0L6 7" />
+                <path d="M20 7L22 12a3 1.5 0 0 1 -6 0L18 7" />
+                <path d="M9 21h6" />
             </svg>
             Governance
           </NavLink>
