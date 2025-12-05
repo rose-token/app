@@ -1,0 +1,342 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
+  "isTestnet": true,
+  "deployer": "0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1",
+  "contracts": {
+    "roseToken": "0x705CD76823Adfa01DFAfd1a680f8d518643Febf5",
+    "vRose": "0xc1D5F49EaE25Cc7241A36815330EB4F8f082b7f4",
+    "roseTreasury": "0xa1556eb57b2DaD7F0506c06C88e721D75c7e62eF",
+    "roseMarketplace": "0xE13bAc4e50A1Af001901c3d2967c71B9B75C5FA3",
+    "roseGovernance": "0x819B76f418EEF72D7C6F1fb241c6641E4b28c0BD"
+  },
+  "tokenAddress": "0x705CD76823Adfa01DFAfd1a680f8d518643Febf5",
+  "vRoseAddress": "0xc1D5F49EaE25Cc7241A36815330EB4F8f082b7f4",
+  "treasuryAddress": "0xa1556eb57b2DaD7F0506c06C88e721D75c7e62eF",
+  "marketplaceAddress": "0xE13bAc4e50A1Af001901c3d2967c71B9B75C5FA3",
+  "governanceAddress": "0x819B76f418EEF72D7C6F1fb241c6641E4b28c0BD",
+  "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
+  "externalAddresses": {
+    "usdc": "0x79d24F9c3BEa72AB50569d719483a32ff4385f86",
+    "wbtc": "0x2325F90CD8a1607258a90df1EA157a03b4942D5e",
+    "paxg": "0xdf2f383186ae72D917b0C2dD2FCa5C603017d33A",
+    "btcUsdFeed": "0x77968481eE2cA803A5416Bd9Ca6Dcb435b3E34D2",
+    "xauUsdFeed": "0xdD54b8EE369c2eb36B542f5f655606aeB1cdF5f1",
+    "swapRouter": "0x17aeEcc9BEfae0a5Ed79601e08Fc5151DED5CCf6",
+    "roseUsdFeed": "0xa1A99359e14AEa8220ba70a38e9007a91e8154be",
+    "mockRouter": {
+      "target": "0x17aeEcc9BEfae0a5Ed79601e08Fc5151DED5CCf6",
+      "interface": {
+        "fragments": [
+          {
+            "type": "constructor",
+            "inputs": [],
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "error",
+            "inputs": [
+              {
+                "name": "token",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "SafeERC20FailedOperation"
+          },
+          {
+            "type": "event",
+            "inputs": [
+              {
+                "name": "tokenIn",
+                "type": "address",
+                "baseType": "address",
+                "indexed": true,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "tokenOut",
+                "type": "address",
+                "baseType": "address",
+                "indexed": true,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "indexed": false,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "indexed": false,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "indexed": false,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "Swap",
+            "anonymous": false
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "params",
+                "type": "tuple",
+                "baseType": "tuple",
+                "components": [
+                  {
+                    "name": "tokenIn",
+                    "type": "address",
+                    "baseType": "address",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "tokenOut",
+                    "type": "address",
+                    "baseType": "address",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "fee",
+                    "type": "uint24",
+                    "baseType": "uint24",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "recipient",
+                    "type": "address",
+                    "baseType": "address",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "deadline",
+                    "type": "uint256",
+                    "baseType": "uint256",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "amountIn",
+                    "type": "uint256",
+                    "baseType": "uint256",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "amountOutMinimum",
+                    "type": "uint256",
+                    "baseType": "uint256",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  },
+                  {
+                    "name": "sqrtPriceLimitX96",
+                    "type": "uint160",
+                    "baseType": "uint160",
+                    "components": null,
+                    "arrayLength": null,
+                    "arrayChildren": null
+                  }
+                ],
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "exactInputSingle",
+            "constant": false,
+            "outputs": [
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "payable",
+            "payable": true,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "exchangeRates",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "tokenIn",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "tokenOut",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "rate",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "setExchangeRate",
+            "constant": false,
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "token",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "decimals",
+                "type": "uint8",
+                "baseType": "uint8",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "setTokenDecimals",
+            "constant": false,
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "tokenDecimals",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint8",
+                "baseType": "uint8",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "fallback",
+            "inputs": [],
+            "payable": true
+          }
+        ],
+        "deploy": {
+          "type": "constructor",
+          "inputs": [],
+          "payable": false,
+          "gas": null
+        },
+        "fallback": null,
+        "receive": true
+      },
+      "runner": "<SignerWithAddress 0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1>",
+      "filters": {}
+    }
+  },
+  "timestamp": "2025-12-05T22:20:28.775Z"
+}
