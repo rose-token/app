@@ -213,6 +213,7 @@ const GovernancePage = () => {
                   <span style={{ color: 'var(--text-muted)' }}>Reputation</span>
                   <ReputationBadge
                     score={reputation || 60}
+                    size="sm"
                     tasksCompleted={userStats?.tasksCompleted}
                     disputes={userStats?.disputes}
                     failedProposals={userStats?.failedProposals}
