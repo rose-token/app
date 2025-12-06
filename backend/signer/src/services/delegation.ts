@@ -12,7 +12,7 @@ const GOVERNANCE_ABI = [
   'function votingPower(address user) external view returns (uint256)',
 
   // Delegated vote tracking
-  'function delegatedVotes(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
+  'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
   'function delegatorPowerUsed(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
   'function allocationHashes(uint256 proposalId, address delegate) external view returns (bytes32)',
 
@@ -114,7 +114,7 @@ export async function computeAllocations(
   }
 
   // Get already used VP for this proposal
-  const existingVote = await contract.delegatedVotes(proposalId, delegate);
+  const existingVote = await contract.getDelegatedVote(proposalId, delegate);
   const alreadyUsed: bigint = BigInt(existingVote.totalPowerUsed || 0);
   const availableVP = totalReceivedVP - alreadyUsed;
 
@@ -268,7 +268,7 @@ export async function getAvailableDelegatedPower(
 
   const [totalReceivedRaw, existingVote] = await Promise.all([
     contract.totalDelegatedIn(delegate),
-    contract.delegatedVotes(proposalId, delegate),
+    contract.getDelegatedVote(proposalId, delegate),
   ]);
 
   const total = BigInt(totalReceivedRaw);
@@ -285,7 +285,7 @@ export async function getDelegatedVote(
   delegate: string
 ): Promise<{ hasVoted: boolean; support: boolean; totalPowerUsed: bigint }> {
   const contract = getGovernanceContract();
-  const vote = await contract.delegatedVotes(proposalId, delegate);
+  const vote = await contract.getDelegatedVote(proposalId, delegate);
 
   return {
     hasVoted: vote.hasVoted,
