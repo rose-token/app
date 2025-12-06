@@ -239,7 +239,7 @@ jobs:
           get_provider_host() {
             local addr="$1"
             echo "$PROVIDERS_RESPONSE" | jq -r --arg addr "$addr" \
-              '.data[] | select(.owner == $addr) | .hostUri // empty' | \
+              '.[] | select(.owner == $addr) | .hostUri // empty' | \
               sed 's|https://||;s|:.*||'
           }
 
