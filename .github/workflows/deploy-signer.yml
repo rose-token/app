@@ -227,7 +227,7 @@ jobs:
           # Provider blacklist - unreliable providers (by wallet address)
           PROVIDER_BLACKLIST=(
             "akash1r2yz5fzkk9gt0r3mk9u2c29q5mmtef050cryak"  # provider.gpu.subangle.com
-            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc" # provider.europlots.com
+            # "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc" # provider.europlots.com
             "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp" # forbidden
             "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj" # forbidden
           )
