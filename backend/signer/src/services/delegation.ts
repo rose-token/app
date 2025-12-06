@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType } from '../types';
+import { query, getPool } from '../db/pool';
 
 // Updated ABI for new VP-centric RoseGovernance
 const GOVERNANCE_ABI = [
@@ -13,7 +14,6 @@ const GOVERNANCE_ABI = [
 
   // Delegated vote tracking
   'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
-  'function delegatorPowerUsed(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
   'function allocationHashes(uint256 proposalId, address delegate) external view returns (bytes32)',
 
   // Direct vote tracking
@@ -63,6 +63,142 @@ function getGovernanceContract(): ethers.Contract {
 
 export function getSignerAddress(): string {
   return wallet.address;
+}
+
+/**
+ * Get per-delegator power used for a proposal from database cache
+ * Returns 0 if no record found (first vote on this proposal)
+ */
+async function getDelegatorPowerUsedFromDB(
+  proposalId: number,
+  delegate: string,
+  delegator: string
+): Promise<bigint> {
+  try {
+    const result = await query(
+      `SELECT power_used FROM delegation_allocations
+       WHERE proposal_id = $1 AND LOWER(delegate) = LOWER($2) AND LOWER(delegator) = LOWER($3)`,
+      [proposalId, delegate, delegator]
+    );
+    return result.rows[0]?.power_used ? BigInt(result.rows[0].power_used) : 0n;
+  } catch (err) {
+    // DB not available - return 0 (treats as first vote)
+    console.warn('getDelegatorPowerUsedFromDB error:', err);
+    return 0n;
+  }
+}
+
+/**
+ * Store per-delegator allocations in database after signing a vote
+ * Used for incremental votes and reward claims
+ */
+export async function storeAllocations(
+  proposalId: number,
+  delegate: string,
+  allocations: DelegationAllocation[],
+  support: boolean,
+  allocationsHash: string
+): Promise<void> {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const alloc of allocations) {
+      await client.query(
+        `INSERT INTO delegation_allocations
+         (proposal_id, delegate, delegator, power_used, support, allocations_hash)
+         VALUES ($1, LOWER($2), LOWER($3), $4, $5, $6)
+         ON CONFLICT (proposal_id, delegate, delegator)
+         DO UPDATE SET
+           power_used = delegation_allocations.power_used + EXCLUDED.power_used,
+           allocations_hash = EXCLUDED.allocations_hash`,
+        [proposalId, delegate, alloc.delegator, alloc.powerUsed, support, allocationsHash]
+      );
+    }
+    await client.query('COMMIT');
+    console.log(`Stored ${allocations.length} allocations for proposal ${proposalId}`);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('storeAllocations error:', e);
+    // Non-fatal - vote can still succeed without cache
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Compute allocations hash - must match the algorithm in computeAllocations()
+ * Used to verify frontend-provided allocations against on-chain hash
+ */
+function computeAllocationsHash(
+  proposalId: number,
+  delegate: string,
+  allocations: DelegationAllocation[]
+): string {
+  // Sort by delegator for deterministic hash (same as computeAllocations)
+  const sorted = [...allocations].sort((a, b) =>
+    a.delegator.toLowerCase().localeCompare(b.delegator.toLowerCase())
+  );
+
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  return ethers.keccak256(
+    abiCoder.encode(
+      ['uint256', 'address', 'tuple(address,uint256)[]'],
+      [
+        proposalId,
+        delegate,
+        sorted.map(a => [a.delegator, BigInt(a.powerUsed)]),
+      ]
+    )
+  );
+}
+
+/**
+ * Verify delegated vote exists on-chain, verify allocations hash matches, then store
+ * Called by frontend after tx confirmation - uses ORIGINAL allocations from signature time
+ * This prevents state drift issues where delegations change between signing and confirming
+ *
+ * SECURITY: The support value is derived from on-chain voteRecord, NOT from client input,
+ * to prevent malicious delegates from spoofing the vote direction in the database.
+ */
+export async function verifyAndStoreAllocations(
+  proposalId: number,
+  delegate: string,
+  allocations: DelegationAllocation[]
+): Promise<{ success: boolean; error?: string }> {
+  const contract = getGovernanceContract();
+
+  try {
+    // 1. Verify vote exists on-chain and get the authoritative support value
+    const voteRecord = await contract.getDelegatedVote(proposalId, delegate);
+    if (!voteRecord.hasVoted) {
+      return { success: false, error: 'Vote not found on-chain' };
+    }
+
+    // Use on-chain support value - NEVER trust client-provided support
+    const onChainSupport: boolean = voteRecord.support;
+
+    // 2. Compute hash of provided allocations
+    const computedHash = computeAllocationsHash(proposalId, delegate, allocations);
+
+    // 3. Get hash stored on-chain and verify it matches
+    const onChainHash = await contract.allocationHashes(proposalId, delegate);
+    if (computedHash !== onChainHash) {
+      console.warn(`Allocations hash mismatch: computed=${computedHash}, onChain=${onChainHash}`);
+      return { success: false, error: 'Allocations hash mismatch - data may have been tampered' };
+    }
+
+    // 4. Store the original allocations with on-chain support value
+    if (allocations.length > 0) {
+      await storeAllocations(proposalId, delegate, allocations, onChainSupport, computedHash);
+      console.log(`Verified and stored ${allocations.length} allocations for proposal ${proposalId} (support=${onChainSupport})`);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('verifyAndStoreAllocations error:', error);
+    return { success: false, error: 'Failed to verify vote on-chain' };
+  }
 }
 
 /**
@@ -122,12 +258,12 @@ export async function computeAllocations(
     throw new Error(`Insufficient delegated VP. Available: ${availableVP}, Requested: ${amount}`);
   }
 
-  // Get already used VP from each delegator for this proposal
+  // Get already used VP from each delegator for this proposal (from database cache)
   const delegatorUsed: Map<string, bigint> = new Map();
   await Promise.all(
     Array.from(delegatorVPs.keys()).map(async (delegator) => {
-      const used = await contract.delegatorPowerUsed(proposalId, delegate, delegator);
-      delegatorUsed.set(delegator, BigInt(used));
+      const used = await getDelegatorPowerUsedFromDB(proposalId, delegate, delegator);
+      delegatorUsed.set(delegator, used);
     })
   );
 
@@ -431,9 +567,9 @@ export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
       // Check if delegate's vote was on winning side
       if (support !== outcome) continue;
 
-      // Check if user's VP was used for this delegate's vote on this proposal
-      const userPowerUsed = await contract.delegatorPowerUsed(proposalId, delegate, user);
-      if (BigInt(userPowerUsed) === 0n) continue;
+      // Check if user's VP was used for this delegate's vote on this proposal (from database cache)
+      const userPowerUsed = await getDelegatorPowerUsedFromDB(proposalId, delegate, user);
+      if (userPowerUsed === 0n) continue;
 
       // Check if user already claimed this delegated reward
       const claimed = await contract.delegatorRewardClaimed(proposalId, delegate, user);

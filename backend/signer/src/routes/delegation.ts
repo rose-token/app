@@ -11,6 +11,7 @@ import {
   getClaimableRewards,
   signClaimApproval,
   calculateRewardAmount,
+  verifyAndStoreAllocations,
 } from '../services/delegation';
 import {
   DelegationVoteRequest,
@@ -114,6 +115,9 @@ router.post('/vote-signature', async (req: Request, res: Response) => {
       allocationsHash,
       expiry
     );
+
+    // NOTE: Allocations are NOT stored here - frontend must call /confirm-vote
+    // after tx confirmation to store allocations (prevents phantom data from failed txs)
 
     const response: DelegationVoteResponse = {
       delegate,
@@ -272,6 +276,48 @@ router.get('/claimable/:user', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get claimable error:', error);
     return res.status(500).json({ error: 'Internal server error' } as ClaimErrorResponse);
+  }
+});
+
+/**
+ * POST /api/delegation/confirm-vote
+ * Called by frontend after tx confirmation to store allocations
+ * Frontend must pass the ORIGINAL allocations from /vote-signature response
+ * This ensures DB reflects the allocations computed at signature time (immune to delegation changes)
+ *
+ * SECURITY: support value is NOT accepted from client - read from on-chain voteRecord
+ */
+router.post('/confirm-vote', async (req: Request, res: Response) => {
+  try {
+    const { delegate, proposalId, allocations } = req.body;
+
+    if (!delegate || !isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' });
+    }
+
+    if (proposalId === undefined || proposalId < 1) {
+      return res.status(400).json({ error: 'Invalid proposalId' });
+    }
+
+    if (!Array.isArray(allocations) || allocations.length === 0) {
+      return res.status(400).json({ error: 'Allocations array required' });
+    }
+
+    // support param NOT accepted - verifyAndStoreAllocations reads from on-chain
+    const result = await verifyAndStoreAllocations(
+      Number(proposalId),
+      delegate,
+      allocations
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Confirm vote error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

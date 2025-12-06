@@ -452,6 +452,26 @@ export const useDelegation = () => {
       });
 
       console.log('Delegated vote cast successfully!');
+
+      // Confirm vote with backend to store allocations (after tx confirmed on-chain)
+      // Pass ORIGINAL allocations from signature response to prevent state drift issues
+      // NOTE: support value is NOT sent - backend reads it from on-chain voteRecord for security
+      try {
+        await fetch(`${SIGNER_URL}/api/delegation/confirm-vote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delegate: account,
+            proposalId: Number(proposalId),
+            allocations: signatureData.allocations,  // Original allocations from /vote-signature
+          }),
+        });
+        console.log('Vote allocations confirmed with backend');
+      } catch (confirmErr) {
+        console.warn('Failed to confirm vote allocation:', confirmErr);
+        // Non-fatal - vote succeeded, can retry confirm later with same allocations
+      }
+
       await refetchDelegation();
       return { success: true, hash, allocations: signatureData.allocations };
     } catch (err) {

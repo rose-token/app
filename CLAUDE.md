@@ -212,6 +212,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | /api/governance/reputation-signed/:address | GET | Signed reputation (^0.6) |
 | /api/governance/vote-signature | POST | Direct vote signature |
 | /api/delegation/vote-signature | POST | Delegated vote signature |
+| /api/delegation/confirm-vote | POST | Confirm vote on-chain, store allocations |
 | /api/delegation/claim-signature | POST | Reward claim signature |
 | /api/delegation/claimable/:user | GET | Claimable rewards |
 | /api/profile | POST | Create/update (EIP-712) |
@@ -227,7 +228,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | signer.ts | getSignerAddress, signApproval |
 | gitcoin.ts | getPassportScore (whitelist fallback) |
 | governance.ts | getUserVP, getTotalSystemVP, getUserDelegations, getReceivedDelegations, getReputationNew, signReputationAttestation, calculateVotePower |
-| delegation.ts | computeAllocations, signDelegatedVote, getAvailableDelegatedPower, getClaimableRewards, signClaimApproval |
+| delegation.ts | computeAllocations, signDelegatedVote, verifyAndStoreAllocations, getAvailableDelegatedPower, getClaimableRewards, signClaimApproval |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
 | nav.ts | fetchNavSnapshot, storeNavSnapshot, syncRebalanceEvents, getNavHistory, getNavStats |
@@ -245,6 +246,11 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 **Docker Compose:** PostgreSQL 16 (5432) + Node.js signer (3000)
 **Akash:** 0.75 CPU, 1GB RAM, signer.rose-token.com
 **PostgreSQL:** 2-10 connections, 30s idle, exponential retry
+
+**Database tables:**
+- `profiles` - User profile data with EIP-712 signatures
+- `nav_history` - Daily NAV snapshots for treasury
+- `delegation_allocations` - Per-delegator VP allocations for proposals (cached for incremental votes + claims)
 
 ```bash
 cd backend/signer && npm install && cp .env.example .env && npm run dev
