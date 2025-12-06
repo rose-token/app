@@ -304,6 +304,27 @@ async function getPassportSignature(address, action) {
   }
 }
 
+// Get reputation signature from backend signer API (for governance deposit)
+async function getReputationSignature(address) {
+  try {
+    const response = await fetch(`${SIGNER_API_URL}/api/governance/reputation-signed/${address}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Reputation attestation failed: ${error.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    // Returns: { address, reputation, expiry, signature }
+    return { reputation: data.reputation, expiry: data.expiry, signature: data.signature };
+  } catch (err) {
+    if (err.code === 'ECONNREFUSED') {
+      throw new Error(`Backend signer not running at ${SIGNER_API_URL}. Start it or set PASSPORT_SIGNER_URL.`);
+    }
+    throw err;
+  }
+}
+
 async function createTask(title, valueRose) {
   const value = hre.ethers.parseUnits(valueRose.toString(), 18);
 
@@ -409,7 +430,8 @@ async function runFullTaskCycle(valueRose) {
       await (await contracts.roseToken.transfer(stakeholder.address, needed)).wait();
     }
     await (await contracts.roseToken.connect(stakeholder).approve(contracts.governance.target, needed)).wait();
-    await (await contracts.governance.connect(stakeholder).deposit(needed)).wait();
+    const { reputation, expiry: repExpiry, signature: repSig } = await getReputationSignature(stakeholder.address);
+    await (await contracts.governance.connect(stakeholder).deposit(needed, reputation, repExpiry, repSig)).wait();
   }
 
   // Approvals
@@ -579,7 +601,8 @@ async function runPartialTaskCycle(options = {}) {
       await (await contracts.roseToken.transfer(stakeholder.address, needed)).wait();
     }
     await (await contracts.roseToken.connect(stakeholder).approve(contracts.governance.target, needed)).wait();
-    await (await contracts.governance.connect(stakeholder).deposit(needed)).wait();
+    const { reputation, expiry: repExpiry, signature: repSig } = await getReputationSignature(stakeholder.address);
+    await (await contracts.governance.connect(stakeholder).deposit(needed, reputation, repExpiry, repSig)).wait();
   }
   await (await contracts.vRose.connect(stakeholder).approve(contracts.marketplace.target, stakeValue)).wait();
 
