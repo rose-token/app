@@ -105,12 +105,13 @@ const VotePanel = ({
       setVoteType(support ? 'yay' : 'nay');
 
       if (onVoteCombined && (amountSplit.ownVP > 0 || amountSplit.delegatedVP > 0)) {
-        // Pass VP amounts directly
+        // Pass totalVP + available amounts (hook will split internally)
         await onVoteCombined(
           proposalId,
-          amountSplit.ownVP.toString(),
-          amountSplit.delegatedVP.toString(),
-          support
+          amountSplit.totalVP.toString(),
+          support,
+          totalAvailable.ownVP.toString(),
+          totalAvailable.delegatedVP.toString()
         );
       } else if (onVote && amountSplit.ownVP > 0) {
         // Own vote only
@@ -148,9 +149,10 @@ const VotePanel = ({
       if (onVoteCombined) {
         await onVoteCombined(
           proposalId,
-          amountSplit.ownVP.toString(),
-          amountSplit.delegatedVP.toString(),
-          existingVoteDirection
+          amountSplit.totalVP.toString(),
+          existingVoteDirection,
+          totalAvailable.ownVP.toString(),
+          totalAvailable.delegatedVP.toString()
         );
       } else if (onVote && amountSplit.ownVP > 0) {
         await onVote(proposalId, amountSplit.ownVP.toString(), existingVoteDirection);
