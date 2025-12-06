@@ -226,7 +226,7 @@ jobs:
 
           # Provider blacklist - unreliable or problematic providers
           PROVIDER_BLACKLIST=(
-            "provider.gpu.subangle.com",
+            "provider.gpu.subangle.com"
             "provider.europlots.com"
           )
 
