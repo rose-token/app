@@ -72,21 +72,7 @@ async function main() {
   console.log(`  Customer: ${hre.ethers.formatUnits(customerRoseNeeded, 18)} ROSE ✓`);
   console.log(`  Stakeholder: ${hre.ethers.formatUnits(stakeholderRoseNeeded, 18)} ROSE ✓`);
 
-  // 8. Stakeholder: Deposit ROSE to governance to get vROSE
-  console.log("\n--- Stakeholder: Getting vROSE ---");
-  await (await roseToken.connect(stakeholder).approve(governance.target, stakeholderRoseNeeded)).wait();
-  await (await governance.connect(stakeholder).deposit(stakeholderRoseNeeded)).wait();
-  const vRoseBalance = await vRoseToken.balanceOf(stakeholder.address);
-  console.log(`  Deposited ROSE, received ${hre.ethers.formatUnits(vRoseBalance, 18)} vROSE ✓`);
-
-  // 9. Pre-approve marketplace for customer and stakeholder
-  console.log("\n--- Setting Up Approvals ---");
-  await (await roseToken.connect(customer).approve(marketplace.target, customerRoseNeeded)).wait();
-  console.log("  Customer approved marketplace for ROSE ✓");
-  await (await vRoseToken.connect(stakeholder).approve(marketplace.target, stakeholderRoseNeeded)).wait();
-  console.log("  Stakeholder approved marketplace for vROSE ✓");
-
-  // 10. Helper to generate passport signatures (deployer is passport signer on testnet)
+  // 8. Helper functions for signatures (deployer is passport signer on testnet)
   async function signPassport(address, action, expiry) {
     const messageHash = hre.ethers.solidityPackedKeccak256(
       ["address", "string", "uint256"],
@@ -94,6 +80,36 @@ async function main() {
     );
     return deployer.signMessage(hre.ethers.getBytes(messageHash));
   }
+
+  async function signReputation(address, reputation, expiry) {
+    const messageHash = hre.ethers.solidityPackedKeccak256(
+      ["string", "address", "uint256", "uint256"],
+      ["reputation", address, reputation, expiry]
+    );
+    return deployer.signMessage(hre.ethers.getBytes(messageHash));
+  }
+
+  // 9. Stakeholder: Deposit ROSE to governance to get vROSE
+  console.log("\n--- Stakeholder: Getting vROSE ---");
+  const DEFAULT_REPUTATION = 60; // Cold start reputation for new users
+  const repExpiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+  const repSig = await signReputation(stakeholder.address, DEFAULT_REPUTATION, repExpiry);
+  await (await roseToken.connect(stakeholder).approve(governance.target, stakeholderRoseNeeded)).wait();
+  await (await governance.connect(stakeholder).deposit(
+    stakeholderRoseNeeded,
+    DEFAULT_REPUTATION,
+    repExpiry,
+    repSig
+  )).wait();
+  const vRoseBalance = await vRoseToken.balanceOf(stakeholder.address);
+  console.log(`  Deposited ROSE, received ${hre.ethers.formatUnits(vRoseBalance, 18)} vROSE ✓`);
+
+  // 10. Pre-approve marketplace for customer and stakeholder
+  console.log("\n--- Setting Up Approvals ---");
+  await (await roseToken.connect(customer).approve(marketplace.target, customerRoseNeeded)).wait();
+  console.log("  Customer approved marketplace for ROSE ✓");
+  await (await vRoseToken.connect(stakeholder).approve(marketplace.target, stakeholderRoseNeeded)).wait();
+  console.log("  Stakeholder approved marketplace for vROSE ✓");
 
   // 11. Complete 10 tasks
   console.log("\n--- Completing Tasks ---");
