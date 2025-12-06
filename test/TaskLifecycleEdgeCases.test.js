@@ -54,6 +54,25 @@ describe("Task Lifecycle Edge Cases", function () {
     return block.timestamp + 3600 + signatureNonce;
   }
 
+  // Helper function to generate reputation attestation signature
+  async function createReputationSignature(signer, user, reputation, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "uint256", "uint256"],
+      ["reputation", user, reputation, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Default reputation for tests (60% cold start)
+  const DEFAULT_REPUTATION = 60;
+
+  // Helper to get reputation attestation
+  async function getRepAttestation(user, reputation = DEFAULT_REPUTATION) {
+    const expiry = await getFutureExpiry();
+    const signature = await createReputationSignature(passportSigner, user.address, reputation, expiry);
+    return { reputation, expiry, signature };
+  }
+
   beforeEach(async function () {
     [owner, customer, worker, stakeholder, otherUser, passportSigner] = await ethers.getSigners();
     signatureNonce = 0;
@@ -148,7 +167,8 @@ describe("Task Lifecycle Edge Cases", function () {
     // 15. Stakeholder needs vROSE for staking - deposit ROSE to governance
     const stakeholderVRoseAmount = ethers.parseEther("10000");
     await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
-    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
+    const repAttest = await getRepAttestation(stakeholder);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
   });
 
   it("Should not allow creating a task with zero deposit", async function() {
@@ -216,7 +236,8 @@ describe("Task Lifecycle Edge Cases", function () {
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await governance.getAddress(), ethers.parseEther("1"));
-    await governance.connect(customer).deposit(ethers.parseEther("1"));
+    const custRepAttest = await getRepAttestation(customer);
+    await governance.connect(customer).deposit(ethers.parseEther("1"), custRepAttest.reputation, custRepAttest.expiry, custRepAttest.signature);
     await vRose.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
 
     const stakeExpiry = await getFutureExpiry();
@@ -275,7 +296,8 @@ describe("Task Lifecycle Edge Cases", function () {
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await governance.getAddress(), ethers.parseEther("1"));
-    await governance.connect(customer).deposit(ethers.parseEther("1"));
+    const custRepAttest2 = await getRepAttestation(customer);
+    await governance.connect(customer).deposit(ethers.parseEther("1"), custRepAttest2.reputation, custRepAttest2.expiry, custRepAttest2.signature);
     await vRose.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
 
     const custStakeExpiry = await getFutureExpiry();

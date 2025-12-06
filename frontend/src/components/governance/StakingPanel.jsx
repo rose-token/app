@@ -319,9 +319,10 @@ const StakingPanel = () => {
       <div className="mt-4 p-3 rounded-lg text-xs" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
         <strong>How VP Works:</strong>
         <ul className="mt-1 list-disc list-inside space-y-1">
-          <li>VP = sqrt(stakedROSE) x (reputation / 100)</li>
-          <li>VP is calculated once at deposit time</li>
-          <li>Use VP to vote on proposals or delegate to others</li>
+          <li>VP = sqrt(stakedROSE) x reputation</li>
+          <li>Reputation = (successPoints - disputePoints) / successPoints</li>
+          <li>Points use sublinear scaling (taskValue^0.6)</li>
+          <li>Disputes count 2x toward penalty points</li>
           <li>VP can only be on ONE proposal at a time</li>
           <li>Free VP from resolved proposals before using elsewhere</li>
         </ul>

@@ -46,6 +46,26 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
+  // Helper to create reputation attestation signature
+  async function createReputationSignature(signer, user, reputation, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "uint256", "uint256"],
+      ["reputation", user, reputation, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Default reputation value (60% = 6000 basis points in contract, 60 for attestation)
+  const DEFAULT_REPUTATION = 60;
+
+  // Helper to get reputation attestation params
+  async function getRepAttestation(user, reputation = DEFAULT_REPUTATION) {
+    const currentBlock = await ethers.provider.getBlock("latest");
+    const expiry = currentBlock.timestamp + 3600;
+    const signature = await createReputationSignature(passportSigner, user.address, reputation, expiry);
+    return { reputation, expiry, signature };
+  }
+
   // Helper to create delegation vote signature
   async function createDelegatedVoteSignature(signer, delegate, proposalId, vpAmount, support, allocationsHash, expiry) {
     const messageHash = ethers.solidityPackedKeccak256(
@@ -146,7 +166,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const depositAmount = ethers.parseEther("100");
 
       // Default reputation is 60%
-      await governance.connect(user1).deposit(depositAmount);
+      const rep = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature);
 
       const stakedRose = await governance.stakedRose(user1.address);
       const votingPower = await governance.votingPower(user1.address);
@@ -162,17 +183,20 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     it("Should emit VotingPowerChanged event on deposit", async function () {
       const depositAmount = ethers.parseEther("100");
 
-      await expect(governance.connect(user1).deposit(depositAmount))
+      const rep = await getRepAttestation(user1);
+      await expect(governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "VotingPowerChanged");
     });
 
     it("Should update totalVotingPower on deposit", async function () {
       const depositAmount = ethers.parseEther("100");
 
-      await governance.connect(user1).deposit(depositAmount);
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(depositAmount, rep1.reputation, rep1.expiry, rep1.signature);
       const totalVP1 = await governance.totalVotingPower();
 
-      await governance.connect(user2).deposit(depositAmount);
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(depositAmount, rep2.reputation, rep2.expiry, rep2.signature);
       const totalVP2 = await governance.totalVotingPower();
 
       expect(totalVP2).to.be.gt(totalVP1);
@@ -181,7 +205,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     it("Should mint vROSE 1:1 on deposit", async function () {
       const depositAmount = ethers.parseEther("100");
 
-      await governance.connect(user1).deposit(depositAmount);
+      const rep = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature);
 
       const vRoseBalance = await vRose.balanceOf(user1.address);
       expect(vRoseBalance).to.equal(depositAmount);
@@ -190,14 +215,16 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
 
   describe("VP-Based Withdrawal", function () {
     beforeEach(async function () {
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      const rep = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature);
     });
 
     it("Should allow withdrawal when VP is not locked", async function () {
       const withdrawAmount = ethers.parseEther("50");
 
       // No approval needed - governance burns vROSE directly
-      await expect(governance.connect(user1).withdraw(withdrawAmount))
+      const rep = await getRepAttestation(user1);
+      await expect(governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "Withdrawn")
         .withArgs(user1.address, withdrawAmount);
 
@@ -210,7 +237,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
 
       const vpBefore = await governance.votingPower(user1.address);
 
-      await governance.connect(user1).withdraw(withdrawAmount);
+      const rep = await getRepAttestation(user1);
+      await governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature);
 
       const vpAfter = await governance.votingPower(user1.address);
       expect(vpAfter).to.be.lt(vpBefore);
@@ -219,7 +247,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     it("Should emit VotingPowerChanged on withdrawal", async function () {
       const withdrawAmount = ethers.parseEther("50");
 
-      await expect(governance.connect(user1).withdraw(withdrawAmount))
+      const rep = await getRepAttestation(user1);
+      await expect(governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "VotingPowerChanged");
     });
   });
@@ -236,19 +265,23 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleVoter(user1);    // User1 can vote
 
       // User1 deposits
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
       // User2 deposits (to be delegate)
-      await governance.connect(user2).deposit(ethers.parseEther("100"));
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
     });
 
     it("Should allow delegating VP to eligible delegate", async function () {
-      await expect(governance.connect(user1).delegate(user2.address, SMALL_VP))
+      const rep = await getRepAttestation(user1, 70); // Voter needs 70%+ reputation
+      await expect(governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "DelegationChanged")
         .withArgs(user1.address, user2.address, SMALL_VP, true);
     });
 
     it("Should track delegation amounts correctly", async function () {
-      await governance.connect(user1).delegate(user2.address, SMALL_VP);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
 
       const delegatedVP = await governance.delegatedVP(user1.address, user2.address);
       const totalDelegatedOut = await governance.totalDelegatedOut(user1.address);
@@ -262,7 +295,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     it("Should reduce available VP after delegation", async function () {
       const vpBefore = await governance.getAvailableVP(user1.address);
 
-      await governance.connect(user1).delegate(user2.address, SMALL_VP);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
 
       const vpAfter = await governance.getAvailableVP(user1.address);
       expect(vpAfter).to.equal(vpBefore - SMALL_VP);
@@ -270,10 +304,13 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
 
     it("Should allow delegating to multiple delegates", async function () {
       await setupEligibleProposer(user3); // User3 is also eligible
-      await governance.connect(user3).deposit(ethers.parseEther("100"));
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
 
-      await governance.connect(user1).delegate(user2.address, SMALL_VP);
-      await governance.connect(user1).delegate(user3.address, MEDIUM_VP);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
+      const rep2 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user3.address, MEDIUM_VP, rep2.reputation, rep2.expiry, rep2.signature);
 
       const delegatedToUser2 = await governance.delegatedVP(user1.address, user2.address);
       const delegatedToUser3 = await governance.delegatedVP(user1.address, user3.address);
@@ -285,7 +322,8 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     });
 
     it("Should allow partial undelegation", async function () {
-      await governance.connect(user1).delegate(user2.address, MEDIUM_VP);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, MEDIUM_VP, rep.reputation, rep.expiry, rep.signature);
       await governance.connect(user1).undelegate(user2.address, SMALL_VP);
 
       const remaining = await governance.delegatedVP(user1.address, user2.address);
@@ -293,23 +331,26 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     });
 
     it("Should revert if delegating to self", async function () {
+      const rep = await getRepAttestation(user1, 70);
       await expect(
-        governance.connect(user1).delegate(user1.address, SMALL_VP)
+        governance.connect(user1).delegate(user1.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "CannotDelegateToSelf");
     });
 
     it("Should revert if delegating to ineligible delegate", async function () {
       // User3 is not eligible (cold start)
+      const rep = await getRepAttestation(user1, 70);
       await expect(
-        governance.connect(user1).delegate(user3.address, SMALL_VP)
+        governance.connect(user1).delegate(user3.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "IneligibleToDelegate");
     });
 
     it("Should revert if insufficient available VP", async function () {
       const vpAmount = await governance.votingPower(user1.address);
 
+      const rep = await getRepAttestation(user1, 70);
       await expect(
-        governance.connect(user1).delegate(user2.address, vpAmount + 1n)
+        governance.connect(user1).delegate(user2.address, vpAmount + 1n, rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "InsufficientAvailableVP");
     });
   });
@@ -332,6 +373,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // Need actual ROSE in treasury for proposal value check
       await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
 
+      // Get reputation attestation
+      const rep = await getRepAttestation(proposerAccount, 90); // Proposer needs 90%+ rep
+
       await governance.connect(proposerAccount).propose(
         "Test Proposal",
         "ipfs://QmTest",
@@ -339,7 +383,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         deadline,
         "Complete deliverables",
         expiry,
-        signature
+        signature,
+        rep.reputation,
+        rep.expiry,
+        rep.signature
       );
     }
 
@@ -349,8 +396,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleVoter(user1);
 
       // Deposit to get VP
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      const repProposer = await getRepAttestation(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
 
       // Create proposal
       await createProposal(proposer);
@@ -361,8 +410,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const support = true;
       const expiry = Math.floor(Date.now() / 1000) + 3600;
       const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+      const rep = await getRepAttestation(user1, 70);
 
-      await expect(governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature))
+      await expect(governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "VPAllocatedToProposal");
     });
 
@@ -370,8 +420,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const support = true;
       const expiry = Math.floor(Date.now() / 1000) + 3600;
       const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+      const rep = await getRepAttestation(user1, 70);
 
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature);
+      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature);
 
       const allocatedProposal = await governance.allocatedToProposal(user1.address);
       const lockedVP = await governance.proposalVPLocked(user1.address);
@@ -384,10 +435,11 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const support = true;
       const expiry = Math.floor(Date.now() / 1000) + 3600;
       const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+      const rep = await getRepAttestation(user1, 70);
 
       const availableBefore = await governance.getAvailableVP(user1.address);
 
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature);
+      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature);
 
       const availableAfter = await governance.getAvailableVP(user1.address);
       expect(availableAfter).to.equal(availableBefore - VP_AMOUNT);
@@ -398,11 +450,13 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
 
       const expiry1 = Math.floor(Date.now() / 1000) + 3600;
       const signature1 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, support, expiry1);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry1, signature1);
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry1, signature1, rep1.reputation, rep1.expiry, rep1.signature);
 
       const expiry2 = Math.floor(Date.now() / 1000) + 3601;
       const signature2 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, support, expiry2);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry2, signature2);
+      const rep2 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry2, signature2, rep2.reputation, rep2.expiry, rep2.signature);
 
       const lockedVP = await governance.proposalVPLocked(user1.address);
       expect(lockedVP).to.equal(VP_AMOUNT_SMALL + VP_AMOUNT_SMALL);
@@ -411,13 +465,15 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     it("Should revert if changing vote direction", async function () {
       const expiry1 = Math.floor(Date.now() / 1000) + 3600;
       const signature1 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, true, expiry1);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, true, expiry1, signature1);
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, true, expiry1, signature1, rep1.reputation, rep1.expiry, rep1.signature);
 
       const expiry2 = Math.floor(Date.now() / 1000) + 3601;
       const signature2 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, false, expiry2);
+      const rep2 = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, false, expiry2, signature2)
+        governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, false, expiry2, signature2, rep2.reputation, rep2.expiry, rep2.signature)
       ).to.be.revertedWithCustomError(governance, "CannotChangeVoteDirection");
     });
 
@@ -428,13 +484,15 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // Vote on first proposal
       const voteExpiry = Math.floor(Date.now() / 1000) + 3600;
       const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
-      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig);
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, rep1.reputation, rep1.expiry, rep1.signature);
 
       // Try to vote on second proposal (should fail)
       const voteSig2 = await createVoteSignature(passportSigner, user1.address, 2, VP_AMOUNT, true, voteExpiry + 1);
+      const rep2 = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(2, VP_AMOUNT, true, voteExpiry + 1, voteSig2)
+        governance.connect(user1).vote(2, VP_AMOUNT, true, voteExpiry + 1, voteSig2, rep2.reputation, rep2.expiry, rep2.signature)
       ).to.be.revertedWithCustomError(governance, "VPLockedToAnotherProposal");
     });
 
@@ -446,9 +504,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // User1 can vote on first proposal (not their own)
       const voteExpiry = Math.floor(Date.now() / 1000) + 3600;
       const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
+      const rep = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig)
+        governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, rep.reputation, rep.expiry, rep.signature)
       ).to.emit(governance, "VPAllocatedToProposal");
     });
   });
@@ -468,6 +527,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // Need actual ROSE in treasury for proposal value check
       await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
 
+      // Get reputation attestation
+      const rep = await getRepAttestation(proposerAccount, 90);
+
       await governance.connect(proposerAccount).propose(
         "Test Proposal",
         "ipfs://QmTest",
@@ -475,7 +537,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         deadline,
         "Complete deliverables",
         expiry,
-        signature
+        signature,
+        rep.reputation,
+        rep.expiry,
+        rep.signature
       );
     }
 
@@ -484,9 +549,12 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleVoter(user1);
       await setupEligibleVoter(user2);
 
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
-      await governance.connect(user2).deposit(ethers.parseEther("500")); // More stake to help meet quorum
+      const repProposer = await getRepAttestation(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("500"), rep2.reputation, rep2.expiry, rep2.signature); // More stake to help meet quorum
 
       // Create proposal
       await createProposal(proposer);
@@ -498,14 +566,16 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const currentBlock = await ethers.provider.getBlock("latest");
       const voteExpiry = currentBlock.timestamp + 3600;
       const voteSig = await createVoteSignature(passportSigner, user1.address, proposalId, user1VP, true, voteExpiry);
-      await governance.connect(user1).vote(proposalId, user1VP, true, voteExpiry, voteSig);
+      const repVote1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(proposalId, user1VP, true, voteExpiry, voteSig, repVote1.reputation, repVote1.expiry, repVote1.signature);
 
       // User2 also votes to ensure quorum
       const user2VP = await governance.votingPower(user2.address);
       const currentBlock2 = await ethers.provider.getBlock("latest");
       const voteExpiry2 = currentBlock2.timestamp + 3600;
       const voteSig2 = await createVoteSignature(passportSigner, user2.address, proposalId, user2VP, true, voteExpiry2);
-      await governance.connect(user2).vote(proposalId, user2VP, true, voteExpiry2, voteSig2);
+      const repVote2 = await getRepAttestation(user2, 70);
+      await governance.connect(user2).vote(proposalId, user2VP, true, voteExpiry2, voteSig2, repVote2.reputation, repVote2.expiry, repVote2.signature);
     });
 
     it("Should revert freeVP if proposal still active", async function () {
@@ -561,6 +631,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // Need actual ROSE in treasury for proposal value check
       await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
 
+      // Get reputation attestation
+      const rep = await getRepAttestation(proposerAccount, 90);
+
       await governance.connect(proposerAccount).propose(
         "Test Proposal",
         "ipfs://QmTest",
@@ -568,7 +641,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         deadline,
         "Complete deliverables",
         expiry,
-        signature
+        signature,
+        rep.reputation,
+        rep.expiry,
+        rep.signature
       );
     }
 
@@ -577,19 +653,24 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleVoter(user1);
       await setupEligibleProposer(user2);
 
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
-      await governance.connect(user2).deposit(ethers.parseEther("100"));
+      const repProposer = await getRepAttestation(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
     });
 
     it("Should revert withdrawal if VP is delegated", async function () {
       // Delegate most of the VP
       const userVP = await governance.votingPower(user1.address);
-      await governance.connect(user1).delegate(user2.address, userVP - 1n);
+      const repDel = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, userVP - 1n, repDel.reputation, repDel.expiry, repDel.signature);
 
       // Try to withdraw all - should fail since VP is locked in delegation
+      const rep = await getRepAttestation(user1);
       await expect(
-        governance.connect(user1).withdraw(ethers.parseEther("100"))
+        governance.connect(user1).withdraw(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "VPLocked");
     });
 
@@ -600,11 +681,13 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const currentBlock = await ethers.provider.getBlock("latest");
       const voteExpiry = currentBlock.timestamp + 3600;
       const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
-      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig);
+      const repVote = await getRepAttestation(user1, 70);
+      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, repVote.reputation, repVote.expiry, repVote.signature);
 
       // Try to withdraw all - should fail since VP is locked in proposal
+      const rep = await getRepAttestation(user1);
       await expect(
-        governance.connect(user1).withdraw(ethers.parseEther("100"))
+        governance.connect(user1).withdraw(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "VPLocked");
     });
 
@@ -613,8 +696,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const withdrawAmount = ethers.parseEther("10"); // Small amount
 
       // Should succeed since no VP is locked
+      const rep = await getRepAttestation(user1);
       await expect(
-        governance.connect(user1).withdraw(withdrawAmount)
+        governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature)
       ).to.emit(governance, "Withdrawn");
 
       const remaining = await governance.stakedRose(user1.address);
@@ -638,6 +722,9 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       // Need actual ROSE in treasury for proposal value check
       await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
 
+      // Get reputation attestation
+      const rep = await getRepAttestation(proposerAccount, 90);
+
       await governance.connect(proposerAccount).propose(
         "Test Proposal",
         "ipfs://QmTest",
@@ -645,7 +732,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         deadline,
         "Complete deliverables",
         expiry,
-        signature
+        signature,
+        rep.reputation,
+        rep.expiry,
+        rep.signature
       );
     }
 
@@ -654,12 +744,16 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleProposer(user2); // Delegate
       await setupEligibleVoter(user1);
 
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
-      await governance.connect(user2).deposit(ethers.parseEther("100"));
+      const repProposer = await getRepAttestation(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
 
       // User1 delegates to user2
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT);
+      const repDel = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, repDel.reputation, repDel.expiry, repDel.signature);
 
       // Create proposal
       await createProposal(proposer);
@@ -719,27 +813,32 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
 
   describe("Total VP Tracking", function () {
     it("Should track total VP correctly across deposits", async function () {
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
       const total1 = await governance.totalVotingPower();
 
-      await governance.connect(user2).deposit(ethers.parseEther("100"));
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
       const total2 = await governance.totalVotingPower();
 
       expect(total2).to.be.gt(total1);
     });
 
     it("Should reduce total VP on withdrawal", async function () {
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
       const totalBefore = await governance.totalVotingPower();
 
-      await governance.connect(user1).withdraw(ethers.parseEther("50"));
+      const rep2 = await getRepAttestation(user1);
+      await governance.connect(user1).withdraw(ethers.parseEther("50"), rep2.reputation, rep2.expiry, rep2.signature);
 
       const totalAfter = await governance.totalVotingPower();
       expect(totalAfter).to.be.lt(totalBefore);
     });
 
     it("Should emit TotalVPUpdated on VP changes", async function () {
-      await expect(governance.connect(user1).deposit(ethers.parseEther("100")))
+      const rep = await getRepAttestation(user1);
+      await expect(governance.connect(user1).deposit(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature))
         .to.emit(governance, "TotalVPUpdated");
     });
   });
@@ -751,8 +850,10 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await setupEligibleProposer(user2);
       await setupEligibleVoter(user1);
 
-      await governance.connect(user1).deposit(ethers.parseEther("100"));
-      await governance.connect(user2).deposit(ethers.parseEther("100"));
+      const rep1 = await getRepAttestation(user1);
+      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
+      const rep2 = await getRepAttestation(user2);
+      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
     });
 
     it("Should return correct available VP", async function () {
@@ -760,14 +861,16 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       expect(vpBefore).to.be.gt(0);
 
       // Delegate some
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, rep.reputation, rep.expiry, rep.signature);
 
       const vpAfter = await governance.getAvailableVP(user1.address);
       expect(vpAfter).to.be.lt(vpBefore);
     });
 
     it("Should return user delegations", async function () {
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT);
+      const rep = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, rep.reputation, rep.expiry, rep.signature);
 
       const [delegates, amounts] = await governance.getUserDelegations(user1.address);
       expect(delegates.length).to.equal(1);

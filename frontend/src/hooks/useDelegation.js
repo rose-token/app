@@ -224,7 +224,20 @@ export const useDelegation = () => {
   });
 
   /**
+   * Fetch signed reputation attestation from backend
+   * @returns {Promise<{reputation: number, expiry: number, signature: string}>}
+   */
+  const fetchReputationAttestation = useCallback(async () => {
+    const response = await fetch(`${SIGNER_URL}/api/governance/reputation-signed/${account}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch reputation attestation');
+    }
+    return response.json();
+  }, [account]);
+
+  /**
    * Delegate VP to another user (multi-delegation)
+   * Requires reputation attestation for voter eligibility check
    * @param {string} delegateAddress - Address to delegate to
    * @param {string} vpAmount - Amount of VP to delegate
    */
@@ -248,12 +261,23 @@ export const useDelegation = () => {
         throw new Error('Insufficient available VP');
       }
 
+      // Fetch reputation attestation from backend
+      console.log('Fetching reputation attestation...');
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+
       console.log(`Delegating ${vpAmount} VP to ${delegateAddress}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'delegate',
-        args: [delegateAddress, vpWei],
+        args: [
+          delegateAddress,
+          vpWei,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
+        ],
         ...GAS_SETTINGS,
       });
 
@@ -278,6 +302,8 @@ export const useDelegation = () => {
         ? 'Insufficient available VP'
         : err.message.includes('IneligibleToDelegate')
         ? 'Target user is not eligible to receive delegation'
+        : err.message.includes('IneligibleToVote')
+        ? 'You are not eligible to delegate (need 70%+ reputation)'
         : err.message.includes('DelegateIneligible')
         ? 'Target has insufficient reputation to be a delegate'
         : err.message;
@@ -286,7 +312,7 @@ export const useDelegation = () => {
     } finally {
       setActionLoading(prev => ({ ...prev, delegate: false }));
     }
-  }, [isConnected, account, parsedDelegation, writeContractAsync, publicClient, refetchDelegation, fetchDelegations]);
+  }, [isConnected, account, parsedDelegation, writeContractAsync, publicClient, refetchDelegation, fetchDelegations, fetchReputationAttestation]);
 
   /**
    * Remove delegation from a specific delegate (partial undelegate)
@@ -475,6 +501,7 @@ export const useDelegation = () => {
 
   /**
    * Claim all pending voter rewards
+   * Requires reputation attestation for VP recalculation
    */
   const claimAllRewards = useCallback(async () => {
     if (!isConnected || !account) {
@@ -505,9 +532,14 @@ export const useDelegation = () => {
         throw new Error('No rewards to claim');
       }
 
+      // Fetch reputation attestation from backend
+      console.log('Fetching reputation attestation...');
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+
       console.log(`Claiming ${claims.length} reward(s)...`);
 
-      // Call contract
+      // Call contract with reputation attestation
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
@@ -521,6 +553,9 @@ export const useDelegation = () => {
           })),
           BigInt(expiry),
           signature,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
         ],
         ...GAS_SETTINGS,
       });
@@ -550,7 +585,7 @@ export const useDelegation = () => {
     } finally {
       setActionLoading(prev => ({ ...prev, claimRewards: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, fetchClaimableRewards, refetchDelegation]);
+  }, [isConnected, account, writeContractAsync, publicClient, fetchClaimableRewards, refetchDelegation, fetchReputationAttestation]);
 
   return {
     // State

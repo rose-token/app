@@ -56,12 +56,6 @@ interface IRoseGovernance {
         uint256 allocatedAmount;  // Legacy field, not used in VP model
     }
 
-    struct TaskRecord {
-        uint256 timestamp;
-        uint256 value;
-        bool isDispute;
-    }
-
     struct DelegatedVoteRecord {
         bool hasVoted;
         bool support;
@@ -193,6 +187,14 @@ interface IRoseGovernance {
     function allocatedToProposal(address user) external view returns (uint256);
     function proposalVPLocked(address user) external view returns (uint256);
 
+    // Monthly bucket storage (for new reputation formula)
+    function monthlySuccessValue(address user, uint256 bucket) external view returns (uint256);
+    function monthlyDisputeValue(address user, uint256 bucket) external view returns (uint256);
+
+    // Reputation constants
+    function BUCKET_DURATION() external view returns (uint256);
+    function DECAY_BUCKETS() external view returns (uint256);
+
     // User data
     function userStats(address user) external view returns (UserStats memory);
     function proposals(uint256 proposalId) external view returns (Proposal memory);
@@ -201,6 +203,13 @@ interface IRoseGovernance {
 
     // Computed values
     function getReputation(address user) external view returns (uint256);
+    function getReputationSimple(address user) external view returns (uint256);
+    function validateReputationSignature(
+        address user,
+        uint256 reputation,
+        uint256 expiry,
+        bytes memory signature
+    ) external view returns (bool);
     function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256);
     function getAvailableVP(address user) external view returns (uint256);
     function getUserDelegations(address user) external view returns (address[] memory delegates, uint256[] memory amounts);
@@ -209,19 +218,35 @@ interface IRoseGovernance {
     function canDelegate(address user) external view returns (bool);
     function getQuorumProgress(uint256 proposalId) external view returns (uint256 current, uint256 required);
     function getVoteResult(uint256 proposalId) external view returns (uint256 yayPercent, uint256 nayPercent);
-    function getTaskHistory(address user) external view returns (TaskRecord[] memory);
     function getAvailableDelegatedPower(address delegate, uint256 proposalId) external view returns (uint256);
     function getDelegatedVote(uint256 proposalId, address delegate) external view returns (DelegatedVoteRecord memory);
     function getProposalDelegates(uint256 proposalId) external view returns (address[] memory);
 
     // ============ Staking Functions ============
 
-    function deposit(uint256 amount) external;
-    function withdraw(uint256 amount) external;
+    function deposit(
+        uint256 amount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external;
+
+    function withdraw(
+        uint256 amount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external;
 
     // ============ Delegation Functions (Multi-Delegation) ============
 
-    function delegate(address delegate, uint256 vpAmount) external;
+    function delegate(
+        address delegateAddr,
+        uint256 vpAmount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external;
     function undelegate(address delegate, uint256 vpAmount) external;
     function refreshVP(address user, uint256 newRep, uint256 expiry, bytes calldata signature) external;
 
@@ -232,7 +257,10 @@ interface IRoseGovernance {
         uint256 vpAmount,
         bool support,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external;
 
     function freeVP(uint256 proposalId) external;
@@ -251,7 +279,10 @@ interface IRoseGovernance {
     function claimVoterRewards(
         ClaimData[] calldata claims,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external;
 
     // ============ Proposal Functions ============
@@ -263,7 +294,10 @@ interface IRoseGovernance {
         uint256 deadline,
         string calldata deliverables,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external returns (uint256);
 
     function editProposal(

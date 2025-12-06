@@ -60,7 +60,20 @@ export const ProposalStatusColors = {
 
 /**
  * Calculate vote power using quadratic voting formula
- * votePower = sqrt(stakedAmount) * (reputation / 100)
+ * VP = sqrt(stakedAmount) * reputation
+ *
+ * Reputation Formula (computed by backend):
+ * reputation % = (successPoints - disputePoints) / successPoints * 100
+ * Where:
+ *   successPoints = Σ(taskValue^0.6)
+ *   disputePoints = Σ(taskValue^0.6 × 2) + (failedProposals × penalty)
+ *
+ * Features:
+ * - Sublinear scaling (^0.6) reduces whale advantage
+ * - Disputes count 2x toward penalty points
+ * - 3-year decay window for both tasks and disputes
+ * - Cold start: 60% default until 10 tasks completed
+ *
  * @param {bigint|string} stakedAmount - Amount of ROSE staked (in wei)
  * @param {number} reputation - Reputation score as percentage (0-100)
  * @returns {number} Vote power

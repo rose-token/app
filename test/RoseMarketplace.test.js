@@ -59,6 +59,25 @@ describe("RoseMarketplace", function () {
     return block.timestamp + 3600; // 1 hour from now
   }
 
+  // Helper function to generate reputation attestation signature
+  async function createReputationSignature(signer, user, reputation, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "uint256", "uint256"],
+      ["reputation", user, reputation, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Default reputation for tests (60% cold start)
+  const DEFAULT_REPUTATION = 60;
+
+  // Helper to get reputation attestation
+  async function getRepAttestation(user, reputation = DEFAULT_REPUTATION) {
+    const expiry = await getFutureExpiry();
+    const signature = await createReputationSignature(passportSigner, user.address, reputation, expiry);
+    return { reputation, expiry, signature };
+  }
+
   beforeEach(async function () {
     [owner, customer, worker, stakeholder, passportSigner] = await ethers.getSigners();
     burnAddress = "0x000000000000000000000000000000000000dEaD";
@@ -167,7 +186,8 @@ describe("RoseMarketplace", function () {
     // This gives stakeholder vROSE tokens (1:1 with ROSE deposited)
     const stakeholderVRoseAmount = ethers.parseEther("10000");
     await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
-    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
+    const repAttest = await getRepAttestation(stakeholder);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
   });
 
   describe("Deployment", function () {

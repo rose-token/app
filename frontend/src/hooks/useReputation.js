@@ -2,6 +2,7 @@
  * Reputation hook for on-chain task completion data
  * Reads events from RoseMarketplace to calculate reputation metrics
  * Also reads on-chain reputation score from RoseGovernance
+ * Supports new backend-computed reputation with ^0.6 formula
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -11,6 +12,7 @@ import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS } from '../constants/contracts';
 
 const MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS;
+const PASSPORT_SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL;
 
 // Relevant events from RoseMarketplace
 const MARKETPLACE_EVENTS = parseAbi([
@@ -56,6 +58,50 @@ const setCachedReputation = (address, data) => {
   });
 };
 
+// Cache for backend reputation (with signature)
+const backendReputationCache = new Map();
+const BACKEND_CACHE_TTL_MS = 60 * 1000; // 1 minute (shorter since it includes signature)
+
+/**
+ * Fetch new reputation formula from backend (with signature)
+ * Uses new ^0.6 formula: reputation = (successPoints - disputePoints) / successPoints
+ */
+const fetchBackendReputation = async (address) => {
+  if (!PASSPORT_SIGNER_URL || !address) return null;
+
+  const cacheKey = address.toLowerCase();
+  const cached = backendReputationCache.get(cacheKey);
+
+  // Check cache (with expiry buffer for signature)
+  if (cached && Date.now() - cached.fetchedAt < BACKEND_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  try {
+    const response = await fetch(
+      `${PASSPORT_SIGNER_URL}/api/governance/reputation-signed/${address}`
+    );
+
+    if (!response.ok) {
+      console.warn('Failed to fetch backend reputation:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Cache the result
+    backendReputationCache.set(cacheKey, {
+      data,
+      fetchedAt: Date.now(),
+    });
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching backend reputation:', error);
+    return null;
+  }
+};
+
 /**
  * Hook to fetch reputation data for an address
  * @param {string} address - Ethereum address to get reputation for
@@ -75,6 +121,9 @@ export const useReputation = (address) => {
     loading: false,
     error: null,
   });
+
+  // Backend reputation state (new ^0.6 formula with signature)
+  const [backendReputation, setBackendReputation] = useState(null);
 
   // Read on-chain governance data for reputation score and eligibility
   const { data: governanceData, refetch: refetchGovernance } = useReadContracts({
@@ -276,41 +325,66 @@ export const useReputation = (address) => {
     return fetchReputation();
   }, [address, fetchReputation]);
 
+  // Fetch backend reputation (new ^0.6 formula)
+  const fetchBackendRep = useCallback(async () => {
+    if (!address) return;
+    const data = await fetchBackendReputation(address);
+    setBackendReputation(data);
+  }, [address]);
+
   // Fetch reputation on mount and when address changes
   // Only refetch if address actually changed (not on every render)
   useEffect(() => {
     if (addressRef.current !== address) {
       hasFetchedRef.current = false;
       addressRef.current = address;
+      setBackendReputation(null); // Reset backend reputation on address change
     }
     if (!hasFetchedRef.current && address) {
       hasFetchedRef.current = true;
       fetchReputation();
+      fetchBackendRep(); // Also fetch backend reputation
     }
-  }, [address, fetchReputation]);
+  }, [address, fetchReputation, fetchBackendRep]);
 
-  // Merge event-based reputation with on-chain governance data
+  // Merge event-based reputation with on-chain governance data and backend reputation
   const mergedReputation = useMemo(() => {
     if (!state.reputation) return governanceParsed;
 
+    // Use backend reputation (new ^0.6 formula) if available, fallback to on-chain
+    const reputationScore = backendReputation?.reputation ?? governanceParsed?.reputationScore ?? 60;
+
     return {
       ...state.reputation,
-      // On-chain reputation score (0-100%)
-      reputationScore: governanceParsed?.reputationScore ?? 60,
+      // Reputation score - prefer new backend formula, fallback to on-chain
+      reputationScore,
+      // Legacy on-chain reputation (for comparison/debugging)
+      reputationScoreLegacy: governanceParsed?.reputationScore ?? 60,
       // Governance eligibility flags
       canPropose: governanceParsed?.canPropose ?? false,
       canVote: governanceParsed?.canVote ?? false,
       canDelegate: governanceParsed?.canDelegate ?? false,
       // User stats from governance contract
       governanceStats: governanceParsed?.userStats ?? null,
+      // Backend reputation attestation (for on-chain validation)
+      reputationAttestation: backendReputation ? {
+        reputation: backendReputation.reputation,
+        expiry: backendReputation.expiry,
+        signature: backendReputation.signature,
+      } : null,
     };
-  }, [state.reputation, governanceParsed]);
+  }, [state.reputation, governanceParsed, backendReputation]);
 
-  // Combined refetch for both event data and governance data
+  // Combined refetch for event data, governance data, and backend reputation
   const refetchAll = useCallback(() => {
     refetchGovernance();
+    fetchBackendRep(); // Also refresh backend reputation
+    // Clear backend cache for this address
+    if (address) {
+      backendReputationCache.delete(address.toLowerCase());
+    }
     return refetch();
-  }, [refetch, refetchGovernance]);
+  }, [address, refetch, refetchGovernance, fetchBackendRep]);
 
   return {
     reputation: mergedReputation,

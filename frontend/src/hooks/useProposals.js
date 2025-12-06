@@ -347,7 +347,19 @@ export const useProposals = (options = {}) => {
   });
 
   /**
-   * Vote on a proposal with VP (requires passport signature)
+   * Fetch signed reputation attestation from backend
+   * @returns {Promise<{reputation: number, expiry: number, signature: string}>}
+   */
+  const fetchReputationAttestation = useCallback(async () => {
+    const response = await fetch(`${SIGNER_URL}/api/governance/reputation-signed/${account}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch reputation attestation');
+    }
+    return response.json();
+  }, [account]);
+
+  /**
+   * Vote on a proposal with VP (requires passport signature + reputation attestation)
    * VP-centric model: vote with VP, not ROSE amounts
    * @param {number} proposalId - Proposal ID
    * @param {string} vpAmount - Amount of VP to vote with
@@ -389,6 +401,11 @@ export const useProposals = (options = {}) => {
       const signatureData = await response.json();
       console.log('Got vote signature from backend');
 
+      // Fetch reputation attestation from backend
+      console.log('Fetching reputation attestation...');
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+
       console.log(`Voting ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP on proposal ${proposalId}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
@@ -400,6 +417,9 @@ export const useProposals = (options = {}) => {
           support,
           BigInt(signatureData.expiry),
           signatureData.signature,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
         ],
         ...GAS_SETTINGS,
       });
@@ -435,7 +455,7 @@ export const useProposals = (options = {}) => {
     } finally {
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
 
   /**
    * Free VP from a resolved proposal
@@ -528,7 +548,7 @@ export const useProposals = (options = {}) => {
 
       const results = [];
 
-      // Vote with own VP if any (requires passport signature)
+      // Vote with own VP if any (requires passport signature + reputation attestation)
       if (ownToUse > 0n) {
         console.log(`Requesting vote signature for ${formatUnits(ownToUse, 18)} own VP...`);
 
@@ -552,6 +572,11 @@ export const useProposals = (options = {}) => {
         const voteSignatureData = await voteResponse.json();
         console.log('Got vote signature from backend');
 
+        // Fetch reputation attestation from backend
+        console.log('Fetching reputation attestation...');
+        const repAttestation = await fetchReputationAttestation();
+        console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+
         console.log(`Voting with ${formatUnits(ownToUse, 18)} own VP...`);
         const ownHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
@@ -563,6 +588,9 @@ export const useProposals = (options = {}) => {
             support,
             BigInt(voteSignatureData.expiry),
             voteSignatureData.signature,
+            BigInt(repAttestation.reputation),
+            BigInt(repAttestation.expiry),
+            repAttestation.signature,
           ],
           ...GAS_SETTINGS,
         });
@@ -647,7 +675,7 @@ export const useProposals = (options = {}) => {
       voteCombinedInProgress.current = false;
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
 
   /**
    * Create a new proposal
@@ -748,6 +776,11 @@ export const useProposals = (options = {}) => {
       });
       console.log('Contract passportSigner:', passportSigner);
 
+      // Fetch reputation attestation from backend
+      console.log('Fetching reputation attestation...');
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+
       // Simulate the propose call BEFORE executing
       console.log('Simulating propose transaction...');
       try {
@@ -755,7 +788,18 @@ export const useProposals = (options = {}) => {
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
           functionName: 'propose',
-          args: [title, descriptionHash, valueWei, BigInt(deadlineTimestamp), deliverables, BigInt(expiry), signature],
+          args: [
+            title,
+            descriptionHash,
+            valueWei,
+            BigInt(deadlineTimestamp),
+            deliverables,
+            BigInt(expiry),
+            signature,
+            BigInt(repAttestation.reputation),
+            BigInt(repAttestation.expiry),
+            repAttestation.signature,
+          ],
           account: account,
         });
         console.log('Propose simulation passed!');
@@ -770,7 +814,18 @@ export const useProposals = (options = {}) => {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'propose',
-        args: [title, descriptionHash, valueWei, BigInt(deadlineTimestamp), deliverables, BigInt(expiry), signature],
+        args: [
+          title,
+          descriptionHash,
+          valueWei,
+          BigInt(deadlineTimestamp),
+          deliverables,
+          BigInt(expiry),
+          signature,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
+        ],
         ...GAS_SETTINGS,
       });
 
@@ -793,7 +848,7 @@ export const useProposals = (options = {}) => {
       createProposalInProgress.current = false;
       setActionLoading(prev => ({ ...prev, create: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals, getSignature, account]);
+  }, [isConnected, writeContractAsync, publicClient, refetchCounter, refetchProposals, getSignature, account, fetchReputationAttestation]);
 
   /**
    * Finalize a proposal (after voting period ends)

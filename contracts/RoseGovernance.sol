@@ -57,7 +57,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Reputation Tracking ============
     mapping(address => UserStats) internal _userStats;
-    mapping(address => TaskRecord[]) internal _taskHistory;
+
+    // ============ Monthly Bucket Storage (for new reputation formula) ============
+    // user => bucket (timestamp / BUCKET_DURATION) => raw task value
+    mapping(address => mapping(uint256 => uint256)) public monthlySuccessValue;
+    mapping(address => mapping(uint256 => uint256)) public monthlyDisputeValue;
 
     // ============ Proposals ============
     uint256 public proposalCounter;
@@ -66,9 +70,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     mapping(uint256 => address[]) internal _proposalVoters;
     mapping(uint256 => uint256) internal _proposalToTask;
     mapping(uint256 => uint256) internal _taskToProposal;
-
-    // ============ Pending Rewards ============
-    mapping(address => uint256) public pendingRewards;
 
     // ============ Delegated Voting Tracking ============
     mapping(uint256 => mapping(address => uint256)) public delegatedVoteAllocated;
@@ -102,8 +103,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     uint256 public constant DELEGATE_REP_THRESHOLD = 90;
     uint256 public constant DEFAULT_REPUTATION = 60;
     uint256 public constant BASIS_POINTS = 10000;
-    uint256 public constant TASK_DECAY_PERIOD = 365 days;
-    uint256 public constant DISPUTE_DECAY_PERIOD = 1095 days;
+
+    // Bucket-based reputation constants (3 year decay)
+    uint256 public constant BUCKET_DURATION = 30 days;
+    uint256 public constant DECAY_BUCKETS = 36;  // 3 years = 36 months
 
     // Reward percentages (basis points)
     uint256 public constant DAO_MINT_PERCENT = 200;       // 2%
@@ -179,58 +182,76 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         return _delegators[delegateAddr].values();
     }
 
-    function getTaskHistory(address user) external view returns (TaskRecord[] memory) {
-        return _taskHistory[user];
+    /**
+     * @dev Get reputation score using O(36) bucket-based formula
+     * Delegates to getReputationSimple() which uses monthly buckets
+     */
+    function getReputation(address user) public view returns (uint256) {
+        return getReputationSimple(user);
     }
 
     /**
-     * @dev Get reputation score (0-100) with time-based decay
+     * @dev Get simplified reputation using monthly buckets (O(36) vs O(n))
+     * Uses linear formula (not ^0.6) as on-chain fallback
+     * Backend computes precise ^0.6 formula and signs attestation
      */
-    function getReputation(address user) public view returns (uint256) {
-        TaskRecord[] memory history = _taskHistory[user];
-        uint256 failedProposals = _userStats[user].failedProposals;
+    function getReputationSimple(address user) public view returns (uint256) {
+        UserStats memory stats = _userStats[user];
 
-        uint256 taskCutoff = block.timestamp > TASK_DECAY_PERIOD
-            ? block.timestamp - TASK_DECAY_PERIOD
-            : 0;
-        uint256 disputeCutoff = block.timestamp > DISPUTE_DECAY_PERIOD
-            ? block.timestamp - DISPUTE_DECAY_PERIOD
-            : 0;
-
-        uint256 recentTaskCount = 0;
-        uint256 recentTaskValue = 0;
-        uint256 recentDisputes = 0;
-
-        for (uint256 i = 0; i < history.length; i++) {
-            TaskRecord memory record = history[i];
-
-            if (record.isDispute) {
-                if (record.timestamp >= disputeCutoff) {
-                    recentDisputes++;
-                }
-            } else {
-                if (record.timestamp >= taskCutoff) {
-                    recentTaskCount++;
-                    recentTaskValue += record.value;
-                }
-            }
-        }
-
-        if (recentTaskCount < COLD_START_TASKS) {
+        // Cold start check
+        if (stats.tasksCompleted < COLD_START_TASKS) {
             return DEFAULT_REPUTATION;
         }
 
-        if (recentTaskValue == 0) {
+        uint256 currentBucket = block.timestamp / BUCKET_DURATION;
+        uint256 successSum = 0;
+        uint256 disputeSum = 0;
+
+        // Sum last 36 months (3 years)
+        for (uint256 i = 0; i < DECAY_BUCKETS; i++) {
+            uint256 bucket = currentBucket - i;
+            successSum += monthlySuccessValue[user][bucket];
+            disputeSum += monthlyDisputeValue[user][bucket];
+        }
+
+        if (successSum == 0) {
             return DEFAULT_REPUTATION;
         }
 
-        uint256 penalties = recentDisputes + (failedProposals / 5);
-        if (penalties >= recentTaskCount) {
+        // Simplified: linear with 2x dispute multiplier (not ^0.6)
+        // Add failed proposals penalty converted to equivalent dispute value
+        uint256 failedPenalty = (stats.failedProposals * successSum) / (stats.tasksCompleted > 0 ? stats.tasksCompleted : 1) / 5;
+        uint256 adjustedDisputeSum = (disputeSum * 2) + failedPenalty;
+
+        if (adjustedDisputeSum >= successSum) {
             return 0;
         }
 
-        uint256 effectiveValue = recentTaskValue - (penalties * recentTaskValue / recentTaskCount);
-        return (effectiveValue * 100) / recentTaskValue;
+        return ((successSum - adjustedDisputeSum) * 100) / successSum;
+    }
+
+    /**
+     * @dev Validate backend-signed reputation attestation
+     * Used for precise reputation in governance actions
+     */
+    function validateReputationSignature(
+        address user,
+        uint256 reputation,
+        uint256 expiry,
+        bytes memory signature
+    ) public view returns (bool) {
+        if (block.timestamp > expiry) return false;
+
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "reputation",
+            user,
+            reputation,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        address recovered = ethSignedHash.recover(signature);
+        return recovered == passportSigner;
     }
 
     /**
@@ -313,18 +334,29 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     /**
      * @dev Deposit ROSE to governance, receive vROSE 1:1
-     * VP is calculated at deposit time using current reputation
+     * VP is calculated using backend-attested reputation (^0.6 formula)
+     * @param amount Amount of ROSE to deposit
+     * @param attestedRep Backend-computed reputation score (0-100)
+     * @param repExpiry Attestation expiry timestamp
+     * @param repSignature Backend signature for reputation attestation
      */
-    function deposit(uint256 amount) external nonReentrant {
+    function deposit(
+        uint256 amount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
 
         roseToken.safeTransferFrom(msg.sender, address(this), amount);
         vRoseToken.mint(msg.sender, amount);
 
-        // Calculate VP at deposit time
-        uint256 rep = getReputation(msg.sender);
+        // Calculate VP using attested reputation
         uint256 newTotalStaked = stakedRose[msg.sender] + amount;
-        uint256 newVP = getVotePower(newTotalStaked, rep);
+        uint256 newVP = getVotePower(newTotalStaked, attestedRep);
         uint256 oldVP = votingPower[msg.sender];
         uint256 vpIncrease = newVP - oldVP;
 
@@ -334,7 +366,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         totalStakedRose += amount;
         totalVotingPower += vpIncrease;
 
-        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, rep);
+        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, attestedRep);
         emit TotalVPUpdated(totalVotingPower);
         emit Deposited(msg.sender, amount);
     }
@@ -342,9 +374,21 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     /**
      * @dev Withdraw ROSE from governance, burn vROSE
      * Requires sufficient available VP (not delegated, not on proposals)
+     * @param amount Amount of ROSE to withdraw
+     * @param attestedRep Backend-computed reputation score (0-100)
+     * @param repExpiry Attestation expiry timestamp
+     * @param repSignature Backend signature for reputation attestation
      */
-    function withdraw(uint256 amount) external nonReentrant {
+    function withdraw(
+        uint256 amount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
         if (stakedRose[msg.sender] < amount) revert InsufficientStake();
 
         // Calculate available VP
@@ -352,10 +396,9 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         uint256 lockedVP = totalDelegatedOut[msg.sender] + proposalVPLocked[msg.sender];
         uint256 availableVP = currentVP > lockedVP ? currentVP - lockedVP : 0;
 
-        // Calculate VP being withdrawn
+        // Calculate VP being withdrawn using attested reputation
         uint256 newTotalStaked = stakedRose[msg.sender] - amount;
-        uint256 rep = getReputation(msg.sender);
-        uint256 newVP = getVotePower(newTotalStaked, rep);
+        uint256 newVP = getVotePower(newTotalStaked, attestedRep);
         uint256 vpDecrease = currentVP - newVP;
 
         if (availableVP < vpDecrease) revert VPLocked();
@@ -374,7 +417,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
         roseToken.safeTransfer(msg.sender, amount);
 
-        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, rep);
+        emit VotingPowerChanged(msg.sender, newTotalStaked, newVP, attestedRep);
         emit TotalVPUpdated(totalVotingPower);
         emit Withdrawn(msg.sender, amount);
     }
@@ -385,12 +428,26 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
      * @dev Delegate VP to another user (supports multi-delegation)
      * @param delegateAddr Address to delegate to
      * @param vpAmount Amount of VP to delegate
+     * @param attestedRep Backend-computed reputation score for sender (0-100)
+     * @param repExpiry Attestation expiry timestamp
+     * @param repSignature Backend signature for reputation attestation
      */
-    function delegate(address delegateAddr, uint256 vpAmount) external nonReentrant {
+    function delegate(
+        address delegateAddr,
+        uint256 vpAmount,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
+    ) external nonReentrant {
         if (delegateAddr == address(0)) revert ZeroAddress();
         if (delegateAddr == msg.sender) revert CannotDelegateToSelf();
         if (vpAmount == 0) revert ZeroAmount();
-        if (!canVote(msg.sender)) revert IneligibleToVote();
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
+        // Check sender eligibility using attested reputation
+        if (attestedRep < VOTER_REP_THRESHOLD) revert IneligibleToVote();
+        // Check delegate eligibility using on-chain reputation (delegate not calling)
         if (!canDelegate(delegateAddr)) revert IneligibleToDelegate();
 
         // Check available VP
@@ -482,20 +539,26 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Voting Functions ============
 
     /**
-     * @dev Vote on a proposal with VP (requires passport signature)
+     * @dev Vote on a proposal with VP (requires passport + reputation signatures)
      * VP is locked to ONE proposal at a time
      * @param proposalId Proposal to vote on
      * @param vpAmount VP to allocate
      * @param support True for Yay, false for Nay
-     * @param expiry Signature expiration
+     * @param expiry Passport signature expiration
      * @param signature Passport signer signature
+     * @param attestedRep Backend-computed reputation score (0-100)
+     * @param repExpiry Reputation attestation expiry
+     * @param repSignature Reputation attestation signature
      */
     function vote(
         uint256 proposalId,
         uint256 vpAmount,
         bool support,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external nonReentrant {
         // Verify passport signature
         if (block.timestamp > expiry) revert SignatureExpired();
@@ -516,12 +579,18 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         address recovered = ethSignedHash.recover(signature);
         if (recovered != passportSigner) revert InvalidSignature();
 
+        // Verify reputation attestation
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
+
         // Proposal validations
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
-        if (!canVote(msg.sender)) revert IneligibleToVote();
+        // Check eligibility using attested reputation
+        if (attestedRep < VOTER_REP_THRESHOLD) revert IneligibleToVote();
         if (vpAmount == 0) revert ZeroAmount();
 
         // Check VP not locked to another proposal
@@ -667,6 +736,19 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Proposal Functions ============
 
+    /**
+     * @dev Create a governance proposal (requires passport + reputation signatures)
+     * @param title Proposal title
+     * @param descriptionHash IPFS hash of full description
+     * @param value ROSE value requested from treasury
+     * @param deadline Task deadline timestamp
+     * @param deliverables Expected deliverables
+     * @param expiry Passport signature expiration
+     * @param signature Passport signer signature
+     * @param attestedRep Backend-computed reputation score (0-100)
+     * @param repExpiry Reputation attestation expiry
+     * @param repSignature Reputation attestation signature
+     */
     function propose(
         string calldata title,
         string calldata descriptionHash,
@@ -674,9 +756,20 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         uint256 deadline,
         string calldata deliverables,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external requiresPassport("propose", expiry, signature) returns (uint256) {
-        if (!canPropose(msg.sender)) revert IneligibleToPropose();
+        // Verify reputation attestation
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
+        // Check eligibility: need cold start tasks + attested reputation >= 90%
+        UserStats memory stats = _userStats[msg.sender];
+        if (stats.tasksCompleted < COLD_START_TASKS) revert IneligibleToPropose();
+        if (attestedRep < PROPOSER_REP_THRESHOLD) revert IneligibleToPropose();
+
         if (bytes(title).length == 0) revert ZeroAmount();
         if (value == 0) revert ZeroAmount();
 
@@ -803,11 +896,13 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Marketplace Integration ============
 
     function updateUserStats(address user, uint256 taskValue, bool isDispute) external onlyMarketplace {
-        _taskHistory[user].push(TaskRecord({
-            timestamp: block.timestamp,
-            value: taskValue,
-            isDispute: isDispute
-        }));
+        // Write to monthly buckets (new reputation formula)
+        uint256 bucket = block.timestamp / BUCKET_DURATION;
+        if (isDispute) {
+            monthlyDisputeValue[user][bucket] += taskValue;
+        } else {
+            monthlySuccessValue[user][bucket] += taskValue;
+        }
 
         UserStats storage stats = _userStats[user];
         if (isDispute) {
@@ -841,14 +936,31 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
     // ============ Claim Functions ============
 
+    /**
+     * @dev Claim voter rewards (direct votes + delegated votes)
+     * @param claims Array of claim data for each proposal/vote type
+     * @param expiry Delegation signature expiration
+     * @param signature Delegation signer signature
+     * @param attestedRep Backend-computed reputation score (0-100)
+     * @param repExpiry Reputation attestation expiry
+     * @param repSignature Reputation attestation signature
+     */
     function claimVoterRewards(
         ClaimData[] calldata claims,
         uint256 expiry,
-        bytes calldata signature
+        bytes calldata signature,
+        uint256 attestedRep,
+        uint256 repExpiry,
+        bytes calldata repSignature
     ) external nonReentrant {
         if (claims.length == 0) revert EmptyClaims();
         if (block.timestamp > expiry) revert SignatureExpired();
         if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+
+        // Verify reputation attestation
+        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+            revert InvalidSignature();
+        }
 
         bytes32 messageHash = keccak256(abi.encodePacked(
             "claimVoterRewards",
@@ -894,14 +1006,13 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
 
         if (totalReward > 0) {
             stakedRose[msg.sender] += totalReward;
-            // Recalculate VP with new staked amount
-            uint256 rep = getReputation(msg.sender);
-            uint256 newVP = getVotePower(stakedRose[msg.sender], rep);
+            // Recalculate VP using attested reputation
+            uint256 newVP = getVotePower(stakedRose[msg.sender], attestedRep);
             uint256 oldVP = votingPower[msg.sender];
             votingPower[msg.sender] = newVP;
             totalVotingPower = totalVotingPower - oldVP + newVP;
 
-            emit VotingPowerChanged(msg.sender, stakedRose[msg.sender], newVP, rep);
+            emit VotingPowerChanged(msg.sender, stakedRose[msg.sender], newVP, attestedRep);
             emit TotalVPUpdated(totalVotingPower);
             emit TotalRewardsClaimed(msg.sender, totalReward);
         }

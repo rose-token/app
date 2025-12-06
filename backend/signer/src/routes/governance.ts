@@ -119,7 +119,7 @@ router.get('/received/:delegate', async (req: Request, res: Response) => {
 
 /**
  * GET /api/governance/reputation/:address
- * Get user's reputation score
+ * Get user's reputation score (legacy - uses old formula)
  */
 router.get('/reputation/:address', async (req: Request, res: Response) => {
   try {
@@ -134,6 +134,48 @@ router.get('/reputation/:address', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching reputation:', error);
     return res.status(500).json({ error: 'Failed to fetch reputation' } as ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/governance/reputation-signed/:address
+ * Get user's reputation with signed attestation (uses new ^0.6 formula)
+ * Returns signed message that can be validated on-chain
+ */
+router.get('/reputation-signed/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({ error: 'Invalid address' } as ErrorResponse);
+    }
+
+    const attestation = await governanceService.getSignedReputation(address);
+    return res.json(attestation);
+  } catch (error) {
+    console.error('Error fetching signed reputation:', error);
+    return res.status(500).json({ error: 'Failed to fetch signed reputation' } as ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/governance/reputation-new/:address
+ * Get user's reputation using new formula (without signature)
+ * For display purposes only
+ */
+router.get('/reputation-new/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({ error: 'Invalid address' } as ErrorResponse);
+    }
+
+    const reputation = await governanceService.getReputationNew(address);
+    return res.json({ address, reputation });
+  } catch (error) {
+    console.error('Error fetching new reputation:', error);
+    return res.status(500).json({ error: 'Failed to fetch new reputation' } as ErrorResponse);
   }
 });
 
