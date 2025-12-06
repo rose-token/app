@@ -242,6 +242,41 @@ async function forceRebalance() {
   log.info(`NAV before: $${vaultBefore.rosePrice.toFixed(6)} -> after: $${vaultAfter.rosePrice.toFixed(6)}`);
 }
 
+async function sendRoseToTreasury(roseAmount) {
+  const amount = hre.ethers.parseUnits(roseAmount.toString(), 18);
+
+  const balance = await contracts.roseToken.balanceOf(deployer.address);
+  if (balance < amount) {
+    log.error(`Insufficient ROSE. Have: ${hre.ethers.formatUnits(balance, 18)}, Need: ${roseAmount}`);
+    return;
+  }
+
+  const treasuryBefore = await contracts.roseToken.balanceOf(contracts.treasury.target);
+  await (await contracts.roseToken.transfer(contracts.treasury.target, amount)).wait();
+  const treasuryAfter = await contracts.roseToken.balanceOf(contracts.treasury.target);
+
+  log.success(`Sent ${roseAmount} ROSE to treasury`);
+  log.info(`Treasury ROSE: ${hre.ethers.formatUnits(treasuryBefore, 18)} -> ${hre.ethers.formatUnits(treasuryAfter, 18)}`);
+}
+
+async function withdrawRoseFromTreasury(roseAmount) {
+  const amount = hre.ethers.parseUnits(roseAmount.toString(), 18);
+
+  const treasuryBalance = await contracts.roseToken.balanceOf(contracts.treasury.target);
+  if (treasuryBalance < amount) {
+    log.error(`Insufficient ROSE in treasury. Have: ${hre.ethers.formatUnits(treasuryBalance, 18)}, Need: ${roseAmount}`);
+    return;
+  }
+
+  const deployerBefore = await contracts.roseToken.balanceOf(deployer.address);
+  // Uses treasury.spendRose() - requires deployer to be owner
+  await (await contracts.treasury.spendRose(deployer.address, amount, "simulation withdrawal")).wait();
+  const deployerAfter = await contracts.roseToken.balanceOf(deployer.address);
+
+  log.success(`Withdrew ${roseAmount} ROSE from treasury`);
+  log.info(`Deployer ROSE: ${hre.ethers.formatUnits(deployerBefore, 18)} -> ${hre.ethers.formatUnits(deployerAfter, 18)}`);
+}
+
 // ============ Task Module ============
 
 // Get passport signature from backend signer API
@@ -842,6 +877,8 @@ ${colors.cyan}--- TREASURY OPERATIONS ---${colors.reset}
   2. Deposit USDC
   3. Redeem ROSE
   4. Force rebalance
+  5. Send ROSE to treasury
+  6. Withdraw ROSE from treasury
   0. Back
 `);
 
@@ -861,6 +898,14 @@ ${colors.cyan}--- TREASURY OPERATIONS ---${colors.reset}
       break;
     case "4":
       await forceRebalance();
+      break;
+    case "5":
+      const sendAmt = await prompt(rl, "ROSE amount to send to treasury: ");
+      await sendRoseToTreasury(parseFloat(sendAmt));
+      break;
+    case "6":
+      const withdrawAmt = await prompt(rl, "ROSE amount to withdraw from treasury: ");
+      await withdrawRoseFromTreasury(parseFloat(withdrawAmt));
       break;
   }
 }
