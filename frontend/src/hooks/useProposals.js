@@ -527,9 +527,9 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const totalWei = parseUnits(totalVP.toString(), 18);
-      const ownAvailableWei = parseUnits(ownAvailable.toString(), 18);
-      const delegatedAvailableWei = parseUnits(delegatedAvailable.toString(), 18);
+      const totalWei = parseUnits(totalVP.toString(), 9);
+      const ownAvailableWei = parseUnits(ownAvailable.toString(), 9);
+      const delegatedAvailableWei = parseUnits(delegatedAvailable.toString(), 9);
 
       // Calculate split: use own VP first, then delegated
       let ownToUse = 0n;
@@ -550,7 +550,7 @@ export const useProposals = (options = {}) => {
 
       // Vote with own VP if any (requires passport signature + reputation attestation)
       if (ownToUse > 0n) {
-        console.log(`Requesting vote signature for ${formatUnits(ownToUse, 18)} own VP...`);
+        console.log(`Requesting vote signature for ${formatUnits(ownToUse, 9)} own VP...`);
 
         // Get passport signature from backend
         const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
@@ -577,7 +577,7 @@ export const useProposals = (options = {}) => {
         const repAttestation = await fetchReputationAttestation();
         console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
 
-        console.log(`Voting with ${formatUnits(ownToUse, 18)} own VP...`);
+        console.log(`Voting with ${formatUnits(ownToUse, 9)} own VP...`);
         const ownHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
@@ -599,7 +599,7 @@ export const useProposals = (options = {}) => {
           hash: ownHash,
           confirmations: 1,
         });
-        results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 18) });
+        results.push({ type: 'own', hash: ownHash, amount: formatUnits(ownToUse, 9) });
 
         // Delay between transactions to allow nonce refresh
         if (delegatedToUse > 0n) {
@@ -609,7 +609,7 @@ export const useProposals = (options = {}) => {
 
       // Vote with delegated VP if any (uses backend signing)
       if (delegatedToUse > 0n) {
-        console.log(`Requesting delegated vote signature for ${formatUnits(delegatedToUse, 18)} VP...`);
+        console.log(`Requesting delegated vote signature for ${formatUnits(delegatedToUse, 9)} VP...`);
 
         // Get signature from backend
         const response = await fetch(`${SIGNER_URL}/api/delegation/vote-signature`, {
@@ -639,7 +639,7 @@ export const useProposals = (options = {}) => {
           console.warn('Failed to store allocations:', storageErr);
         }
 
-        console.log(`Voting with ${formatUnits(delegatedToUse, 18)} delegated VP...`);
+        console.log(`Voting with ${formatUnits(delegatedToUse, 9)} delegated VP...`);
         const delegatedHash = await writeContractAsync({
           address: CONTRACTS.GOVERNANCE,
           abi: RoseGovernanceABI,
@@ -659,7 +659,7 @@ export const useProposals = (options = {}) => {
           hash: delegatedHash,
           confirmations: 1,
         });
-        results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 18) });
+        results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 9) });
       }
 
       console.log('Combined vote successful!');
