@@ -228,7 +228,8 @@ jobs:
           PROVIDER_BLACKLIST=(
             "akash1r2yz5fzkk9gt0r3mk9u2c29q5mmtef050cryak"  # provider.gpu.subangle.com
             "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc" # provider.europlots.com
-            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp" #dunno
+            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp" # forbidden
+            "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj" # forbidden
           )
 
           is_blacklisted() {
@@ -267,67 +268,71 @@ jobs:
             exit 1
           fi
 
-          # Step 4: Select first non-blacklisted provider
-          echo "Step 4: Selecting provider (filtering blacklist)..."
-          PROVIDER=""
-          SELECTED_INDEX=-1
+          # Step 4: Try providers until lease succeeds
+          echo "Step 4: Creating lease (with fallback)..."
           TOTAL_BIDS=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
+          LEASE_CREATED=false
+          PROVIDERS_TRIED=0
 
           for i in $(seq 0 $((TOTAL_BIDS - 1))); do
             CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
+
             if is_blacklisted "$CANDIDATE"; then
-              echo "Skipping blacklisted provider: $CANDIDATE"
-            else
-              PROVIDER="$CANDIDATE"
-              SELECTED_INDEX=$i
-              break
+              echo "Skipping blacklisted: $CANDIDATE"
+              continue
             fi
+
+            PROVIDERS_TRIED=$((PROVIDERS_TRIED + 1))
+            GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.gseq // 1")
+            OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.oseq // 1")
+            echo "Trying provider $PROVIDERS_TRIED: $CANDIDATE"
+
+            # Build lease payload
+            LEASE_PAYLOAD=$(jq -n \
+              --arg manifest "$MANIFEST" \
+              --arg certPem "$CERT_PEM" \
+              --arg keyPem "$ENCRYPTED_KEY" \
+              --arg dseq "$DSEQ" \
+              --argjson gseq "$GSEQ" \
+              --argjson oseq "$OSEQ" \
+              --arg provider "$CANDIDATE" \
+              '{
+                manifest: $manifest,
+                certificate: {certPem: $certPem, keyPem: $keyPem},
+                leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
+              }')
+
+            LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$LEASE_PAYLOAD")
+
+            # Check for error response
+            if echo "$LEASE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+              ERROR_MSG=$(echo "$LEASE_RESPONSE" | jq -r '.message // .error')
+              echo "Provider rejected: $ERROR_MSG - trying next..."
+              continue
+            fi
+
+            # Success
+            LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.data.leaseId // .data.id // .leaseId // .id // empty')
+            echo "Lease response:"
+            echo "$LEASE_RESPONSE" | jq .
+            LEASE_CREATED=true
+            PROVIDER="$CANDIDATE"
+            break
           done
 
-          if [ -z "$PROVIDER" ]; then
-            echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
-            echo "Blacklisted providers:"
-            printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+          if [ "$LEASE_CREATED" = false ]; then
+            if [ "$PROVIDERS_TRIED" -eq 0 ]; then
+              echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
+              printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+            else
+              echo "Error: All $PROVIDERS_TRIED provider(s) rejected the lease"
+            fi
             exit 1
           fi
 
-          GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.gseq // 1")
-          OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.oseq // 1")
-          echo "Selected provider: $PROVIDER (bid #$((SELECTED_INDEX + 1)) of $TOTAL_BIDS)"
-
-          echo "Creating lease with provider: $PROVIDER"
-          # Build lease payload with proper structure:
-          # {manifest: string, certificate: {certPem, keyPem}, leases: [{dseq, gseq, oseq, provider}]}
-          LEASE_PAYLOAD=$(jq -n \
-            --arg manifest "$MANIFEST" \
-            --arg certPem "$CERT_PEM" \
-            --arg keyPem "$ENCRYPTED_KEY" \
-            --arg dseq "$DSEQ" \
-            --argjson gseq "$GSEQ" \
-            --argjson oseq "$OSEQ" \
-            --arg provider "$PROVIDER" \
-            '{
-              manifest: $manifest,
-              certificate: {certPem: $certPem, keyPem: $keyPem},
-              leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
-            }')
-          echo "Lease payload structure:"
-          echo "$LEASE_PAYLOAD" | jq 'del(.manifest) | del(.certificate)'
-
-          LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
-            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$LEASE_PAYLOAD")
-
-          echo "Lease response:"
-          echo "$LEASE_RESPONSE" | jq .
-
-          LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.data.leaseId // .data.id // .leaseId // .id // empty')
-          if [ -n "$LEASE_ID" ]; then
-            echo "Lease created successfully!"
-            echo "Deployment ID: $DSEQ"
-            echo "View at: https://console.akash.network/deployments/$DSEQ"
-          else
-            echo "Warning: Could not extract lease ID, but deployment may still be active"
-            echo "Check: https://console.akash.network/deployments/$DSEQ"
-          fi
+          echo "Lease created successfully with provider: $PROVIDER"
+          echo "Deployment ID: $DSEQ"
+          echo "View at: https://console.akash.network/deployments/$DSEQ"
