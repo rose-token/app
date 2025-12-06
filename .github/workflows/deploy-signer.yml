@@ -224,16 +224,31 @@ jobs:
           echo "Deployment created: dseq=$DSEQ"
           echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
 
-          # Provider blacklist - unreliable or problematic providers
+          # Fetch provider list to map addresses to hostnames
+          echo "Fetching provider list..."
+          PROVIDERS_RESPONSE=$(curl -s "https://console-api.akash.network/v1/providers" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+          # Provider blacklist - unreliable or problematic providers (by hostname)
           PROVIDER_BLACKLIST=(
             "provider.gpu.subangle.com"
             "provider.europlots.com"
           )
 
+          # Get hostname from provider address
+          get_provider_host() {
+            local addr="$1"
+            echo "$PROVIDERS_RESPONSE" | jq -r --arg addr "$addr" \
+              '.data[] | select(.owner == $addr) | .hostUri // empty' | \
+              sed 's|https://||;s|:.*||'
+          }
+
+          # Check if provider hostname is blacklisted
           is_blacklisted() {
-            local provider="$1"
+            local addr="$1"
+            local hostname=$(get_provider_host "$addr")
             for blacklisted in "${PROVIDER_BLACKLIST[@]}"; do
-              if [ "$provider" = "$blacklisted" ]; then
+              if [ "$hostname" = "$blacklisted" ]; then
                 return 0  # true, is blacklisted
               fi
             done
@@ -275,7 +290,8 @@ jobs:
           for i in $(seq 0 $((TOTAL_BIDS - 1))); do
             CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
             if is_blacklisted "$CANDIDATE"; then
-              echo "Skipping blacklisted provider: $CANDIDATE"
+              HOST=$(get_provider_host "$CANDIDATE")
+              echo "Skipping blacklisted provider: $HOST ($CANDIDATE)"
             else
               PROVIDER="$CANDIDATE"
               SELECTED_INDEX=$i
@@ -292,7 +308,8 @@ jobs:
 
           GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.gseq // 1")
           OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$SELECTED_INDEX].bid.id.oseq // 1")
-          echo "Selected provider: $PROVIDER (bid #$((SELECTED_INDEX + 1)) of $TOTAL_BIDS)"
+          PROVIDER_HOST=$(get_provider_host "$PROVIDER")
+          echo "Selected provider: $PROVIDER_HOST ($PROVIDER) - bid #$((SELECTED_INDEX + 1)) of $TOTAL_BIDS"
 
           echo "Creating lease with provider: $PROVIDER"
           # Build lease payload with proper structure:
