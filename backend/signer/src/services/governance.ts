@@ -401,7 +401,7 @@ export async function signReputationAttestation(
   reputation: number
 ): Promise<ReputationAttestation> {
   const wallet = new ethers.Wallet(config.signer.privateKey);
-  const expiry = Math.floor(Date.now() / 1000) + config.signer.signatureTTL;
+  const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
 
   const messageHash = ethers.solidityPackedKeccak256(
     ['string', 'address', 'uint256', 'uint256'],
