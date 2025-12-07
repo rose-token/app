@@ -301,10 +301,20 @@ export const useProposals = (options = {}) => {
   // Debounced refetch to prevent multiple rapid refetches from events
   const refetchTimeoutRef = useRef(null);
   const debouncedRefetch = useCallback((includeCounter = false, includeVotes = false) => {
+    // Skip if voteCombined is in progress - will refetch at the end
+    if (voteCombinedInProgress.current) {
+      return;
+    }
+
     if (refetchTimeoutRef.current) {
       clearTimeout(refetchTimeoutRef.current);
     }
     refetchTimeoutRef.current = setTimeout(() => {
+      // Double-check flag inside timeout in case voting started during debounce
+      if (voteCombinedInProgress.current) {
+        refetchTimeoutRef.current = null;
+        return;
+      }
       if (includeCounter) refetchCounter();
       refetchProposals();
       if (includeVotes) refetchVotes();
@@ -526,6 +536,9 @@ export const useProposals = (options = {}) => {
     setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
     setError(null);
 
+    // Track successful transactions outside try block for finally cleanup
+    const results = [];
+
     try {
       const totalWei = parseUnits(totalVP.toString(), 9);
       const ownAvailableWei = parseUnits(ownAvailable.toString(), 9);
@@ -545,8 +558,6 @@ export const useProposals = (options = {}) => {
           throw new Error('Insufficient total voting power');
         }
       }
-
-      const results = [];
 
       // Vote with own VP if any (requires passport signature + reputation attestation)
       if (ownToUse > 0n) {
@@ -680,8 +691,6 @@ export const useProposals = (options = {}) => {
       }
 
       console.log('Combined vote successful!');
-      await refetchProposals();
-      await refetchVotes();
       return { success: true, results };
     } catch (err) {
       console.error('Combined vote error:', err);
@@ -691,6 +700,11 @@ export const useProposals = (options = {}) => {
     } finally {
       voteCombinedInProgress.current = false;
       setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
+      // Always refetch if any transaction succeeded (handles partial success case)
+      if (results.length > 0) {
+        await refetchProposals();
+        await refetchVotes();
+      }
     }
   }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
 
