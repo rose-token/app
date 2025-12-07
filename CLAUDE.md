@@ -52,6 +52,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 2. `vROSE.setGovernance(governance)` + `setMarketplace(marketplace)`
 3. `RoseMarketplace.setGovernance(governance)` + `setVRoseToken(vROSE)`
 4. `RoseTreasury.setMarketplace(marketplace)` + `setGovernance(governance)`
+5. `RoseGovernance.setDelegationSigner(signerAddress)` - Required for delegated voting
 
 **Passport verification:** ECDSA signatures from passportSigner for `createTask`, `stakeholderStake`, `claimTask`. Replay protection via `usedSignatures` mapping.
 
@@ -189,7 +190,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom, castDelegatedVote, claimAllRewards |
 | useNavHistory | snapshots, pagination | refetch (default 3 years daily) |
 
-**Note:** deposit/withdraw/vote/delegate methods internally fetch reputation attestation from backend.
+**Note:** deposit/withdraw/vote/delegate methods internally fetch reputation attestation from backend. `voteCombined` calls `/api/delegation/confirm-vote` after successful delegated votes for reward tracking.
 
 ## Frontend Passport System
 

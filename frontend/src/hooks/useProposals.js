@@ -660,6 +660,23 @@ export const useProposals = (options = {}) => {
           confirmations: 1,
         });
         results.push({ type: 'delegated', hash: delegatedHash, amount: formatUnits(delegatedToUse, 9) });
+
+        // Confirm vote with backend for reward tracking
+        try {
+          await fetch(`${SIGNER_URL}/api/delegation/confirm-vote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              delegate: account,
+              proposalId: Number(proposalId),
+              allocations: signatureData.allocations,
+            }),
+          });
+          console.log('Delegated vote confirmed with backend');
+        } catch (confirmErr) {
+          // Non-fatal: vote succeeded on-chain, just won't be tracked for rewards
+          console.warn('Failed to confirm delegated vote (non-fatal):', confirmErr);
+        }
       }
 
       console.log('Combined vote successful!');

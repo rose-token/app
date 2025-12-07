@@ -302,6 +302,11 @@ async function main() {
   await (await roseMarketplace.setGovernance(governanceAddress)).wait();
   console.log("Marketplace governance set ✓");
 
+  // Set delegation signer for delegated voting (required for castDelegatedVote)
+  console.log("Setting delegation signer...");
+  await (await roseGovernance.setDelegationSigner(passportSignerAddress)).wait();
+  console.log("Delegation signer set to:", passportSignerAddress, "✓");
+
   // For testnet, set allocation to diversified RWA + ROSE reserve
   if (isTestnet) {
     console.log("Setting testnet allocation (30% BTC, 30% Gold, 20% USDC, 20% ROSE)...");
