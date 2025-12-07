@@ -302,6 +302,14 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         return getReputation(user) >= DELEGATE_REP_THRESHOLD;
     }
 
+    function canReceiveDelegation(address user) public view returns (bool) {
+        return totalDelegatedOut[user] == 0;
+    }
+
+    function canDelegateOut(address user) public view returns (bool) {
+        return totalDelegatedIn[user] == 0;
+    }
+
     function getQuorumProgress(uint256 proposalId) public view returns (uint256 current, uint256 required) {
         Proposal memory p = _proposals[proposalId];
         current = p.yayVotes + p.nayVotes;
@@ -449,6 +457,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (attestedRep < VOTER_REP_THRESHOLD) revert IneligibleToVote();
         // Check delegate eligibility using on-chain reputation (delegate not calling)
         if (!canDelegate(delegateAddr)) revert IneligibleToDelegate();
+
+        // Prevent delegation chains - max depth 1
+        if (totalDelegatedIn[msg.sender] > 0) revert DelegationChainNotAllowed();
+        if (totalDelegatedOut[delegateAddr] > 0) revert DelegationChainNotAllowed();
 
         // Check available VP
         uint256 availableVP = getAvailableVP(msg.sender);

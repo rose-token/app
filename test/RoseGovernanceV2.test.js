@@ -353,6 +353,104 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         governance.connect(user1).delegate(user2.address, vpAmount + 1n, rep.reputation, rep.expiry, rep.signature)
       ).to.be.revertedWithCustomError(governance, "InsufficientAvailableVP");
     });
+
+    it("Should revert if delegate tries to delegate out (delegation chain)", async function () {
+      // User1 delegates to User2 (User2 is now a delegate)
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
+
+      // Set up User3 as eligible delegate
+      await setupEligibleProposer(user3);
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
+
+      // User2 (who is a delegate) tries to delegate to User3 - should fail
+      const rep2 = await getRepAttestation(user2, 70);
+      await expect(
+        governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature)
+      ).to.be.revertedWithCustomError(governance, "DelegationChainNotAllowed");
+    });
+
+    it("Should revert if delegating to someone who has delegated out", async function () {
+      // Set up User3 as eligible delegate
+      await setupEligibleProposer(user3);
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
+
+      // User2 delegates to User3 (User2 is now a delegator)
+      const rep2 = await getRepAttestation(user2, 70);
+      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
+
+      // User1 tries to delegate to User2 (who is a delegator) - should fail
+      const rep1 = await getRepAttestation(user1, 70);
+      await expect(
+        governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature)
+      ).to.be.revertedWithCustomError(governance, "DelegationChainNotAllowed");
+    });
+
+    it("Should allow delegation after undelegating all incoming", async function () {
+      // User1 delegates to User2
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
+
+      // Set up User3 as eligible delegate
+      await setupEligibleProposer(user3);
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
+
+      // User1 undelegates from User2 (User2 is no longer a delegate)
+      await governance.connect(user1).undelegate(user2.address, SMALL_VP);
+
+      // User2 can now delegate to User3
+      const rep2 = await getRepAttestation(user2, 70);
+      await expect(governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature))
+        .to.emit(governance, "DelegationChanged")
+        .withArgs(user2.address, user3.address, SMALL_VP, true);
+    });
+
+    it("Should allow receiving delegation after undelegating all outgoing", async function () {
+      // Set up User3 as eligible delegate
+      await setupEligibleProposer(user3);
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
+
+      // User2 delegates to User3 (User2 is now a delegator)
+      const rep2 = await getRepAttestation(user2, 70);
+      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
+
+      // User2 undelegates from User3 (User2 is no longer a delegator)
+      await governance.connect(user2).undelegate(user3.address, SMALL_VP);
+
+      // User1 can now delegate to User2
+      const rep1 = await getRepAttestation(user1, 70);
+      await expect(governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature))
+        .to.emit(governance, "DelegationChanged")
+        .withArgs(user1.address, user2.address, SMALL_VP, true);
+    });
+
+    it("canReceiveDelegation should return false for delegators", async function () {
+      // User2 delegates to user3 after setup
+      await setupEligibleProposer(user3);
+      const rep3 = await getRepAttestation(user3);
+      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
+
+      const rep2 = await getRepAttestation(user2, 70);
+      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
+
+      // User2 is now a delegator
+      expect(await governance.canReceiveDelegation(user2.address)).to.equal(false);
+      expect(await governance.canReceiveDelegation(user1.address)).to.equal(true); // User1 has not delegated
+    });
+
+    it("canDelegateOut should return false for delegates", async function () {
+      // User1 delegates to User2
+      const rep1 = await getRepAttestation(user1, 70);
+      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
+
+      // User2 is now a delegate
+      expect(await governance.canDelegateOut(user2.address)).to.equal(false);
+      expect(await governance.canDelegateOut(user1.address)).to.equal(true); // User1 has not received delegation
+    });
   });
 
   describe("VP-Based Voting", function () {

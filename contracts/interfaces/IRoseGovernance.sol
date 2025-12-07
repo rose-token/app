@@ -216,6 +216,8 @@ interface IRoseGovernance {
     function canPropose(address user) external view returns (bool);
     function canVote(address user) external view returns (bool);
     function canDelegate(address user) external view returns (bool);
+    function canReceiveDelegation(address user) external view returns (bool);
+    function canDelegateOut(address user) external view returns (bool);
     function getQuorumProgress(uint256 proposalId) external view returns (uint256 current, uint256 required);
     function getVoteResult(uint256 proposalId) external view returns (uint256 yayPercent, uint256 nayPercent);
     function getAvailableDelegatedPower(address delegate, uint256 proposalId) external view returns (uint256);

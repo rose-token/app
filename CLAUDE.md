@@ -89,6 +89,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 | Treasury | RebalanceNotNeeded, RebalanceCooldown, CooldownNotElapsed | Cooldowns |
 | Governance | IneligibleToPropose (<90% rep or <10 tasks) | Eligibility |
 | Governance | IneligibleToVote (<70% rep), IneligibleToDelegate | Eligibility |
+| Governance | DelegationChainNotAllowed | User is both delegator and delegate (max depth 1) |
 | Governance | ProposalNotActive, CannotVoteOnOwnProposal | Voting |
 | Governance | CannotChangeVoteDirection, VPLockedToAnotherProposal | VP allocation |
 | Governance | InsufficientAvailableVP, MaxEditCyclesReached | Limits |

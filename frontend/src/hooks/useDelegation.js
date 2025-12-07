@@ -306,6 +306,8 @@ export const useDelegation = () => {
         ? 'You are not eligible to delegate (need 70%+ reputation)'
         : err.message.includes('DelegateIneligible')
         ? 'Target has insufficient reputation to be a delegate'
+        : err.message.includes('DelegationChainNotAllowed')
+        ? 'Delegation chains not allowed. You cannot be both a delegator and delegate.'
         : err.message;
       setError(message);
       throw new Error(message);
