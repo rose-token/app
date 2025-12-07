@@ -56,7 +56,7 @@ async function loadContracts() {
   // Mock contracts - MUST connect to deployer for write operations (ethers v6 requirement)
   const ext = deployment.externalAddresses;
   contracts.usdc = (await hre.ethers.getContractAt("MockERC20", ext.usdc)).connect(deployer);
-  contracts.wbtc = (await hre.ethers.getContractAt("MockERC20", ext.wbtc)).connect(deployer);
+  contracts.tbtc = (await hre.ethers.getContractAt("MockERC20", ext.tbtc)).connect(deployer);
   contracts.paxg = (await hre.ethers.getContractAt("MockERC20", ext.paxg)).connect(deployer);
   contracts.btcFeed = (await hre.ethers.getContractAt("MockV3Aggregator", ext.btcUsdFeed)).connect(deployer);
   contracts.xauFeed = (await hre.ethers.getContractAt("MockV3Aggregator", ext.xauUsdFeed)).connect(deployer);
@@ -121,11 +121,11 @@ async function syncRatesWithOracles() {
   const { btcPrice, xauPrice } = await getPrices();
   const ext = deployment.externalAddresses;
 
-  // WBTC: 8 decimals
+  // TBTC: 8 decimals
   const btcForward = calcForwardRate(btcPrice, 8);
   const btcReverse = calcReverseRate(btcPrice, 8);
-  await (await contracts.swapRouter.setExchangeRate(ext.usdc, ext.wbtc, btcForward)).wait();
-  await (await contracts.swapRouter.setExchangeRate(ext.wbtc, ext.usdc, btcReverse)).wait();
+  await (await contracts.swapRouter.setExchangeRate(ext.usdc, ext.tbtc, btcForward)).wait();
+  await (await contracts.swapRouter.setExchangeRate(ext.tbtc, ext.usdc, btcReverse)).wait();
 
   // PAXG: 18 decimals
   const goldForward = calcForwardRate(xauPrice, 18);
@@ -675,10 +675,10 @@ async function mintTokens(token, amount) {
       decimals = 6;
       name = "USDC";
       break;
-    case "wbtc":
-      contract = contracts.wbtc;
+    case "tbtc":
+      contract = contracts.tbtc;
       decimals = 8;
-      name = "WBTC";
+      name = "TBTC";
       break;
     case "paxg":
       contract = contracts.paxg;
@@ -700,10 +700,10 @@ async function fundRouter() {
   log.info("Funding swap router with liquidity...");
 
   await (await contracts.usdc.mint(ext.swapRouter, hre.ethers.parseUnits("10000000", 6))).wait();
-  await (await contracts.wbtc.mint(ext.swapRouter, hre.ethers.parseUnits("1000", 8))).wait();
+  await (await contracts.tbtc.mint(ext.swapRouter, hre.ethers.parseUnits("1000", 8))).wait();
   await (await contracts.paxg.mint(ext.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
 
-  log.success("Router funded: 10M USDC, 1000 WBTC, 100K PAXG");
+  log.success("Router funded: 10M USDC, 1000 TBTC, 100K PAXG");
 }
 
 async function getBalances(address = null) {
@@ -1036,7 +1036,7 @@ ${colors.cyan}--- UTILITIES ---${colors.reset}
       await getBalances();
       break;
     case "2":
-      const token = await prompt(rl, "Token (usdc/wbtc/paxg): ");
+      const token = await prompt(rl, "Token (usdc/tbtc/paxg): ");
       const amount = await prompt(rl, "Amount: ");
       await mintTokens(token, parseFloat(amount));
       break;

@@ -18,7 +18,7 @@
   "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
   "externalAddresses": {
     "usdc": "0x79d24F9c3BEa72AB50569d719483a32ff4385f86",
-    "wbtc": "0x2325F90CD8a1607258a90df1EA157a03b4942D5e",
+    "tbtc": "0x2325F90CD8a1607258a90df1EA157a03b4942D5e",
     "paxg": "0xdf2f383186ae72D917b0C2dD2FCa5C603017d33A",
     "btcUsdFeed": "0x77968481eE2cA803A5416Bd9Ca6Dcb435b3E34D2",
     "xauUsdFeed": "0xdD54b8EE369c2eb36B542f5f655606aeB1cdF5f1",

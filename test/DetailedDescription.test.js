@@ -8,7 +8,7 @@ describe("Task Detailed Description", function () {
   let vRose;
   let governance;
   let usdc;
-  let wbtc;
+  let tbtc;
   let reth;
   let paxg;
   let btcFeed;
@@ -79,7 +79,7 @@ describe("Task Detailed Description", function () {
     // 1. Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     usdc = await MockERC20.deploy("USD Coin", "USDC", 6);
-    wbtc = await MockERC20.deploy("Wrapped BTC", "WBTC", 8);
+    tbtc = await MockERC20.deploy("Wrapped BTC", "TBTC", 8);
     reth = await MockERC20.deploy("Rocket Pool ETH", "rETH", 18);
     paxg = await MockERC20.deploy("Pax Gold", "PAXG", 18);
 
@@ -99,15 +99,15 @@ describe("Task Detailed Description", function () {
 
     // 5. Set token decimals and exchange rates on router
     await swapRouter.setTokenDecimals(await usdc.getAddress(), 6);
-    await swapRouter.setTokenDecimals(await wbtc.getAddress(), 8);
+    await swapRouter.setTokenDecimals(await tbtc.getAddress(), 8);
     await swapRouter.setTokenDecimals(await reth.getAddress(), 18);
     await swapRouter.setTokenDecimals(await paxg.getAddress(), 18);
-    await swapRouter.setExchangeRate(await usdc.getAddress(), await wbtc.getAddress(), 2326n * 10n**12n);
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await tbtc.getAddress(), 2326n * 10n**12n);
     await swapRouter.setExchangeRate(await usdc.getAddress(), await reth.getAddress(), 435n * 10n**24n);
     await swapRouter.setExchangeRate(await usdc.getAddress(), await paxg.getAddress(), 5n * 10n**26n);
 
     // 6. Fund router with tokens for swaps
-    await wbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
+    await tbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
@@ -116,7 +116,7 @@ describe("Task Detailed Description", function () {
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await wbtc.getAddress(),
+      await tbtc.getAddress(),
       await paxg.getAddress(),
       await btcFeed.getAddress(),
       await xauFeed.getAddress(),

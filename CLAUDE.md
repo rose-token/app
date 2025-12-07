@@ -302,7 +302,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 | ROSE/vROSE/stakedRose | 18 | formatUnits(value, 18) |
 | VP (votingPower, availableVP, delegatedOut) | 9 | formatUnits(value, 9) |
 | USDC/NAV prices | 6 | formatUnits(value, 6) |
-| WBTC | 8 | - |
+| TBTC | 8 | - |
 | PAXG | 18 | - |
 | Chainlink feeds | 8 | - |
 

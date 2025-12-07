@@ -5,7 +5,7 @@ describe("RoseTreasury Smart Deposits", function () {
   let roseTreasury;
   let roseToken;
   let usdc;
-  let wbtc;
+  let tbtc;
   let reth;
   let paxg;
   let btcFeed;
@@ -22,7 +22,7 @@ describe("RoseTreasury Smart Deposits", function () {
     // 1. Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     usdc = await MockERC20.deploy("USD Coin", "USDC", 6);
-    wbtc = await MockERC20.deploy("Wrapped BTC", "WBTC", 8);
+    tbtc = await MockERC20.deploy("Wrapped BTC", "TBTC", 8);
     reth = await MockERC20.deploy("Rocket Pool ETH", "rETH", 18);
     paxg = await MockERC20.deploy("Pax Gold", "PAXG", 18);
 
@@ -42,22 +42,22 @@ describe("RoseTreasury Smart Deposits", function () {
 
     // 5. Set token decimals on router
     await swapRouter.setTokenDecimals(await usdc.getAddress(), 6);
-    await swapRouter.setTokenDecimals(await wbtc.getAddress(), 8);
+    await swapRouter.setTokenDecimals(await tbtc.getAddress(), 8);
     await swapRouter.setTokenDecimals(await reth.getAddress(), 18);
     await swapRouter.setTokenDecimals(await paxg.getAddress(), 18);
 
     // 6. Set exchange rates on router
-    await swapRouter.setExchangeRate(await usdc.getAddress(), await wbtc.getAddress(), 2326n * 10n**12n);
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await tbtc.getAddress(), 2326n * 10n**12n);
     await swapRouter.setExchangeRate(await usdc.getAddress(), await reth.getAddress(), 435n * 10n**24n);
     await swapRouter.setExchangeRate(await usdc.getAddress(), await paxg.getAddress(), 5n * 10n**26n);
 
     // Also set reverse rates for redemptions
-    await swapRouter.setExchangeRate(await wbtc.getAddress(), await usdc.getAddress(), 43000n * 10n**16n);
+    await swapRouter.setExchangeRate(await tbtc.getAddress(), await usdc.getAddress(), 43000n * 10n**16n);
     await swapRouter.setExchangeRate(await reth.getAddress(), await usdc.getAddress(), 2300n * 10n**6n);
     await swapRouter.setExchangeRate(await paxg.getAddress(), await usdc.getAddress(), 2000n * 10n**6n);
 
     // 7. Fund router with tokens for swaps
-    await wbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
+    await tbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await usdc.mint(await swapRouter.getAddress(), ethers.parseUnits("10000000", 6));
@@ -67,7 +67,7 @@ describe("RoseTreasury Smart Deposits", function () {
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await wbtc.getAddress(),
+      await tbtc.getAddress(),
       await paxg.getAddress(),
       await btcFeed.getAddress(),
       await xauFeed.getAddress(),
@@ -137,7 +137,7 @@ describe("RoseTreasury Smart Deposits", function () {
       const drainAmount = (currentUsdc * 90n) / 100n;
 
       // Directly manipulate by minting more RWA to treasury (making USDC even more underweight)
-      await wbtc.mint(treasuryAddr, ethers.parseUnits("0.1", 8)); // Add more BTC
+      await tbtc.mint(treasuryAddr, ethers.parseUnits("0.1", 8)); // Add more BTC
 
       const pctsBeforeSecondDeposit = await getVaultPercentages();
 
@@ -166,7 +166,7 @@ describe("RoseTreasury Smart Deposits", function () {
 
       // Simulate USDC drain by adding more RWA to treasury (making USDC underweight)
       const treasuryAddr = await roseTreasury.getAddress();
-      await wbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Add BTC to make USDC underweight
+      await tbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Add BTC to make USDC underweight
 
       const pctsBeforeLargeDeposit = await getVaultPercentages();
       expect(pctsBeforeLargeDeposit.usdc).to.be.lessThan(20); // USDC is underweight
@@ -244,7 +244,7 @@ describe("RoseTreasury Smart Deposits", function () {
 
       // Simulate underweight by adding more RWA
       const treasuryAddr = await roseTreasury.getAddress();
-      await wbtc.mint(treasuryAddr, ethers.parseUnits("1", 8)); // Add BTC
+      await tbtc.mint(treasuryAddr, ethers.parseUnits("1", 8)); // Add BTC
 
       // Tiny deposit below MIN_SWAP_AMOUNT (1 USDC)
       const tinyDeposit = ethers.parseUnits("0.5", 6); // 0.5 USDC
@@ -265,7 +265,7 @@ describe("RoseTreasury Smart Deposits", function () {
 
       // 2. Simulate USDC drain by adding more RWA
       const treasuryAddr = await roseTreasury.getAddress();
-      await wbtc.mint(treasuryAddr, ethers.parseUnits("0.2", 8)); // Add BTC
+      await tbtc.mint(treasuryAddr, ethers.parseUnits("0.2", 8)); // Add BTC
 
       const pctsAfterDrain = await getVaultPercentages();
       expect(pctsAfterDrain.usdc).to.be.lessThan(20); // USDC now underweight
@@ -286,7 +286,7 @@ describe("RoseTreasury Smart Deposits", function () {
 
       // 2. Simulate drain by adding more RWA (making USDC and Gold underweight)
       const treasuryAddr = await roseTreasury.getAddress();
-      await wbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Heavy BTC
+      await tbtc.mint(treasuryAddr, ethers.parseUnits("0.5", 8)); // Heavy BTC
 
       const pctsAfterDrain = await getVaultPercentages();
       expect(pctsAfterDrain.usdc).to.be.lessThan(20); // USDC underweight

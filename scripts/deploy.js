@@ -8,7 +8,7 @@ const USE_MOCKS = true;
 // Mainnet addresses
 const MAINNET = {
   usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-  wbtc: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+  tbtc: "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
   paxg: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
   btcUsdFeed: "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
   xauUsdFeed: "0x214eD9Da11D2fbe465a6fc601a91E62EbEc1a0D6",
@@ -18,7 +18,7 @@ const MAINNET = {
 // Arbitrum Sepolia testnet addresses (all mocks for reliable CI/CD)
 const ARBITRUM_SEPOLIA = {
   usdc: null, // Will deploy mock
-  wbtc: null, // Will deploy mock
+  tbtc: null, // Will deploy mock
   paxg: null, // Will deploy mock
   btcUsdFeed: null, // Will deploy mock
   xauUsdFeed: null, // Will deploy mock
@@ -86,12 +86,12 @@ async function main() {
     await (await mockUsdc.mint(deployer.address, mintAmount)).wait();
     console.log("Minted 1,000,000 USDC to deployer ✓");
 
-    // Deploy mock WBTC if needed
-    if (!addresses.wbtc) {
-      const mockWbtc = await MockToken.deploy("Mock WBTC", "WBTC", 8);
-      await mockWbtc.waitForDeployment();
-      addresses.wbtc = await mockWbtc.getAddress();
-      console.log("Mock WBTC deployed to:", addresses.wbtc);
+    // Deploy mock TBTC if needed
+    if (!addresses.tbtc) {
+      const mockTbtc = await MockToken.deploy("Mock TBTC", "TBTC", 8);
+      await mockTbtc.waitForDeployment();
+      addresses.tbtc = await mockTbtc.getAddress();
+      console.log("Mock TBTC deployed to:", addresses.tbtc);
     }
 
     // Deploy mock PAXG if needed
@@ -134,7 +134,7 @@ async function main() {
 
     // Configure token decimals on the mock router
     await (await mockRouter.setTokenDecimals(addresses.usdc, 6)).wait();
-    await (await mockRouter.setTokenDecimals(addresses.wbtc, 8)).wait();
+    await (await mockRouter.setTokenDecimals(addresses.tbtc, 8)).wait();
     await (await mockRouter.setTokenDecimals(addresses.paxg, 18)).wait();
     console.log("Token decimals configured on mock router ✓");
 
@@ -143,7 +143,7 @@ async function main() {
     // For USDC (6 dec) -> Asset swaps: rate = (assetAmount per $1) * 1e18 / 1e6
     //
     // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
-    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.wbtc, 1666666666666666n)).wait();
+    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.tbtc, 1666666666666666n)).wait();
     // Gold @ $2,000: (1e18 / 2000) * 1e18 / 1e6 = 5e26
     await (await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n)).wait();
     console.log("Forward exchange rates (USDC → Asset) configured ✓");
@@ -153,18 +153,18 @@ async function main() {
     // For Asset -> USDC swaps: rate = price * 1e6 * 1e18 / 10^assetDecimals
     //
     // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e20
-    await (await mockRouter.setExchangeRate(addresses.wbtc, addresses.usdc, 600000000000000000000n)).wait();
+    await (await mockRouter.setExchangeRate(addresses.tbtc, addresses.usdc, 600000000000000000000n)).wait();
     // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e18 = 2e9
     await (await mockRouter.setExchangeRate(addresses.paxg, addresses.usdc, 2000000000n)).wait();
     console.log("Reverse exchange rates (Asset → USDC) configured ✓");
 
     // Fund the mock router with tokens for swaps
     const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
-    const mockWbtc_router = await hre.ethers.getContractAt("MockERC20", addresses.wbtc);
+    const mockTbtc_router = await hre.ethers.getContractAt("MockERC20", addresses.tbtc);
     const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
 
     // Fund with massive liquidity for stress testing redemptions
-    await (await mockWbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
+    await (await mockTbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
     await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M PAXG
     await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
     console.log("Mock router funded with liquidity (1B USDC, 10k BTC, 1M PAXG) ✓");
@@ -214,7 +214,7 @@ async function main() {
   const roseTreasury = await RoseTreasury.deploy(
     roseTokenAddress,
     addresses.usdc,
-    addresses.wbtc,
+    addresses.tbtc,
     addresses.paxg,
     addresses.btcUsdFeed,
     addresses.xauUsdFeed,

@@ -574,7 +574,7 @@ Tests use mock contracts to simulate external dependencies:
 
 - **MockV3Aggregator**: Simulates Chainlink price feeds (BTC/USD, ETH/USD, XAU/USD)
 - **MockUniswapV3Router**: Simulates Uniswap V3 swaps with configurable exchange rates
-- **MockERC20**: Standard ERC20 with public mint for USDC, WBTC, rETH, PAXG
+- **MockERC20**: Standard ERC20 with public mint for USDC, TBTC, rETH, PAXG
 
 **Token acquisition in tests:** Tests obtain ROSE tokens via Treasury deposit flow (not direct minting):
 1. Mint USDC to user
@@ -851,7 +851,7 @@ PROFILE_TIMESTAMP_TTL=300          # 5 minutes
 | vROSE | 18 | Governance receipt token |
 | VP (Voting Power) | 9 | sqrt(ROSE) reduces 18→9 decimals |
 | USDC | 6 | Standard stablecoin |
-| WBTC | 8 | Wrapped Bitcoin |
+| TBTC | 8 | Wrapped Bitcoin |
 | PAXG | 18 | Gold-backed token |
 | Chainlink feeds | 8 | Price feed decimals |
 | NAV prices | 6 | Normalized to USDC |

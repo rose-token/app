@@ -13,7 +13,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
  * @title RoseTreasury
  * @dev Treasury vault that backs ROSE tokens with real-world assets (BTC, Gold, USDC).
  *
- * Allocation: 30% WBTC / 30% PAXG / 20% USDC / 20% ROSE (buyback reserve)
+ * Allocation: 30% TBTC / 30% PAXG / 20% USDC / 20% ROSE (buyback reserve)
  *
  * Users deposit USDC, receive ROSE at current NAV.
  * Treasury automatically diversifies into RWA.
@@ -34,7 +34,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ Tokens ============
     IERC20 public immutable roseToken;
     IERC20 public immutable usdc;
-    IERC20 public immutable wbtc;
+    IERC20 public immutable tbtc;
     IERC20 public immutable paxg;
 
     // ============ Chainlink Price Feeds ============
@@ -60,7 +60,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     // ============ Decimals ============
     uint8 public constant USDC_DECIMALS = 6;
-    uint8 public constant WBTC_DECIMALS = 8;
+    uint8 public constant TBTC_DECIMALS = 8;
     uint8 public constant PAXG_DECIMALS = 18;
     uint8 public constant ROSE_DECIMALS = 18;
     uint8 public constant CHAINLINK_DECIMALS = 8;
@@ -118,7 +118,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     constructor(
         address _roseToken,
         address _usdc,
-        address _wbtc,
+        address _tbtc,
         address _paxg,
         address _btcUsdFeed,
         address _xauUsdFeed,
@@ -126,7 +126,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     ) Ownable(msg.sender) {
         roseToken = IERC20(_roseToken);
         usdc = IERC20(_usdc);
-        wbtc = IERC20(_wbtc);
+        tbtc = IERC20(_tbtc);
         paxg = IERC20(_paxg);
 
         btcUsdFeed = AggregatorV3Interface(_btcUsdFeed);
@@ -136,7 +136,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         // Approve router for swaps
         IERC20(_usdc).approve(_swapRouter, type(uint256).max);
-        IERC20(_wbtc).approve(_swapRouter, type(uint256).max);
+        IERC20(_tbtc).approve(_swapRouter, type(uint256).max);
         IERC20(_paxg).approve(_swapRouter, type(uint256).max);
         IERC20(_roseToken).approve(_swapRouter, type(uint256).max);
     }
@@ -205,9 +205,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      */
     function hardAssetValueUSD() public view returns (uint256) {
         uint256 btcValue = _getAssetValueUSD(
-            wbtc.balanceOf(address(this)),
+            tbtc.balanceOf(address(this)),
             getBTCPrice(),
-            WBTC_DECIMALS
+            TBTC_DECIMALS
         );
 
         uint256 goldValue = _getAssetValueUSD(
@@ -284,7 +284,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 hardAssets = hardAssetValueUSD();
         if (hardAssets == 0) return false;
 
-        uint256 btcValue = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+        uint256 btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
         uint256 goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
         uint256 usdcValue = usdc.balanceOf(address(this));
         uint256 roseValue = treasuryRoseValueUSD();
@@ -355,15 +355,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 targetROSE = (totalForAlloc * allocROSE) / ALLOC_DENOMINATOR;
 
         // Get current values
-        uint256 currentBTC = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+        uint256 currentBTC = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
         uint256 currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
         uint256 currentROSE = roseValue;
 
         // Phase 1: Sell overweight hard assets to USDC
         if (currentBTC > targetBTC) {
             uint256 diff = currentBTC - targetBTC;
-            uint256 btcToSell = (wbtc.balanceOf(address(this)) * diff) / currentBTC;
-            if (btcToSell > 0) _swapAssetToUSDC(address(wbtc), btcToSell);
+            uint256 btcToSell = (tbtc.balanceOf(address(this)) * diff) / currentBTC;
+            if (btcToSell > 0) _swapAssetToUSDC(address(tbtc), btcToSell);
         }
         if (currentGold > targetGold) {
             uint256 diff = currentGold - targetGold;
@@ -392,7 +392,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
             if (excess > maxSpend) excess = maxSpend;
 
             // Recalculate current values after sells
-            currentBTC = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+            currentBTC = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
             currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
             currentROSE = treasuryRoseValueUSD();
 
@@ -407,7 +407,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
                 // Buy underweight assets proportionally
                 if (deficitBTC > 0) {
                     uint256 buyAmount = (excess * deficitBTC) / totalDeficit;
-                    if (buyAmount >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(wbtc), buyAmount);
+                    if (buyAmount >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), buyAmount);
                 }
                 if (deficitGold > 0) {
                     uint256 buyAmount = (excess * deficitGold) / totalDeficit;
@@ -424,7 +424,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         }
 
         emit Rebalanced(
-            _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS),
+            _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS),
             _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS),
             usdc.balanceOf(address(this)),
             treasuryRoseValueUSD(),
@@ -475,12 +475,12 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     function _diversify(uint256 usdcAmount) internal {
         if (usdcAmount == 0) return;
 
-        uint256 wbtcBal = wbtc.balanceOf(address(this));
+        uint256 tbtcBal = tbtc.balanceOf(address(this));
         uint256 paxgBal = paxg.balanceOf(address(this));
         uint256 usdcBal = usdc.balanceOf(address(this));
 
         // First deposit - use simple ratio split
-        if (wbtcBal == 0 && paxgBal == 0) {
+        if (tbtcBal == 0 && paxgBal == 0) {
             _diversifyByRatio(usdcAmount);
             return;
         }
@@ -489,7 +489,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 btcPrice = getBTCPrice();
         uint256 goldPrice = getGoldPrice();
 
-        uint256 currentBTC = _getAssetValueUSD(wbtcBal, btcPrice, WBTC_DECIMALS);
+        uint256 currentBTC = _getAssetValueUSD(tbtcBal, btcPrice, TBTC_DECIMALS);
         uint256 currentGold = _getAssetValueUSD(paxgBal, goldPrice, PAXG_DECIMALS);
 
         // Calculate targets based on hard assets only (exclude ROSE allocation)
@@ -525,7 +525,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
                 if (deficitBTC > 0) {
                     uint256 spentBTC = (toSpend * deficitBTC) / totalRWADeficit;
-                    if (spentBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(wbtc), spentBTC);
+                    if (spentBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), spentBTC);
                 }
                 if (deficitGold > 0) {
                     uint256 spentGold = toSpend - ((toSpend * deficitBTC) / totalRWADeficit);
@@ -552,7 +552,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 toGold = (usdcAmount * allocGold) / hardAllocTotal;
         // Rest stays as USDC buffer
 
-        if (toBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(wbtc), toBTC);
+        if (toBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), toBTC);
         if (toGold >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), toGold);
     }
 
@@ -567,16 +567,16 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         if (rwaValue == 0) revert InsufficientLiquidity();
 
-        uint256 btcValue = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+        uint256 btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
         uint256 goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
 
         if (btcValue > 0) {
             // Ceiling division: (a * b + c - 1) / c to ensure we sell enough
-            uint256 btcBalance = wbtc.balanceOf(address(this));
+            uint256 btcBalance = tbtc.balanceOf(address(this));
             uint256 btcToSell = (btcBalance * usdcNeeded + rwaValue - 1) / rwaValue;
             // Cap at actual balance to prevent overflow
             if (btcToSell > btcBalance) btcToSell = btcBalance;
-            if (btcToSell > 0) _swapAssetToUSDC(address(wbtc), btcToSell);
+            if (btcToSell > 0) _swapAssetToUSDC(address(tbtc), btcToSell);
         }
 
         if (goldValue > 0) {
@@ -685,9 +685,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 price;
         uint8 assetDecimals;
 
-        if (asset == address(wbtc)) {
+        if (asset == address(tbtc)) {
             price = getBTCPrice();
-            assetDecimals = WBTC_DECIMALS;
+            assetDecimals = TBTC_DECIMALS;
         } else if (asset == address(paxg)) {
             price = getGoldPrice();
             assetDecimals = PAXG_DECIMALS;
@@ -790,7 +790,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 circulatingRose,
         bool rebalanceNeeded
     ) {
-        btcValue = _getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS);
+        btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
         goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
         usdcValue = usdc.balanceOf(address(this));
         roseValue = treasuryRoseValueUSD();
@@ -823,7 +823,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 total = hardAssets + roseVal;
 
         if (total > 0) {
-            actualBTC = (_getAssetValueUSD(wbtc.balanceOf(address(this)), getBTCPrice(), WBTC_DECIMALS) * ALLOC_DENOMINATOR) / total;
+            actualBTC = (_getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS) * ALLOC_DENOMINATOR) / total;
             actualGold = (_getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS) * ALLOC_DENOMINATOR) / total;
             actualUSDC = (usdc.balanceOf(address(this)) * ALLOC_DENOMINATOR) / total;
             actualROSE = (roseVal * ALLOC_DENOMINATOR) / total;
