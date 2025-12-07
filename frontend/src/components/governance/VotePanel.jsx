@@ -10,7 +10,7 @@
 import React, { useState, useMemo } from 'react';
 import { formatVotePower } from '../../constants/contracts';
 import useGovernance from '../../hooks/useGovernance';
-import useDelegation from '../../hooks/useDelegation';
+import useDelegation, { useDelegationForProposal } from '../../hooks/useDelegation';
 
 const VotePanel = ({
   proposalId,
@@ -32,9 +32,14 @@ const VotePanel = ({
   } = useGovernance();
 
   const {
-    totalReceivedVP,
     castDelegatedVote,
   } = useDelegation();
+
+  // Get per-proposal available delegated power (accounts for already-used VP)
+  const {
+    availableDelegatedPower,
+    refetchAvailablePower,
+  } = useDelegationForProposal(proposalId);
 
   const [amount, setAmount] = useState('');
   const [voteType, setVoteType] = useState(null);
@@ -44,7 +49,7 @@ const VotePanel = ({
   const availableOwnVP = parseFloat(availableVP || '0');
   const ownVotingPower = parseFloat(votingPower || '0');
   const lockedVP = parseFloat(proposalVPLocked || '0');
-  const receivedVP = parseFloat(totalReceivedVP || '0');
+  const receivedVP = parseFloat(availableDelegatedPower || '0');
 
   // Check if VP is locked to a different proposal
   const vpLockedElsewhere = activeProposal && activeProposal !== 0 && activeProposal !== proposalId;
@@ -118,6 +123,11 @@ const VotePanel = ({
         await onVote(proposalId, amountSplit.ownVP.toString(), support);
       }
 
+      // Refetch available delegated power after successful vote
+      if (refetchAvailablePower) {
+        await refetchAvailablePower();
+      }
+
       setAmount('');
       setVoteType(null);
     } catch (err) {
@@ -157,6 +167,12 @@ const VotePanel = ({
       } else if (onVote && amountSplit.ownVP > 0) {
         await onVote(proposalId, amountSplit.ownVP.toString(), existingVoteDirection);
       }
+
+      // Refetch available delegated power after successful vote
+      if (refetchAvailablePower) {
+        await refetchAvailablePower();
+      }
+
       setAmount('');
       setShowAddMore(false);
     } catch (err) {

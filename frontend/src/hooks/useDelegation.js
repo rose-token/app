@@ -675,18 +675,22 @@ export const useDelegationForProposal = (proposalId) => {
   const [availablePower, setAvailablePower] = useState('0');
 
   // Fetch available power from backend (accounts for already used power)
-  useEffect(() => {
+  const fetchAvailablePower = useCallback(async () => {
     if (!account || !proposalId) return;
 
-    fetch(`${SIGNER_URL}/api/delegation/available-power/${account}/${proposalId}`)
-      .then(res => res.json())
-      .then(data => {
-        setAvailablePower(formatUnits(BigInt(data.availablePower || '0'), 9));
-      })
-      .catch(err => {
-        console.error('Failed to fetch available power:', err);
-      });
+    try {
+      const res = await fetch(`${SIGNER_URL}/api/delegation/available-power/${account}/${proposalId}`);
+      const data = await res.json();
+      setAvailablePower(formatUnits(BigInt(data.availablePower || '0'), 9));
+    } catch (err) {
+      console.error('Failed to fetch available power:', err);
+    }
   }, [account, proposalId]);
+
+  // Fetch on mount and when account/proposalId changes
+  useEffect(() => {
+    fetchAvailablePower();
+  }, [fetchAvailablePower]);
 
   const delegatedVoteRecord = useMemo(() => {
     if (!data?.[0] || data[0].status !== 'success' || !data[0].result) return null;
@@ -717,6 +721,7 @@ export const useDelegationForProposal = (proposalId) => {
     totalDelegatedIn,
     totalDelegatedInRaw,
     refetch,
+    refetchAvailablePower: fetchAvailablePower,
   };
 };
 
