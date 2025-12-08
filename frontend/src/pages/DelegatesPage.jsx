@@ -12,6 +12,7 @@ import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem, formatUnits } from 'viem';
 import { CONTRACTS, formatVotePower } from '../constants/contracts';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
 import DelegateCard from '../components/governance/DelegateCard';
@@ -95,11 +96,11 @@ const DelegatesPage = () => {
           addr => addr && addr.toLowerCase() !== account?.toLowerCase()
         );
 
-        // Check canDelegate for each address
+        // Check canDelegate for each address (on Reputation contract, not Governance)
         const canDelegateResults = await publicClient.multicall({
           contracts: filtered.map(addr => ({
-            address: CONTRACTS.GOVERNANCE,
-            abi: RoseGovernanceABI,
+            address: CONTRACTS.REPUTATION,
+            abi: RoseReputationABI,
             functionName: 'canDelegate',
             args: [addr],
           })),
