@@ -10,6 +10,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useAccount, useReadContracts, useWriteContract, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import vROSEABI from '../contracts/vROSEABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS } from '../constants/contracts';
@@ -162,10 +163,10 @@ export const useGovernance = () => {
         functionName: 'balanceOf',
         args: [account],
       },
-      // User's reputation score
+      // User's reputation score (from RoseReputation contract)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [account],
       },
@@ -175,35 +176,35 @@ export const useGovernance = () => {
         abi: RoseGovernanceABI,
         functionName: 'totalStakedRose',
       },
-      // User stats
+      // User stats (from RoseReputation contract)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'userStats',
         args: [account],
       },
-      // Check if user can propose
+      // Check if user can propose (from RoseReputation contract)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canPropose',
         args: [account],
       },
-      // Check if user can vote
+      // Check if user can vote (from RoseReputation contract)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canVote',
         args: [account],
       },
-      // Check if user can be a delegate
+      // Check if user can be a delegate (from RoseReputation contract)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canDelegate',
         args: [account],
       },
-      // Total delegated VP received (for delegates)
+      // Total delegated VP received (for delegates) - stays on Governance
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
@@ -212,7 +213,7 @@ export const useGovernance = () => {
       },
     ],
     query: {
-      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE && !!CONTRACTS.VROSE,
+      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE && !!CONTRACTS.VROSE && !!CONTRACTS.REPUTATION,
     },
   });
 

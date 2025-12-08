@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 
-// Governance contract ABI (read functions for VP tracking)
+// Governance contract ABI (VP and delegation functions - reputation moved to RoseReputation)
 const GOVERNANCE_ABI = [
   'function stakedRose(address user) external view returns (uint256)',
   'function votingPower(address user) external view returns (uint256)',
@@ -15,11 +15,18 @@ const GOVERNANCE_ABI = [
   'function getAvailableVP(address user) external view returns (uint256)',
   'function getUserDelegations(address user) external view returns (address[] delegates, uint256[] amounts)',
   'function delegators(address delegate) external view returns (address[])',
+  'function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256)',
+];
+
+// Reputation contract ABI (split from RoseGovernance)
+const REPUTATION_ABI = [
   'function getReputation(address user) external view returns (uint256)',
   'function getReputationSimple(address user) external view returns (uint256)',
-  'function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256)',
   'function userStats(address user) external view returns (uint256 tasksCompleted, uint256 totalTaskValue, uint256 disputes, uint256 failedProposals, uint256 lastTaskTimestamp)',
-  // New bucket storage for reputation formula
+  'function canPropose(address user) external view returns (bool)',
+  'function canVote(address user) external view returns (bool)',
+  'function canDelegate(address user) external view returns (bool)',
+  // Bucket storage for reputation formula
   'function monthlySuccessValue(address user, uint256 bucket) external view returns (uint256)',
   'function monthlyDisputeValue(address user, uint256 bucket) external view returns (uint256)',
   'function BUCKET_DURATION() external view returns (uint256)',
@@ -74,7 +81,7 @@ const COLD_START_TASKS = 10;
 const DEFAULT_REPUTATION = 60;
 const FAILED_PROPOSAL_PENALTY = 5; // points per failed proposal
 
-// Create provider and contract instance
+// Create provider and contract instances
 const provider = new ethers.JsonRpcProvider(config.rpc.url);
 
 function getGovernanceContract(): ethers.Contract | null {
@@ -83,6 +90,14 @@ function getGovernanceContract(): ethers.Contract | null {
     return null;
   }
   return new ethers.Contract(config.contracts.governance, GOVERNANCE_ABI, provider);
+}
+
+function getReputationContract(): ethers.Contract | null {
+  if (!config.contracts.reputation) {
+    console.warn('Reputation contract address not configured');
+    return null;
+  }
+  return new ethers.Contract(config.contracts.reputation, REPUTATION_ABI, provider);
 }
 
 /**
@@ -217,16 +232,16 @@ export async function getTotalReceivedVP(delegateAddr: string): Promise<string> 
 }
 
 /**
- * Get user's reputation score
+ * Get user's reputation score (from RoseReputation contract)
  */
 export async function getReputation(address: string): Promise<number> {
-  const governance = getGovernanceContract();
-  if (!governance) {
+  const reputation = getReputationContract();
+  if (!reputation) {
     return 60; // Default reputation
   }
 
   try {
-    const rep = await governance.getReputation(address);
+    const rep = await reputation.getReputation(address);
     return Number(rep);
   } catch (error) {
     console.error('Error fetching reputation:', error);
@@ -258,11 +273,11 @@ function sqrt(x: bigint): bigint {
 }
 
 /**
- * Get user stats from contract
+ * Get user stats from contract (from RoseReputation contract)
  */
 export async function getUserStats(address: string): Promise<UserStatsData> {
-  const governance = getGovernanceContract();
-  if (!governance) {
+  const reputation = getReputationContract();
+  if (!reputation) {
     return {
       tasksCompleted: 0,
       totalTaskValue: '0',
@@ -273,7 +288,7 @@ export async function getUserStats(address: string): Promise<UserStatsData> {
   }
 
   try {
-    const stats = await governance.userStats(address);
+    const stats = await reputation.userStats(address);
     return {
       tasksCompleted: Number(stats.tasksCompleted),
       totalTaskValue: stats.totalTaskValue.toString(),
@@ -289,10 +304,11 @@ export async function getUserStats(address: string): Promise<UserStatsData> {
 
 /**
  * Fetch monthly bucket data for last 36 months (3 years)
+ * (from RoseReputation contract)
  */
 export async function fetchUserBuckets(address: string): Promise<BucketData[]> {
-  const governance = getGovernanceContract();
-  if (!governance) {
+  const reputation = getReputationContract();
+  if (!reputation) {
     return [];
   }
 
@@ -306,8 +322,8 @@ export async function fetchUserBuckets(address: string): Promise<BucketData[]> {
       const bucket = currentBucket - i;
       promises.push(
         Promise.all([
-          governance.monthlySuccessValue(address, bucket),
-          governance.monthlyDisputeValue(address, bucket),
+          reputation.monthlySuccessValue(address, bucket),
+          reputation.monthlyDisputeValue(address, bucket),
         ])
       );
     }

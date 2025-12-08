@@ -1,14 +1,14 @@
 /**
  * Reputation hook for on-chain task completion data
  * Reads events from RoseMarketplace to calculate reputation metrics
- * Also reads on-chain reputation score from RoseGovernance
+ * Also reads on-chain reputation score from RoseReputation contract
  * Supports new backend-computed reputation with ^0.6 formula
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePublicClient, useReadContracts } from 'wagmi';
 import { parseAbi, formatUnits } from 'viem';
-import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import { CONTRACTS } from '../constants/contracts';
 
 const MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS;
@@ -125,47 +125,47 @@ export const useReputation = (address) => {
   // Backend reputation state (new ^0.6 formula with signature)
   const [backendReputation, setBackendReputation] = useState(null);
 
-  // Read on-chain governance data for reputation score and eligibility
+  // Read on-chain reputation data for reputation score and eligibility
   const { data: governanceData, refetch: refetchGovernance } = useReadContracts({
     contracts: [
-      // On-chain reputation score (0-100)
+      // On-chain reputation score (0-100) from RoseReputation
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [address],
       },
-      // User stats from governance
+      // User stats from RoseReputation
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'userStats',
         args: [address],
       },
-      // Can propose (90%+ rep + 10 tasks)
+      // Can propose (90%+ rep + 10 tasks) from RoseReputation
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canPropose',
         args: [address],
       },
-      // Can vote (70%+ rep)
+      // Can vote (70%+ rep) from RoseReputation
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canVote',
         args: [address],
       },
-      // Can be delegate (90%+ rep + 10 tasks)
+      // Can be delegate (90%+ rep + 10 tasks) from RoseReputation
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canDelegate',
         args: [address],
       },
     ],
     query: {
-      enabled: !!address && !!CONTRACTS.GOVERNANCE,
+      enabled: !!address && !!CONTRACTS.REPUTATION,
     },
   });
 

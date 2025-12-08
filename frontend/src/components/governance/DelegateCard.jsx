@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { useReadContracts } from 'wagmi';
 import RoseGovernanceABI from '../../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../../contracts/RoseReputationABI.json';
 import { CONTRACTS, formatVotePower } from '../../constants/contracts';
 import ProfileBadge from '../profile/ProfileBadge';
 import ReputationBadge from './ReputationBadge';
@@ -30,12 +31,14 @@ const DelegateCard = React.memo(({
   // Fetch delegate info
   const { data: delegateData } = useReadContracts({
     contracts: [
+      // Reputation from RoseReputation contract
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [address],
       },
+      // Delegation data stays on Governance
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
@@ -48,15 +51,16 @@ const DelegateCard = React.memo(({
         functionName: 'votingPower',
         args: [address],
       },
+      // Eligibility from RoseReputation contract
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canDelegate',
         args: [address],
       },
     ],
     query: {
-      enabled: !!address && !!CONTRACTS.GOVERNANCE,
+      enabled: !!address && !!CONTRACTS.GOVERNANCE && !!CONTRACTS.REPUTATION,
     },
   });
 

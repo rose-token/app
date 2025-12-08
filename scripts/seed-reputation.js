@@ -45,6 +45,7 @@ async function main() {
   const roseToken = await hre.ethers.getContractAt("RoseToken", deployment.tokenAddress);
   const marketplace = await hre.ethers.getContractAt("RoseMarketplace", deployment.marketplaceAddress);
   const governance = await hre.ethers.getContractAt("RoseGovernance", deployment.governanceAddress);
+  const reputation = await hre.ethers.getContractAt("RoseReputation", deployment.reputationAddress);
   const vRoseToken = await hre.ethers.getContractAt("vROSE", deployment.vRoseAddress);
 
   // 5. Calculate funding amounts
@@ -162,16 +163,16 @@ async function main() {
     console.log(`  Task ${i + 1}/${NUM_TASKS} completed ✓`);
   }
 
-  // 12. Verify final reputation
+  // 12. Verify final reputation (using RoseReputation contract)
   console.log("\n--- Verifying Reputation ---");
-  const reputation = await governance.getReputation(deployer.address);
-  const canPropose = await governance.canPropose(deployer.address);
-  const canVote = await governance.canVote(deployer.address);
-  const canDelegate = await governance.canDelegate(deployer.address);
-  const userStats = await governance.userStats(deployer.address);
+  const reputationScore = await reputation.getReputation(deployer.address);
+  const canPropose = await reputation.canPropose(deployer.address);
+  const canVote = await reputation.canVote(deployer.address);
+  const canDelegate = await reputation.canDelegate(deployer.address);
+  const userStats = await reputation.userStats(deployer.address);
 
   console.log(`  Deployer address: ${deployer.address}`);
-  console.log(`  Reputation: ${reputation}%`);
+  console.log(`  Reputation: ${reputationScore}%`);
   console.log(`  Tasks completed: ${userStats[0]}`);
   console.log(`  Can propose: ${canPropose}`);
   console.log(`  Can vote: ${canVote}`);

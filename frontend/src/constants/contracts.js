@@ -9,6 +9,7 @@ export const CONTRACTS = {
   TREASURY: import.meta.env.VITE_TREASURY_ADDRESS,
   MARKETPLACE: import.meta.env.VITE_MARKETPLACE_ADDRESS,
   GOVERNANCE: import.meta.env.VITE_GOVERNANCE_ADDRESS,
+  REPUTATION: import.meta.env.VITE_REPUTATION_ADDRESS,
   VROSE: import.meta.env.VITE_VROSE_ADDRESS,
   USDC: import.meta.env.VITE_USDC_ADDRESS,
 };

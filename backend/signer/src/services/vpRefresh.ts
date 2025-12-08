@@ -13,12 +13,11 @@ const MARKETPLACE_ABI = [
   'event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee)',
 ];
 
-// Governance ABI for VP refresh
+// Governance ABI for VP refresh (reputation functions moved to RoseReputation)
 const GOVERNANCE_ABI = [
   'function refreshVP(address user, uint256 newRep, uint256 expiry, bytes signature) external',
   'function stakedRose(address user) external view returns (uint256)',
   'function votingPower(address user) external view returns (uint256)',
-  'function getReputation(address user) external view returns (uint256)',
 ];
 
 // Types
@@ -435,7 +434,7 @@ export async function startVPRefreshWatcher(): Promise<void> {
 
   console.log('[VPRefresh] Starting VP refresh watcher...');
   console.log(`[VPRefresh] Config: executeOnChain=${config.vpRefresh.executeOnChain}, ` +
-    `minVpDiff=${config.vpRefresh.minVpDifference}, minRepDiff=${config.vpRefresh.minRepDifference}`);
+    `minVpDiff=${config.vpRefresh.minVpDifference}`);
 
   stats.isRunning = true;
   stats.startedAt = new Date();

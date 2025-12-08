@@ -231,6 +231,19 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newReputation",
+        "type": "address"
+      }
+    ],
+    "name": "ReputationContractUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "uint256",
         "name": "taskId",
@@ -770,6 +783,19 @@
   },
   {
     "inputs": [],
+    "name": "reputationContract",
+    "outputs": [
+      {
+        "internalType": "contract IRoseReputation",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "roseToken",
     "outputs": [
       {
@@ -803,6 +829,19 @@
       }
     ],
     "name": "setPassportSigner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_reputation",
+        "type": "address"
+      }
+    ],
+    "name": "setReputation",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -10,6 +10,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAccount, useReadContracts, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import { CONTRACTS } from '../constants/contracts';
 import { GAS_SETTINGS } from '../constants/gas';
 
@@ -82,17 +83,17 @@ export const useDelegation = () => {
         functionName: 'stakedRose',
         args: [account],
       },
-      // Check if user can be a delegate
+      // Check if user can be a delegate (from RoseReputation)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canDelegate',
         args: [account],
       },
-      // User's reputation
+      // User's reputation (from RoseReputation)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [account],
       },
@@ -105,7 +106,7 @@ export const useDelegation = () => {
       },
     ],
     query: {
-      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE,
+      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE && !!CONTRACTS.REPUTATION,
     },
   });
 

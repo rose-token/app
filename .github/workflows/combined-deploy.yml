@@ -77,6 +77,7 @@ jobs:
           TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.treasuryAddress')
           MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
           GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
+          REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
           VROSE_ADDRESS=$(cat deployment-output.json | jq -r '.vRoseAddress')
           USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
 
@@ -85,6 +86,7 @@ jobs:
           echo "Treasury: $TREASURY_ADDRESS"
           echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Governance: $GOVERNANCE_ADDRESS"
+          echo "Reputation: $REPUTATION_ADDRESS"
           echo "vROSE: $VROSE_ADDRESS"
           echo "USDC: $USDC_ADDRESS"
 
@@ -93,11 +95,12 @@ jobs:
           echo "TREASURY_ADDRESS=$TREASURY_ADDRESS" >> $GITHUB_ENV
           echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
           echo "GOVERNANCE_ADDRESS=$GOVERNANCE_ADDRESS" >> $GITHUB_ENV
+          echo "REPUTATION_ADDRESS=$REPUTATION_ADDRESS" >> $GITHUB_ENV
           echo "VROSE_ADDRESS=$VROSE_ADDRESS" >> $GITHUB_ENV
           echo "USDC_ADDRESS=$USDC_ADDRESS" >> $GITHUB_ENV
 
           # Create a JSON file with contract addresses for artifact passing
-          echo "{\"tokenAddress\":\"$TOKEN_ADDRESS\",\"treasuryAddress\":\"$TREASURY_ADDRESS\",\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"vRoseAddress\":\"$VROSE_ADDRESS\",\"usdcAddress\":\"$USDC_ADDRESS\"}" > contract-addresses.json
+          echo "{\"tokenAddress\":\"$TOKEN_ADDRESS\",\"treasuryAddress\":\"$TREASURY_ADDRESS\",\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"reputationAddress\":\"$REPUTATION_ADDRESS\",\"vRoseAddress\":\"$VROSE_ADDRESS\",\"usdcAddress\":\"$USDC_ADDRESS\"}" > contract-addresses.json
       
       - name: Upload Contract Addresses Artifact
         if: github.event_name == 'push' || github.event.inputs.deploy == 'true'
@@ -150,6 +153,7 @@ jobs:
           TREASURY_ADDRESS=$(cat contract-addresses.json | jq -r '.treasuryAddress')
           MARKETPLACE_ADDRESS=$(cat contract-addresses.json | jq -r '.marketplaceAddress')
           GOVERNANCE_ADDRESS=$(cat contract-addresses.json | jq -r '.governanceAddress')
+          REPUTATION_ADDRESS=$(cat contract-addresses.json | jq -r '.reputationAddress')
           VROSE_ADDRESS=$(cat contract-addresses.json | jq -r '.vRoseAddress')
           USDC_ADDRESS=$(cat contract-addresses.json | jq -r '.usdcAddress')
 
@@ -158,6 +162,7 @@ jobs:
           echo "TREASURY_ADDRESS=$TREASURY_ADDRESS" >> $GITHUB_ENV
           echo "MARKETPLACE_ADDRESS=$MARKETPLACE_ADDRESS" >> $GITHUB_ENV
           echo "GOVERNANCE_ADDRESS=$GOVERNANCE_ADDRESS" >> $GITHUB_ENV
+          echo "REPUTATION_ADDRESS=$REPUTATION_ADDRESS" >> $GITHUB_ENV
           echo "VROSE_ADDRESS=$VROSE_ADDRESS" >> $GITHUB_ENV
           echo "USDC_ADDRESS=$USDC_ADDRESS" >> $GITHUB_ENV
 
@@ -166,6 +171,7 @@ jobs:
           echo "Treasury: $TREASURY_ADDRESS"
           echo "Marketplace: $MARKETPLACE_ADDRESS"
           echo "Governance: $GOVERNANCE_ADDRESS"
+          echo "Reputation: $REPUTATION_ADDRESS"
           echo "vROSE: $VROSE_ADDRESS"
           echo "USDC: $USDC_ADDRESS"
       
@@ -186,6 +192,7 @@ jobs:
           VITE_TREASURY_ADDRESS: ${{ env.TREASURY_ADDRESS }}
           VITE_MARKETPLACE_ADDRESS: ${{ env.MARKETPLACE_ADDRESS }}
           VITE_GOVERNANCE_ADDRESS: ${{ env.GOVERNANCE_ADDRESS }}
+          VITE_REPUTATION_ADDRESS: ${{ env.REPUTATION_ADDRESS }}
           VITE_VROSE_ADDRESS: ${{ env.VROSE_ADDRESS }}
           VITE_USDC_ADDRESS: ${{ env.USDC_ADDRESS }}
           VITE_BUILD_VERSION: ${{ env.BUILD_VERSION }}

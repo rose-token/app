@@ -63,6 +63,7 @@ export const config = {
   // Contract addresses
   contracts: {
     governance: process.env.GOVERNANCE_ADDRESS || '',
+    reputation: process.env.REPUTATION_ADDRESS || '',
     treasury: process.env.TREASURY_ADDRESS || '',
     marketplace: process.env.MARKETPLACE_ADDRESS || '',
   },
