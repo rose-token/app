@@ -329,7 +329,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | useReputation | tasks (worker/stakeholder/customer), totalEarned, reputationScore, canPropose/Vote/Delegate | 5-min cache |
 | useGovernance | stakedRose, votingPower, availableVP, delegatedOut, vRoseBalance, totalSystemVP | deposit, withdraw, refetch |
 | useProposals | proposals, userVotes, loading | createProposal, vote, voteCombined, freeVP, finalize, execute, cancel |
-| useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom (auto-detects active votes), undelegateWithVoteReduction, castDelegatedVote, claimAllRewards |
+| useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom (auto-uses vote reduction if active votes), castDelegatedVote, claimAllRewards |
 | useNavHistory | snapshots, pagination | refetch (default 3 years daily) |
 
 **Note:** deposit/withdraw/vote/delegate methods internally fetch reputation attestation from backend. `voteCombined` calls `/api/delegation/confirm-vote` after successful delegated votes for reward tracking.
@@ -361,7 +361,6 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | /api/delegation/claimable/:user | GET | Claimable rewards |
 | /api/delegation/undelegate-signature | POST | Phase 1: Vote reduction signature for undelegation |
 | /api/delegation/global-power/:delegate | GET | Phase 1: Global available VP + nonce |
-| /api/delegation/has-active-votes/:delegator/:delegate | GET | Check if delegate has active votes using delegator's VP |
 | /api/delegation/confirm-undelegate | POST | Phase 2: Clear DB allocations after vote reduction |
 | /api/reconciliation/status | GET | Phase 2: Reconciliation status + last result |
 | /api/reconciliation/last | GET | Phase 2: Full last reconciliation result |

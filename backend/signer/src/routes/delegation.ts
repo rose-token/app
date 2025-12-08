@@ -500,42 +500,4 @@ router.get('/global-power/:delegate', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/delegation/has-active-votes/:delegator/:delegate
- * Check if delegate has active votes using delegator's VP
- * Used by frontend to auto-detect when to use vote reduction flow
- */
-router.get('/has-active-votes/:delegator/:delegate', async (req: Request, res: Response) => {
-  try {
-    const { delegator, delegate } = req.params;
-
-    if (!ethers.isAddress(delegator)) {
-      return res.status(400).json({ error: 'Invalid delegator address' });
-    }
-    if (!ethers.isAddress(delegate)) {
-      return res.status(400).json({ error: 'Invalid delegate address' });
-    }
-
-    if (!config.contracts.governance) {
-      return res.status(500).json({ error: 'Governance contract not configured' });
-    }
-
-    // Use computeVoteReductions with minimal VP to check for active votes
-    // Passing 1n as vpAmount - we just want to know if there ARE any active votes
-    const reductions = await computeVoteReductions(delegator, delegate, 1n);
-    const hasActiveVotes = reductions.length > 0;
-
-    return res.json({
-      delegator,
-      delegate,
-      hasActiveVotes,
-      activeProposalCount: reductions.length,
-      activeProposals: reductions.map(r => r.proposalId),
-    });
-  } catch (error) {
-    console.error('Check active votes error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 export default router;

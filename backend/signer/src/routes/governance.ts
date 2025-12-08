@@ -248,8 +248,8 @@ router.post('/refresh-vp', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid user address' } as ErrorResponse);
     }
 
-    // Get current reputation from contract
-    const newRep = await governanceService.getReputation(user);
+    // Get reputation using backend ^0.6 formula (consistent with vpRefresh watcher)
+    const newRep = await governanceService.getReputationNew(user);
 
     // Create signature
     const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
