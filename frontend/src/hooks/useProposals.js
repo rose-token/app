@@ -17,39 +17,7 @@ const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost
 
 // Need RoseTokenABI for debug logging
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
-
-/**
- * Parse simulation errors into user-friendly messages (for propose)
- */
-function parseSimulationError(err) {
-  const msg = err?.message || err?.shortMessage || '';
-
-  // Custom errors from RoseGovernance
-  if (msg.includes('IneligibleToPropose')) {
-    return 'Not eligible to propose. Requires 90% reputation and 10+ completed tasks.';
-  }
-  if (msg.includes('SignatureExpired')) {
-    return 'Passport signature expired. Please try again.';
-  }
-  if (msg.includes('SignatureAlreadyUsed')) {
-    return 'Passport signature already used. Please get a new signature.';
-  }
-  if (msg.includes('InvalidSignature')) {
-    return 'Invalid passport signature. Backend signer may be misconfigured.';
-  }
-  if (msg.includes('ProposalValueExceedsTreasury')) {
-    return 'Proposal value exceeds treasury balance.';
-  }
-  if (msg.includes('ZeroAmount')) {
-    return 'Title or value cannot be empty/zero.';
-  }
-  if (msg.includes('NotGovernance')) {
-    return 'Contract configuration error - contact admin.';
-  }
-
-  // Return original message if no match
-  return msg || 'Transaction simulation failed';
-}
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 
 /**
  * Parse transaction errors into user-friendly messages
@@ -759,28 +727,28 @@ export const useProposals = (options = {}) => {
       console.log('Signature expiry:', expiry, '(', new Date(Number(expiry) * 1000).toISOString(), ')');
       console.log('Signature:', signature);
 
-      // Check 1: canPropose
+      // Check 1: canPropose (from RoseReputation contract)
       const canProposeResult = await publicClient.readContract({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canPropose',
         args: [account],
       });
       console.log('canPropose:', canProposeResult);
 
-      // Check 2: Reputation
+      // Check 2: Reputation (from RoseReputation contract)
       const reputation = await publicClient.readContract({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [account],
       });
       console.log('Reputation:', Number(reputation), '%');
 
-      // Check 3: User stats (tasks completed)
+      // Check 3: User stats (tasks completed) (from RoseReputation contract)
       const userStats = await publicClient.readContract({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'userStats',
         args: [account],
       });
@@ -812,32 +780,6 @@ export const useProposals = (options = {}) => {
       const repAttestation = await fetchReputationAttestation();
       console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
 
-      // Simulate the propose call BEFORE executing
-      console.log('Simulating propose transaction...');
-      try {
-        await publicClient.simulateContract({
-          address: CONTRACTS.GOVERNANCE,
-          abi: RoseGovernanceABI,
-          functionName: 'propose',
-          args: [
-            title,
-            descriptionHash,
-            valueWei,
-            BigInt(deadlineTimestamp),
-            deliverables,
-            BigInt(expiry),
-            signature,
-            BigInt(repAttestation.reputation),
-            BigInt(repAttestation.expiry),
-            repAttestation.signature,
-          ],
-          account: account,
-        });
-        console.log('Propose simulation passed!');
-      } catch (simError) {
-        console.error('Propose simulation FAILED:', simError);
-        throw new Error(parseSimulationError(simError));
-      }
       // ========== END DEBUG LOGGING ==========
 
       console.log('Creating proposal...');
