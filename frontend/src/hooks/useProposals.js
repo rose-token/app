@@ -628,6 +628,8 @@ export const useProposals = (options = {}) => {
             BigInt(signatureData.amount),
             support,
             signatureData.allocationsHash,
+            signatureData.allocations.map(a => [a.delegator, BigInt(a.powerUsed)]),
+            BigInt(signatureData.nonce),
             BigInt(signatureData.expiry),
             signatureData.signature,
           ],
