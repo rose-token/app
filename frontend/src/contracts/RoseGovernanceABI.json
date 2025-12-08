@@ -32,6 +32,11 @@
   },
   {
     "inputs": [],
+    "name": "AllocationHashMismatch",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "AlreadyClaimed",
     "type": "error"
   },
@@ -129,6 +134,11 @@
   },
   {
     "inputs": [],
+    "name": "InsufficientGlobalDelegatedPower",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientStake",
     "type": "error"
   },
@@ -209,6 +219,11 @@
   },
   {
     "inputs": [],
+    "name": "ProposalStillActive",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ProposalValueExceedsTreasury",
     "type": "error"
   },
@@ -241,6 +256,11 @@
   {
     "inputs": [],
     "name": "SignatureExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "StaleSignature",
     "type": "error"
   },
   {
@@ -301,6 +321,31 @@
       }
     ],
     "name": "DelegatedTo",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegatedVPFreed",
     "type": "event"
   },
   {
@@ -402,6 +447,25 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newNonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegationNonceIncremented",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "user",
         "type": "address"
       },
@@ -432,6 +496,37 @@
       }
     ],
     "name": "DelegationSignerUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "powerUsed",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegatorAllocationStored",
     "type": "event"
   },
   {
@@ -873,6 +968,37 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "vpRemoved",
+        "type": "uint256"
+      }
+    ],
+    "name": "VoteReduced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "voter",
         "type": "address"
       },
@@ -1245,7 +1371,45 @@
         "type": "address"
       }
     ],
+    "name": "canDelegateOut",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
     "name": "canPropose",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "canReceiveDelegation",
     "outputs": [
       {
         "internalType": "bool",
@@ -1309,6 +1473,28 @@
         "internalType": "bytes32",
         "name": "allocationsHash",
         "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "delegator",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "powerUsed",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IRoseGovernance.DelegatorAllocation[]",
+        "name": "allocations",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",
@@ -1425,6 +1611,25 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "name": "delegatedUsedTotal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       },
       {
         "internalType": "address",
@@ -1457,6 +1662,25 @@
       }
     ],
     "name": "delegatedVoteAllocated",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegationNonce",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1504,6 +1728,35 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegatorVoteContribution",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1652,6 +1905,19 @@
         "type": "uint256"
       }
     ],
+    "name": "freeDelegatedVP",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
     "name": "freeVP",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1736,6 +2002,25 @@
         "internalType": "struct IRoseGovernance.DelegatedVoteRecord",
         "name": "",
         "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "delegateAddr",
+        "type": "address"
+      }
+    ],
+    "name": "getGlobalAvailableDelegatedPower",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -2397,6 +2682,61 @@
       }
     ],
     "name": "undelegate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "delegateAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "vpAmount",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "proposalId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "delegate",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "vpToRemove",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "support",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IRoseGovernance.VoteReduction[]",
+        "name": "reductions",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "undelegateWithVoteReduction",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

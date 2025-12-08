@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IvROSE.sol";
 import "./interfaces/IRoseGovernance.sol";
+import "./interfaces/IRoseReputation.sol";
 
 /**
  * @title RoseGovernance
@@ -36,6 +37,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     address public treasury;
     address public passportSigner;
     address public owner;
+    IRoseReputation public reputation;
 
     // ============ Core VP Tracking ============
     mapping(address => uint256) public stakedRose;          // ROSE deposited
@@ -54,14 +56,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     // ============ Proposal Allocation (VP locked to ONE proposal) ============
     mapping(address => uint256) public allocatedToProposal; // Which proposal (0 = none)
     mapping(address => uint256) public proposalVPLocked;    // VP locked to that proposal
-
-    // ============ Reputation Tracking ============
-    mapping(address => UserStats) internal _userStats;
-
-    // ============ Monthly Bucket Storage (for new reputation formula) ============
-    // user => bucket (timestamp / BUCKET_DURATION) => raw task value
-    mapping(address => mapping(uint256 => uint256)) public monthlySuccessValue;
-    mapping(address => mapping(uint256 => uint256)) public monthlyDisputeValue;
 
     // ============ Proposals ============
     uint256 public proposalCounter;
@@ -83,6 +77,20 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     address public delegationSigner;
     mapping(uint256 => mapping(address => bytes32)) public allocationHashes;
 
+    // ============ Phase 1: Liquid Democracy Enhancements ============
+    // Nonce per delegate - bumped on delegation changes to invalidate stale signatures
+    mapping(address => uint256) public delegationNonce;
+
+    // Global delegated VP budget - tracks total VP used across ALL active proposals
+    mapping(address => uint256) public delegatedUsedTotal;
+
+    // Per-delegator contribution tracking for vote reduction on undelegation
+    // proposalId => delegate => delegator => vpContribution
+    mapping(uint256 => mapping(address => mapping(address => uint256))) public delegatorVoteContribution;
+
+    // Track active proposals for each delegator (for cleanup on undelegation)
+    mapping(address => uint256[]) internal _delegatorActiveProposals;
+
     // ============ Voter Reward Pools ============
     mapping(uint256 => uint256) public voterRewardPool;
     mapping(uint256 => uint256) public voterRewardTotalVotes;
@@ -97,16 +105,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     uint256 public constant QUORUM_THRESHOLD = 3300;      // 33% in basis points
     uint256 public constant PASS_THRESHOLD = 5833;        // 7/12 = 58.33%
     uint256 public constant MAX_EDIT_CYCLES = 4;
-    uint256 public constant COLD_START_TASKS = 10;
-    uint256 public constant PROPOSER_REP_THRESHOLD = 90;
-    uint256 public constant VOTER_REP_THRESHOLD = 70;
-    uint256 public constant DELEGATE_REP_THRESHOLD = 90;
-    uint256 public constant DEFAULT_REPUTATION = 60;
     uint256 public constant BASIS_POINTS = 10000;
-
-    // Bucket-based reputation constants (3 year decay)
-    uint256 public constant BUCKET_DURATION = 30 days;
-    uint256 public constant DECAY_BUCKETS = 36;  // 3 years = 36 months
 
     // Reward percentages (basis points)
     uint256 public constant DAO_MINT_PERCENT = 200;       // 2%
@@ -148,27 +147,26 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         address _vRoseToken,
         address _marketplace,
         address _treasury,
-        address _passportSigner
+        address _passportSigner,
+        address _reputation
     ) {
         if (_roseToken == address(0)) revert ZeroAddress();
         if (_vRoseToken == address(0)) revert ZeroAddress();
         if (_marketplace == address(0)) revert ZeroAddress();
         if (_treasury == address(0)) revert ZeroAddress();
         if (_passportSigner == address(0)) revert ZeroAddressSigner();
+        if (_reputation == address(0)) revert ZeroAddress();
 
         roseToken = IERC20(_roseToken);
         vRoseToken = IvROSE(_vRoseToken);
         marketplace = _marketplace;
         treasury = _treasury;
         passportSigner = _passportSigner;
+        reputation = IRoseReputation(_reputation);
         owner = msg.sender;
     }
 
     // ============ View Functions ============
-
-    function userStats(address user) external view returns (UserStats memory) {
-        return _userStats[user];
-    }
 
     function proposals(uint256 proposalId) external view returns (Proposal memory) {
         return _proposals[proposalId];
@@ -183,84 +181,12 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
-     * @dev Get reputation score using O(36) bucket-based formula
-     * Delegates to getReputationSimple() which uses monthly buckets
+     * @dev Calculate vote power: sqrt(amount) * (rep / 100)
      */
-    function getReputation(address user) public view returns (uint256) {
-        return getReputationSimple(user);
-    }
-
-    /**
-     * @dev Get simplified reputation using monthly buckets (O(36) vs O(n))
-     * Uses linear formula (not ^0.6) as on-chain fallback
-     * Backend computes precise ^0.6 formula and signs attestation
-     */
-    function getReputationSimple(address user) public view returns (uint256) {
-        UserStats memory stats = _userStats[user];
-
-        // Cold start check
-        if (stats.tasksCompleted < COLD_START_TASKS) {
-            return DEFAULT_REPUTATION;
-        }
-
-        uint256 currentBucket = block.timestamp / BUCKET_DURATION;
-        uint256 successSum = 0;
-        uint256 disputeSum = 0;
-
-        // Sum last 36 months (3 years)
-        for (uint256 i = 0; i < DECAY_BUCKETS; i++) {
-            uint256 bucket = currentBucket - i;
-            successSum += monthlySuccessValue[user][bucket];
-            disputeSum += monthlyDisputeValue[user][bucket];
-        }
-
-        if (successSum == 0) {
-            return DEFAULT_REPUTATION;
-        }
-
-        // Simplified: linear with 2x dispute multiplier (not ^0.6)
-        // Add failed proposals penalty converted to equivalent dispute value
-        uint256 failedPenalty = (stats.failedProposals * successSum) / (stats.tasksCompleted > 0 ? stats.tasksCompleted : 1) / 5;
-        uint256 adjustedDisputeSum = (disputeSum * 2) + failedPenalty;
-
-        if (adjustedDisputeSum >= successSum) {
-            return 0;
-        }
-
-        return ((successSum - adjustedDisputeSum) * 100) / successSum;
-    }
-
-    /**
-     * @dev Validate backend-signed reputation attestation
-     * Used for precise reputation in governance actions
-     */
-    function validateReputationSignature(
-        address user,
-        uint256 reputation,
-        uint256 expiry,
-        bytes memory signature
-    ) public view returns (bool) {
-        if (block.timestamp > expiry) return false;
-
-        bytes32 messageHash = keccak256(abi.encodePacked(
-            "reputation",
-            user,
-            reputation,
-            expiry
-        ));
-        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
-
-        address recovered = ethSignedHash.recover(signature);
-        return recovered == passportSigner;
-    }
-
-    /**
-     * @dev Calculate vote power: sqrt(amount) * (reputation / 100)
-     */
-    function getVotePower(uint256 amount, uint256 reputation) public pure returns (uint256) {
-        if (amount == 0 || reputation == 0) return 0;
+    function getVotePower(uint256 amount, uint256 rep) public pure returns (uint256) {
+        if (amount == 0 || rep == 0) return 0;
         uint256 sqrtAmount = _sqrt(amount);
-        return (sqrtAmount * reputation) / 100;
+        return (sqrtAmount * rep) / 100;
     }
 
     /**
@@ -284,22 +210,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         for (uint256 i = 0; i < delegates.length; i++) {
             amounts[i] = delegatedVP[user][delegates[i]];
         }
-    }
-
-    function canPropose(address user) public view returns (bool) {
-        UserStats memory stats = _userStats[user];
-        if (stats.tasksCompleted < COLD_START_TASKS) return false;
-        return getReputation(user) >= PROPOSER_REP_THRESHOLD;
-    }
-
-    function canVote(address user) public view returns (bool) {
-        return getReputation(user) >= VOTER_REP_THRESHOLD;
-    }
-
-    function canDelegate(address user) public view returns (bool) {
-        UserStats memory stats = _userStats[user];
-        if (stats.tasksCompleted < COLD_START_TASKS) return false;
-        return getReputation(user) >= DELEGATE_REP_THRESHOLD;
     }
 
     function canReceiveDelegation(address user) public view returns (bool) {
@@ -330,6 +240,16 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         return total > used ? total - used : 0;
     }
 
+    /**
+     * @dev Get globally available delegated VP (not used on ANY active proposal)
+     * Used for checking if delegate has VP budget available
+     */
+    function getGlobalAvailableDelegatedPower(address delegateAddr) public view returns (uint256) {
+        uint256 total = totalDelegatedIn[delegateAddr];
+        uint256 usedGlobal = delegatedUsedTotal[delegateAddr];
+        return total > usedGlobal ? total - usedGlobal : 0;
+    }
+
     function getDelegatedVote(uint256 proposalId, address delegateAddr) external view returns (DelegatedVoteRecord memory) {
         return _delegatedVotes[proposalId][delegateAddr];
     }
@@ -355,7 +275,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         bytes calldata repSignature
     ) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
 
@@ -394,7 +314,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         bytes calldata repSignature
     ) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
         if (stakedRose[msg.sender] < amount) revert InsufficientStake();
@@ -450,13 +370,13 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (delegateAddr == address(0)) revert ZeroAddress();
         if (delegateAddr == msg.sender) revert CannotDelegateToSelf();
         if (vpAmount == 0) revert ZeroAmount();
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
         // Check sender eligibility using attested reputation
-        if (attestedRep < VOTER_REP_THRESHOLD) revert IneligibleToVote();
+        if (attestedRep < reputation.VOTER_REP_THRESHOLD()) revert IneligibleToVote();
         // Check delegate eligibility using on-chain reputation (delegate not calling)
-        if (!canDelegate(delegateAddr)) revert IneligibleToDelegate();
+        if (!reputation.canDelegate(delegateAddr)) revert IneligibleToDelegate();
 
         // Prevent delegation chains - max depth 1
         if (totalDelegatedIn[msg.sender] > 0) revert DelegationChainNotAllowed();
@@ -476,6 +396,10 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         delegatedVP[msg.sender][delegateAddr] += vpAmount;
         totalDelegatedOut[msg.sender] += vpAmount;
         totalDelegatedIn[delegateAddr] += vpAmount;
+
+        // Bump nonce to invalidate any pending signatures
+        delegationNonce[delegateAddr]++;
+        emit DelegationNonceIncremented(delegateAddr, delegationNonce[delegateAddr]);
 
         emit DelegationChanged(msg.sender, delegateAddr, vpAmount, true);
     }
@@ -498,6 +422,116 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             _removeDelegationTarget(msg.sender, delegateAddr);
             _delegators[delegateAddr].remove(msg.sender);
         }
+
+        // Bump nonce to invalidate any pending signatures
+        delegationNonce[delegateAddr]++;
+        emit DelegationNonceIncremented(delegateAddr, delegationNonce[delegateAddr]);
+
+        emit DelegationChanged(msg.sender, delegateAddr, vpAmount, false);
+    }
+
+    /**
+     * @dev Phase 1: Undelegate with vote reduction on active proposals
+     * Reduces votes proportionally when delegator removes delegation
+     * @param delegateAddr Address to undelegate from
+     * @param vpAmount Amount of VP to undelegate
+     * @param reductions Array of vote reductions for active proposals
+     * @param expiry Signature expiration
+     * @param signature Backend signer signature
+     */
+    function undelegateWithVoteReduction(
+        address delegateAddr,
+        uint256 vpAmount,
+        VoteReduction[] calldata reductions,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+        if (block.timestamp > expiry) revert SignatureExpired();
+        if (vpAmount == 0) revert ZeroAmount();
+        if (delegatedVP[msg.sender][delegateAddr] < vpAmount) revert InsufficientDelegated();
+
+        // Verify backend signature for vote reductions
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "undelegateWithReduction",
+            msg.sender,
+            delegateAddr,
+            vpAmount,
+            keccak256(abi.encode(reductions)),
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        // Apply vote reductions for active proposals
+        for (uint256 i = 0; i < reductions.length; i++) {
+            VoteReduction calldata r = reductions[i];
+            Proposal storage p = _proposals[r.proposalId];
+
+            // Only reduce votes for active proposals
+            if (p.status != ProposalStatus.Active) continue;
+
+            // Verify the reduction is for this delegate and delegator has contribution
+            uint256 contribution = delegatorVoteContribution[r.proposalId][r.delegate][msg.sender];
+            if (contribution == 0) continue;
+
+            // Calculate proportional reduction based on VP being undelegated
+            uint256 currentDelegatedVP = delegatedVP[msg.sender][delegateAddr];
+            uint256 reductionAmount = (contribution * vpAmount) / currentDelegatedVP;
+            if (reductionAmount > contribution) reductionAmount = contribution;
+            if (reductionAmount > r.vpToRemove) reductionAmount = r.vpToRemove;
+
+            // Reduce proposal votes
+            if (r.support) {
+                if (p.yayVotes >= reductionAmount) {
+                    p.yayVotes -= reductionAmount;
+                }
+            } else {
+                if (p.nayVotes >= reductionAmount) {
+                    p.nayVotes -= reductionAmount;
+                }
+            }
+
+            // Update tracking
+            if (delegatedVoteAllocated[r.proposalId][r.delegate] >= reductionAmount) {
+                delegatedVoteAllocated[r.proposalId][r.delegate] -= reductionAmount;
+            }
+
+            DelegatedVoteRecord storage record = _delegatedVotes[r.proposalId][r.delegate];
+            if (record.totalPowerUsed >= reductionAmount) {
+                record.totalPowerUsed -= reductionAmount;
+            }
+
+            // Reduce global VP budget
+            if (delegatedUsedTotal[r.delegate] >= reductionAmount) {
+                delegatedUsedTotal[r.delegate] -= reductionAmount;
+            }
+
+            // Clear delegator's contribution for this proposal
+            delegatorVoteContribution[r.proposalId][r.delegate][msg.sender] -= reductionAmount;
+
+            emit VoteReduced(r.proposalId, r.delegate, msg.sender, reductionAmount);
+        }
+
+        // Standard undelegate logic
+        delegatedVP[msg.sender][delegateAddr] -= vpAmount;
+        totalDelegatedOut[msg.sender] -= vpAmount;
+        totalDelegatedIn[delegateAddr] -= vpAmount;
+
+        // Remove from targets if fully undelegated
+        if (delegatedVP[msg.sender][delegateAddr] == 0) {
+            _removeDelegationTarget(msg.sender, delegateAddr);
+            _delegators[delegateAddr].remove(msg.sender);
+        }
+
+        // Bump nonce to invalidate any pending signatures
+        delegationNonce[delegateAddr]++;
+        emit DelegationNonceIncremented(delegateAddr, delegationNonce[delegateAddr]);
 
         emit DelegationChanged(msg.sender, delegateAddr, vpAmount, false);
     }
@@ -592,7 +626,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (recovered != passportSigner) revert InvalidSignature();
 
         // Verify reputation attestation
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
 
@@ -602,7 +636,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (block.timestamp > p.votingEndsAt) revert ProposalNotActive();
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
         // Check eligibility using attested reputation
-        if (attestedRep < VOTER_REP_THRESHOLD) revert IneligibleToVote();
+        if (attestedRep < reputation.VOTER_REP_THRESHOLD()) revert IneligibleToVote();
         if (vpAmount == 0) revert ZeroAmount();
 
         // Check VP not locked to another proposal
@@ -666,11 +700,42 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
+     * @dev Phase 1: Free delegated VP after proposal ends
+     * Releases global VP budget for the delegate
+     * Can only be called once per proposal (guards against double-free)
+     * @param proposalId Proposal to free VP from
+     */
+    function freeDelegatedVP(uint256 proposalId) external nonReentrant {
+        Proposal storage p = _proposals[proposalId];
+        if (p.status == ProposalStatus.Active && block.timestamp <= p.votingEndsAt) {
+            revert ProposalStillActive();
+        }
+
+        uint256 used = delegatedVoteAllocated[proposalId][msg.sender];
+        if (used > 0) {
+            // Clear the per-proposal allocation FIRST to prevent double-free
+            delegatedVoteAllocated[proposalId][msg.sender] = 0;
+
+            // Release from global budget
+            if (delegatedUsedTotal[msg.sender] >= used) {
+                delegatedUsedTotal[msg.sender] -= used;
+            } else {
+                delegatedUsedTotal[msg.sender] = 0;
+            }
+
+            emit DelegatedVPFreed(proposalId, msg.sender, used);
+        }
+    }
+
+    /**
      * @dev Delegate casts vote with received VP (backend-signed)
+     * Phase 1: Now includes nonce validation, global VP budget, and on-chain allocation storage
      * @param proposalId Proposal to vote on
      * @param amount VP amount to use
      * @param support True for Yay, false for Nay
      * @param allocationsHash Hash of per-delegator allocations
+     * @param allocations Array of per-delegator allocations (stored on-chain)
+     * @param nonce Current delegation nonce (must match)
      * @param expiry Signature expiration
      * @param signature Backend signer signature
      */
@@ -679,12 +744,18 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         uint256 amount,
         bool support,
         bytes32 allocationsHash,
+        DelegatorAllocation[] calldata allocations,
+        uint256 nonce,
         uint256 expiry,
         bytes calldata signature
     ) external nonReentrant {
         if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
         if (block.timestamp > expiry) revert SignatureExpired();
 
+        // Phase 1: Verify nonce matches current state (prevents stale signatures)
+        if (nonce != delegationNonce[msg.sender]) revert StaleSignature();
+
+        // Phase 1: Include nonce in signature verification
         bytes32 messageHash = keccak256(abi.encodePacked(
             "delegatedVote",
             msg.sender,
@@ -692,6 +763,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             amount,
             support,
             allocationsHash,
+            nonce,
             expiry
         ));
         bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
@@ -709,7 +781,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (p.proposer == msg.sender) revert CannotVoteOnOwnProposal();
         if (amount == 0) revert ZeroAmount();
 
-        // Check delegate has enough received VP
+        // Phase 1: Check GLOBAL delegated VP budget (not just per-proposal)
+        uint256 globalAvailable = getGlobalAvailableDelegatedPower(msg.sender);
+        if (amount > globalAvailable) revert InsufficientGlobalDelegatedPower();
+
+        // Also check per-proposal availability (for incremental votes)
         uint256 available = getAvailableDelegatedPower(msg.sender, proposalId);
         if (amount > available) revert InsufficientDelegatedPower();
 
@@ -719,11 +795,32 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             if (record.support != support) revert CannotChangeVoteDirection();
         }
 
+        // Phase 1: Verify allocations match the hash
+        bytes32 computedHash = _computeAllocationsHash(proposalId, msg.sender, allocations);
+        if (computedHash != allocationsHash) revert AllocationHashMismatch();
+
+        // Phase 1: Store per-delegator contributions on-chain
+        for (uint256 i = 0; i < allocations.length; i++) {
+            address delegator = allocations[i].delegator;
+            uint256 power = allocations[i].powerUsed;
+
+            // Track first contribution from this delegator to this proposal
+            if (delegatorVoteContribution[proposalId][msg.sender][delegator] == 0) {
+                _delegatorActiveProposals[delegator].push(proposalId);
+            }
+
+            delegatorVoteContribution[proposalId][msg.sender][delegator] += power;
+            emit DelegatorAllocationStored(proposalId, msg.sender, delegator, power);
+        }
+
         // Store allocation hash for reward verification
         allocationHashes[proposalId][msg.sender] = allocationsHash;
 
         // Update tracking
         delegatedVoteAllocated[proposalId][msg.sender] += amount;
+
+        // Phase 1: Update global VP budget
+        delegatedUsedTotal[msg.sender] += amount;
 
         if (!record.hasVoted) {
             record.hasVoted = true;
@@ -774,13 +871,13 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         bytes calldata repSignature
     ) external requiresPassport("propose", expiry, signature) returns (uint256) {
         // Verify reputation attestation
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
         // Check eligibility: need cold start tasks + attested reputation >= 90%
-        UserStats memory stats = _userStats[msg.sender];
-        if (stats.tasksCompleted < COLD_START_TASKS) revert IneligibleToPropose();
-        if (attestedRep < PROPOSER_REP_THRESHOLD) revert IneligibleToPropose();
+        UserStats memory stats = reputation.userStats(msg.sender);
+        if (stats.tasksCompleted < reputation.COLD_START_TASKS()) revert IneligibleToPropose();
+        if (attestedRep < reputation.PROPOSER_REP_THRESHOLD()) revert IneligibleToPropose();
 
         if (bytes(title).length == 0) revert ZeroAmount();
         if (value == 0) revert ZeroAmount();
@@ -879,7 +976,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             emit ProposalFinalized(proposalId, ProposalStatus.Passed);
         } else {
             p.status = ProposalStatus.Failed;
-            _userStats[p.proposer].failedProposals++;
+            reputation.recordFailedProposal(p.proposer);
             _distributeNayRewards(proposalId);
             emit ProposalFinalized(proposalId, ProposalStatus.Failed);
         }
@@ -906,27 +1003,6 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     // ============ Marketplace Integration ============
-
-    function updateUserStats(address user, uint256 taskValue, bool isDispute) external onlyMarketplace {
-        // Write to monthly buckets (new reputation formula)
-        uint256 bucket = block.timestamp / BUCKET_DURATION;
-        if (isDispute) {
-            monthlyDisputeValue[user][bucket] += taskValue;
-        } else {
-            monthlySuccessValue[user][bucket] += taskValue;
-        }
-
-        UserStats storage stats = _userStats[user];
-        if (isDispute) {
-            stats.disputes++;
-        } else {
-            stats.tasksCompleted++;
-            stats.totalTaskValue += taskValue;
-        }
-        stats.lastTaskTimestamp = block.timestamp;
-
-        emit UserStatsUpdated(user, stats.tasksCompleted, stats.totalTaskValue);
-    }
 
     function onTaskComplete(uint256 taskId) external onlyMarketplace {
         uint256 proposalId = _taskToProposal[taskId];
@@ -970,7 +1046,7 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
 
         // Verify reputation attestation
-        if (!validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
+        if (!reputation.validateReputationSignature(msg.sender, attestedRep, repExpiry, repSignature)) {
             revert InvalidSignature();
         }
 
@@ -1049,6 +1125,11 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         marketplace = _marketplace;
     }
 
+    function setReputation(address _reputation) external onlyOwner {
+        if (_reputation == address(0)) revert ZeroAddress();
+        reputation = IRoseReputation(_reputation);
+    }
+
     function setTreasury(address _treasury) external onlyOwner {
         if (_treasury == address(0)) revert ZeroAddress();
         treasury = _treasury;
@@ -1125,6 +1206,24 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
             z = (x / z + z) / 2;
         }
         return y;
+    }
+
+    /**
+     * @dev Phase 1: Compute hash of allocations for on-chain verification
+     * Must match the backend's computeAllocationsHash() algorithm
+     */
+    function _computeAllocationsHash(
+        uint256 proposalId,
+        address delegate,
+        DelegatorAllocation[] calldata allocations
+    ) internal pure returns (bytes32) {
+        // Sort is expected to be done by caller (backend)
+        // Encode: (proposalId, delegate, [(delegator, powerUsed), ...])
+        return keccak256(abi.encode(
+            proposalId,
+            delegate,
+            allocations
+        ));
     }
 }
 

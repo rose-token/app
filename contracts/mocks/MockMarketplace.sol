@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "../interfaces/IRoseReputation.sol";
+
 /**
  * @title MockMarketplace
  * @dev Mock marketplace for testing governance DAO task creation and completion
@@ -8,12 +10,17 @@ pragma solidity ^0.8.20;
 contract MockMarketplace {
     uint256 private _taskIdCounter;
     address public governance;
+    IRoseReputation public reputation;
 
     event DAOTaskCreated(uint256 indexed taskId, address indexed proposer, uint256 value);
     event TaskCompleted(uint256 indexed taskId);
 
     function setGovernance(address _governance) external {
         governance = _governance;
+    }
+
+    function setReputation(address _reputation) external {
+        reputation = IRoseReputation(_reputation);
     }
 
     function createDAOTask(
@@ -38,11 +45,8 @@ contract MockMarketplace {
         emit TaskCompleted(taskId);
     }
 
-    // Helper for tests to update user stats via governance
+    // Helper for tests to update user stats via reputation contract
     function updateUserStats(address user, uint256 taskValue, bool isDispute) external {
-        (bool success,) = governance.call(
-            abi.encodeWithSignature("updateUserStats(address,uint256,bool)", user, taskValue, isDispute)
-        );
-        require(success, "updateUserStats failed");
+        reputation.updateUserStats(user, taskValue, isDispute);
     }
 }

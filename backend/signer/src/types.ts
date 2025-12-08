@@ -218,3 +218,186 @@ export interface RefreshVPResponse {
   expiry: number;
   signature: string;
 }
+
+// Phase 1: Vote reduction types
+export interface VoteReduction {
+  proposalId: number;
+  delegate: string;
+  vpToRemove: string;  // BigInt as string
+  support: boolean;
+}
+
+export interface UndelegateWithReductionRequest {
+  delegator: string;
+  delegate: string;
+  vpAmount: string;  // BigInt as string
+}
+
+export interface UndelegateWithReductionResponse {
+  delegator: string;
+  delegate: string;
+  vpAmount: string;
+  reductions: VoteReduction[];
+  expiry: number;
+  signature: string;
+}
+
+// Phase 1: Updated delegation vote response to include nonce
+export interface DelegationVoteResponseV2 {
+  delegate: string;
+  proposalId: number;
+  amount: string;
+  support: boolean;
+  allocationsHash: string;
+  allocations: DelegationAllocation[];
+  nonce: string;  // BigInt as string
+  expiry: number;
+  signature: string;
+}
+
+// Phase 2: Confirm undelegate request (clears DB allocations)
+export interface ConfirmUndelegateRequest {
+  delegator: string;
+  delegate: string;
+  proposalIds: number[];
+}
+
+export interface ConfirmUndelegateResponse {
+  success: boolean;
+  cleared: number;
+}
+
+// Phase 2: Reconciliation types
+export interface ReconciliationStatus {
+  lastReconciliation: string | null;
+  isHealthy: boolean | null;
+  discrepancyCount: number;
+  stats: {
+    totalDbRecords: number;
+    uniqueProposals: number;
+    uniqueDelegates: number;
+    uniqueDelegators: number;
+  };
+}
+
+// Phase 3: Delegate scoring types
+export interface DelegateScoreResponse {
+  delegate: string;
+  hasScore: boolean;
+  totalDelegatedVotes?: number;
+  winningVotes?: number;
+  missedVotes?: number;
+  winRate?: number;
+  winRatePercent?: string;
+  participationRate?: number;
+  participationRatePercent?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  message?: string;
+}
+
+export interface DelegateEligibilityResponse {
+  delegate: string;
+  eligible: boolean;
+  reason: string | null;
+  gateEnabled: boolean;
+  minVotesRequired: number;
+  minWinRate: number;
+  score: {
+    totalDelegatedVotes: number;
+    winningVotes: number;
+    winRate: number;
+  } | null;
+}
+
+export interface DelegateLeaderboardEntry {
+  rank: number;
+  delegate: string;
+  totalDelegatedVotes: number;
+  winningVotes: number;
+  winRate: number;
+  winRatePercent: string;
+  participationRate: number;
+  updatedAt: string;
+}
+
+export interface DelegateLeaderboardResponse {
+  delegates: DelegateLeaderboardEntry[];
+  total: number;
+  minVotesForRanking: number;
+}
+
+export interface DelegateScoringStatsResponse {
+  totalDelegatesScored: number;
+  totalProposalsScored: number;
+  averageWinRate: number;
+  averageWinRatePercent: string;
+  topDelegate: {
+    address: string;
+    winRate: number;
+    totalVotes: number;
+  } | null;
+  config: {
+    enabled: boolean;
+    gateOnScore: boolean;
+    minVotesForWinRate: number;
+    minWinRate: number;
+  };
+}
+
+// Phase 4: VP Refresh types
+export interface VPRefreshStatsResponse {
+  enabled: boolean;
+  executeOnChain: boolean;
+  isRunning: boolean;
+  startedAt: string | null;
+  eventsProcessed: number;
+  usersQueued: number;
+  refreshesExecuted: number;
+  refreshesSkipped: number;
+  lastError: string | null;
+  lastEventBlock: number;
+  pendingUsers: string[];
+  config: {
+    minVpDifference: string;
+    debounceMs: number;
+    maxBatchSize: number;
+    startupBlockLookback: number;
+  };
+}
+
+export interface VPRefreshResultResponse {
+  address: string;
+  success: boolean;
+  txHash?: string;
+  error?: string;
+  oldVP: string;
+  newVP: string;
+  oldRep: number;
+  newRep: number;
+}
+
+export interface VPRefreshCheckResponse {
+  address: string;
+  needsRefresh: boolean;
+  message?: string;
+  result?: VPRefreshResultResponse;
+}
+
+export interface VPRefreshProcessResponse {
+  processed: number;
+  results: VPRefreshResultResponse[];
+}
+
+export interface VPRefreshConfigResponse {
+  enabled: boolean;
+  executeOnChain: boolean;
+  minVpDifference: string;
+  debounceMs: number;
+  maxBatchSize: number;
+  startupBlockLookback: number;
+  contracts: {
+    governance: string;
+    marketplace: string;
+  };
+}
