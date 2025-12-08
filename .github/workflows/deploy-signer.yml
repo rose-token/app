@@ -76,7 +76,9 @@ jobs:
       actions: read
     outputs:
       governance_address: ${{ steps.extract.outputs.governance_address }}
+      reputation_address: ${{ steps.extract.outputs.reputation_address }}
       treasury_address: ${{ steps.extract.outputs.treasury_address }}
+      marketplace_address: ${{ steps.extract.outputs.marketplace_address }}
     steps:
       - name: Download artifact from combined-deploy
         uses: dawidd6/action-download-artifact@v3
@@ -91,15 +93,23 @@ jobs:
         run: |
           if [ -f contract-addresses.json ]; then
             GOVERNANCE_ADDRESS=$(jq -r '.governanceAddress' contract-addresses.json)
+            REPUTATION_ADDRESS=$(jq -r '.reputationAddress' contract-addresses.json)
             TREASURY_ADDRESS=$(jq -r '.treasuryAddress' contract-addresses.json)
+            MARKETPLACE_ADDRESS=$(jq -r '.marketplaceAddress' contract-addresses.json)
             echo "Found governance address: $GOVERNANCE_ADDRESS"
+            echo "Found reputation address: $REPUTATION_ADDRESS"
             echo "Found treasury address: $TREASURY_ADDRESS"
+            echo "Found marketplace address: $MARKETPLACE_ADDRESS"
             echo "governance_address=$GOVERNANCE_ADDRESS" >> $GITHUB_OUTPUT
+            echo "reputation_address=$REPUTATION_ADDRESS" >> $GITHUB_OUTPUT
             echo "treasury_address=$TREASURY_ADDRESS" >> $GITHUB_OUTPUT
+            echo "marketplace_address=$MARKETPLACE_ADDRESS" >> $GITHUB_OUTPUT
           else
             echo "No contract-addresses.json found, will use secret fallback"
             echo "governance_address=" >> $GITHUB_OUTPUT
+            echo "reputation_address=" >> $GITHUB_OUTPUT
             echo "treasury_address=" >> $GITHUB_OUTPUT
+            echo "marketplace_address=" >> $GITHUB_OUTPUT
           fi
 
   deploy-akash:
@@ -125,7 +135,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
           GOVERNANCE_ADDRESS: ${{ needs.get-contract-addresses.outputs.governance_address || secrets.GOVERNANCE_ADDRESS }}
+          REPUTATION_ADDRESS: ${{ needs.get-contract-addresses.outputs.reputation_address || secrets.REPUTATION_ADDRESS }}
           TREASURY_ADDRESS: ${{ needs.get-contract-addresses.outputs.treasury_address || secrets.TREASURY_ADDRESS }}
+          MARKETPLACE_ADDRESS: ${{ needs.get-contract-addresses.outputs.marketplace_address || secrets.MARKETPLACE_ADDRESS }}
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -139,7 +151,9 @@ jobs:
           sed -i "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" backend/signer/deploy.yaml
           sed -i "s|\${ARBITRUM_SEPOLIA_RPC_URL}|${ARBITRUM_SEPOLIA_RPC_URL}|g" backend/signer/deploy.yaml
           sed -i "s|\${GOVERNANCE_ADDRESS}|${GOVERNANCE_ADDRESS}|g" backend/signer/deploy.yaml
+          sed -i "s|\${REPUTATION_ADDRESS}|${REPUTATION_ADDRESS}|g" backend/signer/deploy.yaml
           sed -i "s|\${TREASURY_ADDRESS}|${TREASURY_ADDRESS}|g" backend/signer/deploy.yaml
+          sed -i "s|\${MARKETPLACE_ADDRESS}|${MARKETPLACE_ADDRESS}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy.yaml | sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g' | sed 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=***REDACTED***/g' | sed 's/postgresql:\/\/rose:.*/postgresql:\/\/rose:***REDACTED***@localhost:5432\/rose/g'

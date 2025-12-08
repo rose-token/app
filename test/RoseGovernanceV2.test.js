@@ -16,6 +16,7 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
   let roseToken;
   let vRose;
   let governance;
+  let reputation;
   let mockMarketplace;
   let mockTreasury;
   let owner;
@@ -67,24 +68,25 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
   }
 
   // Helper to create delegation vote signature
-  async function createDelegatedVoteSignature(signer, delegate, proposalId, vpAmount, support, allocationsHash, expiry) {
+  // Phase 1: Updated signature includes nonce
+  async function createDelegatedVoteSignature(signer, delegate, proposalId, vpAmount, support, allocationsHash, nonce, expiry) {
     const messageHash = ethers.solidityPackedKeccak256(
-      ["string", "address", "uint256", "uint256", "bool", "bytes32", "uint256"],
-      ["delegatedVote", delegate, proposalId, vpAmount, support, allocationsHash, expiry]
+      ["string", "address", "uint256", "uint256", "bool", "bytes32", "uint256", "uint256"],
+      ["delegatedVote", delegate, proposalId, vpAmount, support, allocationsHash, nonce, expiry]
     );
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
   // Helper to compute allocations hash
+  // Phase 1: Updated to match contract's abi.encode format for DelegatorAllocation struct
   function computeAllocationsHash(proposalId, delegate, allocations) {
     const abiCoder = new ethers.AbiCoder();
-    const sorted = [...allocations].sort((a, b) =>
-      a.delegator.toLowerCase().localeCompare(b.delegator.toLowerCase())
-    );
+    // Must match contract's: keccak256(abi.encode(proposalId, delegate, allocations))
+    // Where allocations is DelegatorAllocation[] = tuple(address delegator, uint256 powerUsed)[]
     return ethers.keccak256(
       abiCoder.encode(
         ["uint256", "address", "tuple(address,uint256)[]"],
-        [proposalId, delegate, sorted.map(a => [a.delegator, a.powerUsed])]
+        [proposalId, delegate, allocations.map(a => [a.delegator, a.powerUsed])]
       )
     );
   }
@@ -132,6 +134,16 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     const MockTreasury = await ethers.getContractFactory("MockTreasury");
     mockTreasury = await MockTreasury.deploy();
 
+    // Deploy RoseReputation first (needed by Governance)
+    const RoseReputation = await ethers.getContractFactory("RoseReputation");
+    // Constructor: (governance, marketplace, reputationSigner)
+    // We'll deploy with placeholder addresses and update them later
+    reputation = await RoseReputation.deploy(
+      owner.address, // temporary governance
+      await mockMarketplace.getAddress(),
+      passportSigner.address // reputation signer
+    );
+
     // Deploy Governance
     const Governance = await ethers.getContractFactory("RoseGovernance");
     governance = await Governance.deploy(
@@ -139,12 +151,17 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       await vRose.getAddress(),
       await mockMarketplace.getAddress(),
       await mockTreasury.getAddress(),
-      passportSigner.address
+      passportSigner.address,
+      await reputation.getAddress()
     );
+
+    // Update reputation to point to actual governance
+    await reputation.setGovernance(await governance.getAddress());
 
     // Set up permissions
     await vRose.setGovernance(await governance.getAddress());
     await mockMarketplace.setGovernance(await governance.getAddress());
+    await mockMarketplace.setReputation(await reputation.getAddress());
     await governance.setDelegationSigner(delegationSigner.address);
 
     // Mint tokens to users for testing
@@ -863,9 +880,13 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const currentBlock = await ethers.provider.getBlock("latest");
       const expiry = currentBlock.timestamp + 3600;
 
+      // Phase 1: Get current nonce for delegate
+      const nonce = await governance.delegationNonce(user2.address);
+
       const allocations = [{ delegator: user1.address, powerUsed: VP_AMOUNT }];
       const allocationsHash = computeAllocationsHash(proposalId, user2.address, allocations);
 
+      // Phase 1: Include nonce in signature
       const signature = await createDelegatedVoteSignature(
         delegationSigner,
         user2.address,
@@ -873,11 +894,22 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         VP_AMOUNT,
         support,
         allocationsHash,
+        nonce,
         expiry
       );
 
+      // Phase 1: Pass allocations and nonce to castDelegatedVote
       await expect(
-        governance.connect(user2).castDelegatedVote(proposalId, VP_AMOUNT, support, allocationsHash, expiry, signature)
+        governance.connect(user2).castDelegatedVote(
+          proposalId,
+          VP_AMOUNT,
+          support,
+          allocationsHash,
+          allocations.map(a => [a.delegator, a.powerUsed]),
+          nonce,
+          expiry,
+          signature
+        )
       ).to.emit(governance, "VPAllocatedToProposal");
     });
 
@@ -886,9 +918,13 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
       const currentBlock = await ethers.provider.getBlock("latest");
       const expiry = currentBlock.timestamp + 3600;
 
+      // Phase 1: Get current nonce for delegate
+      const nonce = await governance.delegationNonce(user2.address);
+
       const allocations = [{ delegator: user1.address, powerUsed: VP_AMOUNT }];
       const allocationsHash = computeAllocationsHash(proposalId, user2.address, allocations);
 
+      // Phase 1: Include nonce in signature
       const signature = await createDelegatedVoteSignature(
         delegationSigner,
         user2.address,
@@ -896,13 +932,24 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
         VP_AMOUNT,
         support,
         allocationsHash,
+        nonce,
         expiry
       );
 
       const proposalBefore = await governance.proposals(proposalId);
       const yayBefore = proposalBefore.yayVotes;
 
-      await governance.connect(user2).castDelegatedVote(proposalId, VP_AMOUNT, support, allocationsHash, expiry, signature);
+      // Phase 1: Pass allocations and nonce to castDelegatedVote
+      await governance.connect(user2).castDelegatedVote(
+        proposalId,
+        VP_AMOUNT,
+        support,
+        allocationsHash,
+        allocations.map(a => [a.delegator, a.powerUsed]),
+        nonce,
+        expiry,
+        signature
+      );
 
       const proposalAfter = await governance.proposals(proposalId);
       expect(proposalAfter.yayVotes).to.equal(yayBefore + VP_AMOUNT);

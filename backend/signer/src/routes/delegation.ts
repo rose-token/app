@@ -12,7 +12,12 @@ import {
   signClaimApproval,
   calculateRewardAmount,
   verifyAndStoreAllocations,
+  getDelegationNonce,
+  getGlobalAvailableDelegatedPower,
+  computeVoteReductions,
+  signUndelegateWithReduction,
 } from '../services/delegation';
+import { validateDelegateEligibility } from '../services/delegateScoring';
 import {
   DelegationVoteRequest,
   DelegationVoteResponse,
@@ -21,6 +26,9 @@ import {
   ClaimableRewardsResponse,
   ClaimableRewardsDisplayResponse,
   ClaimErrorResponse,
+  UndelegateWithReductionRequest,
+  UndelegateWithReductionResponse,
+  DelegationVoteResponseV2,
 } from '../types';
 
 const router = Router();
@@ -80,17 +88,42 @@ router.post('/vote-signature', async (req: Request, res: Response) => {
       } as DelegationErrorResponse);
     }
 
+    // Phase 3: Check delegate eligibility based on voting score
+    if (config.delegateScoring.gateOnScore) {
+      const eligibility = await validateDelegateEligibility(delegate);
+      if (!eligibility.eligible) {
+        return res.status(403).json({
+          error: 'Delegate ineligible due to poor voting performance',
+          reason: eligibility.reason,
+          score: eligibility.score ? {
+            totalVotes: eligibility.score.totalDelegatedVotes,
+            winRate: eligibility.score.winRate,
+          } : null,
+        } as DelegationErrorResponse);
+      }
+    }
+
     // Check if proposal is active
     const active = await isProposalActive(proposalId);
     if (!active) {
       return res.status(400).json({ error: 'Proposal is not active or voting has ended' } as DelegationErrorResponse);
     }
 
-    // Check available power
+    // Phase 1: Check GLOBAL available power (not just per-proposal)
+    const globalAvailablePower = await getGlobalAvailableDelegatedPower(delegate);
+    if (amountBigInt > globalAvailablePower) {
+      return res.status(400).json({
+        error: 'Insufficient global delegated power budget',
+        availablePower: globalAvailablePower.toString(),
+        requestedAmount: amount,
+      } as DelegationErrorResponse);
+    }
+
+    // Also check per-proposal availability (for incremental votes)
     const availablePower = await getAvailableDelegatedPower(delegate, proposalId);
     if (amountBigInt > availablePower) {
       return res.status(400).json({
-        error: 'Insufficient delegated power',
+        error: 'Insufficient delegated power for this proposal',
         availablePower: availablePower.toString(),
         requestedAmount: amount,
       } as DelegationErrorResponse);
@@ -103,29 +136,34 @@ router.post('/vote-signature', async (req: Request, res: Response) => {
       amountBigInt
     );
 
+    // Phase 1: Get current delegation nonce
+    const nonce = await getDelegationNonce(delegate);
+
     // Generate expiry timestamp
     const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
 
-    // Sign the vote approval
+    // Phase 1: Sign the vote approval with nonce
     const signature = await signDelegatedVote(
       delegate,
       proposalId,
       amountBigInt,
       support,
       allocationsHash,
+      nonce,
       expiry
     );
 
     // NOTE: Allocations are NOT stored here - frontend must call /confirm-vote
     // after tx confirmation to store allocations (prevents phantom data from failed txs)
 
-    const response: DelegationVoteResponse = {
+    const response: DelegationVoteResponseV2 = {
       delegate,
       proposalId,
       amount,
       support,
       allocationsHash,
       allocations,
+      nonce: nonce.toString(),
       expiry,
       signature,
     };
@@ -317,6 +355,147 @@ router.post('/confirm-vote', async (req: Request, res: Response) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('Confirm vote error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/delegation/undelegate-signature
+ * Phase 1: Compute vote reductions and return signed approval for undelegation
+ * This allows delegators to revoke their delegation while proportionally reducing
+ * active votes cast by the delegate using their VP
+ */
+router.post('/undelegate-signature', async (req: Request, res: Response) => {
+  try {
+    const { delegator, delegate, vpAmount } = req.body as UndelegateWithReductionRequest;
+
+    // Validate inputs
+    if (!delegator || !isValidAddress(delegator)) {
+      return res.status(400).json({ error: 'Invalid delegator address' });
+    }
+
+    if (!delegate || !isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' });
+    }
+
+    if (!vpAmount) {
+      return res.status(400).json({ error: 'VP amount is required' });
+    }
+
+    let vpAmountBigInt: bigint;
+    try {
+      vpAmountBigInt = BigInt(vpAmount);
+      if (vpAmountBigInt <= 0n) {
+        return res.status(400).json({ error: 'VP amount must be positive' });
+      }
+    } catch {
+      return res.status(400).json({ error: 'Invalid VP amount format' });
+    }
+
+    // Check if governance contract is configured
+    if (!config.contracts.governance) {
+      return res.status(500).json({ error: 'Governance contract not configured' });
+    }
+
+    // Compute vote reductions for active proposals
+    const reductions = await computeVoteReductions(delegator, delegate, vpAmountBigInt);
+
+    // Generate expiry timestamp
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+
+    // Sign the undelegate with reduction approval
+    const signature = await signUndelegateWithReduction(
+      delegator,
+      delegate,
+      vpAmountBigInt,
+      reductions,
+      expiry
+    );
+
+    const response: UndelegateWithReductionResponse = {
+      delegator,
+      delegate,
+      vpAmount,
+      reductions,
+      expiry,
+      signature,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('Undelegate signature error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/delegation/confirm-undelegate
+ * Phase 2: Called by frontend after successful undelegateWithVoteReduction tx
+ * Clears DB allocations for the affected proposals
+ */
+router.post('/confirm-undelegate', async (req: Request, res: Response) => {
+  try {
+    const { delegator, delegate, proposalIds } = req.body;
+
+    if (!delegator || !isValidAddress(delegator)) {
+      return res.status(400).json({ error: 'Invalid delegator address' });
+    }
+
+    if (!delegate || !isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' });
+    }
+
+    if (!Array.isArray(proposalIds) || proposalIds.length === 0) {
+      // No proposals affected - no cleanup needed
+      return res.json({ success: true, cleared: 0 });
+    }
+
+    // Validate proposalIds
+    const validProposalIds = proposalIds.filter(
+      (id: unknown) => typeof id === 'number' && id > 0
+    );
+
+    if (validProposalIds.length === 0) {
+      return res.json({ success: true, cleared: 0 });
+    }
+
+    // Import and call clearDelegatorAllocations
+    const { clearDelegatorAllocations } = await import('../services/reconciliation');
+    await clearDelegatorAllocations(delegator, delegate, validProposalIds);
+
+    return res.json({ success: true, cleared: validProposalIds.length });
+  } catch (error) {
+    console.error('Confirm undelegate error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/delegation/global-power/:delegate
+ * Phase 1: Get global available delegated power for a delegate
+ */
+router.get('/global-power/:delegate', async (req: Request, res: Response) => {
+  try {
+    const { delegate } = req.params;
+
+    if (!isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' });
+    }
+
+    if (!config.contracts.governance) {
+      return res.status(500).json({ error: 'Governance contract not configured' });
+    }
+
+    const globalAvailablePower = await getGlobalAvailableDelegatedPower(delegate);
+    const nonce = await getDelegationNonce(delegate);
+
+    return res.json({
+      delegate,
+      globalAvailablePower: globalAvailablePower.toString(),
+      nonce: nonce.toString(),
+    });
+  } catch (error) {
+    console.error('Get global power error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

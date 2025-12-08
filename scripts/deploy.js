@@ -243,6 +243,19 @@ async function main() {
   const marketplaceAddress = await roseMarketplace.getAddress();
   console.log("RoseMarketplace deployed to:", marketplaceAddress);
 
+  // ============ Step 3.5: Deploy RoseReputation ============
+  console.log("\n--- Step 3.5: Deploying RoseReputation ---");
+  const RoseReputation = await hre.ethers.getContractFactory("RoseReputation");
+  // Deploy with deployer as temp governance (will update after governance deploys)
+  const roseReputation = await RoseReputation.deploy(
+    deployer.address,      // temp governance - updated in Step 5
+    marketplaceAddress,
+    passportSignerAddress
+  );
+  await roseReputation.waitForDeployment();
+  const reputationAddress = await roseReputation.getAddress();
+  console.log("RoseReputation deployed to:", reputationAddress);
+
   // ============ Step 4: Deploy RoseGovernance ============
   console.log("\n--- Step 4: Deploying RoseGovernance ---");
   const RoseGovernance = await hre.ethers.getContractFactory("RoseGovernance");
@@ -251,7 +264,8 @@ async function main() {
     vRoseAddress,
     marketplaceAddress,
     treasuryAddress,
-    passportSignerAddress
+    passportSignerAddress,
+    reputationAddress       // 6th parameter: RoseReputation address
   );
   await roseGovernance.waitForDeployment();
   const governanceAddress = await roseGovernance.getAddress();
@@ -301,6 +315,16 @@ async function main() {
   console.log("Setting marketplace governance...");
   await (await roseMarketplace.setGovernance(governanceAddress)).wait();
   console.log("Marketplace governance set ✓");
+
+  // Set reputation's governance to real governance address (was deployer at deploy time)
+  console.log("Setting reputation governance...");
+  await (await roseReputation.setGovernance(governanceAddress)).wait();
+  console.log("Reputation governance set ✓");
+
+  // Set reputation contract in marketplace
+  console.log("Setting marketplace reputation...");
+  await (await roseMarketplace.setReputation(reputationAddress)).wait();
+  console.log("Marketplace reputation set ✓");
 
   // Set delegation signer for delegated voting (required for castDelegatedVote)
   console.log("Setting delegation signer...");
@@ -368,6 +392,7 @@ async function main() {
   console.log("vROSE:           ", vRoseAddress);
   console.log("RoseTreasury:    ", treasuryAddress);
   console.log("RoseMarketplace: ", marketplaceAddress);
+  console.log("RoseReputation:  ", reputationAddress);
   console.log("RoseGovernance:  ", governanceAddress);
   console.log("========================================");
 
@@ -389,6 +414,7 @@ async function main() {
       vRose: vRoseAddress,
       roseTreasury: treasuryAddress,
       roseMarketplace: marketplaceAddress,
+      roseReputation: reputationAddress,
       roseGovernance: governanceAddress,
     },
     // Legacy field names for backward compatibility with frontend
@@ -396,6 +422,7 @@ async function main() {
     vRoseAddress: vRoseAddress,
     treasuryAddress: treasuryAddress,
     marketplaceAddress: marketplaceAddress,
+    reputationAddress: reputationAddress,
     governanceAddress: governanceAddress,
     passportSignerAddress: passportSignerAddress,
     externalAddresses: addresses,

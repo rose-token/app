@@ -29,7 +29,7 @@ export const config = {
 
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30'),
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'),
   },
 
   database: {
@@ -63,13 +63,45 @@ export const config = {
   // Contract addresses
   contracts: {
     governance: process.env.GOVERNANCE_ADDRESS || '',
+    reputation: process.env.REPUTATION_ADDRESS || '',
     treasury: process.env.TREASURY_ADDRESS || '',
+    marketplace: process.env.MARKETPLACE_ADDRESS || '',
   },
 
   // NAV history cron configuration
   nav: {
     cronSchedule: process.env.NAV_CRON_SCHEDULE || '0 0 * * *', // Daily at midnight UTC
     snapshotOnStartup: process.env.NAV_SNAPSHOT_ON_STARTUP !== 'false',
+  },
+
+  // Delegate scoring configuration (Phase 3)
+  delegateScoring: {
+    enabled: process.env.DELEGATE_SCORING_ENABLED !== 'false',
+    // Minimum votes before win rate is enforced
+    minVotesForWinRate: parseInt(process.env.DELEGATE_MIN_VOTES_FOR_WIN_RATE || '5'),
+    // Minimum win rate threshold (0.4 = 40%)
+    minWinRate: parseFloat(process.env.DELEGATE_MIN_WIN_RATE || '0.4'),
+    // Whether to gate delegated vote signatures on score
+    gateOnScore: process.env.DELEGATE_GATE_ON_SCORE === 'true',
+  },
+
+  // VP refresh configuration (Phase 4)
+  vpRefresh: {
+    // Enable automatic VP refresh on reputation changes (default: true)
+    enabled: process.env.VP_REFRESH_ENABLED !== 'false',
+    // Minimum VP difference (in VP decimals, 9) to trigger refresh
+    // Default: 1e9 = 1 VP unit
+    // Note: We only compare VP values, not reputation values directly,
+    // because on-chain getReputation() uses a different formula than backend.
+    minVpDifference: BigInt(process.env.VP_REFRESH_MIN_DIFFERENCE || '1000000000'),
+    // Debounce time in ms - wait before processing to batch events
+    debounceMs: parseInt(process.env.VP_REFRESH_DEBOUNCE_MS || '30000'),
+    // Maximum users to process per batch (gas consideration)
+    maxBatchSize: parseInt(process.env.VP_REFRESH_MAX_BATCH_SIZE || '10'),
+    // Whether to execute on-chain refresh (default: true)
+    executeOnChain: process.env.VP_REFRESH_EXECUTE !== 'false',
+    // Start watching from this many blocks before current (for startup catch-up)
+    startupBlockLookback: parseInt(process.env.VP_REFRESH_STARTUP_LOOKBACK || '1000'),
   },
 };
 

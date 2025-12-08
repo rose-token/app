@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IvROSE.sol";
+import "./interfaces/IRoseReputation.sol";
+import "./interfaces/IRoseGovernance.sol";
 
 /**
  * @title RoseMarketplace
@@ -38,6 +40,9 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
 
     // Governance contract (can create DAO tasks, receives completion notifications)
     address public governance;
+
+    // Reputation contract (for updating user stats directly)
+    IRoseReputation public reputationContract;
 
     // Passport signer (backend service that verifies Gitcoin Passport)
     address public passportSigner;
@@ -101,6 +106,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee);
     event GovernanceUpdated(address indexed newGovernance);
     event VRoseTokenUpdated(address indexed newVRoseToken);
+    event ReputationContractUpdated(address indexed newReputation);
     event ReputationChanged(address indexed user, uint256 taskValue);
 
     // Tokenomics parameters
@@ -195,6 +201,16 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         if (_vRoseToken == address(0)) revert ZeroAddress();
         vRoseToken = IvROSE(_vRoseToken);
         emit VRoseTokenUpdated(_vRoseToken);
+    }
+
+    /**
+     * @dev Set the reputation contract address (owner only)
+     * @param _reputation The new reputation contract address
+     */
+    function setReputation(address _reputation) external onlyOwner {
+        if (_reputation == address(0)) revert ZeroAddress();
+        reputationContract = IRoseReputation(_reputation);
+        emit ReputationContractUpdated(_reputation);
     }
 
     /**
@@ -516,19 +532,19 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             roseToken.safeTransfer(t.stakeholder, stakeholderFee);
             emit StakeholderFeeEarned(_taskId, t.stakeholder, stakeholderFee);
 
-            // Notify governance of task completion for reputation updates
-            if (governance != address(0)) {
-                IRoseGovernance(governance).updateUserStats(t.worker, taskValue, false);
-                IRoseGovernance(governance).updateUserStats(t.stakeholder, taskValue, false);
+            // Update reputation directly in RoseReputation contract
+            if (address(reputationContract) != address(0)) {
+                reputationContract.updateUserStats(t.worker, taskValue, false);
+                reputationContract.updateUserStats(t.stakeholder, taskValue, false);
 
                 // Emit ReputationChanged events for backend to trigger VP refresh
                 emit ReputationChanged(t.worker, taskValue);
                 emit ReputationChanged(t.stakeholder, taskValue);
+            }
 
-                // If DAO-sourced task, notify governance for reward distribution
-                if (t.source == TaskSource.DAO) {
-                    IRoseGovernance(governance).onTaskComplete(_taskId);
-                }
+            // If DAO-sourced task, notify governance for reward distribution
+            if (governance != address(0) && t.source == TaskSource.DAO) {
+                IRoseGovernance(governance).onTaskComplete(_taskId);
             }
         }
     }
@@ -552,10 +568,4 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
 // ============ Interface for RoseToken mint ============
 interface IRoseToken {
     function mint(address to, uint256 amount) external;
-}
-
-// ============ Interface for RoseGovernance ============
-interface IRoseGovernance {
-    function updateUserStats(address user, uint256 taskValue, bool isDispute) external;
-    function onTaskComplete(uint256 taskId) external;
 }

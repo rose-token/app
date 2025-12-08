@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
-import { DelegationAllocation, ClaimData, ClaimType } from '../types';
+import { DelegationAllocation, ClaimData, ClaimType, VoteReduction } from '../types';
 import { query, getPool } from '../db/pool';
 
 // Updated ABI for new VP-centric RoseGovernance
@@ -11,6 +11,12 @@ const GOVERNANCE_ABI = [
   'function totalDelegatedIn(address delegate) external view returns (uint256)',
   'function totalDelegatedOut(address delegator) external view returns (uint256)',
   'function votingPower(address user) external view returns (uint256)',
+
+  // Phase 1: Delegation nonce
+  'function delegationNonce(address delegate) external view returns (uint256)',
+  'function delegatedUsedTotal(address delegate) external view returns (uint256)',
+  'function delegatorVoteContribution(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
+  'function getGlobalAvailableDelegatedPower(address delegate) external view returns (uint256)',
 
   // Delegated vote tracking
   'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
@@ -63,6 +69,25 @@ function getGovernanceContract(): ethers.Contract {
 
 export function getSignerAddress(): string {
   return wallet.address;
+}
+
+/**
+ * Phase 1: Get current delegation nonce for a delegate
+ * Nonce is bumped whenever delegation state changes
+ */
+export async function getDelegationNonce(delegate: string): Promise<bigint> {
+  const contract = getGovernanceContract();
+  const nonce = await contract.delegationNonce(delegate);
+  return BigInt(nonce);
+}
+
+/**
+ * Phase 1: Get global available delegated power
+ */
+export async function getGlobalAvailableDelegatedPower(delegate: string): Promise<bigint> {
+  const contract = getGovernanceContract();
+  const available = await contract.getGlobalAvailableDelegatedPower(delegate);
+  return BigInt(available);
 }
 
 /**
@@ -354,8 +379,9 @@ export async function computeAllocations(
 
 /**
  * Sign delegated vote approval
+ * Phase 1: Now includes nonce in signature for stale signature protection
  * Message format matches contract's verification:
- * keccak256(abi.encodePacked("delegatedVote", delegate, proposalId, amount, support, allocationsHash, expiry))
+ * keccak256(abi.encodePacked("delegatedVote", delegate, proposalId, amount, support, allocationsHash, nonce, expiry))
  */
 export async function signDelegatedVote(
   delegate: string,
@@ -363,11 +389,12 @@ export async function signDelegatedVote(
   amount: bigint,
   support: boolean,
   allocationsHash: string,
+  nonce: bigint,
   expiry: number
 ): Promise<string> {
   const messageHash = ethers.solidityPackedKeccak256(
-    ['string', 'address', 'uint256', 'uint256', 'bool', 'bytes32', 'uint256'],
-    ['delegatedVote', delegate, proposalId, amount, support, allocationsHash, expiry]
+    ['string', 'address', 'uint256', 'uint256', 'bool', 'bytes32', 'uint256', 'uint256'],
+    ['delegatedVote', delegate, proposalId, amount, support, allocationsHash, nonce, expiry]
   );
 
   // Sign the hash (ethers adds "\x19Ethereum Signed Message:\n32" prefix)
@@ -514,6 +541,7 @@ export async function getDelegateVotedProposals(
 
 /**
  * Get all claimable rewards for a user (both direct votes and delegated)
+ * Phase 2: Validates delegated claim power against on-chain data
  */
 export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
   const contract = getGovernanceContract();
@@ -567,20 +595,36 @@ export async function getClaimableRewards(user: string): Promise<ClaimData[]> {
       // Check if delegate's vote was on winning side
       if (support !== outcome) continue;
 
-      // Check if user's VP was used for this delegate's vote on this proposal (from database cache)
-      const userPowerUsed = await getDelegatorPowerUsedFromDB(proposalId, delegate, user);
-      if (userPowerUsed === 0n) continue;
+      // Phase 2: Use ON-CHAIN data as source of truth for vote power
+      // This ensures claims are valid even if DB is out of sync
+      const onChainPower = BigInt(
+        await contract.delegatorVoteContribution(proposalId, delegate, user)
+      );
+
+      // Also get DB value for comparison/logging
+      const dbPower = await getDelegatorPowerUsedFromDB(proposalId, delegate, user);
+
+      // Log discrepancy if found (but use on-chain value)
+      if (dbPower !== onChainPower && dbPower !== 0n) {
+        console.warn(
+          `[Claims] Power discrepancy for ${user} on proposal ${proposalId} via ${delegate}: ` +
+          `DB=${dbPower}, on-chain=${onChainPower}`
+        );
+      }
+
+      // Skip if no on-chain contribution
+      if (onChainPower === 0n) continue;
 
       // Check if user already claimed this delegated reward
       const claimed = await contract.delegatorRewardClaimed(proposalId, delegate, user);
       if (claimed) continue;
 
-      // Add delegated vote claim
+      // Add delegated vote claim using on-chain power
       claims.push({
         proposalId,
         claimType: ClaimType.Delegator,
         delegate,
-        votePower: userPowerUsed.toString(),
+        votePower: onChainPower.toString(),
       });
     }
   }
@@ -622,4 +666,172 @@ export async function calculateRewardAmount(claim: ClaimData): Promise<bigint> {
 
   if (BigInt(totalVotes) === 0n) return 0n;
   return (BigInt(pool) * BigInt(claim.votePower)) / BigInt(totalVotes);
+}
+
+// ============ Phase 1: Vote Reduction Functions ============
+
+/**
+ * Phase 1: Get all active proposals
+ */
+export async function getActiveProposals(): Promise<number[]> {
+  const contract = getGovernanceContract();
+  const proposalCount = await contract.proposalCounter();
+
+  const activeProposals: number[] = [];
+  for (let i = 1; i <= Number(proposalCount); i++) {
+    const proposal = await contract.proposals(i);
+    const now = Math.floor(Date.now() / 1000);
+    // status 0 = Active
+    if (Number(proposal.status) === 0 && now <= Number(proposal.votingEndsAt)) {
+      activeProposals.push(i);
+    }
+  }
+
+  return activeProposals;
+}
+
+/**
+ * Phase 1: Compute vote reductions for undelegation
+ * Calculates how much VP should be removed from each active proposal
+ */
+export async function computeVoteReductions(
+  delegator: string,
+  delegate: string,
+  vpAmount: bigint
+): Promise<VoteReduction[]> {
+  const contract = getGovernanceContract();
+  const reductions: VoteReduction[] = [];
+
+  // Get current delegated VP (before undelegation)
+  const currentDelegatedVP = BigInt(await contract.delegatedVP(delegator, delegate));
+  if (currentDelegatedVP === 0n) {
+    return reductions;
+  }
+
+  // Get all active proposals
+  const activeProposals = await getActiveProposals();
+
+  for (const proposalId of activeProposals) {
+    // Check if delegate voted on this proposal
+    const voteRecord = await contract.getDelegatedVote(proposalId, delegate);
+    if (!voteRecord.hasVoted) continue;
+
+    // Get delegator's contribution to this proposal via this delegate
+    const contribution = BigInt(
+      await contract.delegatorVoteContribution(proposalId, delegate, delegator)
+    );
+    if (contribution === 0n) continue;
+
+    // Calculate proportional reduction based on VP being undelegated
+    let reductionAmount = (contribution * vpAmount) / currentDelegatedVP;
+    if (reductionAmount > contribution) {
+      reductionAmount = contribution;
+    }
+
+    if (reductionAmount > 0n) {
+      reductions.push({
+        proposalId,
+        delegate,
+        vpToRemove: reductionAmount.toString(),
+        support: voteRecord.support,
+      });
+    }
+  }
+
+  return reductions;
+}
+
+/**
+ * Phase 1: Sign undelegate with vote reduction approval
+ * Message format matches contract's verification
+ */
+export async function signUndelegateWithReduction(
+  delegator: string,
+  delegate: string,
+  vpAmount: bigint,
+  reductions: VoteReduction[],
+  expiry: number
+): Promise<string> {
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+
+  // Encode reductions as tuple array matching Solidity struct
+  const encodedReductions = abiCoder.encode(
+    ['tuple(uint256,address,uint256,bool)[]'],
+    [reductions.map(r => [r.proposalId, r.delegate, BigInt(r.vpToRemove), r.support])]
+  );
+
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'address', 'uint256', 'bytes32', 'uint256'],
+    [
+      'undelegateWithReduction',
+      delegator,
+      delegate,
+      vpAmount,
+      ethers.keccak256(encodedReductions),
+      expiry,
+    ]
+  );
+
+  return await wallet.signMessage(ethers.getBytes(messageHash));
+}
+
+/**
+ * Phase 1: Get delegator's contribution to a specific proposal via delegate
+ */
+export async function getDelegatorContribution(
+  proposalId: number,
+  delegate: string,
+  delegator: string
+): Promise<bigint> {
+  const contract = getGovernanceContract();
+  const contribution = await contract.delegatorVoteContribution(proposalId, delegate, delegator);
+  return BigInt(contribution);
+}
+
+/**
+ * Phase 2: Get all delegates with pending VP for a finalized proposal
+ */
+export async function getDelegatesWithPendingVP(proposalId: number): Promise<string[]> {
+  const contract = getGovernanceContract();
+  const delegatesWithPendingVP: string[] = [];
+
+  // Get all delegates who voted on this proposal via events
+  const filter = contract.filters.DelegatedVoteCast(proposalId);
+  const currentBlock = await getProvider().getBlockNumber();
+  const deploymentBlock = parseInt(process.env.GOVERNANCE_DEPLOYMENT_BLOCK || '0') || 0;
+
+  try {
+    const events = await contract.queryFilter(filter, deploymentBlock, currentBlock);
+
+    for (const event of events) {
+      if ('args' in event && event.args) {
+        const delegate = (event.args.delegate as string).toLowerCase();
+        // Check if they still have allocated VP (not already freed)
+        const allocated = BigInt(await contract.delegatedVoteAllocated(proposalId, delegate));
+        if (allocated > 0n && !delegatesWithPendingVP.includes(delegate)) {
+          delegatesWithPendingVP.push(delegate);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error querying delegates for proposal ${proposalId}:`, error);
+  }
+
+  return delegatesWithPendingVP;
+}
+
+/**
+ * Phase 2: Sign freeDelegatedVPFor approval for backend-triggered VP freeing
+ */
+export async function signFreeDelegatedVPFor(
+  proposalId: number,
+  delegate: string,
+  expiry: number
+): Promise<string> {
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'uint256', 'address', 'uint256'],
+    ['freeDelegatedVPFor', proposalId, delegate, expiry]
+  );
+
+  return await wallet.signMessage(ethers.getBytes(messageHash));
 }

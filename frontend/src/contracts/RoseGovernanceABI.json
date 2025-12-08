@@ -25,10 +25,20 @@
         "internalType": "address",
         "name": "_passportSigner",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_reputation",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "AllocationHashMismatch",
+    "type": "error"
   },
   {
     "inputs": [],
@@ -129,6 +139,11 @@
   },
   {
     "inputs": [],
+    "name": "InsufficientGlobalDelegatedPower",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientStake",
     "type": "error"
   },
@@ -209,6 +224,11 @@
   },
   {
     "inputs": [],
+    "name": "ProposalStillActive",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ProposalValueExceedsTreasury",
     "type": "error"
   },
@@ -241,6 +261,11 @@
   {
     "inputs": [],
     "name": "SignatureExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "StaleSignature",
     "type": "error"
   },
   {
@@ -301,6 +326,31 @@
       }
     ],
     "name": "DelegatedTo",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegatedVPFreed",
     "type": "event"
   },
   {
@@ -402,6 +452,25 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newNonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegationNonceIncremented",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "user",
         "type": "address"
       },
@@ -432,6 +501,37 @@
       }
     ],
     "name": "DelegationSignerUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "powerUsed",
+        "type": "uint256"
+      }
+    ],
+    "name": "DelegatorAllocationStored",
     "type": "event"
   },
   {
@@ -873,6 +973,37 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "delegate",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "delegator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "vpRemoved",
+        "type": "uint256"
+      }
+    ],
+    "name": "VoteReduced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "voter",
         "type": "address"
       },
@@ -982,72 +1113,7 @@
   },
   {
     "inputs": [],
-    "name": "BUCKET_DURATION",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "COLD_START_TASKS",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "DAO_MINT_PERCENT",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "DECAY_BUCKETS",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "DEFAULT_REPUTATION",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "DELEGATE_REP_THRESHOLD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1099,19 +1165,6 @@
   },
   {
     "inputs": [],
-    "name": "PROPOSER_REP_THRESHOLD",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "PROPOSER_REWARD",
     "outputs": [
       {
@@ -1126,19 +1179,6 @@
   {
     "inputs": [],
     "name": "QUORUM_THRESHOLD",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "VOTER_REP_THRESHOLD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1226,7 +1266,7 @@
         "type": "address"
       }
     ],
-    "name": "canDelegate",
+    "name": "canDelegateOut",
     "outputs": [
       {
         "internalType": "bool",
@@ -1245,26 +1285,7 @@
         "type": "address"
       }
     ],
-    "name": "canPropose",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "canVote",
+    "name": "canReceiveDelegation",
     "outputs": [
       {
         "internalType": "bool",
@@ -1309,6 +1330,28 @@
         "internalType": "bytes32",
         "name": "allocationsHash",
         "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "delegator",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "powerUsed",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IRoseGovernance.DelegatorAllocation[]",
+        "name": "allocations",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",
@@ -1425,6 +1468,25 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "name": "delegatedUsedTotal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       },
       {
         "internalType": "address",
@@ -1457,6 +1519,25 @@
       }
     ],
     "name": "delegatedVoteAllocated",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegationNonce",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1504,6 +1585,35 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "delegatorVoteContribution",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1652,6 +1762,47 @@
         "type": "uint256"
       }
     ],
+    "name": "freeDelegatedVP",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "delegateAddr",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "freeDelegatedVPFor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "proposalId",
+        "type": "uint256"
+      }
+    ],
     "name": "freeVP",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1744,6 +1895,25 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "delegateAddr",
+        "type": "address"
+      }
+    ],
+    "name": "getGlobalAvailableDelegatedPower",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "proposalId",
         "type": "uint256"
@@ -1792,44 +1962,6 @@
         "type": "address"
       }
     ],
-    "name": "getReputation",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "getReputationSimple",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
     "name": "getUserDelegations",
     "outputs": [
       {
@@ -1855,7 +1987,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "reputation",
+        "name": "rep",
         "type": "uint256"
       }
     ],
@@ -1902,54 +2034,6 @@
         "internalType": "address",
         "name": "",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "monthlyDisputeValue",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "monthlySuccessValue",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -2211,6 +2295,19 @@
   },
   {
     "inputs": [],
+    "name": "reputation",
+    "outputs": [
+      {
+        "internalType": "contract IRoseReputation",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "roseToken",
     "outputs": [
       {
@@ -2257,6 +2354,19 @@
       }
     ],
     "name": "setPassportSigner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_reputation",
+        "type": "address"
+      }
+    ],
+    "name": "setReputation",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2405,21 +2515,53 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "user",
+        "name": "delegateAddr",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "taskValue",
+        "name": "vpAmount",
         "type": "uint256"
       },
       {
-        "internalType": "bool",
-        "name": "isDispute",
-        "type": "bool"
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "proposalId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "delegate",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "vpToRemove",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "support",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct IRoseGovernance.VoteReduction[]",
+        "name": "reductions",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
       }
     ],
-    "name": "updateUserStats",
+    "name": "undelegateWithVoteReduction",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2444,52 +2586,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "userStats",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "tasksCompleted",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "totalTaskValue",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "disputes",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "failedProposals",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "lastTaskTimestamp",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct IRoseGovernance.UserStats",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "vRoseToken",
     "outputs": [
@@ -2497,40 +2593,6 @@
         "internalType": "contract IvROSE",
         "name": "",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "reputation",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "expiry",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes",
-        "name": "signature",
-        "type": "bytes"
-      }
-    ],
-    "name": "validateReputationSignature",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
       }
     ],
     "stateMutability": "view",

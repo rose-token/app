@@ -9,11 +9,17 @@ import profileRoutes from './routes/profile';
 import delegationRoutes from './routes/delegation';
 import governanceRoutes from './routes/governance';
 import treasuryRoutes from './routes/treasury';
+import reconciliationRoutes from './routes/reconciliation';
+import delegateScoringRoutes from './routes/delegateScoring';
+import vpRefreshRoutes from './routes/vpRefresh';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
 import { startRebalanceCron } from './cron/rebalance';
 import { startNavHistoryCron } from './cron/nav-history';
+import { startReconciliationCron } from './cron/reconciliation';
+import { startDelegateScoringCron } from './cron/delegateScoring';
+import { startVPRefreshWatcher } from './services/vpRefresh';
 
 const app = express();
 
@@ -47,6 +53,9 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/delegation', delegationRoutes);
 app.use('/api/governance', governanceRoutes);
 app.use('/api/treasury', treasuryRoutes);
+app.use('/api/reconciliation', reconciliationRoutes);
+app.use('/api/delegate-scoring', delegateScoringRoutes);
+app.use('/api/vp-refresh', vpRefreshRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -90,6 +99,11 @@ async function start() {
   // Start scheduled tasks
   startRebalanceCron();
   startNavHistoryCron();
+  startReconciliationCron();
+  startDelegateScoringCron();
+
+  // Start event watchers (Phase 4)
+  startVPRefreshWatcher();
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);

@@ -10,6 +10,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAccount, useReadContracts, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
+import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import { CONTRACTS } from '../constants/contracts';
 import { GAS_SETTINGS } from '../constants/gas';
 
@@ -82,17 +83,17 @@ export const useDelegation = () => {
         functionName: 'stakedRose',
         args: [account],
       },
-      // Check if user can be a delegate
+      // Check if user can be a delegate (from RoseReputation)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'canDelegate',
         args: [account],
       },
-      // User's reputation
+      // User's reputation (from RoseReputation)
       {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
+        address: CONTRACTS.REPUTATION,
+        abi: RoseReputationABI,
         functionName: 'getReputation',
         args: [account],
       },
@@ -105,7 +106,7 @@ export const useDelegation = () => {
       },
     ],
     query: {
-      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE,
+      enabled: isConnected && !!account && !!CONTRACTS.GOVERNANCE && !!CONTRACTS.REPUTATION,
     },
   });
 
@@ -317,7 +318,9 @@ export const useDelegation = () => {
   }, [isConnected, account, parsedDelegation, writeContractAsync, publicClient, refetchDelegation, fetchDelegations, fetchReputationAttestation]);
 
   /**
-   * Remove delegation from a specific delegate (partial undelegate)
+   * Remove delegation from a specific delegate (auto-detects active votes)
+   * Uses /undelegate-signature to detect active votes and get reduction signature in one call.
+   * If reductions exist, uses undelegateWithVoteReduction; otherwise simple undelegate.
    * @param {string} delegateAddress - Address to undelegate from
    * @param {string} vpAmount - Amount of VP to undelegate
    */
@@ -332,39 +335,113 @@ export const useDelegation = () => {
     try {
       const vpWei = parseUnits(vpAmount, 9);
 
-      console.log(`Undelegating ${vpAmount} VP from ${delegateAddress}...`);
-      const hash = await writeContractAsync({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'undelegate',
-        args: [delegateAddress, vpWei],
-        ...GAS_SETTINGS,
+      console.log(`Requesting undelegate signature for ${vpAmount} VP from ${delegateAddress}...`);
+
+      // Step 1: Get signature and vote reductions from backend (also serves as detection)
+      const response = await fetch(`${SIGNER_URL}/api/delegation/undelegate-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegator: account,
+          delegate: delegateAddress,
+          vpAmount: vpWei.toString(),
+        }),
       });
 
-      await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend error: ${response.status}`);
+      }
 
-      console.log('Undelegation successful!');
+      const { reductions, expiry, signature } = await response.json();
+      let hash;
+
+      // Step 2: Choose contract method based on whether there are active votes
+      if (reductions.length > 0) {
+        // Use undelegateWithVoteReduction when there are active votes
+        console.log(`Undelegating ${vpAmount} VP with ${reductions.length} vote reduction(s)...`);
+        hash = await writeContractAsync({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'undelegateWithVoteReduction',
+          args: [
+            delegateAddress,
+            vpWei,
+            reductions.map(r => [
+              BigInt(r.proposalId),
+              r.delegate,
+              BigInt(r.vpToRemove),
+              r.support,
+            ]),
+            BigInt(expiry),
+            signature,
+          ],
+          ...GAS_SETTINGS,
+        });
+
+        await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 1,
+        });
+
+        console.log('Undelegation with vote reduction successful!');
+
+        // Step 3: Confirm with backend to clear DB allocations
+        const affectedProposalIds = reductions.map(r => r.proposalId);
+        try {
+          await fetch(`${SIGNER_URL}/api/delegation/confirm-undelegate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              delegator: account,
+              delegate: delegateAddress,
+              proposalIds: affectedProposalIds,
+            }),
+          });
+          console.log('DB allocations cleared');
+        } catch (confirmErr) {
+          console.warn('Failed to confirm undelegate:', confirmErr);
+          // Non-fatal - tx succeeded, cron will reconcile
+        }
+      } else {
+        // Simple undelegate when no active votes (signature not needed)
+        console.log(`Simple undelegating ${vpAmount} VP from ${delegateAddress}...`);
+        hash = await writeContractAsync({
+          address: CONTRACTS.GOVERNANCE,
+          abi: RoseGovernanceABI,
+          functionName: 'undelegate',
+          args: [delegateAddress, vpWei],
+          ...GAS_SETTINGS,
+        });
+
+        await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 1,
+        });
+
+        console.log('Undelegation successful!');
+      }
+
       await Promise.all([
         refetchDelegation(),
         fetchDelegations(),
       ]);
-      return { success: true, hash };
+      return { success: true, hash, reductionsApplied: reductions.length };
     } catch (err) {
       console.error('Undelegate error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
         : err.message.includes('InsufficientDelegated')
         ? 'Insufficient delegated amount to undelegate'
-        : err.message;
+        : err.message.includes('SignatureExpired')
+        ? 'Signature expired - please try again'
+        : err.message || 'Failed to undelegate';
       setError(message);
       throw new Error(message);
     } finally {
       setActionLoading(prev => ({ ...prev, [`undelegate-${delegateAddress}`]: false }));
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchDelegation, fetchDelegations]);
+  }, [isConnected, account, writeContractAsync, publicClient, refetchDelegation, fetchDelegations]);
 
   /**
    * Remove all delegation to a delegate
@@ -442,6 +519,8 @@ export const useDelegation = () => {
           BigInt(signatureData.amount),
           support,
           signatureData.allocationsHash,
+          signatureData.allocations.map(a => [a.delegator, BigInt(a.powerUsed)]),
+          BigInt(signatureData.nonce),
           BigInt(signatureData.expiry),
           signatureData.signature,
         ],

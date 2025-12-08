@@ -7,6 +7,7 @@ describe("Task Detailed Description", function () {
   let roseTreasury;
   let vRose;
   let governance;
+  let reputation;
   let usdc;
   let tbtc;
   let reth;
@@ -135,6 +136,14 @@ describe("Task Detailed Description", function () {
       passportSigner.address
     );
 
+    // 9.5 Deploy RoseReputation (needed by Governance)
+    const RoseReputation = await ethers.getContractFactory("RoseReputation");
+    reputation = await RoseReputation.deploy(
+      owner.address, // temporary governance (will update)
+      await roseMarketplace.getAddress(),
+      passportSigner.address
+    );
+
     // 10. Deploy RoseGovernance
     const RoseGovernance = await ethers.getContractFactory("RoseGovernance");
     governance = await RoseGovernance.deploy(
@@ -142,8 +151,12 @@ describe("Task Detailed Description", function () {
       await vRose.getAddress(),
       await roseMarketplace.getAddress(),
       await roseTreasury.getAddress(),
-      passportSigner.address
+      passportSigner.address,
+      await reputation.getAddress()
     );
+
+    // 10.5 Update reputation to point to actual governance
+    await reputation.setGovernance(await governance.getAddress());
 
     // 11. Set up vROSE with governance and marketplace
     await vRose.setGovernance(await governance.getAddress());
@@ -152,6 +165,9 @@ describe("Task Detailed Description", function () {
     // 12. Set vROSE and governance on marketplace
     await roseMarketplace.setVRoseToken(await vRose.getAddress());
     await roseMarketplace.setGovernance(await governance.getAddress());
+
+    // 12.5 Set reputation on marketplace
+    await roseMarketplace.setReputation(await reputation.getAddress());
 
     // 13. Authorize Treasury, Marketplace, and Governance on RoseToken
     await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
