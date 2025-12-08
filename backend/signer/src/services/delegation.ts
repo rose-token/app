@@ -787,3 +787,51 @@ export async function getDelegatorContribution(
   const contribution = await contract.delegatorVoteContribution(proposalId, delegate, delegator);
   return BigInt(contribution);
 }
+
+/**
+ * Phase 2: Get all delegates with pending VP for a finalized proposal
+ */
+export async function getDelegatesWithPendingVP(proposalId: number): Promise<string[]> {
+  const contract = getGovernanceContract();
+  const delegatesWithPendingVP: string[] = [];
+
+  // Get all delegates who voted on this proposal via events
+  const filter = contract.filters.DelegatedVoteCast(proposalId);
+  const currentBlock = await getProvider().getBlockNumber();
+  const deploymentBlock = parseInt(process.env.GOVERNANCE_DEPLOYMENT_BLOCK || '0') || 0;
+
+  try {
+    const events = await contract.queryFilter(filter, deploymentBlock, currentBlock);
+
+    for (const event of events) {
+      if ('args' in event && event.args) {
+        const delegate = (event.args.delegate as string).toLowerCase();
+        // Check if they still have allocated VP (not already freed)
+        const allocated = BigInt(await contract.delegatedVoteAllocated(proposalId, delegate));
+        if (allocated > 0n && !delegatesWithPendingVP.includes(delegate)) {
+          delegatesWithPendingVP.push(delegate);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error querying delegates for proposal ${proposalId}:`, error);
+  }
+
+  return delegatesWithPendingVP;
+}
+
+/**
+ * Phase 2: Sign freeDelegatedVPFor approval for backend-triggered VP freeing
+ */
+export async function signFreeDelegatedVPFor(
+  proposalId: number,
+  delegate: string,
+  expiry: number
+): Promise<string> {
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'uint256', 'address', 'uint256'],
+    ['freeDelegatedVPFor', proposalId, delegate, expiry]
+  );
+
+  return await wallet.signMessage(ethers.getBytes(messageHash));
+}

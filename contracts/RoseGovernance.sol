@@ -728,6 +728,61 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
     }
 
     /**
+     * @dev Phase 2: Free delegated VP for a delegate after proposal ends (backend-triggered)
+     * Can be called by anyone with valid signature from delegationSigner
+     * Uses relayer pattern - signature proves authorization
+     * @param proposalId Proposal to free VP from
+     * @param delegateAddr Delegate whose VP to free
+     * @param expiry Signature expiration
+     * @param signature Backend signer signature
+     */
+    function freeDelegatedVPFor(
+        uint256 proposalId,
+        address delegateAddr,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant {
+        if (delegationSigner == address(0)) revert ZeroAddressDelegationSigner();
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        // Verify backend signature
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "freeDelegatedVPFor",
+            proposalId,
+            delegateAddr,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidDelegationSignature();
+
+        // Proposal must be ended (same check as freeDelegatedVP)
+        Proposal storage p = _proposals[proposalId];
+        if (p.status == ProposalStatus.Active && block.timestamp <= p.votingEndsAt) {
+            revert ProposalStillActive();
+        }
+
+        uint256 used = delegatedVoteAllocated[proposalId][delegateAddr];
+        if (used > 0) {
+            // Clear the per-proposal allocation FIRST to prevent double-free
+            delegatedVoteAllocated[proposalId][delegateAddr] = 0;
+
+            // Release from global budget
+            if (delegatedUsedTotal[delegateAddr] >= used) {
+                delegatedUsedTotal[delegateAddr] -= used;
+            } else {
+                delegatedUsedTotal[delegateAddr] = 0;
+            }
+
+            emit DelegatedVPFreed(proposalId, delegateAddr, used);
+        }
+    }
+
+    /**
      * @dev Delegate casts vote with received VP (backend-signed)
      * Phase 1: Now includes nonce validation, global VP budget, and on-chain allocation storage
      * @param proposalId Proposal to vote on

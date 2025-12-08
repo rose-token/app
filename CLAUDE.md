@@ -167,7 +167,8 @@ mapping(uint256 => mapping(address => mapping(address => uint256))) public deleg
 ```
 
 **New Functions:**
-- `freeDelegatedVP(proposalId)` - Release global VP after proposal ends
+- `freeDelegatedVP(proposalId)` - Release global VP after proposal ends (delegate calls)
+- `freeDelegatedVPFor(proposalId, delegate, expiry, signature)` - Backend-triggered VP freeing for any delegate
 - `undelegateWithVoteReduction(delegate, vpAmount, reductions[], expiry, signature)` - Undelegate with vote reduction
 - `getGlobalAvailableDelegatedPower(delegate)` - View global available VP
 
@@ -203,7 +204,7 @@ mapping(uint256 => mapping(address => mapping(address => uint256))) public deleg
 - `scored_proposals` - Tracks which proposals have been processed to prevent double-counting
 - `proposal_blocks` - Caches discovered block ranges for efficient future queries
 
-**Scoring Cron:** Runs every hour (configurable via `DELEGATE_SCORING_CRON_SCHEDULE`). Scans for finalized proposals and updates delegate scores.
+**Scoring Cron:** Runs every hour (configurable via `DELEGATE_SCORING_CRON_SCHEDULE`). Scans for finalized proposals and updates delegate scores. Also auto-frees delegated VP for all delegates on finalized proposals (configurable via `VP_FREEING_ENABLED`).
 
 **Historical Backfill:** For proposals without stored block ranges, queries from `GOVERNANCE_DEPLOYMENT_BLOCK` (env var) to current block. Once events are found, the actual block range is cached in `proposal_blocks` for efficient future queries. Set `GOVERNANCE_DEPLOYMENT_BLOCK` to the governance contract's deployment block for optimal performance.
 
@@ -230,6 +231,7 @@ mapping(uint256 => mapping(address => mapping(address => uint256))) public deleg
 - `DELEGATE_MIN_WIN_RATE` - Min win rate threshold, 0-1 (default: 0.4)
 - `DELEGATE_GATE_ON_SCORE` - Block low-performers from voting (default: false)
 - `GOVERNANCE_DEPLOYMENT_BLOCK` - Block number where governance was deployed (default: 0, set for optimal backfill performance)
+- `VP_FREEING_ENABLED` - Auto-free delegated VP after proposals finalize (default: true)
 
 ### Phase 4: Automatic VP Refresh
 
@@ -327,7 +329,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | useReputation | tasks (worker/stakeholder/customer), totalEarned, reputationScore, canPropose/Vote/Delegate | 5-min cache |
 | useGovernance | stakedRose, votingPower, availableVP, delegatedOut, vRoseBalance, totalSystemVP | deposit, withdraw, refetch |
 | useProposals | proposals, userVotes, loading | createProposal, vote, voteCombined, freeVP, finalize, execute, cancel |
-| useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom, castDelegatedVote, claimAllRewards |
+| useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom (auto-detects active votes), undelegateWithVoteReduction, castDelegatedVote, claimAllRewards |
 | useNavHistory | snapshots, pagination | refetch (default 3 years daily) |
 
 **Note:** deposit/withdraw/vote/delegate methods internally fetch reputation attestation from backend. `voteCombined` calls `/api/delegation/confirm-vote` after successful delegated votes for reward tracking.
@@ -359,6 +361,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | /api/delegation/claimable/:user | GET | Claimable rewards |
 | /api/delegation/undelegate-signature | POST | Phase 1: Vote reduction signature for undelegation |
 | /api/delegation/global-power/:delegate | GET | Phase 1: Global available VP + nonce |
+| /api/delegation/has-active-votes/:delegator/:delegate | GET | Check if delegate has active votes using delegator's VP |
 | /api/delegation/confirm-undelegate | POST | Phase 2: Clear DB allocations after vote reduction |
 | /api/reconciliation/status | GET | Phase 2: Reconciliation status + last result |
 | /api/reconciliation/last | GET | Phase 2: Full last reconciliation result |
@@ -384,9 +387,9 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | signer.ts | getSignerAddress, signApproval |
 | gitcoin.ts | getPassportScore (whitelist fallback) |
 | governance.ts | getUserVP, getTotalSystemVP, getUserDelegations, getReceivedDelegations, getReputationNew, signReputationAttestation, calculateVotePower |
-| delegation.ts | computeAllocations, signDelegatedVote, verifyAndStoreAllocations, getAvailableDelegatedPower, getClaimableRewards, signClaimApproval, getDelegationNonce, getGlobalAvailableDelegatedPower, computeVoteReductions, signUndelegateWithReduction (Phase 1) |
+| delegation.ts | computeAllocations, signDelegatedVote, verifyAndStoreAllocations, getAvailableDelegatedPower, getClaimableRewards, signClaimApproval, getDelegationNonce, getGlobalAvailableDelegatedPower, computeVoteReductions, signUndelegateWithReduction, getDelegatesWithPendingVP, signFreeDelegatedVPFor (Phase 1) |
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
-| delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats (Phase 3) |
+| delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
@@ -400,7 +403,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | Rebalance | 1st of month 00:00 UTC | treasury.forceRebalance(), retry 6h on failure |
 | NAV Snapshot | Daily 00:00 UTC | Capture prices/allocations, sync Rebalanced events |
 | Reconciliation | Every 6 hours | Compare DB allocations with on-chain, auto-sync discrepancies (Phase 2) |
-| Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records (Phase 3) |
+| Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records, auto-free delegated VP (Phase 3) |
 | VP Refresh Watcher | Event-driven | Watch ReputationChanged events, auto-refresh VP when reputation changes (Phase 4) |
 
 ## Backend Deployment

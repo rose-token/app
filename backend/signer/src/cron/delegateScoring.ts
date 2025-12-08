@@ -3,6 +3,7 @@ import { config } from '../config';
 import {
   scoreAllUnscoredProposals,
   getScoringStats,
+  freeAllPendingVP,
 } from '../services/delegateScoring';
 
 // Default schedule: Every hour
@@ -18,6 +19,8 @@ let lastRunResult: {
   proposalsProcessed: number;
   totalDelegatesUpdated: number;
   errors: string[];
+  vpFreed: number;
+  vpErrors: string[];
   completedAt: Date;
 } | null = null;
 
@@ -36,11 +39,8 @@ async function executeDelegateScoring(): Promise<void> {
   try {
     console.log('[DelegateScoring Cron] Checking for finalized proposals to score...');
 
+    // 1. Score proposals (existing logic)
     const result = await scoreAllUnscoredProposals();
-    lastRunResult = {
-      ...result,
-      completedAt: new Date(),
-    };
 
     if (result.proposalsProcessed > 0) {
       console.log(
@@ -52,8 +52,35 @@ async function executeDelegateScoring(): Promise<void> {
     }
 
     if (result.errors.length > 0) {
-      console.warn('[DelegateScoring Cron] Errors:', result.errors.join('; '));
+      console.warn('[DelegateScoring Cron] Scoring errors:', result.errors.join('; '));
     }
+
+    // 2. Free pending VP for finalized proposals (Phase 2)
+    const vpFreeingEnabled = process.env.VP_FREEING_ENABLED !== 'false';
+    let vpResult = { proposalsProcessed: 0, totalDelegatesFreed: 0, errors: [] as string[] };
+
+    if (vpFreeingEnabled) {
+      console.log('[DelegateScoring Cron] Freeing pending VP for finalized proposals...');
+      vpResult = await freeAllPendingVP();
+
+      if (vpResult.totalDelegatesFreed > 0) {
+        console.log(
+          `[DelegateScoring Cron] Freed VP for ${vpResult.totalDelegatesFreed} delegates ` +
+          `across ${vpResult.proposalsProcessed} proposals`
+        );
+      }
+
+      if (vpResult.errors.length > 0) {
+        console.warn('[DelegateScoring Cron] VP freeing errors:', vpResult.errors.slice(0, 5).join('; '));
+      }
+    }
+
+    lastRunResult = {
+      ...result,
+      vpFreed: vpResult.totalDelegatesFreed,
+      vpErrors: vpResult.errors,
+      completedAt: new Date(),
+    };
 
     consecutiveFailures = 0;
     console.log(`[DelegateScoring Cron] Completed in ${Date.now() - startTime}ms`);

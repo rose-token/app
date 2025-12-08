@@ -477,3 +477,120 @@ export async function getScoringStats(): Promise<{
     topDelegate: topDelegates[0] || null,
   };
 }
+
+// ============ Phase 2: VP Freeing Functions ============
+
+// Extended ABI for VP freeing
+const GOVERNANCE_ABI_WRITE = [
+  ...GOVERNANCE_ABI,
+  'function freeDelegatedVPFor(uint256 proposalId, address delegate, uint256 expiry, bytes signature) external',
+  'function delegatedVoteAllocated(uint256 proposalId, address delegate) external view returns (uint256)',
+];
+
+/**
+ * Free pending VP for all delegates on a finalized proposal
+ */
+export async function freeVPForProposal(proposalId: number): Promise<{
+  freed: boolean;
+  delegatesFreed: number;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  let delegatesFreed = 0;
+
+  try {
+    // Import delegation functions
+    const { getDelegatesWithPendingVP, signFreeDelegatedVPFor } = await import('./delegation');
+
+    const contract = getGovernanceContract();
+    const proposal = await contract.proposals(proposalId);
+    const status = Number(proposal.status);
+
+    // Only process finalized proposals
+    if (status === ProposalStatus.Active) {
+      return { freed: false, delegatesFreed: 0, errors: ['Proposal still active'] };
+    }
+
+    // Get delegates with pending VP
+    const delegates = await getDelegatesWithPendingVP(proposalId);
+
+    if (delegates.length === 0) {
+      return { freed: true, delegatesFreed: 0, errors: [] };
+    }
+
+    console.log(`[VPFreeing] Found ${delegates.length} delegates with pending VP on proposal ${proposalId}`);
+
+    // Create signer for transactions
+    const signer = new ethers.Wallet(config.signer.privateKey, getProvider());
+    const writableContract = new ethers.Contract(
+      config.contracts.governance!,
+      GOVERNANCE_ABI_WRITE,
+      signer
+    );
+
+    for (const delegate of delegates) {
+      try {
+        const expiry = Math.floor(Date.now() / 1000) + 300; // 5 min expiry
+        const signature = await signFreeDelegatedVPFor(proposalId, delegate, expiry);
+
+        const tx = await writableContract.freeDelegatedVPFor(
+          proposalId,
+          delegate,
+          expiry,
+          signature
+        );
+        await tx.wait();
+        delegatesFreed++;
+        console.log(`[VPFreeing] Freed VP for delegate ${delegate} on proposal ${proposalId}`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        // Skip if already freed (signature already used)
+        if (!errMsg.includes('SignatureAlreadyUsed')) {
+          errors.push(`Delegate ${delegate}: ${errMsg}`);
+        }
+      }
+    }
+
+    return { freed: true, delegatesFreed, errors };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    return { freed: false, delegatesFreed: 0, errors: [errMsg] };
+  }
+}
+
+/**
+ * Free VP for all finalized proposals
+ */
+export async function freeAllPendingVP(): Promise<{
+  proposalsProcessed: number;
+  totalDelegatesFreed: number;
+  errors: string[];
+}> {
+  const contract = getGovernanceContract();
+  const proposalCount = Number(await contract.proposalCounter());
+
+  let totalDelegatesFreed = 0;
+  const allErrors: string[] = [];
+  let proposalsWithPendingVP = 0;
+
+  for (let i = 1; i <= proposalCount; i++) {
+    const proposal = await contract.proposals(i);
+    const status = Number(proposal.status);
+
+    // Only process finalized proposals (Passed, Failed, Executed)
+    if (status !== ProposalStatus.Active && status !== ProposalStatus.Cancelled) {
+      const result = await freeVPForProposal(i);
+      if (result.delegatesFreed > 0) {
+        proposalsWithPendingVP++;
+      }
+      totalDelegatesFreed += result.delegatesFreed;
+      allErrors.push(...result.errors);
+    }
+  }
+
+  return {
+    proposalsProcessed: proposalsWithPendingVP,
+    totalDelegatesFreed,
+    errors: allErrors,
+  };
+}

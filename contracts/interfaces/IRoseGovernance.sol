@@ -276,6 +276,14 @@ interface IRoseGovernance {
     // Phase 1: Free delegated VP after proposal ends
     function freeDelegatedVP(uint256 proposalId) external;
 
+    // Phase 2: Backend-triggered VP freeing for a delegate
+    function freeDelegatedVPFor(
+        uint256 proposalId,
+        address delegateAddr,
+        uint256 expiry,
+        bytes calldata signature
+    ) external;
+
     // ============ Voting Functions ============
 
     function vote(
