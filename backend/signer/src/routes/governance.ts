@@ -248,24 +248,14 @@ router.post('/refresh-vp', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid user address' } as ErrorResponse);
     }
 
-    // Get reputation using backend ^0.6 formula (consistent with vpRefresh watcher)
-    const newRep = await governanceService.getReputationNew(user);
-
-    // Create signature
-    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
-
-    const messageHash = ethers.solidityPackedKeccak256(
-      ['string', 'address', 'uint256', 'uint256'],
-      ['refreshVP', user, newRep, expiry]
-    );
-
-    const signature = await wallet.signMessage(ethers.getBytes(messageHash));
+    // Use same attestation helper as vpRefresh worker for consistent signature format
+    const attestation = await governanceService.getSignedReputation(user);
 
     return res.json({
       user,
-      newRep,
-      expiry,
-      signature,
+      newRep: attestation.reputation,
+      expiry: attestation.expiry,
+      signature: attestation.signature,
     } as RefreshVPResponse);
   } catch (error) {
     console.error('Error creating refresh VP signature:', error);
