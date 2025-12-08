@@ -59,28 +59,31 @@ async function executeReconciliation(): Promise<void> {
         console.warn(`  [${d.type}] ${d.message}`);
       }
 
-      // Auto-fix POWER_MISMATCH discrepancies by syncing from chain
-      const uniqueVotes = new Set<string>();
+      // Auto-fix discrepancies by syncing from chain (handles POWER_MISMATCH + ORPHANED_DB_RECORD)
+      const votesToSync = new Map<string, Set<DiscrepancyType>>();
       for (const d of result.discrepancies) {
-        if (d.type === DiscrepancyType.POWER_MISMATCH) {
-          uniqueVotes.add(`${d.proposalId}:${d.delegate}`);
+        if (d.type === DiscrepancyType.POWER_MISMATCH || d.type === DiscrepancyType.ORPHANED_DB_RECORD) {
+          const key = `${d.proposalId}:${d.delegate}`;
+          const types = votesToSync.get(key) || new Set<DiscrepancyType>();
+          types.add(d.type);
+          votesToSync.set(key, types);
         }
       }
 
-      if (uniqueVotes.size > 0) {
-        console.log(`[Reconciliation Cron] Auto-syncing ${uniqueVotes.size} discrepant votes from chain...`);
+      if (votesToSync.size > 0) {
+        console.log(`[Reconciliation Cron] Auto-syncing ${votesToSync.size} discrepant votes from chain...`);
 
-        for (const key of uniqueVotes) {
+        for (const [key, types] of votesToSync.entries()) {
           const [proposalIdStr, delegate] = key.split(':');
           const proposalId = parseInt(proposalIdStr);
 
           try {
             const syncResult = await syncAllocationsFromChain(proposalId, delegate);
             if (syncResult.synced > 0) {
-              console.log(`[Reconciliation Cron] Synced proposal ${proposalId}, delegate ${delegate}: ${syncResult.synced} records`);
+              console.log(`[Reconciliation Cron] Synced proposal ${proposalId}, delegate ${delegate} (${Array.from(types).join(', ')}): ${syncResult.synced} records`);
             }
             if (syncResult.errors.length > 0) {
-              console.warn(`[Reconciliation Cron] Sync errors: ${syncResult.errors.join(', ')}`);
+              console.warn(`[Reconciliation Cron] Sync errors for proposal ${proposalId}, delegate ${delegate}: ${syncResult.errors.join(', ')}`);
             }
           } catch (err) {
             console.error(`[Reconciliation Cron] Failed to sync proposal ${proposalId}, delegate ${delegate}:`, err);
