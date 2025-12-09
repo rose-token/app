@@ -401,3 +401,116 @@ export interface VPRefreshConfigResponse {
     marketplace: string;
   };
 }
+
+// ==========================================
+// Auction Types (Reverse Auction System)
+// ==========================================
+
+// Database row types
+export interface AuctionTaskRow {
+  task_id: number;
+  max_budget: string; // NUMERIC comes as string from pg
+  bid_count: number;
+  winner_address: string | null;
+  winning_bid: string | null;
+  concluded_at: string | null;
+  created_at: string;
+}
+
+export interface AuctionBidRow {
+  id: number;
+  task_id: number;
+  worker_address: string;
+  bid_amount: string; // NUMERIC comes as string from pg
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// API request/response types
+export interface RegisterAuctionTaskRequest {
+  taskId: number;
+  maxBudget: string; // BigInt as string
+}
+
+export interface RegisterAuctionTaskResponse {
+  success: boolean;
+  taskId: number;
+  maxBudget: string;
+}
+
+export interface SubmitBidRequest {
+  taskId: number;
+  worker: string;
+  bidAmount: string; // BigInt as string
+  message?: string;
+  signature: string; // Worker signature proving ownership
+}
+
+export interface SubmitBidResponse {
+  success: boolean;
+  taskId: number;
+  worker: string;
+  bidAmount: string;
+  isUpdate: boolean; // true if this updated an existing bid
+}
+
+export interface AuctionBid {
+  taskId: number;
+  worker: string;
+  bidAmount: string;
+  message: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GetBidsResponse {
+  taskId: number;
+  maxBudget: string;
+  bidCount: number;
+  bids: AuctionBid[];
+}
+
+export interface GetBidCountResponse {
+  taskId: number;
+  bidCount: number;
+}
+
+export interface GetWorkerBidResponse {
+  taskId: number;
+  worker: string;
+  hasBid: boolean;
+  bid: AuctionBid | null;
+}
+
+export interface SelectWinnerRequest {
+  taskId: number;
+  customer: string;
+  worker: string;
+  winningBid: string; // BigInt as string
+}
+
+export interface SelectWinnerResponse {
+  taskId: number;
+  customer: string;
+  worker: string;
+  winningBid: string;
+  expiry: number;
+  signature: string;
+}
+
+export interface ConfirmWinnerRequest {
+  taskId: number;
+  winner: string;
+  winningBid: string;
+}
+
+export interface ConfirmWinnerResponse {
+  success: boolean;
+  taskId: number;
+}
+
+export interface AuctionErrorResponse {
+  error: string;
+  details?: Record<string, string>;
+}
