@@ -77,6 +77,20 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     mapping(address => uint256) public lastDepositTime;
     mapping(address => uint256) public lastRedeemTime;
 
+    // ============ Redemption Queue ============
+    struct RedemptionRequest {
+        address user;
+        uint256 roseAmount;
+        uint256 usdcOwed;      // Locked at request NAV
+        uint256 requestedAt;
+        bool fulfilled;
+    }
+
+    mapping(uint256 => RedemptionRequest) public redemptionRequests;
+    uint256 public nextRedemptionId;
+    mapping(address => uint256) public userPendingRedemptionId;
+    uint256 public totalPendingUsdcOwed;
+
     // ============ Events ============
     event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted);
     event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut);
@@ -91,6 +105,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     event GovernanceUpdated(address indexed newGovernance);
     event SwapExecuted(bytes32 indexed fromAsset, bytes32 indexed toAsset, uint256 amountIn, uint256 amountOut);
     event RebalancerUpdated(address indexed newRebalancer);
+    event RedemptionRequested(uint256 indexed requestId, address indexed user, uint256 roseAmount, uint256 usdcOwed);
+    event RedemptionFulfilled(uint256 indexed requestId, address indexed user, uint256 usdcAmount);
 
     // ============ Errors ============
     error InvalidPrice();
@@ -112,6 +128,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error CannotDeactivateRequired();
     error NotRebalancer();
     error LiFiSwapFailed();
+    error UserHasPendingRedemption();
+    error RequestNotFound();
+    error RequestAlreadyFulfilled();
 
     // ============ Modifiers ============
     modifier onlyRebalancer() {
