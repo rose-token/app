@@ -177,7 +177,7 @@ export function calculateRebalanceSwaps(assets: AssetBreakdown[]): SwapInstructi
       : targetValueUSD - currentValueUSD;
     const driftBps = Number((diff * 10000n) / (targetValueUSD || 1n));
 
-    if (driftBps <= 500) continue; // Within threshold, no action needed
+    if (driftBps < 500) continue; // Within threshold, 5% or more drift triggers rebalance
 
     if (currentValueUSD > targetValueUSD) {
       overAllocated.push({
