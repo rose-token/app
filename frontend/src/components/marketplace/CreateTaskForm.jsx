@@ -14,7 +14,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
-  const [isAuction, setIsAuction] = useState(false);
+  const [isAuction, setIsAuction] = useState(true);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -303,37 +303,23 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           </p>
         </div>
 
-        {/* Task Type Toggle */}
+        {/* Task Type Dropdown */}
         <div className="mb-5">
-          <label style={labelStyle}>
-            Task Type
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAuction(false)}
-              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200"
-              style={{
-                background: !isAuction ? 'var(--rose-gold)' : 'var(--bg-secondary)',
-                color: !isAuction ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                border: `1px solid ${!isAuction ? 'var(--rose-gold)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              Fixed Price
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAuction(true)}
-              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200"
-              style={{
-                background: isAuction ? 'var(--rose-gold)' : 'var(--bg-secondary)',
-                color: isAuction ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                border: `1px solid ${isAuction ? 'var(--rose-gold)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              Auction
-            </button>
-          </div>
+          <label style={labelStyle}>Task Type</label>
+          <select
+            value={isAuction ? 'auction' : 'fixed'}
+            onChange={(e) => setIsAuction(e.target.value === 'auction')}
+            className="w-full rounded-xl py-2.5 px-4 text-sm cursor-pointer transition-all duration-200"
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-subtle)',
+              outline: 'none',
+            }}
+          >
+            <option value="auction">Auction</option>
+            <option value="fixed">Fixed Price</option>
+          </select>
           <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
             {isAuction
               ? 'Workers will bid to complete this task. You select the winning bid.'

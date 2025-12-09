@@ -357,7 +357,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 
 | Component | Purpose |
 |-----------|---------|
-| `CreateTaskForm.jsx` | Toggle between Fixed Price / Auction mode |
+| `CreateTaskForm.jsx` | Dropdown for Fixed Price / Auction mode (default: Auction) |
 | `BidSubmissionModal.jsx` | Workers submit/update bids with optional message |
 | `BidSelectionModal.jsx` | Customers view bids sorted by amount, select winner |
 | `TaskCard.jsx` | Shows bid count, "Place Bid" / "View Bids" buttons |
