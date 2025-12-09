@@ -463,6 +463,13 @@ uint256 winningBid;    // Final price (0 until winner selected)
 - `hooks/` - useNotifications, useProfile, useVaultData, useNavHistory, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation, useAuction
 - `contracts/` - Auto-generated ABIs (via update-abi)
 
+**Dynamic Vault Display (Phase 5):**
+- `VaultAllocation` uses dynamic assets from `getAllAssets()` contract call
+- Supports arbitrary number of assets with auto-generated colors for unknown assets
+- Shows target vs actual allocation percentages with drift indicators
+- Highlights assets >5% off target with orange border
+- "Rebalance Needed" badge when vault drift detected
+
 **Styling:** CSS variables in `index.css`, semantic Tailwind (`bg-primary`, `text-accent`). Never hardcode colors.
 
 **Context hierarchy:** WagmiProvider → QueryClientProvider → RainbowKitProvider → ProfileProvider → PassportProvider → PassportVerifyProvider → Router
@@ -485,7 +492,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 
 | Hook | State | Methods |
 |------|-------|---------|
-| useVaultData | rosePrice, vaultValueUSD, breakdown, balances, cooldowns | auto-refresh 45s |
+| useVaultData | rosePrice, vaultValueUSD, breakdown, assets, needsRebalance, balances, cooldowns | auto-refresh 45s |
 | usePassport | score, loading, error, lastUpdated, isCached | loadScore, refetch, meetsThreshold |
 | usePassportVerify | loading, error, lastSignature | getSignature, getSignerAddress, getThresholds |
 | useProfile | profile, isLoading, error, isAuthenticated | updateProfile (disabled), getProfile, refreshProfile |

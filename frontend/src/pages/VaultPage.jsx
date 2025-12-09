@@ -17,6 +17,8 @@ const VaultPage = () => {
     vaultValueUSD,
     breakdown,
     circulatingSupply,
+    assets,
+    needsRebalance,
     // User data
     roseBalance,
     roseBalanceRaw,
@@ -69,12 +71,18 @@ const VaultPage = () => {
         circulatingSupply={circulatingSupply}
         roseBalance={roseBalance}
         usdcBalance={usdcBalance}
+        assetCount={assets?.length ?? 0}
+        needsRebalance={needsRebalance}
         isLoading={isLoading}
         isConnected={isConnected}
       />
 
       {/* Vault Allocation Chart */}
-      <VaultAllocation breakdown={breakdown} isLoading={isLoading} />
+      <VaultAllocation
+        breakdown={breakdown}
+        isLoading={isLoading}
+        needsRebalance={needsRebalance}
+      />
 
       {/* NAV Price History Chart */}
       <NavHistoryChart />

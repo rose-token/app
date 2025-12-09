@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract, useReadContracts } from 'wagmi';
-import { formatUnits } from 'viem';
+import { formatUnits, hexToString } from 'viem';
 import RoseTreasuryABI from '../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 
@@ -24,6 +24,26 @@ const ERC20_ABI = [
     type: 'function',
   },
 ];
+
+// Human-readable display names for asset keys
+const ASSET_DISPLAY_NAMES = {
+  BTC: 'Bitcoin',
+  GOLD: 'Gold',
+  STABLE: 'USDC',
+  ROSE: 'ROSE',
+};
+
+// Convert bytes32 to string (remove null bytes)
+function bytes32ToString(bytes32) {
+  if (!bytes32) return '';
+  try {
+    // hexToString handles the conversion but may include null chars
+    const str = hexToString(bytes32, { size: 32 });
+    return str.replace(/\0/g, '');
+  } catch {
+    return '';
+  }
+}
 
 const useVaultData = () => {
   const { address, isConnected, chain } = useAccount();
@@ -65,6 +85,16 @@ const useVaultData = () => {
         address: treasuryAddress,
         abi: RoseTreasuryABI,
         functionName: 'circulatingSupply',
+      },
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'getAllAssets',
+      },
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'needsRebalance',
       },
     ];
   }, [treasuryAddress]);
@@ -153,10 +183,19 @@ const useVaultData = () => {
         vaultValueUSD: null,
         breakdown: null,
         circulatingSupply: null,
+        assets: null,
+        needsRebalance: false,
       };
     }
 
-    const [rosePriceResult, vaultValueResult, breakdownResult, supplyResult] = vaultData;
+    const [
+      rosePriceResult,
+      vaultValueResult,
+      breakdownResult,
+      supplyResult,
+      allAssetsResult,
+      needsRebalanceResult,
+    ] = vaultData;
 
     // rosePrice is in 6 decimals (USD)
     const rosePrice = rosePriceResult?.result
@@ -168,7 +207,31 @@ const useVaultData = () => {
       ? Number(formatUnits(vaultValueResult.result, 6))
       : null;
 
+    // needsRebalance boolean
+    const needsRebalance = needsRebalanceResult?.result ?? false;
+
+    // Process getAllAssets for dynamic asset display
+    let assets = null;
+    if (allAssetsResult?.result) {
+      const [keys, assetList] = allAssetsResult.result;
+      assets = keys.map((keyBytes32, i) => {
+        const key = bytes32ToString(keyBytes32);
+        const asset = assetList[i];
+        return {
+          key,
+          keyBytes32,
+          displayName: ASSET_DISPLAY_NAMES[key] || key,
+          token: asset.token,
+          priceFeed: asset.priceFeed,
+          decimals: Number(asset.decimals),
+          targetBps: Number(asset.targetBps),
+          active: asset.active,
+        };
+      }).filter(a => a.active); // Only show active assets
+    }
+
     // getVaultBreakdown returns: btcValue, goldValue, usdcValue, roseValue, totalHardAssets, currentRosePrice, circulatingRose, rebalanceNeeded
+    // For backwards compatibility, keep the old structure but also build dynamic one
     let breakdown = null;
     if (breakdownResult?.result) {
       const [btcValue, goldValue, usdcValue, roseValue, totalHardAssets] = breakdownResult.result;
@@ -177,25 +240,74 @@ const useVaultData = () => {
       // Include ROSE in total so all percentages sum to 100%
       const totalIncludingRose = hardAssetsTotal + roseVal;
 
-      breakdown = {
-        btc: {
-          value: Number(formatUnits(btcValue, 6)),
-          percentage: totalIncludingRose > 0 ? (Number(formatUnits(btcValue, 6)) / totalIncludingRose) * 100 : 0,
-        },
-        gold: {
-          value: Number(formatUnits(goldValue, 6)),
-          percentage: totalIncludingRose > 0 ? (Number(formatUnits(goldValue, 6)) / totalIncludingRose) * 100 : 0,
-        },
-        usdc: {
-          value: Number(formatUnits(usdcValue, 6)),
-          percentage: totalIncludingRose > 0 ? (Number(formatUnits(usdcValue, 6)) / totalIncludingRose) * 100 : 0,
-        },
-        rose: {
-          value: roseVal,
-          percentage: totalIncludingRose > 0 ? (roseVal / totalIncludingRose) * 100 : 0,
-        },
-        total: totalIncludingRose,
+      // Build dynamic breakdown from asset values
+      // Map legacy breakdown values to asset keys for now
+      const assetValues = {
+        BTC: Number(formatUnits(btcValue, 6)),
+        GOLD: Number(formatUnits(goldValue, 6)),
+        STABLE: Number(formatUnits(usdcValue, 6)),
+        ROSE: roseVal,
       };
+
+      // If we have dynamic assets, use them to build breakdown
+      if (assets && assets.length > 0) {
+        breakdown = {
+          assets: assets.map(asset => {
+            const value = assetValues[asset.key] ?? 0;
+            const percentage = totalIncludingRose > 0 ? (value / totalIncludingRose) * 100 : 0;
+            const targetPercentage = asset.targetBps / 100; // Convert bps to percentage
+            return {
+              key: asset.key,
+              displayName: asset.displayName,
+              value,
+              percentage,
+              targetBps: asset.targetBps,
+              targetPercentage,
+              // Calculate drift (difference from target)
+              driftBps: Math.abs(Math.round(percentage * 100) - asset.targetBps),
+            };
+          }),
+          total: totalIncludingRose,
+          // Keep legacy structure for backwards compatibility
+          btc: {
+            value: assetValues.BTC,
+            percentage: totalIncludingRose > 0 ? (assetValues.BTC / totalIncludingRose) * 100 : 0,
+          },
+          gold: {
+            value: assetValues.GOLD,
+            percentage: totalIncludingRose > 0 ? (assetValues.GOLD / totalIncludingRose) * 100 : 0,
+          },
+          usdc: {
+            value: assetValues.STABLE,
+            percentage: totalIncludingRose > 0 ? (assetValues.STABLE / totalIncludingRose) * 100 : 0,
+          },
+          rose: {
+            value: roseVal,
+            percentage: totalIncludingRose > 0 ? (roseVal / totalIncludingRose) * 100 : 0,
+          },
+        };
+      } else {
+        // Fallback to legacy structure if no dynamic assets
+        breakdown = {
+          btc: {
+            value: assetValues.BTC,
+            percentage: totalIncludingRose > 0 ? (assetValues.BTC / totalIncludingRose) * 100 : 0,
+          },
+          gold: {
+            value: assetValues.GOLD,
+            percentage: totalIncludingRose > 0 ? (assetValues.GOLD / totalIncludingRose) * 100 : 0,
+          },
+          usdc: {
+            value: assetValues.STABLE,
+            percentage: totalIncludingRose > 0 ? (assetValues.STABLE / totalIncludingRose) * 100 : 0,
+          },
+          rose: {
+            value: roseVal,
+            percentage: totalIncludingRose > 0 ? (roseVal / totalIncludingRose) * 100 : 0,
+          },
+          total: totalIncludingRose,
+        };
+      }
     }
 
     // circulatingSupply is in 18 decimals (ROSE)
@@ -208,6 +320,8 @@ const useVaultData = () => {
       vaultValueUSD,
       breakdown,
       circulatingSupply,
+      assets,
+      needsRebalance,
     };
   }, [vaultData]);
 
