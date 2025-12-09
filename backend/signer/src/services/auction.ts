@@ -67,17 +67,20 @@ function getMarketplaceContract(): ethers.Contract {
   return marketplaceContract;
 }
 
-/**
- * Get task data from on-chain contract.
- * Returns only the fields we need for auction verification.
- */
-async function getOnChainTask(taskId: number): Promise<{
+/** On-chain task data returned by getOnChainTask */
+type OnChainTask = {
   customer: string;
   worker: string;
   status: TaskStatus;
   isAuction: boolean;
   winningBid: bigint;
-} | null> {
+};
+
+/**
+ * Get task data from on-chain contract.
+ * Returns only the fields we need for auction verification.
+ */
+async function getOnChainTask(taskId: number): Promise<OnChainTask | null> {
   try {
     const contract = getMarketplaceContract();
     const task = await contract.tasks(taskId);
@@ -474,6 +477,36 @@ export async function signWinnerSelection(
 }
 
 /**
+ * Helper to wait for on-chain status with retry logic.
+ * Handles RPC sync lag between frontend and backend nodes.
+ */
+async function waitForOnChainStatus(
+  taskId: number,
+  expectedStatus: TaskStatus,
+  maxAttempts: number = 7,
+  baseDelayMs: number = 1000
+): Promise<OnChainTask> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const task = await getOnChainTask(taskId);
+
+    if (task && task.status === expectedStatus) {
+      if (attempt > 1) {
+        console.log(`[auction] On-chain status verified after ${attempt} attempts`);
+      }
+      return task;
+    }
+
+    if (attempt < maxAttempts) {
+      const delay = baseDelayMs * Math.pow(2, attempt - 1); // 1s, 2s, 4s, 8s, 16s, 32s, 64s
+      console.log(`[auction] Waiting for on-chain status (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Auction winner not yet selected on-chain after retries');
+}
+
+/**
  * Conclude auction after on-chain winner selection confirms.
  * Called by frontend after selectAuctionWinner tx confirms.
  *
@@ -489,20 +522,11 @@ export async function concludeAuction(
     throw new Error('Invalid winner address');
   }
 
-  // Verify on-chain state matches the request
-  const onChainTask = await getOnChainTask(taskId);
-
-  if (!onChainTask) {
-    throw new Error('Task not found on-chain');
-  }
+  // Verify on-chain state matches the request (with retry for RPC lag)
+  const onChainTask = await waitForOnChainStatus(taskId, TaskStatus.InProgress);
 
   if (!onChainTask.isAuction) {
     throw new Error('Task is not an auction');
-  }
-
-  // Verify task is in InProgress status (winner has been selected on-chain)
-  if (onChainTask.status !== TaskStatus.InProgress) {
-    throw new Error('Auction winner not yet selected on-chain');
   }
 
   // Verify winner matches on-chain worker

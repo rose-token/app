@@ -325,6 +325,8 @@ When a worker unclaims an auction task:
 - Backend: `signWinnerSelection` checks on-chain status; if Open but DB has `winner_address`, clears stale DB data
 - Endpoint: `POST /api/auction/:taskId/sync` can manually sync auction state from chain
 
+**RPC Sync Handling:** `concludeAuction` uses exponential backoff retry (7 attempts, max 127s) to handle RPC lag between frontend and backend nodes when verifying on-chain winner selection.
+
 ### Contract Functions
 
 | Function | Purpose |
