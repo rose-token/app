@@ -314,6 +314,17 @@ StakeholderRequired → [stake 10% of max] → Open (bids collected off-chain)
     → [selectWinner: refund excess stake] → InProgress → ... → Closed (refund surplus to customer)
 ```
 
+**Auction Unclaim + Re-selection:**
+```
+InProgress → [worker unclaims] → Open (winningBid reset to 0)
+    → [customer selects new winner] → InProgress → ...
+```
+
+When a worker unclaims an auction task:
+- Contract: `unclaimTask` resets `winningBid = 0` for auction tasks (allows fresh re-selection)
+- Backend: `signWinnerSelection` checks on-chain status; if Open but DB has `winner_address`, clears stale DB data
+- Endpoint: `POST /api/auction/:taskId/sync` can manually sync auction state from chain
+
 ### Contract Functions
 
 | Function | Purpose |
@@ -480,6 +491,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | /api/auction/:taskId/exists | GET | Check if auction exists |
 | /api/auction/select-winner | POST | Get signature for on-chain winner selection |
 | /api/auction/confirm-winner | POST | Confirm winner after on-chain tx |
+| /api/auction/:taskId/sync | POST | Sync auction state from chain (clears stale winner after unclaim) |
 
 ## Backend Services
 
@@ -492,7 +504,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
 | delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
-| auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask |
+| auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask, syncAuctionFromChain |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
 | nav.ts | fetchNavSnapshot, storeNavSnapshot, syncRebalanceEvents, getNavHistory, getNavStats |

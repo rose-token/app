@@ -524,6 +524,11 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         t.worker = address(0);
         t.status = TaskStatus.Open;
 
+        // Reset winningBid for auction tasks to allow fresh selection
+        if (t.isAuction) {
+            t.winningBid = 0;
+        }
+
         emit TaskUnclaimed(_taskId, previousWorker);
     }
 

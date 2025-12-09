@@ -393,7 +393,34 @@ export async function signWinnerSelection(
     throw new Error('Auction task not found');
   }
 
-  const auction = auctionResult.rows[0];
+  let auction = auctionResult.rows[0];
+
+  // Check on-chain task state to detect unclaimed auctions
+  const onChainTask = await getOnChainTask(taskId);
+  if (!onChainTask) {
+    throw new Error('Task not found on-chain');
+  }
+
+  // If on-chain status is Open, the auction can be re-selected
+  // This handles the case where a winner unclaimed the task
+  if (onChainTask.status === TaskStatus.Open && auction.winner_address) {
+    console.log(
+      `Auction ${taskId} was unclaimed on-chain, clearing stale DB winner data`
+    );
+    // Clear stale winner data from DB
+    await query(
+      `UPDATE auction_tasks
+       SET winner_address = NULL, winning_bid = NULL, concluded_at = NULL
+       WHERE task_id = $1`,
+      [taskId]
+    );
+    // Refresh auction data
+    const refreshed = await query<AuctionTaskRow>(
+      'SELECT * FROM auction_tasks WHERE task_id = $1',
+      [taskId]
+    );
+    auction = refreshed.rows[0];
+  }
 
   if (auction.winner_address) {
     throw new Error('Auction already concluded');
@@ -540,4 +567,54 @@ export async function getAuctionTask(taskId: number): Promise<AuctionTaskRow | n
   }
 
   return result.rows[0];
+}
+
+/**
+ * Sync auction state from on-chain to database.
+ * Clears stale winner data if on-chain status is Open.
+ * Returns sync result with details of what changed.
+ */
+export async function syncAuctionFromChain(taskId: number): Promise<{
+  taskId: number;
+  synced: boolean;
+  onChainStatus: string;
+  dbHadWinner: boolean;
+  cleared: boolean;
+}> {
+  // Get DB state
+  const auction = await getAuctionTask(taskId);
+  if (!auction) {
+    throw new Error('Auction task not found in database');
+  }
+
+  // Get on-chain state
+  const onChainTask = await getOnChainTask(taskId);
+  if (!onChainTask) {
+    throw new Error('Task not found on-chain');
+  }
+
+  const statusNames = ['None', 'StakeholderRequired', 'Open', 'InProgress', 'Completed', 'ApprovedPendingPayment', 'Closed'];
+  const onChainStatus = statusNames[onChainTask.status] || 'Unknown';
+  const dbHadWinner = !!auction.winner_address;
+  let cleared = false;
+
+  // If on-chain is Open but DB has winner, clear the stale data
+  if (onChainTask.status === TaskStatus.Open && auction.winner_address) {
+    await query(
+      `UPDATE auction_tasks
+       SET winner_address = NULL, winning_bid = NULL, concluded_at = NULL
+       WHERE task_id = $1`,
+      [taskId]
+    );
+    cleared = true;
+    console.log(`Synced auction ${taskId}: cleared stale winner data (on-chain status: ${onChainStatus})`);
+  }
+
+  return {
+    taskId,
+    synced: true,
+    onChainStatus,
+    dbHadWinner,
+    cleared,
+  };
 }

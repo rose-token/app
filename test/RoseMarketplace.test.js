@@ -997,6 +997,48 @@ describe("RoseMarketplace", function () {
           roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, 0, expiry, signature)
         ).to.be.revertedWithCustomError(roseMarketplace, "InvalidWinningBid");
       });
+
+      it("Should allow re-selection after worker unclaims auction task", async function () {
+        const [, , , , , worker2] = await ethers.getSigners();
+
+        // First winner selection
+        const winningBid1 = ethers.parseEther("600");
+        const expiry1 = await getFutureExpiry();
+        const signature1 = await generateSelectWinnerSignature(customer.address, 1, worker.address, winningBid1, expiry1);
+        await roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, winningBid1, expiry1, signature1);
+
+        // Verify task is InProgress with worker set
+        let task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(2); // InProgress
+        expect(task.worker).to.equal(worker.address);
+        expect(task.winningBid).to.equal(winningBid1);
+
+        // Worker unclaims
+        await roseMarketplace.connect(worker).unclaimTask(1);
+
+        // Verify task is back to Open with no worker and winningBid reset
+        task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(0); // Open
+        expect(task.worker).to.equal(ethers.ZeroAddress);
+        expect(task.winningBid).to.equal(0); // Should be reset for auction tasks
+
+        // Customer selects different worker with different bid
+        const winningBid2 = ethers.parseEther("500");
+        const expiry2 = await getFutureExpiry();
+        const signature2 = await generateSelectWinnerSignature(customer.address, 1, worker2.address, winningBid2, expiry2);
+
+        await expect(
+          roseMarketplace.connect(customer).selectAuctionWinner(1, worker2.address, winningBid2, expiry2, signature2)
+        )
+          .to.emit(roseMarketplace, "AuctionWinnerSelected")
+          .withArgs(1, worker2.address, winningBid2);
+
+        // Verify new winner
+        task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(2); // InProgress
+        expect(task.worker).to.equal(worker2.address);
+        expect(task.winningBid).to.equal(winningBid2);
+      });
     });
 
     describe("Auction Payment Flow", function () {

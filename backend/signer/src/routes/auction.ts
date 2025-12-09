@@ -18,6 +18,7 @@ import {
   concludeAuction,
   auctionExists,
   getAuctionTask,
+  syncAuctionFromChain,
 } from '../services/auction';
 import {
   RegisterAuctionTaskRequest,
@@ -447,6 +448,43 @@ router.get('/:taskId/exists', async (req: Request, res: Response) => {
     return res.json({ taskId, exists });
   } catch (error) {
     console.error('Check auction exists error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+    } as AuctionErrorResponse);
+  }
+});
+
+/**
+ * POST /api/auction/:taskId/sync
+ * Sync auction state from on-chain to database.
+ * Clears stale winner data if on-chain status is Open (e.g., after unclaim).
+ */
+router.post('/:taskId/sync', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+
+    if (isNaN(taskId) || taskId <= 0) {
+      return res.status(400).json({
+        error: 'Invalid taskId',
+      } as AuctionErrorResponse);
+    }
+
+    const result = await syncAuctionFromChain(taskId);
+    return res.json(result);
+  } catch (error) {
+    console.error('Sync auction error:', error);
+
+    if (error instanceof Error) {
+      if (
+        error.message.includes('not found') ||
+        error.message.includes('not configured')
+      ) {
+        return res.status(404).json({
+          error: error.message,
+        } as AuctionErrorResponse);
+      }
+    }
+
     return res.status(500).json({
       error: 'Internal server error',
     } as AuctionErrorResponse);
