@@ -96,6 +96,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 | Treasury | InvalidAllocation, ZeroAmount, AssetNotFound, AssetNotActive | Validation |
 | Treasury | RebalanceNotNeeded, RebalanceCooldown, CooldownNotElapsed | Cooldowns |
 | Treasury | NotRebalancer, AssetAlreadyExists, CannotDeactivateRequired | Admin/asset |
+| Treasury | UserHasPendingRedemption, RequestNotFound, RequestAlreadyFulfilled | Redemption queue (Phase 5) |
 | Reputation | NotOwner, NotGovernance, NotMarketplace | Auth |
 | Reputation | ZeroAddress, ZeroAddressSigner | Validation |
 | Governance | IneligibleToPropose (<90% rep or <10 tasks) | Eligibility |
@@ -178,6 +179,57 @@ mapping(bytes32 => Asset) public assets;  // e.g., encodeBytes32String("BTC") =>
 - `POST /api/treasury/rebalance/run` - Manually trigger rebalance (admin only in production)
 
 **Cron Schedule:** 1st of month at 00:00 UTC. Retries every 6 hours on failure, max 10 attempts.
+
+### Redemption Queue (Phase 5)
+
+**Purpose:** Hybrid redemption: instant when USDC buffer sufficient, queued liquidation when depleted.
+
+**Design Decisions:**
+- NAV locked at request time (protects user from price changes during liquidation)
+- ONE pending request per user (prevents queue flooding)
+- No cancellation (guarantees fulfillment)
+- FIFO processing order
+
+**Contract Storage:**
+```solidity
+struct RedemptionRequest {
+    address user;
+    uint256 roseAmount;
+    uint256 usdcOwed;      // Locked at request NAV
+    uint256 requestedAt;
+    bool fulfilled;
+}
+
+mapping(uint256 => RedemptionRequest) public redemptionRequests;
+uint256 public nextRedemptionId;
+mapping(address => uint256) public userPendingRedemptionId;
+uint256 public totalPendingUsdcOwed;
+```
+
+**Contract Functions:**
+- `requestRedemption(roseAmount)` - Create queued redemption, auto-fulfills if USDC available
+- `fulfillRedemption(requestId)` - Rebalancer-only, fulfill single request
+- `fulfillMultipleRedemptions(requestIds[])` - Batch fulfillment
+- `getRedemptionRequest(requestId)` - View request details
+- `getUserPendingRedemption(user)` - Get user's pending request ID (0 if none)
+- `canRedeemInstantly(roseAmount)` - Check if instant redemption possible
+- `emergencyRefundRedemption(requestId)` - Owner-only, refund ROSE instead of USDC
+
+**Contract Events:**
+- `RedemptionRequested(requestId, user, roseAmount, usdcOwed)` - When request created
+- `RedemptionFulfilled(requestId, user, usdcAmount)` - When fulfilled (usdcAmount=0 for refund)
+
+**Flow:**
+1. User calls `requestRedemption()` → ROSE locked, request queued
+2. If USDC buffer sufficient → instant fulfillment
+3. If insufficient → backend liquidates assets via LiFi
+4. Backend calls `fulfillRedemption()` → ROSE burned, USDC sent
+
+**Frontend Integration:**
+- `RedeemCard.jsx` checks availability via `/api/treasury/redeem-check`
+- If instant: uses existing `redeem()` flow
+- If queued: calls `requestRedemption()`, polls `/api/treasury/redemption/:id` for fulfillment
+- Shows "Processing Redemption" UI with spinner while awaiting fulfillment
 
 ## Security Patterns
 
@@ -492,7 +544,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 
 | Hook | State | Methods |
 |------|-------|---------|
-| useVaultData | rosePrice, vaultValueUSD, breakdown, assets, needsRebalance, balances, cooldowns | auto-refresh 45s |
+| useVaultData | rosePrice, vaultValueUSD, breakdown, assets, needsRebalance, balances, cooldowns, pendingRedemptionId | auto-refresh 45s |
 | usePassport | score, loading, error, lastUpdated, isCached | loadScore, refetch, meetsThreshold |
 | usePassportVerify | loading, error, lastSignature | getSignature, getSignerAddress, getThresholds |
 | useProfile | profile, isLoading, error, isAuthenticated | updateProfile (disabled), getProfile, refreshProfile |
@@ -554,6 +606,12 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | /api/vp-refresh/config | GET | Phase 4: VP refresh configuration |
 | /api/vp-refresh/check/:address | POST | Phase 4: Manually check and refresh user VP |
 | /api/vp-refresh/process | POST | Phase 4: Force process all pending users |
+| /api/treasury/redeem-check | GET | Phase 5: Check instant redemption availability |
+| /api/treasury/redemption/:id | GET | Phase 5: Get redemption request status |
+| /api/treasury/user-pending/:address | GET | Phase 5: Get user's pending redemption |
+| /api/treasury/pending-redemptions | GET | Phase 5: Admin view of all pending redemptions |
+| /api/treasury/redemption-watcher/stats | GET | Phase 5: Redemption watcher statistics |
+| /api/treasury/redemption-watcher/process | POST | Phase 5: Force process pending redemptions |
 | /api/auction/register | POST | Register auction task after on-chain creation |
 | /api/auction/bid | POST | Submit/update bid (requires worker signature) |
 | /api/auction/:taskId/bids | GET | Get all bids for auction (customer only) |
@@ -578,6 +636,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
 | lifi.ts | getSwapQuote, applySlippage, calculateDiversificationSwaps, executeDiversificationSwap, getAssetTokenAddress, getTargetAllocations (Phase 3 Treasury LiFi) |
 | depositWatcher.ts | startDepositWatcher, stopDepositWatcher, getDepositWatcherStats, forceProcessPending, getPendingDeposits (Phase 3 Treasury LiFi) |
+| redemptionWatcher.ts | startRedemptionWatcher, stopRedemptionWatcher, getRedemptionWatcherStats, forceProcessPending, getPendingRedemptions, calculateLiquidationSwaps, processPendingRedemptions (Phase 5) |
 | auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask, syncAuctionFromChain |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
@@ -594,6 +653,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records, auto-free delegated VP (Phase 3) |
 | VP Refresh Watcher | Event-driven | Watch ReputationChanged events, auto-refresh VP when reputation changes (Phase 4) |
 | Deposit Watcher | Event-driven | Watch Deposited events, diversify via LiFi (Phase 3 Treasury LiFi) |
+| Redemption Watcher | Event-driven | Watch RedemptionRequested events, liquidate assets via LiFi, fulfill redemptions (Phase 5) |
 
 ## Backend Deployment
 
@@ -651,7 +711,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 |----------|---------------|
 | Root .env | ARBITRUM_SEPOLIA_RPC_URL, PRIVATE_KEY, DAO_TREASURY_ADDRESS, ARBISCAN_API_KEY, PASSPORT_SIGNER_ADDRESS |
 | frontend/.env | VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS, VITE_PINATA_*, VITE_PASSPORT_SIGNER_URL |
-| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE, DEPOSIT_WATCHER_* |
+| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE, DEPOSIT_WATCHER_*, REDEMPTION_WATCHER_* |
 
 **Deposit Watcher Env Vars (Phase 3 Treasury LiFi):**
 - `DEPOSIT_WATCHER_ENABLED` - Enable deposit watching (default: true)
@@ -659,6 +719,13 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 - `DEPOSIT_WATCHER_EXECUTE` - Execute swaps vs dry run (default: true when enabled)
 - `DEPOSIT_WATCHER_SLIPPAGE_BPS` - Slippage tolerance (default: 100 = 1%)
 - `DEPOSIT_WATCHER_STARTUP_LOOKBACK` - Blocks to look back on startup (default: 0)
+
+**Redemption Watcher Env Vars (Phase 5):**
+- `REDEMPTION_WATCHER_ENABLED` - Enable redemption watching (default: true)
+- `REDEMPTION_WATCHER_DEBOUNCE_MS` - Debounce time before processing (default: 15000)
+- `REDEMPTION_WATCHER_EXECUTE` - Execute liquidation swaps vs dry run (default: true)
+- `REDEMPTION_WATCHER_SLIPPAGE_BPS` - Slippage tolerance for liquidations (default: 150 = 1.5%)
+- `REDEMPTION_WATCHER_STARTUP_LOOKBACK` - Blocks to scan for pending on startup (default: 100)
 
 ## Token Decimals Reference
 
