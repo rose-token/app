@@ -117,6 +117,20 @@ export const config = {
     // Blocks to look back on startup (default: 0 - don't catch up)
     startupBlockLookback: parseInt(process.env.DEPOSIT_WATCHER_STARTUP_LOOKBACK || '0'),
   },
+
+  // Redemption watcher configuration (On-demand liquidation)
+  redemptionWatcher: {
+    // Enable redemption watching and auto-fulfillment (default: true)
+    enabled: process.env.REDEMPTION_WATCHER_ENABLED !== 'false',
+    // Debounce time in ms - wait before processing to batch redemptions (default: 15s - faster than deposits)
+    debounceMs: parseInt(process.env.REDEMPTION_WATCHER_DEBOUNCE_MS || '15000'),
+    // Whether to execute swaps/fulfillments (default: true when enabled)
+    executeSwaps: process.env.REDEMPTION_WATCHER_EXECUTE !== 'false',
+    // Slippage tolerance in basis points for liquidation swaps (default: 150 = 1.5%)
+    slippageBps: parseInt(process.env.REDEMPTION_WATCHER_SLIPPAGE_BPS || '150'),
+    // Blocks to look back on startup (default: 100 - catch up on recent requests)
+    startupBlockLookback: parseInt(process.env.REDEMPTION_WATCHER_STARTUP_LOOKBACK || '100'),
+  },
 };
 
 // Validate required env vars

@@ -360,6 +360,159 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         emit Redeemed(msg.sender, roseAmount, usdcOwed);
     }
 
+    // ============ Redemption Queue Functions ============
+
+    /**
+     * @dev Request a redemption when instant redemption isn't possible
+     * Locks ROSE in treasury, records USDC owed at current NAV
+     * If USDC buffer is sufficient, fulfills instantly
+     * @param roseAmount Amount of ROSE to redeem
+     * @return requestId Unique ID for tracking the request
+     */
+    function requestRedemption(uint256 roseAmount) external nonReentrant whenNotPaused returns (uint256 requestId) {
+        if (roseAmount == 0) revert ZeroAmount();
+        if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
+        if (userPendingRedemptionId[msg.sender] != 0) revert UserHasPendingRedemption();
+
+        // User cooldown (same as redeem)
+        if (msg.sender != owner()) {
+            uint256 nextAllowed = lastRedeemTime[msg.sender] + USER_COOLDOWN;
+            if (block.timestamp < nextAllowed) {
+                revert CooldownNotElapsed(nextAllowed - block.timestamp);
+            }
+        }
+
+        // Calculate USDC owed at current NAV (locked price)
+        uint256 usdcOwed = calculateUsdcForRedemption(roseAmount);
+
+        // Lock ROSE by transferring to treasury
+        roseToken.safeTransferFrom(msg.sender, address(this), roseAmount);
+
+        // Create request
+        requestId = ++nextRedemptionId;
+        redemptionRequests[requestId] = RedemptionRequest({
+            user: msg.sender,
+            roseAmount: roseAmount,
+            usdcOwed: usdcOwed,
+            requestedAt: block.timestamp,
+            fulfilled: false
+        });
+
+        userPendingRedemptionId[msg.sender] = requestId;
+        totalPendingUsdcOwed += usdcOwed;
+        lastRedeemTime[msg.sender] = block.timestamp;
+
+        emit RedemptionRequested(requestId, msg.sender, roseAmount, usdcOwed);
+
+        // Try instant fulfillment if buffer sufficient
+        if (usdc.balanceOf(address(this)) >= usdcOwed) {
+            _fulfillRedemption(requestId);
+        }
+    }
+
+    /**
+     * @dev Fulfill a pending redemption request (rebalancer only)
+     * Called by backend after liquidating assets to build USDC buffer
+     * @param requestId ID of the redemption request to fulfill
+     */
+    function fulfillRedemption(uint256 requestId) external onlyRebalancer nonReentrant whenNotPaused {
+        _fulfillRedemption(requestId);
+    }
+
+    /**
+     * @dev Internal fulfillment logic - burns locked ROSE, transfers USDC
+     * @param requestId ID of the redemption request to fulfill
+     */
+    function _fulfillRedemption(uint256 requestId) internal {
+        RedemptionRequest storage request = redemptionRequests[requestId];
+
+        if (request.user == address(0)) revert RequestNotFound();
+        if (request.fulfilled) revert RequestAlreadyFulfilled();
+        if (usdc.balanceOf(address(this)) < request.usdcOwed) revert InsufficientLiquidity();
+
+        request.fulfilled = true;
+        userPendingRedemptionId[request.user] = 0;
+        totalPendingUsdcOwed -= request.usdcOwed;
+
+        // Burn locked ROSE, transfer USDC
+        IRoseToken(address(roseToken)).burn(address(this), request.roseAmount);
+        usdc.safeTransfer(request.user, request.usdcOwed);
+
+        emit RedemptionFulfilled(requestId, request.user, request.usdcOwed);
+    }
+
+    /**
+     * @dev Fulfill multiple redemption requests in a single transaction
+     * @param requestIds Array of request IDs to fulfill
+     */
+    function fulfillMultipleRedemptions(uint256[] calldata requestIds) external onlyRebalancer nonReentrant whenNotPaused {
+        for (uint256 i = 0; i < requestIds.length; i++) {
+            _fulfillRedemption(requestIds[i]);
+        }
+    }
+
+    /**
+     * @dev Get details of a redemption request
+     * @param requestId ID of the redemption request
+     * @return user Address of the user who made the request
+     * @return roseAmount Amount of ROSE locked
+     * @return usdcOwed Amount of USDC owed (locked at request NAV)
+     * @return requestedAt Timestamp when request was created
+     * @return fulfilled Whether the request has been fulfilled
+     */
+    function getRedemptionRequest(uint256 requestId) external view returns (
+        address user, uint256 roseAmount, uint256 usdcOwed, uint256 requestedAt, bool fulfilled
+    ) {
+        RedemptionRequest memory r = redemptionRequests[requestId];
+        return (r.user, r.roseAmount, r.usdcOwed, r.requestedAt, r.fulfilled);
+    }
+
+    /**
+     * @dev Get the pending redemption request ID for a user
+     * @param user Address to check
+     * @return requestId ID of pending request, or 0 if none
+     */
+    function getUserPendingRedemption(address user) external view returns (uint256) {
+        return userPendingRedemptionId[user];
+    }
+
+    /**
+     * @dev Check if a redemption can be fulfilled instantly
+     * @param roseAmount Amount of ROSE to redeem
+     * @return ready True if instant redemption is possible
+     * @return usdcAvailable USDC available after pending obligations
+     * @return usdcNeeded USDC needed for this redemption
+     */
+    function canRedeemInstantly(uint256 roseAmount) external view returns (bool ready, uint256 usdcAvailable, uint256 usdcNeeded) {
+        uint256 usdcOwed = calculateUsdcForRedemption(roseAmount);
+        uint256 balance = usdc.balanceOf(address(this));
+        uint256 available = balance > totalPendingUsdcOwed ? balance - totalPendingUsdcOwed : 0;
+        return (available >= usdcOwed, available, usdcOwed);
+    }
+
+    /**
+     * @dev Emergency refund - return ROSE instead of USDC (owner only)
+     * Used when liquidation is not possible or taking too long
+     * @param requestId ID of the redemption request to refund
+     */
+    function emergencyRefundRedemption(uint256 requestId) external onlyOwner {
+        RedemptionRequest storage request = redemptionRequests[requestId];
+        if (request.user == address(0)) revert RequestNotFound();
+        if (request.fulfilled) revert RequestAlreadyFulfilled();
+
+        address user = request.user;
+        uint256 roseAmount = request.roseAmount;
+
+        request.fulfilled = true;
+        userPendingRedemptionId[user] = 0;
+        totalPendingUsdcOwed -= request.usdcOwed;
+
+        // Return ROSE instead of USDC
+        roseToken.safeTransfer(user, roseAmount);
+
+        emit RedemptionFulfilled(requestId, user, 0); // 0 USDC = refund
+    }
+
     // ============ NAV Functions ============
 
     /**
