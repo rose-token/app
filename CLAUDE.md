@@ -5,7 +5,7 @@ Guidance for Claude Code. ALWAYS ASK CLARIFYING QUESTIONS. ALWAYS UPDATE CLAUDE.
 ## Table of Contents
 **Contracts:** [Overview](#project-overview) | [Architecture](#contract-architecture) | [Constants](#contract-constants) | [Errors](#contract-custom-errors) | [Treasury NAV](#treasury-nav-calculations) | [Security](#security-patterns)
 **Governance:** [System](#governance-system)
-**Tasks:** [Status Flow](#task-status-flow)
+**Tasks:** [Status Flow](#task-status-flow) | [Auction System](#auction-system)
 **Frontend:** [Architecture](#frontend-architecture) | [Routes](#frontend-routes) | [Hooks](#frontend-hooks) | [Passport](#frontend-passport-system)
 **Backend:** [API](#backend-api) | [Services](#backend-services) | [Cron](#backend-scheduled-jobs) | [Deployment](#backend-deployment)
 **Infrastructure:** [Testing](#testing) | [Simulation](#simulation-script) | [CI/CD](#cicd-workflows) | [Env Vars](#environment-variables) | [Decimals](#token-decimals-reference) | [Git](#git-workflow)
@@ -288,16 +288,107 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 
 **Role separation:** Customer ≠ Stakeholder ≠ Worker on same task.
 
+## Auction System
+
+**Purpose:** Reverse auction where customers post tasks with max budgets, workers submit competitive bids off-chain, and customers select winners. Only the final outcome goes on-chain.
+
+### Design Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Stakeholder stake basis | 10% of MAX budget upfront, refunded excess when winner selected |
+| Surplus refund timing | Customer refunded at task completion |
+| Bid visibility | Real-time visible to customer only, blind to workers/stakeholders/public |
+| Task type selection | Customer chooses fixed-price OR auction at creation time |
+
+### Status Flow Comparison
+
+**Fixed-Price (unchanged):**
+```
+StakeholderRequired → [stake 10%] → Open → [claim] → InProgress → ... → Closed
+```
+
+**Auction Mode:**
+```
+StakeholderRequired → [stake 10% of max] → Open (bids collected off-chain)
+    → [selectWinner: refund excess stake] → InProgress → ... → Closed (refund surplus to customer)
+```
+
+### Contract Functions
+
+| Function | Purpose |
+|----------|---------|
+| `createAuctionTask(title, maxBudget, ipfsHash, expiry, signature)` | Create auction task (sets `isAuction=true`) |
+| `selectAuctionWinner(taskId, worker, winningBid, expiry, signature)` | Customer selects winner, refunds excess stake to stakeholder |
+
+### Contract Events
+
+| Event | Parameters | When |
+|-------|------------|------|
+| `AuctionTaskCreated` | taskId, customer, maxBudget | After `createAuctionTask` |
+| `AuctionWinnerSelected` | taskId, worker, winningBid, stakeholderRefund | After `selectAuctionWinner` |
+| `SurplusRefunded` | taskId, customer, amount | At task completion (deposit - winningBid) |
+
+### Contract Storage
+
+Task struct extended with:
+```solidity
+bool isAuction;        // true = auction mode
+uint256 winningBid;    // Final price (0 until winner selected)
+```
+
+### Payment Flow Example
+
+**1000 ROSE max budget, 600 ROSE winning bid:**
+
+| Stage | Action | Amount |
+|-------|--------|--------|
+| Create | Customer deposits | 1000 ROSE |
+| Stake | Stakeholder locks 10% of max | 100 vROSE |
+| Select Winner | Stakeholder refund (100 - 60) | 40 vROSE |
+| Select Winner | Remaining stake | 60 vROSE |
+| Finalize | Worker (95% of 600) | 570 ROSE |
+| Finalize | Stakeholder (5% of 600) | 30 ROSE |
+| Finalize | Stake returned | 60 vROSE |
+| Finalize | DAO mint (2% of 600) | 12 ROSE |
+| Finalize | Customer surplus (1000 - 600) | 400 ROSE |
+
+### Frontend Components
+
+| Component | Purpose |
+|-----------|---------|
+| `CreateTaskForm.jsx` | Toggle between Fixed Price / Auction mode |
+| `BidSubmissionModal.jsx` | Workers submit/update bids with optional message |
+| `BidSelectionModal.jsx` | Customers view bids sorted by amount, select winner |
+| `TaskCard.jsx` | Shows bid count, "Place Bid" / "View Bids" buttons |
+
+### Bid Visibility Rules
+
+| Role | Can See |
+|------|---------|
+| Customer | All bids with worker addresses, amounts, messages |
+| Worker | Own bid only |
+| Stakeholder | Bid count only |
+| Public | Bid count only |
+
+### UI State Indicators
+
+| Status | Display Text | Badge |
+|--------|--------------|-------|
+| Open auction | "Accepting Bids" | Bid count |
+| After selection | Shows winning bid amount | Worker assigned |
+| Lowest bid | Green "Lowest" badge | Savings % shown |
+
 ## Frontend Architecture
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
 **Directories:**
 - `pages/` - TasksPage, VaultPage, ProfilePage, HelpPage, GovernancePage, ProposalCreatePage, ProposalDetailPage, DelegatesPage, MyVotesPage
-- `components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm
+- `components/marketplace/` - TaskCard, TaskList, TaskFilters, CreateTaskForm, BidSubmissionModal, BidSelectionModal
 - `components/vault/` - VaultStats, VaultAllocation, NavHistoryChart, DepositCard, RedeemCard
 - `components/governance/` - StakingPanel, VotePanel, ClaimRewardsPanel, ProposalCard, DelegateCard, QuorumBar
-- `hooks/` - useNotifications, useProfile, useVaultData, useNavHistory, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation
+- `hooks/` - useNotifications, useProfile, useVaultData, useNavHistory, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation, useAuction
 - `contracts/` - Auto-generated ABIs (via update-abi)
 
 **Styling:** CSS variables in `index.css`, semantic Tailwind (`bg-primary`, `text-accent`). Never hardcode colors.
