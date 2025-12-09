@@ -127,6 +127,8 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 
 **Architecture:** Contract is "dumb" (safety rails only), backend is "smart" (routing decisions).
 
+**Testnet Support:** LiFi API only supports mainnet chains. On Arbitrum Sepolia, the backend generates mock calldata for `MockLiFiDiamond.swapSimple()` instead of calling LiFi API. The mock does 1:1 swaps (adjusted for decimals), which is sufficient for testing. Detection via `isTestnet()` in `lifi.ts`.
+
 **Key Changes:**
 - `executeSwap(fromAsset, toAsset, amountIn, minAmountOut, lifiData)` - Backend-driven swaps via LiFi Diamond
 - Deposits no longer auto-diversify - backend watches `Deposited` events and calls `executeSwap()`
@@ -634,7 +636,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
 | delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
-| lifi.ts | getSwapQuote, applySlippage, calculateDiversificationSwaps, executeDiversificationSwap, getAssetTokenAddress, getTargetAllocations (Phase 3 Treasury LiFi) |
+| lifi.ts | isTestnet, getSwapQuote, applySlippage, calculateDiversificationSwaps, executeDiversificationSwap, getAssetTokenAddress, getTargetAllocations (Phase 3 Treasury LiFi) |
 | depositWatcher.ts | startDepositWatcher, stopDepositWatcher, getDepositWatcherStats, forceProcessPending, getPendingDeposits (Phase 3 Treasury LiFi) |
 | redemptionWatcher.ts | startRedemptionWatcher, stopRedemptionWatcher, getRedemptionWatcherStats, forceProcessPending, getPendingRedemptions, calculateLiquidationSwaps, processPendingRedemptions (Phase 5) |
 | auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask, syncAuctionFromChain |

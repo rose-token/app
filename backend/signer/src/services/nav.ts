@@ -3,14 +3,14 @@ import { config } from '../config';
 import { query } from '../db/pool';
 
 // Treasury contract ABI (read functions for NAV tracking)
+// Updated to match dynamic asset registry contract
 const TREASURY_ABI = [
-  // Vault breakdown - all-in-one snapshot
-  'function getVaultBreakdown() external view returns (uint256 btcValue, uint256 goldValue, uint256 usdcValue, uint256 roseValue, uint256 totalHardAssets, uint256 currentRosePrice, uint256 circulatingRose, bool rebalanceNeeded)',
-  // Allocation status - target vs actual percentages
-  'function getAllocationStatus() external view returns (uint256 targetBTC, uint256 targetGold, uint256 targetUSDC, uint256 targetROSE, uint256 actualBTC, uint256 actualGold, uint256 actualUSDC, uint256 actualROSE)',
-  // Chainlink prices
-  'function getBTCPrice() external view returns (uint256)',
-  'function getGoldPrice() external view returns (uint256)',
+  // Vault breakdown - core metrics
+  'function getVaultBreakdown() external view returns (uint256 totalHardAssets, uint256 currentRosePrice, uint256 circulatingRose, bool rebalanceNeeded)',
+  // Per-asset breakdown
+  'function getAssetBreakdown(bytes32 key) external view returns (address token, uint256 balance, uint256 valueUSD, uint256 targetBps, uint256 actualBps, bool active)',
+  // Asset price (Chainlink oracle)
+  'function getAssetPrice(bytes32 key) external view returns (uint256)',
 ];
 
 // Types
@@ -125,8 +125,15 @@ function getTreasuryContract(): ethers.Contract | null {
   return new ethers.Contract(config.contracts.treasury, TREASURY_ABI, provider);
 }
 
+// Asset keys as bytes32
+const BTC_KEY = ethers.encodeBytes32String('BTC');
+const GOLD_KEY = ethers.encodeBytes32String('GOLD');
+const STABLE_KEY = ethers.encodeBytes32String('STABLE');
+const ROSE_KEY = ethers.encodeBytes32String('ROSE');
+
 /**
  * Fetch current NAV snapshot from treasury contract
+ * Uses dynamic asset registry to get per-asset breakdowns
  */
 export async function fetchNavSnapshot(): Promise<NavSnapshot> {
   const treasury = getTreasuryContract();
@@ -135,34 +142,49 @@ export async function fetchNavSnapshot(): Promise<NavSnapshot> {
   }
 
   // Parallel contract calls for efficiency
-  const [breakdown, allocation, btcPrice, goldPrice, blockNumber] = await Promise.all([
+  const [
+    vaultBreakdown,
+    btcBreakdown,
+    goldBreakdown,
+    usdcBreakdown,
+    roseBreakdown,
+    btcPrice,
+    goldPrice,
+    blockNumber
+  ] = await Promise.all([
     treasury.getVaultBreakdown(),
-    treasury.getAllocationStatus(),
-    treasury.getBTCPrice(),
-    treasury.getGoldPrice(),
+    treasury.getAssetBreakdown(BTC_KEY),
+    treasury.getAssetBreakdown(GOLD_KEY),
+    treasury.getAssetBreakdown(STABLE_KEY),
+    treasury.getAssetBreakdown(ROSE_KEY),
+    treasury.getAssetPrice(BTC_KEY),
+    treasury.getAssetPrice(GOLD_KEY),
     provider.getBlockNumber(),
   ]);
 
+  // getAssetBreakdown returns: (token, balance, valueUSD, targetBps, actualBps, active)
+  // valueUSD is in 6 decimals, targetBps and actualBps are basis points
+
   return {
     breakdown: {
-      btcValueUsd: ethers.formatUnits(breakdown.btcValue, 6),
-      goldValueUsd: ethers.formatUnits(breakdown.goldValue, 6),
-      usdcValueUsd: ethers.formatUnits(breakdown.usdcValue, 6),
-      roseValueUsd: ethers.formatUnits(breakdown.roseValue, 6),
-      totalHardAssets: ethers.formatUnits(breakdown.totalHardAssets, 6),
-      rosePriceUsd: ethers.formatUnits(breakdown.currentRosePrice, 6),
-      circulatingRose: ethers.formatUnits(breakdown.circulatingRose, 18),
-      rebalanceNeeded: breakdown.rebalanceNeeded,
+      btcValueUsd: ethers.formatUnits(btcBreakdown.valueUSD, 6),
+      goldValueUsd: ethers.formatUnits(goldBreakdown.valueUSD, 6),
+      usdcValueUsd: ethers.formatUnits(usdcBreakdown.valueUSD, 6),
+      roseValueUsd: ethers.formatUnits(roseBreakdown.valueUSD, 6),
+      totalHardAssets: ethers.formatUnits(vaultBreakdown.totalHardAssets, 6),
+      rosePriceUsd: ethers.formatUnits(vaultBreakdown.currentRosePrice, 6),
+      circulatingRose: ethers.formatUnits(vaultBreakdown.circulatingRose, 18),
+      rebalanceNeeded: vaultBreakdown.rebalanceNeeded,
     },
     allocation: {
-      targetBtc: Number(allocation.targetBTC),
-      targetGold: Number(allocation.targetGold),
-      targetUsdc: Number(allocation.targetUSDC),
-      targetRose: Number(allocation.targetROSE),
-      actualBtc: Number(allocation.actualBTC),
-      actualGold: Number(allocation.actualGold),
-      actualUsdc: Number(allocation.actualUSDC),
-      actualRose: Number(allocation.actualROSE),
+      targetBtc: Number(btcBreakdown.targetBps),
+      targetGold: Number(goldBreakdown.targetBps),
+      targetUsdc: Number(usdcBreakdown.targetBps),
+      targetRose: Number(roseBreakdown.targetBps),
+      actualBtc: Number(btcBreakdown.actualBps),
+      actualGold: Number(goldBreakdown.actualBps),
+      actualUsdc: Number(usdcBreakdown.actualBps),
+      actualRose: Number(roseBreakdown.actualBps),
     },
     btcChainlinkPrice: ethers.formatUnits(btcPrice, 8),
     goldChainlinkPrice: ethers.formatUnits(goldPrice, 8),

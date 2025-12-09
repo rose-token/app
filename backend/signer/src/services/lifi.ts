@@ -8,6 +8,34 @@ const LIFI_API_BASE = 'https://li.quest/v1';
 const ARBITRUM_CHAIN_ID = 42161;
 const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 
+/**
+ * Check if running on testnet (Sepolia)
+ * LiFi API only supports mainnet chains
+ */
+export function isTestnet(): boolean {
+  const rpcUrl = config.rpc.url.toLowerCase();
+  return rpcUrl.includes('sepolia') || rpcUrl.includes('testnet');
+}
+
+/**
+ * Generate mock swap calldata for MockLiFiDiamond on testnet
+ * The mock uses swapSimple(address,address,uint256,uint256,address)
+ */
+function generateMockSwapData(
+  fromToken: string,
+  toToken: string,
+  amountIn: bigint,
+  minAmountOut: bigint,
+  recipient: string
+): string {
+  const iface = new ethers.Interface([
+    'function swapSimple(address fromToken, address toToken, uint256 amountIn, uint256 minAmountOut, address recipient)'
+  ]);
+  return iface.encodeFunctionData('swapSimple', [
+    fromToken, toToken, amountIn, minAmountOut, recipient
+  ]);
+}
+
 interface LiFiQuoteParams {
   fromChain: number;
   toChain: number;
@@ -51,7 +79,7 @@ function getChainId(): number {
 }
 
 /**
- * Get a swap quote from LiFi API
+ * Get a swap quote from LiFi API (mainnet) or generate mock data (testnet)
  */
 export async function getSwapQuote(
   fromToken: string,
@@ -65,6 +93,34 @@ export async function getSwapQuote(
   estimatedAmountOut: bigint;
   gasCost: bigint;
 }> {
+  // On testnet, generate mock calldata for MockLiFiDiamond
+  // LiFi API only supports mainnet chains
+  if (isTestnet()) {
+    console.log(`[LiFi] Testnet detected - generating mock swap data`);
+
+    // MockLiFiDiamond does 1:1 swaps (adjusting for decimals internally)
+    // Apply slippage to minAmountOut for safety margin
+    const minAmountOut = (amountIn * BigInt(10000 - slippageBps)) / 10000n;
+
+    const lifiData = generateMockSwapData(
+      fromToken,
+      toToken,
+      amountIn,
+      minAmountOut,
+      treasuryAddress
+    );
+
+    console.log(`[LiFi] Mock: ${fromToken} -> ${toToken}, amount: ${amountIn.toString()}`);
+
+    return {
+      lifiData,
+      minAmountOut,
+      estimatedAmountOut: amountIn, // 1:1 on testnet
+      gasCost: 0n,
+    };
+  }
+
+  // Mainnet: call LiFi API
   const chainId = getChainId();
 
   const params: LiFiQuoteParams = {
