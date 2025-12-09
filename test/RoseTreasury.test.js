@@ -6,15 +6,19 @@ describe("RoseTreasury Smart Deposits", function () {
   let roseToken;
   let usdc;
   let tbtc;
-  let reth;
   let paxg;
   let btcFeed;
-  let ethFeed;
   let xauFeed;
   let swapRouter;
   let owner;
   let user;
   let user2;
+
+  // Asset keys as bytes32
+  const BTC_KEY = ethers.encodeBytes32String("BTC");
+  const GOLD_KEY = ethers.encodeBytes32String("GOLD");
+  const STABLE_KEY = ethers.encodeBytes32String("STABLE");
+  const ROSE_KEY = ethers.encodeBytes32String("ROSE");
 
   beforeEach(async function () {
     [owner, user, user2] = await ethers.getSigners();
@@ -23,7 +27,6 @@ describe("RoseTreasury Smart Deposits", function () {
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     usdc = await MockERC20.deploy("USD Coin", "USDC", 6);
     tbtc = await MockERC20.deploy("Wrapped BTC", "TBTC", 8);
-    reth = await MockERC20.deploy("Rocket Pool ETH", "rETH", 18);
     paxg = await MockERC20.deploy("Pax Gold", "PAXG", 18);
 
     // 2. Deploy RoseToken (owner is initial authorized)
@@ -33,7 +36,6 @@ describe("RoseTreasury Smart Deposits", function () {
     // 3. Deploy mock Chainlink price feeds (8 decimals)
     const MockV3Aggregator = await ethers.getContractFactory("MockV3Aggregator");
     btcFeed = await MockV3Aggregator.deploy(8, 4300000000000n);  // $43,000
-    ethFeed = await MockV3Aggregator.deploy(8, 230000000000n);   // $2,300
     xauFeed = await MockV3Aggregator.deploy(8, 200000000000n);   // $2,000
 
     // 4. Deploy mock Uniswap router
@@ -43,39 +45,71 @@ describe("RoseTreasury Smart Deposits", function () {
     // 5. Set token decimals on router
     await swapRouter.setTokenDecimals(await usdc.getAddress(), 6);
     await swapRouter.setTokenDecimals(await tbtc.getAddress(), 8);
-    await swapRouter.setTokenDecimals(await reth.getAddress(), 18);
     await swapRouter.setTokenDecimals(await paxg.getAddress(), 18);
+    await swapRouter.setTokenDecimals(await roseToken.getAddress(), 18);
 
     // 6. Set exchange rates on router
     await swapRouter.setExchangeRate(await usdc.getAddress(), await tbtc.getAddress(), 2326n * 10n**12n);
-    await swapRouter.setExchangeRate(await usdc.getAddress(), await reth.getAddress(), 435n * 10n**24n);
     await swapRouter.setExchangeRate(await usdc.getAddress(), await paxg.getAddress(), 5n * 10n**26n);
+    await swapRouter.setExchangeRate(await usdc.getAddress(), await roseToken.getAddress(), 1n * 10n**30n); // 1 USDC = 1 ROSE
 
     // Also set reverse rates for redemptions
     await swapRouter.setExchangeRate(await tbtc.getAddress(), await usdc.getAddress(), 43000n * 10n**16n);
-    await swapRouter.setExchangeRate(await reth.getAddress(), await usdc.getAddress(), 2300n * 10n**6n);
     await swapRouter.setExchangeRate(await paxg.getAddress(), await usdc.getAddress(), 2000n * 10n**6n);
+    await swapRouter.setExchangeRate(await roseToken.getAddress(), await usdc.getAddress(), 1n * 10n**6n); // 1 ROSE = 1 USDC
 
     // 7. Fund router with tokens for swaps
     await tbtc.mint(await swapRouter.getAddress(), ethers.parseUnits("1000", 8));
-    await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await usdc.mint(await swapRouter.getAddress(), ethers.parseUnits("10000000", 6));
 
-    // 8. Deploy RoseTreasury
+    // 8. Deploy RoseTreasury with new constructor (roseToken, usdc, swapRouter)
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await tbtc.getAddress(),
-      await paxg.getAddress(),
-      await btcFeed.getAddress(),
-      await xauFeed.getAddress(),
       await swapRouter.getAddress()
     );
 
     // 9. Authorize Treasury on RoseToken
     await roseToken.setAuthorized(await roseTreasury.getAddress(), true);
+
+    // 10. Register assets with addAsset()
+    // BTC: 30%
+    await roseTreasury.addAsset(
+      BTC_KEY,
+      await tbtc.getAddress(),
+      await btcFeed.getAddress(),
+      8,  // decimals
+      3000 // 30%
+    );
+
+    // GOLD: 30%
+    await roseTreasury.addAsset(
+      GOLD_KEY,
+      await paxg.getAddress(),
+      await xauFeed.getAddress(),
+      18, // decimals
+      3000 // 30%
+    );
+
+    // STABLE (USDC): 20%
+    await roseTreasury.addAsset(
+      STABLE_KEY,
+      await usdc.getAddress(),
+      ethers.ZeroAddress, // No price feed needed for stablecoin
+      6,  // decimals
+      2000 // 20%
+    );
+
+    // ROSE: 20%
+    await roseTreasury.addAsset(
+      ROSE_KEY,
+      await roseToken.getAddress(),
+      ethers.ZeroAddress, // Uses NAV, not price feed
+      18, // decimals
+      2000 // 20%
+    );
   });
 
   // Helper constants
@@ -93,16 +127,24 @@ describe("RoseTreasury Smart Deposits", function () {
     await roseTreasury.connect(signer).deposit(usdcAmount);
   }
 
-  // Helper to get vault allocation percentages
+  // Helper to get vault allocation percentages (updated for new contract)
   async function getVaultPercentages() {
+    const treasuryAddr = await roseTreasury.getAddress();
+
+    // Get individual asset values
+    const btcBreakdown = await roseTreasury.getAssetBreakdown(BTC_KEY);
+    const goldBreakdown = await roseTreasury.getAssetBreakdown(GOLD_KEY);
+    const stableBreakdown = await roseTreasury.getAssetBreakdown(STABLE_KEY);
+
     const breakdown = await roseTreasury.getVaultBreakdown();
     const total = breakdown.totalHardAssets;
+
     if (total == 0n) return { btc: 0, gold: 0, usdc: 0 };
 
     return {
-      btc: Number((breakdown.btcValue * 10000n) / total) / 100,
-      gold: Number((breakdown.goldValue * 10000n) / total) / 100,
-      usdc: Number((breakdown.usdcValue * 10000n) / total) / 100
+      btc: Number((btcBreakdown.valueUSD * 10000n) / total) / 100,
+      gold: Number((goldBreakdown.valueUSD * 10000n) / total) / 100,
+      usdc: Number((stableBreakdown.valueUSD * 10000n) / total) / 100
     };
   }
 
@@ -400,9 +442,9 @@ describe("RoseTreasury Smart Deposits", function () {
     it("Should allow config changes while paused", async function () {
       await roseTreasury.connect(owner).pause();
 
-      // setAllocation should still work while paused
+      // updateAssetAllocation should still work while paused
       await expect(
-        roseTreasury.connect(owner).setAllocation(3000, 3000, 2000, 2000)
+        roseTreasury.connect(owner).updateAssetAllocation(BTC_KEY, 3000)
       ).to.not.be.reverted;
 
       // setMaxSlippage should still work while paused
@@ -632,6 +674,141 @@ describe("RoseTreasury Smart Deposits", function () {
       // Check the view function reports ~12hr remaining
       const timeRemaining = await roseTreasury.timeUntilDeposit(user.address);
       expect(timeRemaining).to.be.closeTo(12 * 60 * 60, 10);
+    });
+  });
+
+  describe("Asset Management", function () {
+    it("Should add assets correctly", async function () {
+      // Assets were added in beforeEach, verify they exist
+      const btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.token).to.equal(await tbtc.getAddress());
+      expect(btcAsset.targetBps).to.equal(3000);
+      expect(btcAsset.active).to.be.true;
+
+      const goldAsset = await roseTreasury.assets(GOLD_KEY);
+      expect(goldAsset.token).to.equal(await paxg.getAddress());
+      expect(goldAsset.targetBps).to.equal(3000);
+
+      const stableAsset = await roseTreasury.assets(STABLE_KEY);
+      expect(stableAsset.token).to.equal(await usdc.getAddress());
+      expect(stableAsset.targetBps).to.equal(2000);
+
+      const roseAsset = await roseTreasury.assets(ROSE_KEY);
+      expect(roseAsset.token).to.equal(await roseToken.getAddress());
+      expect(roseAsset.targetBps).to.equal(2000);
+    });
+
+    it("Should reject duplicate asset keys", async function () {
+      await expect(
+        roseTreasury.addAsset(
+          BTC_KEY,
+          await tbtc.getAddress(),
+          await btcFeed.getAddress(),
+          8,
+          1000
+        )
+      ).to.be.revertedWithCustomError(roseTreasury, "AssetAlreadyExists");
+    });
+
+    it("Should update asset allocation", async function () {
+      await roseTreasury.updateAssetAllocation(BTC_KEY, 2500);
+
+      const btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.targetBps).to.equal(2500);
+    });
+
+    it("Should deactivate and reactivate assets", async function () {
+      await roseTreasury.deactivateAsset(BTC_KEY);
+
+      let btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.active).to.be.false;
+
+      await roseTreasury.reactivateAsset(BTC_KEY);
+
+      btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.active).to.be.true;
+    });
+
+    it("Should not allow deactivating ROSE or STABLE", async function () {
+      await expect(
+        roseTreasury.deactivateAsset(ROSE_KEY)
+      ).to.be.revertedWithCustomError(roseTreasury, "CannotDeactivateRequired");
+
+      await expect(
+        roseTreasury.deactivateAsset(STABLE_KEY)
+      ).to.be.revertedWithCustomError(roseTreasury, "CannotDeactivateRequired");
+    });
+
+    it("Should return all assets via getAllAssets", async function () {
+      const [keys, assetList] = await roseTreasury.getAllAssets();
+
+      expect(keys.length).to.equal(4);
+      expect(assetList.length).to.equal(4);
+
+      // Verify keys are correct
+      expect(keys[0]).to.equal(BTC_KEY);
+      expect(keys[1]).to.equal(GOLD_KEY);
+      expect(keys[2]).to.equal(STABLE_KEY);
+      expect(keys[3]).to.equal(ROSE_KEY);
+    });
+
+    it("Should validate allocations sum", async function () {
+      // Default allocations sum to 10000 (3000+3000+2000+2000)
+      expect(await roseTreasury.validateAllocations()).to.be.true;
+
+      // Update one allocation to break the sum
+      await roseTreasury.updateAssetAllocation(BTC_KEY, 4000);
+
+      // Now sum is 11000, not valid
+      expect(await roseTreasury.validateAllocations()).to.be.false;
+    });
+
+    it("Should update asset token", async function () {
+      const NewMockERC20 = await ethers.getContractFactory("MockERC20");
+      const newBtcToken = await NewMockERC20.deploy("New BTC", "NBTC", 8);
+
+      await roseTreasury.updateAssetToken(BTC_KEY, await newBtcToken.getAddress());
+
+      const btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.token).to.equal(await newBtcToken.getAddress());
+    });
+
+    it("Should update asset price feed", async function () {
+      const MockV3Aggregator = await ethers.getContractFactory("MockV3Aggregator");
+      const newFeed = await MockV3Aggregator.deploy(8, 5000000000000n);
+
+      await roseTreasury.updateAssetPriceFeed(BTC_KEY, await newFeed.getAddress());
+
+      const btcAsset = await roseTreasury.assets(BTC_KEY);
+      expect(btcAsset.priceFeed).to.equal(await newFeed.getAddress());
+    });
+
+    it("Should get asset breakdown", async function () {
+      // First deposit to populate treasury
+      await deposit(user, ethers.parseUnits("10000", 6));
+
+      const btcBreakdown = await roseTreasury.getAssetBreakdown(BTC_KEY);
+
+      expect(btcBreakdown.token).to.equal(await tbtc.getAddress());
+      expect(btcBreakdown.balance).to.be.greaterThan(0);
+      expect(btcBreakdown.valueUSD).to.be.greaterThan(0);
+      expect(btcBreakdown.targetBps).to.equal(3000);
+      expect(btcBreakdown.active).to.be.true;
+    });
+
+    it("Should get asset price", async function () {
+      const btcPrice = await roseTreasury.getAssetPrice(BTC_KEY);
+      expect(btcPrice).to.equal(4300000000000n); // $43,000 in 8 decimals
+
+      const goldPrice = await roseTreasury.getAssetPrice(GOLD_KEY);
+      expect(goldPrice).to.equal(200000000000n); // $2,000 in 8 decimals
+
+      const stablePrice = await roseTreasury.getAssetPrice(STABLE_KEY);
+      expect(stablePrice).to.equal(100000000n); // $1.00 in 8 decimals
+
+      // ROSE price is NAV ($1 initially)
+      const rosePrice = await roseTreasury.getAssetPrice(ROSE_KEY);
+      expect(rosePrice).to.equal(1000000n); // $1.00 in 6 decimals (NAV format)
     });
   });
 });

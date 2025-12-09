@@ -211,18 +211,66 @@ async function main() {
   // ============ Step 2: Deploy RoseTreasury ============
   console.log("\n--- Step 2: Deploying RoseTreasury ---");
   const RoseTreasury = await hre.ethers.getContractFactory("RoseTreasury");
+  // New constructor: (roseToken, usdc, swapRouter) - assets added via addAsset()
   const roseTreasury = await RoseTreasury.deploy(
     roseTokenAddress,
     addresses.usdc,
-    addresses.tbtc,
-    addresses.paxg,
-    addresses.btcUsdFeed,
-    addresses.xauUsdFeed,
     addresses.swapRouter
   );
   await roseTreasury.waitForDeployment();
   const treasuryAddress = await roseTreasury.getAddress();
   console.log("RoseTreasury deployed to:", treasuryAddress);
+
+  // Register assets with addAsset()
+  console.log("Registering treasury assets...");
+
+  // BTC: 30%
+  const btcKey = hre.ethers.encodeBytes32String("BTC");
+  await (await roseTreasury.addAsset(
+    btcKey,
+    addresses.tbtc,
+    addresses.btcUsdFeed,
+    8,    // decimals
+    3000  // 30%
+  )).wait();
+  console.log("  BTC asset registered (30%) ✓");
+
+  // GOLD: 30%
+  const goldKey = hre.ethers.encodeBytes32String("GOLD");
+  await (await roseTreasury.addAsset(
+    goldKey,
+    addresses.paxg,
+    addresses.xauUsdFeed,
+    18,   // decimals
+    3000  // 30%
+  )).wait();
+  console.log("  GOLD asset registered (30%) ✓");
+
+  // STABLE (USDC): 20%
+  const stableKey = hre.ethers.encodeBytes32String("STABLE");
+  await (await roseTreasury.addAsset(
+    stableKey,
+    addresses.usdc,
+    hre.ethers.ZeroAddress, // No price feed for stablecoin
+    6,    // decimals
+    2000  // 20%
+  )).wait();
+  console.log("  STABLE asset registered (20%) ✓");
+
+  // ROSE: 20%
+  const roseKey = hre.ethers.encodeBytes32String("ROSE");
+  await (await roseTreasury.addAsset(
+    roseKey,
+    roseTokenAddress,
+    hre.ethers.ZeroAddress, // Uses NAV, not price feed
+    18,   // decimals
+    2000  // 20%
+  )).wait();
+  console.log("  ROSE asset registered (20%) ✓");
+
+  // Validate allocations sum to 100%
+  const validAllocations = await roseTreasury.validateAllocations();
+  console.log("  Allocations valid:", validAllocations ? "✓" : "✗");
 
   // ============ Step 3: Deploy RoseMarketplace ============
   console.log("\n--- Step 3: Deploying RoseMarketplace ---");
@@ -331,12 +379,10 @@ async function main() {
   await (await roseGovernance.setDelegationSigner(passportSignerAddress)).wait();
   console.log("Delegation signer set to:", passportSignerAddress, "✓");
 
-  // For testnet, set allocation to diversified RWA + ROSE reserve
+  // For testnet, set slippage tolerance and seed treasury
   if (isTestnet) {
-    console.log("Setting testnet allocation (30% BTC, 30% Gold, 20% USDC, 20% ROSE)...");
-    const setAllocTx = await roseTreasury.setAllocation(3000, 3000, 2000, 2000); // 30% BTC, 30% Gold, 20% USDC, 20% ROSE
-    await setAllocTx.wait();
-    console.log("Testnet allocation set to 30% BTC, 30% Gold, 20% USDC, 20% ROSE ✓");
+    // Allocations already set via addAsset() calls above
+    console.log("Assets registered with allocations: 30% BTC, 30% Gold, 20% USDC, 20% ROSE");
 
     // Set slippage tolerance to 100% for testnet (disables slippage check)
     console.log("Setting testnet slippage tolerance (100%)...");

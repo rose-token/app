@@ -11,91 +11,77 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 /**
  * @title RoseTreasury
- * @dev Treasury vault that backs ROSE tokens with real-world assets (BTC, Gold, USDC).
+ * @dev Treasury vault that backs ROSE tokens with configurable real-world assets.
  *
- * Allocation: 30% TBTC / 30% PAXG / 20% USDC / 20% ROSE (buyback reserve)
+ * Assets are registered with bytes32 keys (e.g., "BTC", "GOLD", "STABLE", "ROSE").
+ * Each asset has a target allocation in basis points.
  *
  * Users deposit USDC, receive ROSE at current NAV.
  * Treasury automatically diversifies into RWA.
  * Users redeem ROSE for USDC at current NAV.
  *
- * NAV = Hard Assets (BTC + Gold + USDC) / Circulating ROSE Supply
+ * NAV = Hard Assets (all non-ROSE assets) / Circulating ROSE Supply
  * Treasury ROSE is NOT counted in NAV - it's a buyback/spending reserve.
  *
  * Rebalancing:
  * - Threshold-based (5% drift triggers rebalance)
  * - 7-day cooldown between rebalances
- * - Buys ROSE from LP when underweight (reduces circulating supply)
- * - Sells ROSE to LP when overweight (or spends on dev)
+ * - Backend orchestrates swaps via LiFi (Phase 3)
  */
 contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
 
-    // ============ Tokens ============
+    // ============ Asset Configuration ============
+    struct Asset {
+        address token;
+        address priceFeed;    // Chainlink feed (address(0) for ROSE - uses NAV)
+        uint8 decimals;
+        uint256 targetBps;    // Target allocation in basis points
+        bool active;
+    }
+
+    mapping(bytes32 => Asset) public assets;
+    bytes32[] public assetKeys;
+
+    // ============ Core Tokens ============
     IERC20 public immutable roseToken;
-    IERC20 public immutable usdc;
-    IERC20 public immutable tbtc;
-    IERC20 public immutable paxg;
+    IERC20 public immutable usdc;  // Base currency for deposits/redemptions
 
-    // ============ Chainlink Price Feeds ============
-    AggregatorV3Interface public immutable btcUsdFeed;
-    AggregatorV3Interface public immutable xauUsdFeed;
+    // ============ Special Asset Keys ============
+    bytes32 public constant ROSE_KEY = "ROSE";
+    bytes32 public constant STABLE_KEY = "STABLE";
 
-    // ============ DEX ============
+    // ============ DEX (Temporary - Phase 3 replaces with LiFi) ============
     ISwapRouter public immutable swapRouter;
     uint24 public constant POOL_FEE_STABLE = 500;   // 0.05% for USDC pairs
     uint24 public constant POOL_FEE_VOLATILE = 3000; // 0.3% for volatile pairs
 
-    // ============ Allocation Targets (basis points, 10000 = 100%) ============
-    uint256 public allocBTC = 3000;   // 30%
-    uint256 public allocGold = 3000;  // 30%
-    uint256 public allocUSDC = 2000;  // 20%
-    uint256 public allocROSE = 2000;  // 20% buyback reserve
+    // ============ Constants ============
     uint256 public constant ALLOC_DENOMINATOR = 10000;
-
-    // ============ Rebalancing ============
     uint256 public constant DRIFT_THRESHOLD = 500; // 5% drift triggers rebalance
     uint256 public constant REBALANCE_COOLDOWN = 7 days;
-    uint256 public lastRebalanceTime;
-
-    // ============ Decimals ============
+    uint256 public constant USER_COOLDOWN = 24 hours;
+    uint256 public constant MAX_ORACLE_STALENESS = 1 hours;
+    uint256 public constant MIN_SWAP_AMOUNT = 1e6; // 1 USDC minimum
     uint8 public constant USDC_DECIMALS = 6;
-    uint8 public constant TBTC_DECIMALS = 8;
-    uint8 public constant PAXG_DECIMALS = 18;
-    uint8 public constant ROSE_DECIMALS = 18;
     uint8 public constant CHAINLINK_DECIMALS = 8;
 
-    // ============ Slippage Protection ============
+    // ============ State ============
+    uint256 public lastRebalanceTime;
     uint256 public maxSlippageBps = 100; // 1% default
-
-    // ============ Oracle Staleness ============
-    uint256 public constant MAX_ORACLE_STALENESS = 1 hours;
-
-    // ============ Minimum Swap Threshold ============
-    uint256 public constant MIN_SWAP_AMOUNT = 1e6; // 1 USDC minimum
-
-    // ============ Marketplace Integration ============
     address public marketplace;
-
-    // ============ Governance Integration ============
     address public governance;
-
-    // ============ User Cooldowns ============
-    uint256 public constant USER_COOLDOWN = 24 hours;
     mapping(address => uint256) public lastDepositTime;
     mapping(address => uint256) public lastRedeemTime;
 
     // ============ Events ============
     event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted);
     event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut);
-    event Rebalanced(
-        uint256 btcValue,
-        uint256 goldValue,
-        uint256 usdcValue,
-        uint256 roseValue,
-        uint256 totalHardAssets
-    );
-    event AllocationUpdated(uint256 btc, uint256 gold, uint256 usdc, uint256 rose);
+    event Rebalanced(uint256 totalHardAssets);
+    event AssetAdded(bytes32 indexed key, address token, address priceFeed, uint8 decimals, uint256 targetBps);
+    event AssetUpdated(bytes32 indexed key, address token, address priceFeed, uint256 targetBps);
+    event AssetDeactivated(bytes32 indexed key);
+    event AssetReactivated(bytes32 indexed key);
     event RoseSpent(address indexed to, uint256 amount, string reason);
     event RoseBuyback(uint256 usdcSpent, uint256 roseBought);
     event MarketplaceUpdated(address indexed newMarketplace);
@@ -114,31 +100,176 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error RebalanceNotNeeded();
     error RebalanceCooldown();
     error CooldownNotElapsed(uint256 timeRemaining);
+    error AssetAlreadyExists();
+    error AssetNotFound();
+    error AssetNotActive();
+    error InvalidTargetSum();
+    error CannotDeactivateRequired();
 
     constructor(
         address _roseToken,
         address _usdc,
-        address _tbtc,
-        address _paxg,
-        address _btcUsdFeed,
-        address _xauUsdFeed,
         address _swapRouter
     ) Ownable(msg.sender) {
+        if (_roseToken == address(0) || _usdc == address(0) || _swapRouter == address(0)) {
+            revert ZeroAddress();
+        }
+
         roseToken = IERC20(_roseToken);
         usdc = IERC20(_usdc);
-        tbtc = IERC20(_tbtc);
-        paxg = IERC20(_paxg);
-
-        btcUsdFeed = AggregatorV3Interface(_btcUsdFeed);
-        xauUsdFeed = AggregatorV3Interface(_xauUsdFeed);
-
         swapRouter = ISwapRouter(_swapRouter);
 
         // Approve router for swaps
         IERC20(_usdc).approve(_swapRouter, type(uint256).max);
-        IERC20(_tbtc).approve(_swapRouter, type(uint256).max);
-        IERC20(_paxg).approve(_swapRouter, type(uint256).max);
         IERC20(_roseToken).approve(_swapRouter, type(uint256).max);
+    }
+
+    // ============ Asset Management ============
+
+    /**
+     * @dev Add a new asset to the registry
+     * @param key Unique identifier (e.g., "BTC", "GOLD")
+     * @param token Token contract address
+     * @param priceFeed Chainlink price feed (address(0) for ROSE)
+     * @param decimals Token decimals
+     * @param targetBps Target allocation in basis points
+     */
+    function addAsset(
+        bytes32 key,
+        address token,
+        address priceFeed,
+        uint8 decimals,
+        uint256 targetBps
+    ) external onlyOwner {
+        if (token == address(0)) revert ZeroAddress();
+        if (assets[key].token != address(0)) revert AssetAlreadyExists();
+
+        assets[key] = Asset({
+            token: token,
+            priceFeed: priceFeed,
+            decimals: decimals,
+            targetBps: targetBps,
+            active: true
+        });
+
+        assetKeys.push(key);
+
+        // Approve router for this asset
+        IERC20(token).approve(address(swapRouter), type(uint256).max);
+
+        emit AssetAdded(key, token, priceFeed, decimals, targetBps);
+    }
+
+    /**
+     * @dev Update asset token address (e.g., swap PAXG for XAUt0)
+     * @param key Asset key
+     * @param newToken New token address
+     */
+    function updateAssetToken(bytes32 key, address newToken) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+        if (newToken == address(0)) revert ZeroAddress();
+
+        // Revoke old approval
+        IERC20(asset.token).approve(address(swapRouter), 0);
+
+        asset.token = newToken;
+
+        // Approve new token
+        IERC20(newToken).approve(address(swapRouter), type(uint256).max);
+
+        emit AssetUpdated(key, newToken, asset.priceFeed, asset.targetBps);
+    }
+
+    /**
+     * @dev Update asset price feed
+     * @param key Asset key
+     * @param newPriceFeed New Chainlink price feed address
+     */
+    function updateAssetPriceFeed(bytes32 key, address newPriceFeed) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+
+        asset.priceFeed = newPriceFeed;
+
+        emit AssetUpdated(key, asset.token, newPriceFeed, asset.targetBps);
+    }
+
+    /**
+     * @dev Update asset target allocation
+     * @param key Asset key
+     * @param newTargetBps New target allocation in basis points
+     */
+    function updateAssetAllocation(bytes32 key, uint256 newTargetBps) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+
+        asset.targetBps = newTargetBps;
+
+        emit AssetUpdated(key, asset.token, asset.priceFeed, newTargetBps);
+    }
+
+    /**
+     * @dev Deactivate an asset (keeps data but excludes from calculations)
+     * @param key Asset key
+     */
+    function deactivateAsset(bytes32 key) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+        // Cannot deactivate ROSE or STABLE as they are required
+        if (key == ROSE_KEY || key == STABLE_KEY) revert CannotDeactivateRequired();
+
+        asset.active = false;
+
+        emit AssetDeactivated(key);
+    }
+
+    /**
+     * @dev Reactivate a previously deactivated asset
+     * @param key Asset key
+     */
+    function reactivateAsset(bytes32 key) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+
+        asset.active = true;
+
+        emit AssetReactivated(key);
+    }
+
+    /**
+     * @dev Validate that all active asset allocations sum to 10000 bps
+     */
+    function validateAllocations() public view returns (bool) {
+        uint256 total = 0;
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            Asset memory asset = assets[assetKeys[i]];
+            if (asset.active) {
+                total += asset.targetBps;
+            }
+        }
+        return total == ALLOC_DENOMINATOR;
+    }
+
+    /**
+     * @dev Get all registered assets
+     */
+    function getAllAssets() external view returns (
+        bytes32[] memory keys,
+        Asset[] memory assetList
+    ) {
+        keys = assetKeys;
+        assetList = new Asset[](assetKeys.length);
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            assetList[i] = assets[assetKeys[i]];
+        }
+    }
+
+    /**
+     * @dev Get count of registered assets
+     */
+    function getAssetCount() external view returns (uint256) {
+        return assetKeys.length;
     }
 
     // ============ Core Functions ============
@@ -201,24 +332,31 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     /**
      * @dev Get total hard asset value in USD (6 decimals)
-     * EXCLUDES treasury ROSE - only counts BTC, Gold, USDC
+     * Excludes treasury ROSE - only counts non-ROSE assets
      */
     function hardAssetValueUSD() public view returns (uint256) {
-        uint256 btcValue = _getAssetValueUSD(
-            tbtc.balanceOf(address(this)),
-            getBTCPrice(),
-            TBTC_DECIMALS
-        );
+        uint256 total = 0;
 
-        uint256 goldValue = _getAssetValueUSD(
-            paxg.balanceOf(address(this)),
-            getGoldPrice(),
-            PAXG_DECIMALS
-        );
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY) continue; // Skip ROSE from hard assets
 
-        uint256 usdcValue = usdc.balanceOf(address(this));
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
 
-        return btcValue + goldValue + usdcValue;
+            uint256 balance = IERC20(asset.token).balanceOf(address(this));
+            if (balance == 0) continue;
+
+            // STABLE (USDC) doesn't need price conversion
+            if (key == STABLE_KEY) {
+                total += balance;
+            } else {
+                uint256 price = _getAssetPrice(asset.priceFeed);
+                total += _getAssetValueUSD(balance, price, asset.decimals);
+            }
+        }
+
+        return total;
     }
 
     /**
@@ -228,7 +366,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     function treasuryRoseValueUSD() public view returns (uint256) {
         uint256 treasuryRose = roseToken.balanceOf(address(this));
         if (treasuryRose == 0) return 0;
-        
+
         uint256 nav = rosePrice();
         return (treasuryRose * nav) / 1e18;
     }
@@ -242,7 +380,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         if (circulating == 0) {
             return 1e6; // $1.00 initial price
         }
-        
+
         return (hardAssetValueUSD() * 1e18) / circulating;
     }
 
@@ -284,23 +422,29 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         uint256 hardAssets = hardAssetValueUSD();
         if (hardAssets == 0) return false;
 
-        uint256 btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
-        uint256 goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
-        uint256 usdcValue = usdc.balanceOf(address(this));
         uint256 roseValue = treasuryRoseValueUSD();
-
         uint256 totalForAlloc = hardAssets + roseValue;
 
-        // Check each allocation for drift
-        uint256 btcTarget = (totalForAlloc * allocBTC) / ALLOC_DENOMINATOR;
-        uint256 goldTarget = (totalForAlloc * allocGold) / ALLOC_DENOMINATOR;
-        uint256 usdcTarget = (totalForAlloc * allocUSDC) / ALLOC_DENOMINATOR;
-        uint256 roseTarget = (totalForAlloc * allocROSE) / ALLOC_DENOMINATOR;
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
 
-        if (_isDrifted(btcValue, btcTarget)) return true;
-        if (_isDrifted(goldValue, goldTarget)) return true;
-        if (_isDrifted(usdcValue, usdcTarget)) return true;
-        if (_isDrifted(roseValue, roseTarget)) return true;
+            uint256 currentValue;
+            if (key == ROSE_KEY) {
+                currentValue = roseValue;
+            } else if (key == STABLE_KEY) {
+                currentValue = IERC20(asset.token).balanceOf(address(this));
+            } else {
+                uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                uint256 price = _getAssetPrice(asset.priceFeed);
+                currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+            }
+
+            uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
+
+            if (_isDrifted(currentValue, targetValue)) return true;
+        }
 
         return false;
     }
@@ -310,14 +454,14 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      */
     function _isDrifted(uint256 current, uint256 target) internal pure returns (bool) {
         if (target == 0) return current > 0;
-        
+
         uint256 diff;
         if (current > target) {
             diff = current - target;
         } else {
             diff = target - current;
         }
-        
+
         return (diff * ALLOC_DENOMINATOR) / target > DRIFT_THRESHOLD;
     }
 
@@ -341,111 +485,147 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Internal rebalance logic
+     * @dev Internal rebalance logic - sells overweight assets, buys underweight
      */
     function _executeRebalance() internal {
         uint256 hardAssets = hardAssetValueUSD();
         uint256 roseValue = treasuryRoseValueUSD();
         uint256 totalForAlloc = hardAssets + roseValue;
 
-        // Calculate targets
-        uint256 targetBTC = (totalForAlloc * allocBTC) / ALLOC_DENOMINATOR;
-        uint256 targetGold = (totalForAlloc * allocGold) / ALLOC_DENOMINATOR;
-        uint256 targetUSDC = (totalForAlloc * allocUSDC) / ALLOC_DENOMINATOR;
-        uint256 targetROSE = (totalForAlloc * allocROSE) / ALLOC_DENOMINATOR;
-
-        // Get current values
-        uint256 currentBTC = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
-        uint256 currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
-        uint256 currentROSE = roseValue;
-
         // Phase 1: Sell overweight hard assets to USDC
-        if (currentBTC > targetBTC) {
-            uint256 diff = currentBTC - targetBTC;
-            uint256 btcToSell = (tbtc.balanceOf(address(this)) * diff) / currentBTC;
-            if (btcToSell > 0) _swapAssetToUSDC(address(tbtc), btcToSell);
-        }
-        if (currentGold > targetGold) {
-            uint256 diff = currentGold - targetGold;
-            uint256 goldToSell = (paxg.balanceOf(address(this)) * diff) / currentGold;
-            if (goldToSell > 0) _swapAssetToUSDC(address(paxg), goldToSell);
-        }
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY || key == STABLE_KEY) continue;
 
-        // Phase 2: Sell overweight ROSE to USDC (if significantly over)
-        if (currentROSE > targetROSE && currentROSE > 0) {
-            uint256 diff = currentROSE - targetROSE;
-            uint256 roseToSell = (roseToken.balanceOf(address(this)) * diff) / currentROSE;
-            if (roseToSell >= MIN_SWAP_AMOUNT) {
-                _swapROSEToUSDC(roseToSell);
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
+
+            uint256 balance = IERC20(asset.token).balanceOf(address(this));
+            if (balance == 0) continue;
+
+            uint256 price = _getAssetPrice(asset.priceFeed);
+            uint256 currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+            uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
+
+            if (currentValue > targetValue) {
+                uint256 diff = currentValue - targetValue;
+                uint256 toSell = (balance * diff) / currentValue;
+                if (toSell > 0) _swapAssetToUSDC(asset.token, toSell, asset.priceFeed, asset.decimals);
             }
         }
 
-        // Refresh USDC balance after sells
-        uint256 currentUSDC = usdc.balanceOf(address(this));
+        // Phase 2: Sell overweight ROSE to USDC
+        Asset memory roseAsset = assets[ROSE_KEY];
+        if (roseAsset.active && roseValue > 0) {
+            uint256 targetROSE = (totalForAlloc * roseAsset.targetBps) / ALLOC_DENOMINATOR;
+            if (roseValue > targetROSE) {
+                uint256 diff = roseValue - targetROSE;
+                uint256 roseToSell = (roseToken.balanceOf(address(this)) * diff) / roseValue;
+                if (roseToSell >= MIN_SWAP_AMOUNT) {
+                    _swapROSEToUSDC(roseToSell);
+                }
+            }
+        }
 
-        // Phase 3: Buy underweight assets with excess USDC
+        // Refresh values after sells
+        uint256 currentUSDC = usdc.balanceOf(address(this));
+        Asset memory stableAsset = assets[STABLE_KEY];
+        uint256 targetUSDC = (totalForAlloc * stableAsset.targetBps) / ALLOC_DENOMINATOR;
         uint256 minBuffer = (totalForAlloc * 500) / ALLOC_DENOMINATOR; // 5% min buffer
 
+        // Phase 3: Buy underweight assets with excess USDC
         if (currentUSDC > targetUSDC && currentUSDC > minBuffer) {
             uint256 excess = currentUSDC - targetUSDC;
             uint256 maxSpend = currentUSDC - minBuffer;
             if (excess > maxSpend) excess = maxSpend;
 
-            // Recalculate current values after sells
-            currentBTC = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
-            currentGold = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
-            currentROSE = treasuryRoseValueUSD();
+            // Calculate total deficit
+            uint256 totalDeficit = 0;
+            for (uint256 i = 0; i < assetKeys.length; i++) {
+                bytes32 key = assetKeys[i];
+                if (key == STABLE_KEY) continue;
 
-            // Calculate deficits
-            uint256 deficitBTC = targetBTC > currentBTC ? targetBTC - currentBTC : 0;
-            uint256 deficitGold = targetGold > currentGold ? targetGold - currentGold : 0;
-            uint256 deficitROSE = targetROSE > currentROSE ? targetROSE - currentROSE : 0;
+                Asset memory asset = assets[key];
+                if (!asset.active) continue;
 
-            uint256 totalDeficit = deficitBTC + deficitGold + deficitROSE;
+                uint256 currentValue;
+                if (key == ROSE_KEY) {
+                    currentValue = treasuryRoseValueUSD();
+                } else {
+                    uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                    uint256 price = _getAssetPrice(asset.priceFeed);
+                    currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+                }
 
+                uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
+                if (targetValue > currentValue) {
+                    totalDeficit += targetValue - currentValue;
+                }
+            }
+
+            // Buy underweight assets proportionally
             if (totalDeficit > 0 && excess > 0) {
-                // Buy underweight assets proportionally
-                if (deficitBTC > 0) {
-                    uint256 buyAmount = (excess * deficitBTC) / totalDeficit;
-                    if (buyAmount >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), buyAmount);
-                }
-                if (deficitGold > 0) {
-                    uint256 buyAmount = (excess * deficitGold) / totalDeficit;
-                    if (buyAmount >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), buyAmount);
-                }
-                if (deficitROSE > 0) {
-                    uint256 buyAmount = (excess * deficitROSE) / totalDeficit;
-                    if (buyAmount >= MIN_SWAP_AMOUNT) {
-                        uint256 roseBought = _swapUSDCToROSE(buyAmount);
-                        emit RoseBuyback(buyAmount, roseBought);
+                for (uint256 i = 0; i < assetKeys.length; i++) {
+                    bytes32 key = assetKeys[i];
+                    if (key == STABLE_KEY) continue;
+
+                    Asset memory asset = assets[key];
+                    if (!asset.active) continue;
+
+                    uint256 currentValue;
+                    if (key == ROSE_KEY) {
+                        currentValue = treasuryRoseValueUSD();
+                    } else {
+                        uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                        uint256 price = _getAssetPrice(asset.priceFeed);
+                        currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+                    }
+
+                    uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
+                    if (targetValue > currentValue) {
+                        uint256 deficit = targetValue - currentValue;
+                        uint256 buyAmount = (excess * deficit) / totalDeficit;
+
+                        if (buyAmount >= MIN_SWAP_AMOUNT) {
+                            if (key == ROSE_KEY) {
+                                uint256 roseBought = _swapUSDCToROSE(buyAmount);
+                                emit RoseBuyback(buyAmount, roseBought);
+                            } else {
+                                _swapUSDCToAsset(asset.token, buyAmount, asset.priceFeed, asset.decimals);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        emit Rebalanced(
-            _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS),
-            _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS),
-            usdc.balanceOf(address(this)),
-            treasuryRoseValueUSD(),
-            hardAssetValueUSD()
-        );
+        emit Rebalanced(hardAssetValueUSD());
     }
 
-    // ============ Price Feed Functions ============
+    // ============ Price Functions ============
 
-    function getBTCPrice() public view returns (uint256) {
-        (, int256 price, , uint256 updatedAt, ) = btcUsdFeed.latestRoundData();
+    /**
+     * @dev Get price from Chainlink feed with staleness check
+     */
+    function _getAssetPrice(address priceFeed) internal view returns (uint256) {
+        if (priceFeed == address(0)) revert InvalidPrice();
+
+        (, int256 price, , uint256 updatedAt, ) = AggregatorV3Interface(priceFeed).latestRoundData();
         if (price <= 0) revert InvalidPrice();
         if (block.timestamp - updatedAt > MAX_ORACLE_STALENESS) revert StaleOracle();
+
         return uint256(price);
     }
 
-    function getGoldPrice() public view returns (uint256) {
-        (, int256 price, , uint256 updatedAt, ) = xauUsdFeed.latestRoundData();
-        if (price <= 0) revert InvalidPrice();
-        if (block.timestamp - updatedAt > MAX_ORACLE_STALENESS) revert StaleOracle();
-        return uint256(price);
+    /**
+     * @dev Get price for an asset by key (public view function)
+     */
+    function getAssetPrice(bytes32 key) external view returns (uint256) {
+        Asset memory asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+        if (key == ROSE_KEY) return rosePrice();
+        if (key == STABLE_KEY) return 1e8; // $1.00 in Chainlink decimals
+        return _getAssetPrice(asset.priceFeed);
     }
 
     // ============ Internal Functions ============
@@ -469,67 +649,123 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     /**
      * @dev Diversify deposited USDC into RWA with smart rebalancing.
      * Prioritizes underweight assets (USDC buffer first, then RWA proportionally).
-     * Only uses target ratios for excess after all deficits are filled.
      * Note: Does NOT buy ROSE - that's handled by rebalance() buybacks.
      */
     function _diversify(uint256 usdcAmount) internal {
         if (usdcAmount == 0) return;
 
-        uint256 tbtcBal = tbtc.balanceOf(address(this));
-        uint256 paxgBal = paxg.balanceOf(address(this));
-        uint256 usdcBal = usdc.balanceOf(address(this));
+        // Get total hard allocation excluding ROSE
+        uint256 hardAllocTotal = 0;
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY) continue;
+            Asset memory asset = assets[key];
+            if (asset.active) hardAllocTotal += asset.targetBps;
+        }
 
-        // First deposit - use simple ratio split
-        if (tbtcBal == 0 && paxgBal == 0) {
-            _diversifyByRatio(usdcAmount);
+        if (hardAllocTotal == 0) return;
+
+        // Check if this is first deposit (no RWA held yet)
+        bool isFirstDeposit = true;
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY || key == STABLE_KEY) continue;
+            Asset memory asset = assets[key];
+            if (asset.active && IERC20(asset.token).balanceOf(address(this)) > 0) {
+                isFirstDeposit = false;
+                break;
+            }
+        }
+
+        if (isFirstDeposit) {
+            _diversifyByRatio(usdcAmount, hardAllocTotal);
             return;
         }
 
-        // Get current values via Chainlink
-        uint256 btcPrice = getBTCPrice();
-        uint256 goldPrice = getGoldPrice();
-
-        uint256 currentBTC = _getAssetValueUSD(tbtcBal, btcPrice, TBTC_DECIMALS);
-        uint256 currentGold = _getAssetValueUSD(paxgBal, goldPrice, PAXG_DECIMALS);
-
-        // Calculate targets based on hard assets only (exclude ROSE allocation)
-        uint256 hardAllocTotal = allocBTC + allocGold + allocUSDC;
-        uint256 newHardTotal = currentBTC + currentGold + usdcBal;
-
-        uint256 targetBTC = (newHardTotal * allocBTC) / hardAllocTotal;
-        uint256 targetGold = (newHardTotal * allocGold) / hardAllocTotal;
-        uint256 targetUSDC = (newHardTotal * allocUSDC) / hardAllocTotal;
-
+        // Smart diversification based on current holdings
+        uint256 usdcBal = usdc.balanceOf(address(this));
         uint256 preDepositUSDC = usdcBal - usdcAmount;
 
-        // Calculate deficits
+        // Calculate current hard asset total
+        uint256 currentHardTotal = 0;
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY) continue;
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
+
+            if (key == STABLE_KEY) {
+                currentHardTotal += usdcBal;
+            } else {
+                uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                if (balance > 0) {
+                    uint256 price = _getAssetPrice(asset.priceFeed);
+                    currentHardTotal += _getAssetValueUSD(balance, price, asset.decimals);
+                }
+            }
+        }
+
+        // Calculate target USDC based on allocation
+        Asset memory stableAsset = assets[STABLE_KEY];
+        uint256 targetUSDC = (currentHardTotal * stableAsset.targetBps) / hardAllocTotal;
         uint256 deficitUSDC = targetUSDC > preDepositUSDC ? targetUSDC - preDepositUSDC : 0;
-        uint256 deficitBTC = targetBTC > currentBTC ? targetBTC - currentBTC : 0;
-        uint256 deficitGold = targetGold > currentGold ? targetGold - currentGold : 0;
 
         uint256 remaining = usdcAmount;
 
-        // Phase 1: Fill USDC buffer first (critical for redemption liquidity)
+        // Phase 1: Fill USDC buffer first
         if (deficitUSDC > 0 && remaining > 0) {
             uint256 toUSDC = remaining < deficitUSDC ? remaining : deficitUSDC;
             remaining -= toUSDC;
-            // USDC stays in contract, no swap needed
         }
 
         // Phase 2: Fill RWA deficits proportionally
         if (remaining > 0) {
-            uint256 totalRWADeficit = deficitBTC + deficitGold;
+            uint256 totalRWADeficit = 0;
+
+            // Calculate RWA deficits
+            for (uint256 i = 0; i < assetKeys.length; i++) {
+                bytes32 key = assetKeys[i];
+                if (key == ROSE_KEY || key == STABLE_KEY) continue;
+                Asset memory asset = assets[key];
+                if (!asset.active) continue;
+
+                uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                uint256 currentValue = 0;
+                if (balance > 0) {
+                    uint256 price = _getAssetPrice(asset.priceFeed);
+                    currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+                }
+
+                uint256 targetValue = (currentHardTotal * asset.targetBps) / hardAllocTotal;
+                if (targetValue > currentValue) {
+                    totalRWADeficit += targetValue - currentValue;
+                }
+            }
 
             if (totalRWADeficit > 0) {
                 uint256 toSpend = remaining < totalRWADeficit ? remaining : totalRWADeficit;
 
-                if (deficitBTC > 0) {
-                    uint256 spentBTC = (toSpend * deficitBTC) / totalRWADeficit;
-                    if (spentBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), spentBTC);
-                }
-                if (deficitGold > 0) {
-                    uint256 spentGold = toSpend - ((toSpend * deficitBTC) / totalRWADeficit);
-                    if (spentGold >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), spentGold);
+                for (uint256 i = 0; i < assetKeys.length; i++) {
+                    bytes32 key = assetKeys[i];
+                    if (key == ROSE_KEY || key == STABLE_KEY) continue;
+                    Asset memory asset = assets[key];
+                    if (!asset.active) continue;
+
+                    uint256 balance = IERC20(asset.token).balanceOf(address(this));
+                    uint256 currentValue = 0;
+                    if (balance > 0) {
+                        uint256 price = _getAssetPrice(asset.priceFeed);
+                        currentValue = _getAssetValueUSD(balance, price, asset.decimals);
+                    }
+
+                    uint256 targetValue = (currentHardTotal * asset.targetBps) / hardAllocTotal;
+                    if (targetValue > currentValue) {
+                        uint256 deficit = targetValue - currentValue;
+                        uint256 spendAmount = (toSpend * deficit) / totalRWADeficit;
+                        if (spendAmount >= MIN_SWAP_AMOUNT) {
+                            _swapUSDCToAsset(asset.token, spendAmount, asset.priceFeed, asset.decimals);
+                        }
+                    }
                 }
 
                 remaining -= toSpend;
@@ -538,27 +774,30 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         // Phase 3: Excess goes to RWA by ratio
         if (remaining > 0) {
-            _diversifyByRatio(remaining);
+            _diversifyByRatio(remaining, hardAllocTotal);
         }
     }
 
     /**
      * @dev Simple diversification using target ratios (for first deposit or excess)
      */
-    function _diversifyByRatio(uint256 usdcAmount) internal {
-        uint256 hardAllocTotal = allocBTC + allocGold + allocUSDC;
-        
-        uint256 toBTC = (usdcAmount * allocBTC) / hardAllocTotal;
-        uint256 toGold = (usdcAmount * allocGold) / hardAllocTotal;
-        // Rest stays as USDC buffer
+    function _diversifyByRatio(uint256 usdcAmount, uint256 hardAllocTotal) internal {
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY || key == STABLE_KEY) continue;
 
-        if (toBTC >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(tbtc), toBTC);
-        if (toGold >= MIN_SWAP_AMOUNT) _swapUSDCToAsset(address(paxg), toGold);
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
+
+            uint256 buyAmount = (usdcAmount * asset.targetBps) / hardAllocTotal;
+            if (buyAmount >= MIN_SWAP_AMOUNT) {
+                _swapUSDCToAsset(asset.token, buyAmount, asset.priceFeed, asset.decimals);
+            }
+        }
     }
 
     /**
      * @dev Liquidate RWA to USDC for redemptions
-     * Uses ceiling division to ensure we liquidate enough to cover the shortfall
      */
     function _liquidateForRedemption(uint256 usdcNeeded) internal {
         uint256 hardAssets = hardAssetValueUSD();
@@ -567,37 +806,36 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         if (rwaValue == 0) revert InsufficientLiquidity();
 
-        uint256 btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
-        uint256 goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
+        // Liquidate proportionally from each RWA asset
+        for (uint256 i = 0; i < assetKeys.length; i++) {
+            bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY || key == STABLE_KEY) continue;
 
-        if (btcValue > 0) {
-            // Ceiling division: (a * b + c - 1) / c to ensure we sell enough
-            uint256 btcBalance = tbtc.balanceOf(address(this));
-            uint256 btcToSell = (btcBalance * usdcNeeded + rwaValue - 1) / rwaValue;
-            // Cap at actual balance to prevent overflow
-            if (btcToSell > btcBalance) btcToSell = btcBalance;
-            if (btcToSell > 0) _swapAssetToUSDC(address(tbtc), btcToSell);
-        }
+            Asset memory asset = assets[key];
+            if (!asset.active) continue;
 
-        if (goldValue > 0) {
-            // Ceiling division for gold as well
-            uint256 goldBalance = paxg.balanceOf(address(this));
-            uint256 goldToSell = (goldBalance * usdcNeeded + rwaValue - 1) / rwaValue;
-            // Cap at actual balance to prevent overflow
-            if (goldToSell > goldBalance) goldToSell = goldBalance;
-            if (goldToSell > 0) _swapAssetToUSDC(address(paxg), goldToSell);
+            uint256 balance = IERC20(asset.token).balanceOf(address(this));
+            if (balance == 0) continue;
+
+            // Ceiling division to ensure we sell enough
+            uint256 toSell = (balance * usdcNeeded + rwaValue - 1) / rwaValue;
+            if (toSell > balance) toSell = balance;
+
+            if (toSell > 0) {
+                _swapAssetToUSDC(asset.token, toSell, asset.priceFeed, asset.decimals);
+            }
         }
     }
 
     /**
      * @dev Swap USDC to asset via Uniswap
      */
-    function _swapUSDCToAsset(address asset, uint256 usdcAmount) internal {
-        uint256 minOut = _calculateMinOut(usdcAmount, asset, true);
+    function _swapUSDCToAsset(address assetToken, uint256 usdcAmount, address priceFeed, uint8 assetDecimals) internal {
+        uint256 minOut = _calculateMinOut(usdcAmount, priceFeed, assetDecimals, true);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(usdc),
-            tokenOut: asset,
+            tokenOut: assetToken,
             fee: POOL_FEE_VOLATILE,
             recipient: address(this),
             deadline: block.timestamp,
@@ -612,11 +850,11 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     /**
      * @dev Swap asset to USDC via Uniswap
      */
-    function _swapAssetToUSDC(address asset, uint256 assetAmount) internal {
-        uint256 minOut = _calculateMinOut(assetAmount, asset, false);
+    function _swapAssetToUSDC(address assetToken, uint256 assetAmount, address priceFeed, uint8 assetDecimals) internal {
+        uint256 minOut = _calculateMinOut(assetAmount, priceFeed, assetDecimals, false);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: asset,
+            tokenIn: assetToken,
             tokenOut: address(usdc),
             fee: POOL_FEE_VOLATILE,
             recipient: address(this),
@@ -633,7 +871,6 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      * @dev Swap USDC to ROSE via Uniswap (buyback)
      */
     function _swapUSDCToROSE(uint256 usdcAmount) internal returns (uint256) {
-        // Use NAV as price reference for slippage
         uint256 nav = rosePrice();
         uint256 expectedRose = (usdcAmount * 1e18) / nav;
         uint256 minOut = (expectedRose * (ALLOC_DENOMINATOR - maxSlippageBps)) / ALLOC_DENOMINATOR;
@@ -679,21 +916,11 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      */
     function _calculateMinOut(
         uint256 amountIn,
-        address asset,
+        address priceFeed,
+        uint8 assetDecimals,
         bool buyingAsset
     ) internal view returns (uint256) {
-        uint256 price;
-        uint8 assetDecimals;
-
-        if (asset == address(tbtc)) {
-            price = getBTCPrice();
-            assetDecimals = TBTC_DECIMALS;
-        } else if (asset == address(paxg)) {
-            price = getGoldPrice();
-            assetDecimals = PAXG_DECIMALS;
-        } else {
-            revert InvalidPrice();
-        }
+        uint256 price = _getAssetPrice(priceFeed);
 
         uint256 expectedOut;
         if (buyingAsset) {
@@ -733,31 +960,11 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     /**
      * @dev Set the governance contract address (owner only)
-     * @param _governance The new governance address
      */
     function setGovernance(address _governance) external onlyOwner {
         if (_governance == address(0)) revert ZeroAddress();
         governance = _governance;
         emit GovernanceUpdated(_governance);
-    }
-
-    /**
-     * @dev Update allocation percentages (must sum to 10000)
-     */
-    function setAllocation(
-        uint256 _btc,
-        uint256 _gold,
-        uint256 _usdc,
-        uint256 _rose
-    ) external onlyOwner {
-        if (_btc + _gold + _usdc + _rose != ALLOC_DENOMINATOR) revert InvalidAllocation();
-        
-        allocBTC = _btc;
-        allocGold = _gold;
-        allocUSDC = _usdc;
-        allocROSE = _rose;
-
-        emit AllocationUpdated(_btc, _gold, _usdc, _rose);
     }
 
     /**
@@ -778,56 +985,50 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ View Functions ============
 
     /**
-     * @dev Get current vault breakdown
+     * @dev Get current vault breakdown (dynamic based on registered assets)
      */
     function getVaultBreakdown() external view returns (
-        uint256 btcValue,
-        uint256 goldValue,
-        uint256 usdcValue,
-        uint256 roseValue,
         uint256 totalHardAssets,
         uint256 currentRosePrice,
         uint256 circulatingRose,
         bool rebalanceNeeded
     ) {
-        btcValue = _getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS);
-        goldValue = _getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS);
-        usdcValue = usdc.balanceOf(address(this));
-        roseValue = treasuryRoseValueUSD();
-        totalHardAssets = btcValue + goldValue + usdcValue;
+        totalHardAssets = hardAssetValueUSD();
         currentRosePrice = rosePrice();
         circulatingRose = circulatingSupply();
         rebalanceNeeded = needsRebalance();
     }
 
     /**
-     * @dev Get allocation percentages and current actuals
+     * @dev Get detailed breakdown of each asset
      */
-    function getAllocationStatus() external view returns (
-        uint256 targetBTC,
-        uint256 targetGold,
-        uint256 targetUSDC,
-        uint256 targetROSE,
-        uint256 actualBTC,
-        uint256 actualGold,
-        uint256 actualUSDC,
-        uint256 actualROSE
+    function getAssetBreakdown(bytes32 key) external view returns (
+        address token,
+        uint256 balance,
+        uint256 valueUSD,
+        uint256 targetBps,
+        uint256 actualBps,
+        bool active
     ) {
-        targetBTC = allocBTC;
-        targetGold = allocGold;
-        targetUSDC = allocUSDC;
-        targetROSE = allocROSE;
+        Asset memory asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
 
-        uint256 hardAssets = hardAssetValueUSD();
-        uint256 roseVal = treasuryRoseValueUSD();
-        uint256 total = hardAssets + roseVal;
+        token = asset.token;
+        balance = IERC20(asset.token).balanceOf(address(this));
+        targetBps = asset.targetBps;
+        active = asset.active;
 
-        if (total > 0) {
-            actualBTC = (_getAssetValueUSD(tbtc.balanceOf(address(this)), getBTCPrice(), TBTC_DECIMALS) * ALLOC_DENOMINATOR) / total;
-            actualGold = (_getAssetValueUSD(paxg.balanceOf(address(this)), getGoldPrice(), PAXG_DECIMALS) * ALLOC_DENOMINATOR) / total;
-            actualUSDC = (usdc.balanceOf(address(this)) * ALLOC_DENOMINATOR) / total;
-            actualROSE = (roseVal * ALLOC_DENOMINATOR) / total;
+        if (key == ROSE_KEY) {
+            valueUSD = treasuryRoseValueUSD();
+        } else if (key == STABLE_KEY) {
+            valueUSD = balance;
+        } else {
+            uint256 price = _getAssetPrice(asset.priceFeed);
+            valueUSD = _getAssetValueUSD(balance, price, asset.decimals);
         }
+
+        uint256 total = hardAssetValueUSD() + treasuryRoseValueUSD();
+        actualBps = total > 0 ? (valueUSD * ALLOC_DENOMINATOR) / total : 0;
     }
 
     /**

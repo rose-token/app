@@ -113,17 +113,24 @@ describe("Task Lifecycle Edge Cases", function () {
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
-    // 7. Deploy RoseTreasury
+    // 7. Deploy RoseTreasury (new constructor: roseToken, usdc, swapRouter)
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await tbtc.getAddress(),
-      await paxg.getAddress(),
-      await btcFeed.getAddress(),
-      await xauFeed.getAddress(),
       await swapRouter.getAddress()
     );
+
+    // 7.5 Register assets via addAsset()
+    const BTC_KEY = ethers.encodeBytes32String("BTC");
+    const GOLD_KEY = ethers.encodeBytes32String("GOLD");
+    const STABLE_KEY = ethers.encodeBytes32String("STABLE");
+    const ROSE_KEY = ethers.encodeBytes32String("ROSE");
+
+    await roseTreasury.addAsset(BTC_KEY, await tbtc.getAddress(), await btcFeed.getAddress(), 8, 3000);
+    await roseTreasury.addAsset(GOLD_KEY, await paxg.getAddress(), await xauFeed.getAddress(), 18, 3000);
+    await roseTreasury.addAsset(STABLE_KEY, await usdc.getAddress(), ethers.ZeroAddress, 6, 2000);
+    await roseTreasury.addAsset(ROSE_KEY, await roseToken.getAddress(), ethers.ZeroAddress, 18, 2000);
 
     // 8. Deploy vROSE soulbound token
     const VROSE = await ethers.getContractFactory("vROSE");
