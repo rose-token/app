@@ -8,7 +8,7 @@ Guidance for Claude Code. ALWAYS ASK CLARIFYING QUESTIONS. ALWAYS UPDATE CLAUDE.
 **Tasks:** [Status Flow](#task-status-flow) | [Auction System](#auction-system)
 **Frontend:** [Architecture](#frontend-architecture) | [Routes](#frontend-routes) | [Hooks](#frontend-hooks) | [Passport](#frontend-passport-system)
 **Backend:** [API](#backend-api) | [Services](#backend-services) | [Cron](#backend-scheduled-jobs) | [Deployment](#backend-deployment)
-**Infrastructure:** [Testing](#testing) | [Simulation](#simulation-script) | [CI/CD](#cicd-workflows) | [Env Vars](#environment-variables) | [Decimals](#token-decimals-reference) | [Git](#git-workflow)
+**Infrastructure:** [Testing](#testing) | [Simulation](#simulation-script) | [CI/CD](#cicd-workflows) | [Env Vars](#environment-variables) | [Decimals](#token-decimals-reference) | [Mainnet Addresses](#arbitrum-one-mainnet-addresses) | [Git](#git-workflow)
 
 ---
 
@@ -624,7 +624,7 @@ test/TaskLifecycleEdgeCases.test.js  # 167 lines - Edge cases
 test/DetailedDescription.test.js     # 100 lines - IPFS
 ```
 
-**Mocks:** MockV3Aggregator (Chainlink), MockUniswapV3Router, MockERC20
+**Mocks:** MockV3Aggregator (Chainlink), MockLiFiDiamond (swap aggregator), MockERC20
 **Token acquisition:** Mint USDC → Approve Treasury → deposit() → ROSE minted
 
 ## Simulation Script
@@ -668,7 +668,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 | VP (votingPower, availableVP, delegatedOut) | 9 | formatUnits(value, 9) |
 | USDC/NAV prices | 6 | formatUnits(value, 6) |
 | TBTC | 8 | - |
-| PAXG | 18 | - |
+| XAUt (Tether Gold) | 6 | - |
 | Chainlink feeds | 8 | - |
 
 ## Key Technical Details
@@ -678,6 +678,19 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 - **Networks:** Arbitrum Sepolia (421614), Arbitrum One (42161)
 - **Frontend:** Vite 7.x, wagmi + viem + RainbowKit
 - **Backend:** Express.js + TypeScript + PostgreSQL + ethers.js
+
+## Arbitrum One Mainnet Addresses
+
+| Asset | Address | Notes |
+|-------|---------|-------|
+| USDC | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | Native USDC on Arbitrum |
+| TBTC | `0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40` | Threshold BTC |
+| XAUt | `0x40461291347e1ecbb09499f3371d3f17f10d7159` | Tether Gold |
+| BTC/USD Feed | `0x6ce185860a4963106506C203335A2910D6ce18586` | Chainlink |
+| XAU/USD Feed | `0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c` | Chainlink |
+| LiFi Diamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | DEX Aggregator |
+
+**Testnet:** All addresses are mocked via `MockERC20`, `MockV3Aggregator`, and `MockLiFiDiamond`.
 
 ## Git Workflow
 
