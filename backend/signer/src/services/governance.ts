@@ -435,6 +435,32 @@ export async function signReputationAttestation(
 }
 
 /**
+ * Sign VP refresh attestation for refreshVP() contract call
+ * Uses "refreshVP" prefix to match contract's message format
+ */
+export async function signVPRefreshAttestation(
+  address: string,
+  reputation: number
+): Promise<ReputationAttestation> {
+  const wallet = new ethers.Wallet(config.signer.privateKey);
+  const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'uint256', 'uint256'],
+    ['refreshVP', address, reputation, expiry]
+  );
+
+  const signature = await wallet.signMessage(ethers.getBytes(messageHash));
+
+  return {
+    address,
+    reputation,
+    expiry,
+    signature,
+  };
+}
+
+/**
  * Get signed reputation attestation (fetches buckets, calculates, and signs)
  */
 export async function getSignedReputation(address: string): Promise<ReputationAttestation> {
@@ -456,5 +482,6 @@ export default {
   fetchUserBuckets,
   calculateReputationNew,
   signReputationAttestation,
+  signVPRefreshAttestation,
   getSignedReputation,
 };

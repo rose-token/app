@@ -3,7 +3,7 @@ import { config } from '../config';
 import {
   getReputationNew,
   calculateVotePower,
-  signReputationAttestation,
+  signVPRefreshAttestation,
 } from './governance';
 
 // Marketplace ABI for reputation events
@@ -226,7 +226,7 @@ async function executeRefresh(candidate: VPRefreshCandidate): Promise<VPRefreshR
 
   try {
     // Get signed attestation
-    const attestation = await signReputationAttestation(
+    const attestation = await signVPRefreshAttestation(
       candidate.address,
       candidate.newRep
     );
