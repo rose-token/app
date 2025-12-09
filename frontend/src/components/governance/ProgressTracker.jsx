@@ -83,8 +83,10 @@ const ProgressTracker = ({ task }) => {
     },
     {
       id: 'worker-claim',
-      title: 'Worker Claims Task',
-      description: 'Worker claims task (first-come, first-served)',
+      title: task?.isAuction ? 'Bidding & Winner Selection' : 'Worker Claims Task',
+      description: task?.isAuction
+        ? 'Workers submit bids. Customer selects winning bid.'
+        : 'Worker claims task (first-come, first-served)',
       status: getStageStatus('worker-claim')
     },
     {
