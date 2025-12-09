@@ -430,17 +430,30 @@ describe("RoseTreasury with LiFi Integration", function () {
 
     it("Should revert rebalance if threshold not met", async function () {
       // Deposit and diversify to approximately match target allocation
-      // Target: BTC 30%, GOLD 30%, USDC 20%, ROSE 20%
+      // Target: BTC 30%, GOLD 30%, USDC 20%, ROSE 20% (of total including ROSE)
       // Without diversification, vault is 100% USDC which IS drifted
-      // So we need to diversify to get within threshold
+      // So we need to diversify to get within threshold, AND have ROSE in treasury
       const depositAmount = ethers.parseUnits("10000", 6);
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
       await roseTreasury.connect(user).deposit(depositAmount);
 
-      // Diversify to approximately match hard asset target (75% of hard assets: 37.5% BTC, 37.5% Gold, 25% USDC)
-      const btcAmount = ethers.parseUnits("3750", 6); // 37.5%
-      const goldAmount = ethers.parseUnits("3750", 6); // 37.5%
+      // User got ~10000 ROSE minted. To balance ROSE at 20% of total:
+      // NAV = hardAssets / circulatingSupply, and circulatingSupply = total - treasuryHeld
+      // Let x = ROSE in treasury
+      // roseValue = x * NAV = x * ($10000 / (10000 - x))
+      // We want roseValue = 20% of total = 0.2 * ($10000 + roseValue)
+      // Solving: x * 10000 / (10000 - x) = 0.2 * (10000 + x * 10000 / (10000 - x))
+      // After algebra: x = 2000 ROSE tokens
+      const roseForTreasury = ethers.parseUnits("2000", 18);
+      await roseToken.connect(user).transfer(await roseTreasury.getAddress(), roseForTreasury);
+
+      // Now: circulating = 8000 ROSE, NAV = $10000/8000 = $1.25
+      // Treasury ROSE value = 2000 * $1.25 = $2500
+      // Total = $10000 (hard) + $2500 (ROSE) = $12500
+      // Targets: BTC 30% = $3750, Gold 30% = $3750, USDC 20% = $2500, ROSE 20% = $2500
+      const btcAmount = ethers.parseUnits("3750", 6); // 30%
+      const goldAmount = ethers.parseUnits("3750", 6); // 30%
 
       const btcData = await generateSwapCalldata(
         await usdc.getAddress(), await tbtc.getAddress(), btcAmount, 1n, await roseTreasury.getAddress()
@@ -452,7 +465,7 @@ describe("RoseTreasury with LiFi Integration", function () {
       await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, btcAmount, 1n, btcData);
       await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, GOLD_KEY, goldAmount, 1n, goldData);
 
-      // Now vault should be balanced, rebalance not needed
+      // Now vault should be balanced: BTC ~30%, Gold ~30%, USDC ~20%, ROSE ~20%
       await expect(
         roseTreasury.connect(user).rebalance()
       ).to.be.revertedWithCustomError(roseTreasury, "RebalanceNotNeeded");

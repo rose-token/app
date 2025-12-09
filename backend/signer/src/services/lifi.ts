@@ -40,6 +40,7 @@ function generateMockSwapData(
 const BTC_KEY = ethers.encodeBytes32String('BTC');
 const GOLD_KEY = ethers.encodeBytes32String('GOLD');
 const STABLE_KEY = ethers.encodeBytes32String('STABLE');
+const ROSE_KEY = ethers.encodeBytes32String('ROSE');
 
 // Treasury ABI for price lookups
 const PRICE_LOOKUP_ABI = [
@@ -52,6 +53,7 @@ const ASSET_DECIMALS: Record<string, number> = {
   'BTC': 8,    // TBTC uses 8 decimals
   'GOLD': 6,   // XAUt uses 6 decimals
   'STABLE': 6, // USDC uses 6 decimals
+  'ROSE': 18,  // ROSE uses 18 decimals
 };
 
 /**
@@ -61,8 +63,8 @@ async function getAssetKeyForToken(tokenAddress: string, treasuryAddress: string
   const provider = new ethers.JsonRpcProvider(config.rpc.url);
   const treasury = new ethers.Contract(treasuryAddress, PRICE_LOOKUP_ABI, provider);
 
-  // Check each asset key
-  for (const key of ['BTC', 'GOLD', 'STABLE']) {
+  // Check each asset key (including ROSE for rebalancing)
+  for (const key of ['BTC', 'GOLD', 'STABLE', 'ROSE']) {
     try {
       const keyBytes = ethers.encodeBytes32String(key);
       const asset = await treasury.assets(keyBytes);

@@ -601,25 +601,25 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ Rebalancing ============
 
     /**
-     * @dev Check if rebalance is needed (any hard asset >5% off target)
-     * Note: ROSE is excluded from drift calculations since treasury doesn't hold ROSE
-     * (ROSE is minted to users on deposit, burned on redemption)
+     * @dev Check if rebalance is needed (any asset >5% off target)
+     * Includes ROSE in drift calculations - treasury can hold ROSE from DAO mints
+     * and can sell/buyback ROSE via LiFi to maintain target allocation.
      */
     function needsRebalance() public view returns (bool) {
         uint256 hardAssets = hardAssetValueUSD();
-        if (hardAssets == 0) return false;
+        uint256 roseValue = treasuryRoseValueUSD();
+        uint256 totalAssets = hardAssets + roseValue;
+        if (totalAssets == 0) return false;
 
-        // For drift calculations, we only consider hard assets (BTC, GOLD, STABLE)
-        // ROSE is excluded since treasury mints/burns rather than holds it
         for (uint256 i = 0; i < assetKeys.length; i++) {
             bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY) continue; // Skip ROSE - treasury doesn't hold it
-
             Asset memory asset = assets[key];
             if (!asset.active) continue;
 
             uint256 currentValue;
-            if (key == STABLE_KEY) {
+            if (key == ROSE_KEY) {
+                currentValue = roseValue;
+            } else if (key == STABLE_KEY) {
                 currentValue = IERC20(asset.token).balanceOf(address(this));
             } else {
                 uint256 balance = IERC20(asset.token).balanceOf(address(this));
@@ -627,10 +627,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
                 currentValue = _getAssetValueUSD(balance, price, asset.decimals);
             }
 
-            // Calculate target based on hard assets only (since ROSE is excluded)
-            // Rescale target: if BTC is 30% of total and ROSE is 20%, BTC is 30/80 = 37.5% of hard assets
-            uint256 hardAssetTargetBps = (asset.targetBps * ALLOC_DENOMINATOR) / (ALLOC_DENOMINATOR - assets[ROSE_KEY].targetBps);
-            uint256 targetValue = (hardAssets * hardAssetTargetBps) / ALLOC_DENOMINATOR;
+            // Calculate target based on total assets (including ROSE)
+            uint256 targetValue = (totalAssets * asset.targetBps) / ALLOC_DENOMINATOR;
 
             if (_isDrifted(currentValue, targetValue)) return true;
         }
@@ -736,7 +734,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     function getAssetPrice(bytes32 key) external view returns (uint256) {
         Asset memory asset = assets[key];
         if (asset.token == address(0)) revert AssetNotFound();
-        if (key == ROSE_KEY) return rosePrice();
+        // ROSE price is in 6 decimals, convert to 8 decimals for consistency
+        if (key == ROSE_KEY) return rosePrice() * 100;
         if (key == STABLE_KEY) return 1e8; // $1.00 in Chainlink decimals
         return _getAssetPrice(asset.priceFeed);
     }

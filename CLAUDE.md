@@ -121,7 +121,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 
 **Deposit:** USDC → Treasury → ROSE minted → Backend watches `Deposited` event → Diversifies via LiFi
 **Redeem:** User approves ROSE → ROSE burned → USDC returned (requires USDC buffer)
-**Rebalance:** >5% drift triggers (hard assets only), 7-day cooldown, rebalancer/owner can force
+**Rebalance:** >5% drift triggers (all assets including ROSE), 7-day cooldown, rebalancer/owner can force
 
 ### LiFi Integration (Phase 3)
 
@@ -134,7 +134,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 - Deposits no longer auto-diversify - backend watches `Deposited` events and calls `executeSwap()`
 - Redemptions require USDC buffer - no auto-liquidation, backend must ensure buffer via swaps
 - Rebalancer role added - `onlyRebalancer` modifier for `executeSwap()` and `forceRebalance()`
-- ROSE excluded from drift calculations (treasury doesn't hold ROSE)
+- ROSE included in drift calculations - treasury can hold ROSE from DAO mints, sell/buyback via LiFi
 
 **Asset Registry:**
 ```solidity
@@ -160,10 +160,10 @@ mapping(bytes32 => Asset) public assets;  // e.g., encodeBytes32String("BTC") =>
 **Purpose:** Backend orchestrates multi-swap rebalances to keep vault allocations within 5% drift threshold.
 
 **Rebalance Strategy:**
-1. Calculate current vs target allocations for all hard assets (ROSE excluded)
+1. Calculate current vs target allocations for all assets (including ROSE)
 2. Identify over-allocated assets (>5% above target) and under-allocated (<5% below target)
-3. Sell over-allocated assets to USDC first (most liquid intermediate)
-4. Buy under-allocated assets with USDC proceeds
+3. Sell over-allocated assets to USDC first (including ROSE → USDC)
+4. Buy under-allocated assets with USDC proceeds (including USDC → ROSE buyback)
 5. Call `forceRebalance()` to update timestamp and emit event
 
 **Backend Functions (`treasury.ts`):**

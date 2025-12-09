@@ -1,33 +1,33 @@
 {
-  "network": "hardhat",
-  "chainId": 1337,
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
   "isTestnet": true,
-  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "deployer": "0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1",
   "contracts": {
-    "roseToken": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
-    "vRose": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
-    "roseTreasury": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
-    "roseMarketplace": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
-    "roseReputation": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
-    "roseGovernance": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E"
+    "roseToken": "0xC67D2Cc0fc499F4fC85F5D56fdC9894C10502356",
+    "vRose": "0xE21f1608abC666d3f044551fb334cFdB2AF16790",
+    "roseTreasury": "0x2baf0A086870cd7087bD6AD0a540F1aC88979EaD",
+    "roseMarketplace": "0x3B472b47A4d6da01C99eBe24d842B54180f53580",
+    "roseReputation": "0x2cF9458608cE1E2d486bbd9a90509BEdCc9ABa7a",
+    "roseGovernance": "0xdb4711eDA473794C7237ed52d697a3F499C3ec1A"
   },
-  "tokenAddress": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
-  "vRoseAddress": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
-  "treasuryAddress": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
-  "marketplaceAddress": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
-  "reputationAddress": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
-  "governanceAddress": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
-  "passportSignerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "tokenAddress": "0xC67D2Cc0fc499F4fC85F5D56fdC9894C10502356",
+  "vRoseAddress": "0xE21f1608abC666d3f044551fb334cFdB2AF16790",
+  "treasuryAddress": "0x2baf0A086870cd7087bD6AD0a540F1aC88979EaD",
+  "marketplaceAddress": "0x3B472b47A4d6da01C99eBe24d842B54180f53580",
+  "reputationAddress": "0x2cF9458608cE1E2d486bbd9a90509BEdCc9ABa7a",
+  "governanceAddress": "0xdb4711eDA473794C7237ed52d697a3F499C3ec1A",
+  "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
   "externalAddresses": {
-    "usdc": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-    "tbtc": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-    "xaut": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    "btcUsdFeed": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    "xauUsdFeed": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
-    "lifiDiamond": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-    "roseUsdFeed": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+    "usdc": "0xdb2500616e4F802985361cb07CE7d850b6D25D3d",
+    "tbtc": "0x87968effB7AA9900F21A53087aBF8aB54A398CEd",
+    "xaut": "0x48440b8BB4b08C14214e66D1fbD1CF350831f688",
+    "btcUsdFeed": "0x654E2c0107FBA458214af354217aE7c615484606",
+    "xauUsdFeed": "0xEaDc1828ed04685E63a297ae5d8ff2373F7680dB",
+    "lifiDiamond": "0x2a6Ed1996D6FE01a361b863AA752d89B47fb248a",
+    "roseUsdFeed": "0x400755b2337021Da481ee40ff91662E151C6Cb4D",
     "mockLiFi": {
-      "target": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "target": "0x2a6Ed1996D6FE01a361b863AA752d89B47fb248a",
       "interface": {
         "fragments": [
           {
@@ -694,9 +694,9 @@
         },
         "receive": true
       },
-      "runner": "<SignerWithAddress 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266>",
+      "runner": "<SignerWithAddress 0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1>",
       "filters": {}
     }
   },
-  "timestamp": "2025-12-09T07:39:25.254Z"
+  "timestamp": "2025-12-09T18:24:07.467Z"
 }

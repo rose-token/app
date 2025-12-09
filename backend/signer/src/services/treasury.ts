@@ -145,34 +145,30 @@ export async function getVaultStatus(): Promise<{
  * Calculate which swaps are needed to rebalance the vault
  * Strategy: Sell over-allocated assets for USDC, then buy under-allocated assets with USDC
  * This ensures all swaps go through USDC as an intermediate (most liquid path)
+ *
+ * ROSE is now included in rebalancing:
+ * - Over-allocated ROSE: Sell ROSE -> USDC (funds other purchases)
+ * - Under-allocated ROSE: Buy ROSE with USDC (market buyback via LiFi)
  */
 export function calculateRebalanceSwaps(assets: AssetBreakdown[]): SwapInstruction[] {
   const swaps: SwapInstruction[] = [];
 
-  // Filter to active hard assets only (exclude ROSE)
-  const hardAssets = assets.filter(
-    (a) => a.active && a.keyBytes32 !== ROSE_KEY
-  );
+  // Include ALL active assets (including ROSE)
+  const allAssets = assets.filter((a) => a.active);
 
-  if (hardAssets.length === 0) return swaps;
+  if (allAssets.length === 0) return swaps;
 
-  // Calculate total hard asset value
-  const totalHardAssets = hardAssets.reduce((sum, a) => sum + a.valueUSD, 0n);
-  if (totalHardAssets === 0n) return swaps;
+  // Calculate total value (hard assets + ROSE)
+  const totalValue = allAssets.reduce((sum, a) => sum + a.valueUSD, 0n);
+  if (totalValue === 0n) return swaps;
 
-  // Calculate total target bps for hard assets (rescale since ROSE is excluded)
-  const roseAsset = assets.find((a) => a.keyBytes32 === ROSE_KEY);
-  const roseTargetBps = roseAsset?.targetBps ?? 0;
-  const hardAssetTotalBps = 10000 - roseTargetBps;
-
-  // Categorize assets
+  // Categorize assets by drift (no rescaling needed - using actual targets)
   const overAllocated: { asset: AssetBreakdown; excessUSD: bigint }[] = [];
   const underAllocated: { asset: AssetBreakdown; deficitUSD: bigint }[] = [];
 
-  for (const asset of hardAssets) {
-    // Rescale target to hard assets only
-    const rescaledTargetBps = (asset.targetBps * 10000) / hardAssetTotalBps;
-    const targetValueUSD = (totalHardAssets * BigInt(rescaledTargetBps)) / 10000n;
+  for (const asset of allAssets) {
+    // Use actual target (no rescaling)
+    const targetValueUSD = (totalValue * BigInt(asset.targetBps)) / 10000n;
     const currentValueUSD = asset.valueUSD;
 
     // Calculate drift (5% threshold = 500 bps)
@@ -196,13 +192,14 @@ export function calculateRebalanceSwaps(assets: AssetBreakdown[]): SwapInstructi
     }
   }
 
-  // Phase 1: Sell over-allocated assets to USDC
+  // Phase 1: Sell over-allocated assets to USDC (including ROSE)
   for (const { asset, excessUSD } of overAllocated) {
     if (asset.keyBytes32 === STABLE_KEY) continue; // Can't sell USDC for USDC
 
     // Calculate amount of tokens to sell based on excess USD value
     // This is an approximation - actual amount depends on price
     // For now, we use the proportion: amount = balance * (excess / currentValue)
+    if (asset.valueUSD === 0n) continue; // Avoid division by zero
     const amountToSell = (asset.balance * excessUSD) / asset.valueUSD;
 
     if (amountToSell > 0n) {
@@ -217,9 +214,9 @@ export function calculateRebalanceSwaps(assets: AssetBreakdown[]): SwapInstructi
     }
   }
 
-  // Phase 2: Buy under-allocated assets with USDC
+  // Phase 2: Buy under-allocated assets with USDC (including ROSE buyback)
   // Find the STABLE asset to get available USDC
-  const stableAsset = hardAssets.find((a) => a.keyBytes32 === STABLE_KEY);
+  const stableAsset = allAssets.find((a) => a.keyBytes32 === STABLE_KEY);
   if (!stableAsset) return swaps;
 
   // Calculate how much USDC will be available after selling over-allocated assets
