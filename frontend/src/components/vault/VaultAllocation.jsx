@@ -23,7 +23,7 @@ function generateAssetColor(key) {
   return `hsl(${hue}, 70%, 50%)`;
 }
 
-const VaultAllocation = ({ breakdown, isLoading, needsRebalance }) => {
+const VaultAllocation = ({ breakdown, isLoading }) => {
   // Use dynamic assets if available, fall back to legacy structure
   const chartData = useMemo(() => {
     if (!breakdown) return [];
@@ -77,11 +77,6 @@ const VaultAllocation = ({ breakdown, isLoading, needsRebalance }) => {
           <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{formatUSD(data.value)}</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
             {data.percentage.toFixed(1)}%
-            {data.targetPercentage !== undefined && (
-              <span className="ml-2">
-                (Target: {data.targetPercentage.toFixed(1)}%)
-              </span>
-            )}
           </p>
         </div>
       );
@@ -95,50 +90,32 @@ const VaultAllocation = ({ breakdown, isLoading, needsRebalance }) => {
 
     return (
       <div className={`grid ${gridCols} gap-4 mt-4`}>
-        {chartData.map((entry) => {
-          const isOverTarget = entry.targetPercentage !== undefined &&
-            entry.percentage > entry.targetPercentage + 0.5;
-          const isUnderTarget = entry.targetPercentage !== undefined &&
-            entry.percentage < entry.targetPercentage - 0.5;
-
-          return (
+        {chartData.map((entry) => (
+          <div
+            key={entry.key}
+            className="flex items-center gap-3 p-3 rounded-xl"
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-subtle)'
+            }}
+          >
             <div
-              key={entry.key}
-              className="flex items-center gap-3 p-3 rounded-xl"
-              style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: entry.driftBps > 500 ? '1px solid rgba(255, 165, 0, 0.4)' : '1px solid var(--border-subtle)'
-              }}
-            >
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: entry.color }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                  {entry.name}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {entry.percentage.toFixed(1)}%
-                  {entry.targetPercentage !== undefined && (
-                    <span
-                      className="ml-1"
-                      style={{
-                        color: isOverTarget ? '#ffa500' : isUnderTarget ? '#87CEEB' : 'var(--text-muted)'
-                      }}
-                    >
-                      ({isOverTarget ? '+' : isUnderTarget ? '-' : ''}
-                      {Math.abs(entry.percentage - entry.targetPercentage).toFixed(1)}%)
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {formatUSD(entry.value)}
-                </p>
-              </div>
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                {entry.name}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {entry.percentage.toFixed(1)}%
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {formatUSD(entry.value)}
+              </p>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     );
   };
@@ -199,23 +176,9 @@ const VaultAllocation = ({ breakdown, isLoading, needsRebalance }) => {
         boxShadow: 'var(--shadow-card)'
       }}
     >
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="font-display text-xl font-medium" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-          Vault Allocation
-        </h2>
-        {needsRebalance && (
-          <span
-            className="text-xs px-2 py-1 rounded-full"
-            style={{
-              background: 'rgba(255, 165, 0, 0.15)',
-              color: '#ffa500',
-              border: '1px solid rgba(255, 165, 0, 0.3)'
-            }}
-          >
-            Rebalance Needed
-          </span>
-        )}
-      </div>
+      <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Vault Allocation
+      </h2>
 
       <div className="flex flex-col md:flex-row items-center gap-6">
         <div className="w-48 h-48">

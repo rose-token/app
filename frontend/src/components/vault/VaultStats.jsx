@@ -41,8 +41,6 @@ const VaultStats = ({
   circulatingSupply,
   roseBalance,
   usdcBalance,
-  assetCount,
-  needsRebalance,
   isLoading,
   isConnected
 }) => {
@@ -65,23 +63,9 @@ const VaultStats = ({
         boxShadow: 'var(--shadow-card)'
       }}
     >
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="font-display text-xl font-medium" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-          Vault Overview
-        </h2>
-        {needsRebalance && (
-          <span
-            className="text-xs px-2 py-1 rounded-full"
-            style={{
-              background: 'rgba(255, 165, 0, 0.15)',
-              color: '#ffa500',
-              border: '1px solid rgba(255, 165, 0, 0.3)'
-            }}
-          >
-            Drift Detected
-          </span>
-        )}
-      </div>
+      <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+        Vault Overview
+      </h2>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
@@ -96,13 +80,6 @@ const VaultStats = ({
           label="ROSE Supply"
           value={formatTokens(circulatingSupply, 0)}
           isLoading={isLoading}
-        />
-
-        <StatCard
-          label="Assets"
-          value={assetCount || '--'}
-          isLoading={isLoading}
-          subtext="Configured"
         />
 
         {isConnected && (
