@@ -9,6 +9,7 @@ import profileRoutes from './routes/profile';
 import delegationRoutes from './routes/delegation';
 import governanceRoutes from './routes/governance';
 import treasuryRoutes from './routes/treasury';
+import redemptionRoutes from './routes/redemption';
 import reconciliationRoutes from './routes/reconciliation';
 import delegateScoringRoutes from './routes/delegateScoring';
 import vpRefreshRoutes from './routes/vpRefresh';
@@ -21,6 +22,8 @@ import { startNavHistoryCron } from './cron/nav-history';
 import { startReconciliationCron } from './cron/reconciliation';
 import { startDelegateScoringCron } from './cron/delegateScoring';
 import { startVPRefreshWatcher } from './services/vpRefresh';
+import { startDepositWatcher } from './services/depositWatcher';
+import { startRedemptionWatcher } from './services/redemptionWatcher';
 
 const app = express();
 
@@ -54,6 +57,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/delegation', delegationRoutes);
 app.use('/api/governance', governanceRoutes);
 app.use('/api/treasury', treasuryRoutes);
+app.use('/api/treasury', redemptionRoutes);
 app.use('/api/reconciliation', reconciliationRoutes);
 app.use('/api/delegate-scoring', delegateScoringRoutes);
 app.use('/api/vp-refresh', vpRefreshRoutes);
@@ -106,6 +110,16 @@ async function start() {
 
   // Start event watchers (Phase 4)
   startVPRefreshWatcher();
+
+  // Start deposit watcher for LiFi diversification (Phase 3)
+  startDepositWatcher().catch((err) => {
+    console.error('[DepositWatcher] Failed to start:', err);
+  });
+
+  // Start redemption watcher for on-demand liquidation (Phase 5)
+  startRedemptionWatcher().catch((err) => {
+    console.error('[RedemptionWatcher] Failed to start:', err);
+  });
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);

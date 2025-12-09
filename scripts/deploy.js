@@ -5,24 +5,24 @@ const fs = require("fs");
 const USE_MOCKS = true;
 
 // ============ Network Addresses ============
-// Mainnet addresses
-const MAINNET = {
-  usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-  tbtc: "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",
-  paxg: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
-  btcUsdFeed: "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
-  xauUsdFeed: "0x214eD9Da11D2fbe465a6fc601a91E62EbEc1a0D6",
-  swapRouter: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
+// Arbitrum One mainnet addresses
+const ARBITRUM_MAINNET = {
+  usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",      // Native USDC on Arbitrum
+  tbtc: "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40",      // tBTC on Arbitrum
+  xaut: "0x40461291347e1ecbb09499f3371d3f17f10d7159",      // Tether Gold (XAUt) on Arbitrum
+  btcUsdFeed: "0x6ce185860a4963106506C203335A2910413708e9", // Chainlink BTC/USD Arbitrum
+  xauUsdFeed: "0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c", // Chainlink XAU/USD Arbitrum
+  lifiDiamond: "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE", // LiFi Diamond Arbitrum
 };
 
 // Arbitrum Sepolia testnet addresses (all mocks for reliable CI/CD)
 const ARBITRUM_SEPOLIA = {
-  usdc: null, // Will deploy mock
-  tbtc: null, // Will deploy mock
-  paxg: null, // Will deploy mock
-  btcUsdFeed: null, // Will deploy mock
-  xauUsdFeed: null, // Will deploy mock
-  swapRouter: null, // Will deploy mock
+  usdc: null,        // Will deploy mock
+  tbtc: null,        // Will deploy mock
+  xaut: null,        // Will deploy mock (gold token)
+  btcUsdFeed: null,  // Will deploy mock
+  xauUsdFeed: null,  // Will deploy mock
+  lifiDiamond: null, // Will deploy MockLiFiDiamond
 };
 
 // Simple mock ERC20 for testnet
@@ -54,10 +54,10 @@ async function main() {
     // Force mock mode (useful for Tenderly forks without state sync)
     addresses = { ...ARBITRUM_SEPOLIA };
     isTestnet = true;
-    console.log("⚠️  --use-mocks flag detected: deploying mock oracles/router");
+    console.log("⚠️  --use-mocks flag detected: deploying mock oracles/LiFi Diamond");
   } else if (chainId === 42161) {
-    addresses = MAINNET;
-    console.log("Using MAINNET addresses (Arbitrum One)");
+    addresses = { ...ARBITRUM_MAINNET };
+    console.log("Using ARBITRUM_MAINNET addresses (Arbitrum One)");
   } else if (chainId === 421614) {
     addresses = { ...ARBITRUM_SEPOLIA };
     isTestnet = true;
@@ -94,12 +94,12 @@ async function main() {
       console.log("Mock TBTC deployed to:", addresses.tbtc);
     }
 
-    // Deploy mock PAXG if needed
-    if (!addresses.paxg) {
-      const mockPaxg = await MockToken.deploy("Mock PAXG", "PAXG", 18);
-      await mockPaxg.waitForDeployment();
-      addresses.paxg = await mockPaxg.getAddress();
-      console.log("Mock PAXG deployed to:", addresses.paxg);
+    // Deploy mock XAUt (Tether Gold) if needed
+    if (!addresses.xaut) {
+      const mockXaut = await MockToken.deploy("Mock XAUt", "XAUt", 6);
+      await mockXaut.waitForDeployment();
+      addresses.xaut = await mockXaut.getAddress();
+      console.log("Mock XAUt deployed to:", addresses.xaut);
     }
 
     // Deploy MockV3Aggregator for price feeds (real Chainlink feeds may be stale on testnet)
@@ -124,28 +124,28 @@ async function main() {
     addresses.roseUsdFeed = await mockRoseFeed.getAddress();
     console.log("Mock ROSE/USD feed deployed to:", addresses.roseUsdFeed, "(price: $1.33)");
 
-    // Deploy MockUniswapV3Router for testnet (real Uniswap has no liquidity for mock tokens)
-    console.log("\nDeploying MockUniswapV3Router for testnet...");
-    const MockRouter = await hre.ethers.getContractFactory("MockUniswapV3Router");
-    const mockRouter = await MockRouter.deploy();
-    await mockRouter.waitForDeployment();
-    addresses.swapRouter = await mockRouter.getAddress();
-    console.log("MockUniswapV3Router deployed to:", addresses.swapRouter);
+    // Deploy MockLiFiDiamond for testnet (simulates LiFi aggregator)
+    console.log("\nDeploying MockLiFiDiamond for testnet...");
+    const MockLiFi = await hre.ethers.getContractFactory("MockLiFiDiamond");
+    const mockLiFi = await MockLiFi.deploy();
+    await mockLiFi.waitForDeployment();
+    addresses.lifiDiamond = await mockLiFi.getAddress();
+    console.log("MockLiFiDiamond deployed to:", addresses.lifiDiamond);
 
-    // Configure token decimals on the mock router
-    await (await mockRouter.setTokenDecimals(addresses.usdc, 6)).wait();
-    await (await mockRouter.setTokenDecimals(addresses.tbtc, 8)).wait();
-    await (await mockRouter.setTokenDecimals(addresses.paxg, 18)).wait();
-    console.log("Token decimals configured on mock router ✓");
+    // Configure token decimals on the mock LiFi
+    await (await mockLiFi.setTokenDecimals(addresses.usdc, 6)).wait();
+    await (await mockLiFi.setTokenDecimals(addresses.tbtc, 8)).wait();
+    await (await mockLiFi.setTokenDecimals(addresses.xaut, 6)).wait();
+    console.log("Token decimals configured on MockLiFi ✓");
 
     // Set exchange rates to match mock aggregator prices
     // Formula: amountOut = (amountIn * rate) / 1e18
     // For USDC (6 dec) -> Asset swaps: rate = (assetAmount per $1) * 1e18 / 1e6
     //
     // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
-    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.tbtc, 1666666666666666n)).wait();
-    // Gold @ $2,000: (1e18 / 2000) * 1e18 / 1e6 = 5e26
-    await (await mockRouter.setExchangeRate(addresses.usdc, addresses.paxg, 500000000000000000000000000n)).wait();
+    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.tbtc, 1666666666666666n)).wait();
+    // Gold @ $2,000: (1e6 / 2000) * 1e18 / 1e6 = 5e11 (XAUt has 6 decimals)
+    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.xaut, 500000000000n)).wait();
     console.log("Forward exchange rates (USDC → Asset) configured ✓");
 
     // Reverse rates: Asset -> USDC (for redemption liquidation)
@@ -153,24 +153,24 @@ async function main() {
     // For Asset -> USDC swaps: rate = price * 1e6 * 1e18 / 10^assetDecimals
     //
     // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e20
-    await (await mockRouter.setExchangeRate(addresses.tbtc, addresses.usdc, 600000000000000000000n)).wait();
-    // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e18 = 2e9
-    await (await mockRouter.setExchangeRate(addresses.paxg, addresses.usdc, 2000000000n)).wait();
+    await (await mockLiFi.setExchangeRate(addresses.tbtc, addresses.usdc, 600000000000000000000n)).wait();
+    // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e6 = 2e21 (XAUt has 6 decimals)
+    await (await mockLiFi.setExchangeRate(addresses.xaut, addresses.usdc, 2000000000000000000000n)).wait();
     console.log("Reverse exchange rates (Asset → USDC) configured ✓");
 
-    // Fund the mock router with tokens for swaps
-    const mockUsdc_router = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
-    const mockTbtc_router = await hre.ethers.getContractAt("MockERC20", addresses.tbtc);
-    const mockPaxg_router = await hre.ethers.getContractAt("MockERC20", addresses.paxg);
+    // Fund the mock LiFi Diamond with tokens for swaps
+    const mockUsdc_lifi = await hre.ethers.getContractAt("MockERC20", addresses.usdc);
+    const mockTbtc_lifi = await hre.ethers.getContractAt("MockERC20", addresses.tbtc);
+    const mockXaut_lifi = await hre.ethers.getContractAt("MockERC20", addresses.xaut);
 
     // Fund with massive liquidity for stress testing redemptions
-    await (await mockTbtc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
-    await (await mockPaxg_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000", 18))).wait();   // 1M PAXG
-    await (await mockUsdc_router.mint(addresses.swapRouter, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
-    console.log("Mock router funded with liquidity (1B USDC, 10k BTC, 1M PAXG) ✓");
+    await (await mockTbtc_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
+    await (await mockXaut_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("1000000", 6))).wait();    // 1M XAUt
+    await (await mockUsdc_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
+    console.log("MockLiFi funded with liquidity (1B USDC, 10k BTC, 1M XAUt) ✓");
 
-    // Store mockRouter for ROSE configuration after RoseToken deploy
-    addresses.mockRouter = mockRouter;
+    // Store mockLiFi for ROSE configuration after RoseToken deploy
+    addresses.mockLiFi = mockLiFi;
   }
 
   // ============ Step 1: Deploy RoseToken ============
@@ -190,39 +190,87 @@ async function main() {
   const vRoseAddress = await vRose.getAddress();
   console.log("vROSE deployed to:", vRoseAddress);
 
-  // ============ Step 1.5: Configure ROSE on Mock Router (Testnet) ============
-  if (isTestnet && addresses.mockRouter) {
-    console.log("\n--- Step 1.5: Configuring ROSE on Mock Router ---");
-    const mockRouter = addresses.mockRouter;
+  // ============ Step 1.5: Configure ROSE on MockLiFi (Testnet) ============
+  if (isTestnet && addresses.mockLiFi) {
+    console.log("\n--- Step 1.5: Configuring ROSE on MockLiFi ---");
+    const mockLiFi = addresses.mockLiFi;
 
     // Set ROSE decimals
-    await (await mockRouter.setTokenDecimals(roseTokenAddress, 18)).wait();
+    await (await mockLiFi.setTokenDecimals(roseTokenAddress, 18)).wait();
 
     // ROSE at $1.33
     // USDC → ROSE: 1 USDC = 0.7519 ROSE (rate = 1e30 / 1.33 to handle 6→18 decimal conversion)
-    await (await mockRouter.setExchangeRate(addresses.usdc, roseTokenAddress, 751879699248120300751879699248n)).wait();
+    await (await mockLiFi.setExchangeRate(addresses.usdc, roseTokenAddress, 751879699248120300751879699248n)).wait();
     // ROSE → USDC: 1 ROSE = 1.33 USDC (rate = 1e6 * 1.33 to handle 18→6 decimal conversion)
-    await (await mockRouter.setExchangeRate(roseTokenAddress, addresses.usdc, 1330000n)).wait();
+    await (await mockLiFi.setExchangeRate(roseTokenAddress, addresses.usdc, 1330000n)).wait();
     console.log("ROSE exchange rates configured (USDC ↔ ROSE @ $1.33) ✓");
 
-    // Note: ROSE liquidity for router will be added after treasury deposit
+    // Note: ROSE liquidity for LiFi will be added after treasury deposit
   }
 
   // ============ Step 2: Deploy RoseTreasury ============
   console.log("\n--- Step 2: Deploying RoseTreasury ---");
   const RoseTreasury = await hre.ethers.getContractFactory("RoseTreasury");
+  // New constructor: (roseToken, usdc, lifiDiamond) - assets added via addAsset()
   const roseTreasury = await RoseTreasury.deploy(
     roseTokenAddress,
     addresses.usdc,
-    addresses.tbtc,
-    addresses.paxg,
-    addresses.btcUsdFeed,
-    addresses.xauUsdFeed,
-    addresses.swapRouter
+    addresses.lifiDiamond
   );
   await roseTreasury.waitForDeployment();
   const treasuryAddress = await roseTreasury.getAddress();
   console.log("RoseTreasury deployed to:", treasuryAddress);
+
+  // Register assets with addAsset()
+  console.log("Registering treasury assets...");
+
+  // BTC: 30%
+  const btcKey = hre.ethers.encodeBytes32String("BTC");
+  await (await roseTreasury.addAsset(
+    btcKey,
+    addresses.tbtc,
+    addresses.btcUsdFeed,
+    8,    // decimals
+    3000  // 30%
+  )).wait();
+  console.log("  BTC asset registered (30%) ✓");
+
+  // GOLD: 30% (using XAUt - Tether Gold)
+  const goldKey = hre.ethers.encodeBytes32String("GOLD");
+  await (await roseTreasury.addAsset(
+    goldKey,
+    addresses.xaut,
+    addresses.xauUsdFeed,
+    6,    // XAUt has 6 decimals
+    3000  // 30%
+  )).wait();
+  console.log("  GOLD asset registered (30%) ✓");
+
+  // STABLE (USDC): 20%
+  const stableKey = hre.ethers.encodeBytes32String("STABLE");
+  await (await roseTreasury.addAsset(
+    stableKey,
+    addresses.usdc,
+    hre.ethers.ZeroAddress, // No price feed for stablecoin
+    6,    // decimals
+    2000  // 20%
+  )).wait();
+  console.log("  STABLE asset registered (20%) ✓");
+
+  // ROSE: 20%
+  const roseKey = hre.ethers.encodeBytes32String("ROSE");
+  await (await roseTreasury.addAsset(
+    roseKey,
+    roseTokenAddress,
+    hre.ethers.ZeroAddress, // Uses NAV, not price feed
+    18,   // decimals
+    2000  // 20%
+  )).wait();
+  console.log("  ROSE asset registered (20%) ✓");
+
+  // Validate allocations sum to 100%
+  const validAllocations = await roseTreasury.validateAllocations();
+  console.log("  Allocations valid:", validAllocations ? "✓" : "✗");
 
   // ============ Step 3: Deploy RoseMarketplace ============
   console.log("\n--- Step 3: Deploying RoseMarketplace ---");
@@ -331,12 +379,15 @@ async function main() {
   await (await roseGovernance.setDelegationSigner(passportSignerAddress)).wait();
   console.log("Delegation signer set to:", passportSignerAddress, "✓");
 
-  // For testnet, set allocation to diversified RWA + ROSE reserve
+  // Set rebalancer for treasury swaps (uses same signer wallet)
+  console.log("Setting treasury rebalancer...");
+  await (await roseTreasury.setRebalancer(passportSignerAddress)).wait();
+  console.log("Treasury rebalancer set to:", passportSignerAddress, "✓");
+
+  // For testnet, set slippage tolerance and seed treasury
   if (isTestnet) {
-    console.log("Setting testnet allocation (30% BTC, 30% Gold, 20% USDC, 20% ROSE)...");
-    const setAllocTx = await roseTreasury.setAllocation(3000, 3000, 2000, 2000); // 30% BTC, 30% Gold, 20% USDC, 20% ROSE
-    await setAllocTx.wait();
-    console.log("Testnet allocation set to 30% BTC, 30% Gold, 20% USDC, 20% ROSE ✓");
+    // Allocations already set via addAsset() calls above
+    console.log("Assets registered with allocations: 30% BTC, 30% Gold, 20% USDC, 20% ROSE");
 
     // Set slippage tolerance to 100% for testnet (disables slippage check)
     console.log("Setting testnet slippage tolerance (100%)...");
@@ -360,12 +411,12 @@ async function main() {
     await (await roseTreasury.deposit(hre.ethers.parseUnits("1000000", 6))).wait();
     console.log("Deposited 1M USDC, received 1M ROSE ✓");
 
-    // Distribute ROSE: 500k to LP, 250k to treasury, 250k stays with deployer
+    // Distribute ROSE: 500k to MockLiFi, 250k to treasury, 250k stays with deployer
     console.log("Distributing ROSE tokens...");
 
-    // 500k ROSE to mock router (LP liquidity)
-    await (await roseToken.transfer(addresses.swapRouter, hre.ethers.parseUnits("500000", 18))).wait();
-    console.log("  - 500k ROSE sent to mock LP ✓");
+    // 500k ROSE to MockLiFi (swap liquidity)
+    await (await roseToken.transfer(addresses.lifiDiamond, hre.ethers.parseUnits("500000", 18))).wait();
+    console.log("  - 500k ROSE sent to MockLiFi ✓");
 
     // 250k ROSE to treasury (ROSE reserve)
     await (await roseToken.transfer(treasuryAddress, hre.ethers.parseUnits("250000", 18))).wait();
@@ -376,11 +427,11 @@ async function main() {
 
     // Log final balances
     const deployerRose = await roseToken.balanceOf(deployer.address);
-    const routerRose = await roseToken.balanceOf(addresses.swapRouter);
+    const lifiRose = await roseToken.balanceOf(addresses.lifiDiamond);
     const treasuryRose = await roseToken.balanceOf(treasuryAddress);
     console.log("\nROSE Distribution Complete:");
     console.log("  Deployer:", hre.ethers.formatUnits(deployerRose, 18), "ROSE");
-    console.log("  Mock LP:", hre.ethers.formatUnits(routerRose, 18), "ROSE");
+    console.log("  MockLiFi:", hre.ethers.formatUnits(lifiRose, 18), "ROSE");
     console.log("  Treasury:", hre.ethers.formatUnits(treasuryRose, 18), "ROSE");
   }
 

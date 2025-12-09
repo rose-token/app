@@ -8,7 +8,7 @@ Guidance for Claude Code. ALWAYS ASK CLARIFYING QUESTIONS. ALWAYS UPDATE CLAUDE.
 **Tasks:** [Status Flow](#task-status-flow) | [Auction System](#auction-system)
 **Frontend:** [Architecture](#frontend-architecture) | [Routes](#frontend-routes) | [Hooks](#frontend-hooks) | [Passport](#frontend-passport-system)
 **Backend:** [API](#backend-api) | [Services](#backend-services) | [Cron](#backend-scheduled-jobs) | [Deployment](#backend-deployment)
-**Infrastructure:** [Testing](#testing) | [Simulation](#simulation-script) | [CI/CD](#cicd-workflows) | [Env Vars](#environment-variables) | [Decimals](#token-decimals-reference) | [Git](#git-workflow)
+**Infrastructure:** [Testing](#testing) | [Simulation](#simulation-script) | [CI/CD](#cicd-workflows) | [Env Vars](#environment-variables) | [Decimals](#token-decimals-reference) | [Mainnet Addresses](#arbitrum-one-mainnet-addresses) | [Git](#git-workflow)
 
 ---
 
@@ -40,11 +40,11 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 |----------|-------|---------|
 | RoseToken.sol | 167 | ERC20 with authorized mint/burn |
 | RoseMarketplace.sol | 572 | Task lifecycle, escrow, payments, passport verification |
-| RoseTreasury.sol | 861 | RWA-backed treasury (BTC/Gold/USDC via Chainlink + Uniswap V3) |
+| RoseTreasury.sol | ~700 | RWA-backed treasury (BTC/Gold/USDC via Chainlink + LiFi), configurable asset registry |
 | RoseGovernance.sol | 1235 | Proposals, quadratic voting, multi-delegation, rewards, Phase 1 liquid democracy |
 | RoseReputation.sol | 205 | User reputation tracking, monthly buckets, eligibility checks |
 | vROSE.sol | 205 | Soulbound governance receipt token |
-| mocks/*.sol | 260 | MockERC20, MockV3Aggregator, MockUniswapV3Router, MockMarketplace |
+| mocks/*.sol | 560 | MockERC20, MockV3Aggregator, MockUniswapV3Router, MockMarketplace, MockLiFiDiamond |
 
 **Deployment order:** RoseToken → vROSE → RoseTreasury → RoseMarketplace → RoseReputation → RoseGovernance
 
@@ -53,8 +53,9 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 2. `vROSE.setGovernance(governance)` + `setMarketplace(marketplace)`
 3. `RoseReputation.setGovernance(governance)` - After governance deployed
 4. `RoseMarketplace.setGovernance(governance)` + `setVRoseToken(vROSE)` + `setReputation(reputation)`
-5. `RoseTreasury.setMarketplace(marketplace)` + `setGovernance(governance)`
+5. `RoseTreasury.setRebalancer(signerAddress)` - Required for backend-driven swaps
 6. `RoseGovernance.setDelegationSigner(signerAddress)` - Required for delegated voting
+7. `RoseTreasury.addAsset(...)` - Register initial assets (BTC, GOLD, STABLE, ROSE)
 
 **Passport verification:** ECDSA signatures from passportSigner for `createTask`, `stakeholderStake`, `claimTask`. Replay protection via `usedSignatures` mapping.
 
@@ -91,9 +92,11 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 | Marketplace | InvalidSignature, SignatureExpired, SignatureAlreadyUsed | Passport |
 | Marketplace | NotGovernance, InsufficientVRose | Permissions |
 | Treasury | InvalidPrice, StaleOracle | Oracle issues |
-| Treasury | InsufficientLiquidity, SlippageExceeded | Swap failures |
-| Treasury | InvalidAllocation, ZeroAmount | Validation |
+| Treasury | InsufficientLiquidity, SlippageExceeded, LiFiSwapFailed | Swap failures |
+| Treasury | InvalidAllocation, ZeroAmount, AssetNotFound, AssetNotActive | Validation |
 | Treasury | RebalanceNotNeeded, RebalanceCooldown, CooldownNotElapsed | Cooldowns |
+| Treasury | NotRebalancer, AssetAlreadyExists, CannotDeactivateRequired | Admin/asset |
+| Treasury | UserHasPendingRedemption, RequestNotFound, RequestAlreadyFulfilled | Redemption queue (Phase 5) |
 | Reputation | NotOwner, NotGovernance, NotMarketplace | Auth |
 | Reputation | ZeroAddress, ZeroAddressSigner | Validation |
 | Governance | IneligibleToPropose (<90% rep or <10 tasks) | Eligibility |
@@ -116,9 +119,117 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 - **Circulating Supply:** totalSupply - balanceOf(treasury)
 - **All values normalized to 6 decimals**
 
-**Deposit:** USDC → Treasury → ROSE minted → `_diversify()` swaps to RWA
-**Redeem:** ROSE burned → `_liquidateForRedemption()` if needed → USDC returned
-**Rebalance:** >5% drift triggers, 7-day cooldown, owner can force, maintains 5% USDC buffer
+**Deposit:** USDC → Treasury → ROSE minted → Backend watches `Deposited` event → Diversifies via LiFi
+**Redeem:** User approves ROSE → ROSE burned → USDC returned (requires USDC buffer)
+**Rebalance:** >5% drift triggers (hard assets only), 7-day cooldown, rebalancer/owner can force
+
+### LiFi Integration (Phase 3)
+
+**Architecture:** Contract is "dumb" (safety rails only), backend is "smart" (routing decisions).
+
+**Key Changes:**
+- `executeSwap(fromAsset, toAsset, amountIn, minAmountOut, lifiData)` - Backend-driven swaps via LiFi Diamond
+- Deposits no longer auto-diversify - backend watches `Deposited` events and calls `executeSwap()`
+- Redemptions require USDC buffer - no auto-liquidation, backend must ensure buffer via swaps
+- Rebalancer role added - `onlyRebalancer` modifier for `executeSwap()` and `forceRebalance()`
+- ROSE excluded from drift calculations (treasury doesn't hold ROSE)
+
+**Asset Registry:**
+```solidity
+struct Asset {
+    address token;
+    address priceFeed;    // Chainlink (or ZeroAddress for USDC/ROSE)
+    uint8 decimals;
+    uint256 targetBps;    // Target allocation in basis points
+    bool active;
+}
+mapping(bytes32 => Asset) public assets;  // e.g., encodeBytes32String("BTC") => Asset
+```
+
+**Functions:**
+- `addAsset(key, token, priceFeed, decimals, targetBps)` - Register new asset
+- `updateAssetAllocation(key, newTargetBps)` - Change target allocation
+- `deactivateAsset(key)` / `reactivateAsset(key)` - Toggle asset (ROSE/STABLE cannot be deactivated)
+- `getAllAssets()` - Returns all registered assets
+- `setRebalancer(address)` - Set rebalancer wallet (usually same as signer)
+
+### Rebalance Automation (Phase 4)
+
+**Purpose:** Backend orchestrates multi-swap rebalances to keep vault allocations within 5% drift threshold.
+
+**Rebalance Strategy:**
+1. Calculate current vs target allocations for all hard assets (ROSE excluded)
+2. Identify over-allocated assets (>5% above target) and under-allocated (<5% below target)
+3. Sell over-allocated assets to USDC first (most liquid intermediate)
+4. Buy under-allocated assets with USDC proceeds
+5. Call `forceRebalance()` to update timestamp and emit event
+
+**Backend Functions (`treasury.ts`):**
+- `getAssetBreakdowns()` - Get all asset balances and USD values from contract
+- `getVaultStatus()` - Full vault status including rebalance need
+- `calculateRebalanceSwaps(assets)` - Calculate optimal swap sequence
+- `executeRebalance()` - Execute multi-swap rebalance via LiFi
+- `checkRebalanceNeeded()` - View-only check with planned swaps
+- `getLastRebalanceInfo()` - Last rebalance time and cooldown status
+
+**API Endpoints (Phase 4 Rebalance):**
+- `GET /api/treasury/vault-status` - Full vault status with asset breakdowns
+- `GET /api/treasury/rebalance/status` - Check if rebalance needed + planned swaps
+- `GET /api/treasury/rebalance/last` - Last rebalance info
+- `POST /api/treasury/rebalance/run` - Manually trigger rebalance (admin only in production)
+
+**Cron Schedule:** 1st of month at 00:00 UTC. Retries every 6 hours on failure, max 10 attempts.
+
+### Redemption Queue (Phase 5)
+
+**Purpose:** Hybrid redemption: instant when USDC buffer sufficient, queued liquidation when depleted.
+
+**Design Decisions:**
+- NAV locked at request time (protects user from price changes during liquidation)
+- ONE pending request per user (prevents queue flooding)
+- No cancellation (guarantees fulfillment)
+- FIFO processing order
+
+**Contract Storage:**
+```solidity
+struct RedemptionRequest {
+    address user;
+    uint256 roseAmount;
+    uint256 usdcOwed;      // Locked at request NAV
+    uint256 requestedAt;
+    bool fulfilled;
+}
+
+mapping(uint256 => RedemptionRequest) public redemptionRequests;
+uint256 public nextRedemptionId;
+mapping(address => uint256) public userPendingRedemptionId;
+uint256 public totalPendingUsdcOwed;
+```
+
+**Contract Functions:**
+- `requestRedemption(roseAmount)` - Create queued redemption, auto-fulfills if USDC available
+- `fulfillRedemption(requestId)` - Rebalancer-only, fulfill single request
+- `fulfillMultipleRedemptions(requestIds[])` - Batch fulfillment
+- `getRedemptionRequest(requestId)` - View request details
+- `getUserPendingRedemption(user)` - Get user's pending request ID (0 if none)
+- `canRedeemInstantly(roseAmount)` - Check if instant redemption possible
+- `emergencyRefundRedemption(requestId)` - Owner-only, refund ROSE instead of USDC
+
+**Contract Events:**
+- `RedemptionRequested(requestId, user, roseAmount, usdcOwed)` - When request created
+- `RedemptionFulfilled(requestId, user, usdcAmount)` - When fulfilled (usdcAmount=0 for refund)
+
+**Flow:**
+1. User calls `requestRedemption()` → ROSE locked, request queued
+2. If USDC buffer sufficient → instant fulfillment
+3. If insufficient → backend liquidates assets via LiFi
+4. Backend calls `fulfillRedemption()` → ROSE burned, USDC sent
+
+**Frontend Integration:**
+- `RedeemCard.jsx` checks availability via `/api/treasury/redeem-check`
+- If instant: uses existing `redeem()` flow
+- If queued: calls `requestRedemption()`, polls `/api/treasury/redemption/:id` for fulfillment
+- Shows "Processing Redemption" UI with spinner while awaiting fulfillment
 
 ## Security Patterns
 
@@ -404,6 +515,13 @@ uint256 winningBid;    // Final price (0 until winner selected)
 - `hooks/` - useNotifications, useProfile, useVaultData, useNavHistory, usePassport, usePassportVerify, useGovernance, useProposals, useDelegation, useReputation, useAuction
 - `contracts/` - Auto-generated ABIs (via update-abi)
 
+**Dynamic Vault Display (Phase 5):**
+- `VaultAllocation` uses dynamic assets from `getAllAssets()` contract call
+- Supports arbitrary number of assets with auto-generated colors for unknown assets
+- Shows target vs actual allocation percentages with drift indicators
+- Highlights assets >5% off target with orange border
+- "Rebalance Needed" badge when vault drift detected
+
 **Styling:** CSS variables in `index.css`, semantic Tailwind (`bg-primary`, `text-accent`). Never hardcode colors.
 
 **Context hierarchy:** WagmiProvider → QueryClientProvider → RainbowKitProvider → ProfileProvider → PassportProvider → PassportVerifyProvider → Router
@@ -426,7 +544,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 
 | Hook | State | Methods |
 |------|-------|---------|
-| useVaultData | rosePrice, vaultValueUSD, breakdown, balances, cooldowns | auto-refresh 45s |
+| useVaultData | rosePrice, vaultValueUSD, breakdown, assets, needsRebalance, balances, cooldowns, pendingRedemptionId | auto-refresh 45s |
 | usePassport | score, loading, error, lastUpdated, isCached | loadScore, refetch, meetsThreshold |
 | usePassportVerify | loading, error, lastSignature | getSignature, getSignerAddress, getThresholds |
 | useProfile | profile, isLoading, error, isAuthenticated | updateProfile (disabled), getProfile, refreshProfile |
@@ -479,11 +597,21 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | /api/treasury/history | GET | NAV snapshots |
 | /api/treasury/rebalances | GET | Rebalance events |
 | /api/treasury/stats | GET | NAV statistics |
+| /api/treasury/vault-status | GET | Phase 4: Full vault status with asset breakdowns |
+| /api/treasury/rebalance/status | GET | Phase 4: Check if rebalance needed + planned swaps |
+| /api/treasury/rebalance/last | GET | Phase 4: Last rebalance info |
+| /api/treasury/rebalance/run | POST | Phase 4: Manually trigger rebalance |
 | /api/vp-refresh/stats | GET | Phase 4: VP refresh watcher statistics |
 | /api/vp-refresh/pending | GET | Phase 4: Users pending VP check |
 | /api/vp-refresh/config | GET | Phase 4: VP refresh configuration |
 | /api/vp-refresh/check/:address | POST | Phase 4: Manually check and refresh user VP |
 | /api/vp-refresh/process | POST | Phase 4: Force process all pending users |
+| /api/treasury/redeem-check | GET | Phase 5: Check instant redemption availability |
+| /api/treasury/redemption/:id | GET | Phase 5: Get redemption request status |
+| /api/treasury/user-pending/:address | GET | Phase 5: Get user's pending redemption |
+| /api/treasury/pending-redemptions | GET | Phase 5: Admin view of all pending redemptions |
+| /api/treasury/redemption-watcher/stats | GET | Phase 5: Redemption watcher statistics |
+| /api/treasury/redemption-watcher/process | POST | Phase 5: Force process pending redemptions |
 | /api/auction/register | POST | Register auction task after on-chain creation |
 | /api/auction/bid | POST | Submit/update bid (requires worker signature) |
 | /api/auction/:taskId/bids | GET | Get all bids for auction (customer only) |
@@ -506,21 +634,26 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
 | delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
+| lifi.ts | getSwapQuote, applySlippage, calculateDiversificationSwaps, executeDiversificationSwap, getAssetTokenAddress, getTargetAllocations (Phase 3 Treasury LiFi) |
+| depositWatcher.ts | startDepositWatcher, stopDepositWatcher, getDepositWatcherStats, forceProcessPending, getPendingDeposits (Phase 3 Treasury LiFi) |
+| redemptionWatcher.ts | startRedemptionWatcher, stopRedemptionWatcher, getRedemptionWatcherStats, forceProcessPending, getPendingRedemptions, calculateLiquidationSwaps, processPendingRedemptions (Phase 5) |
 | auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask, syncAuctionFromChain |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
 | nav.ts | fetchNavSnapshot, storeNavSnapshot, syncRebalanceEvents, getNavHistory, getNavStats |
-| treasury.ts | executeRebalance |
+| treasury.ts | executeRebalance, getAssetBreakdowns, getVaultStatus, calculateRebalanceSwaps, checkRebalanceNeeded, getLastRebalanceInfo (Phase 4 Treasury LiFi Rebalance) |
 
 ## Backend Scheduled Jobs
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| Rebalance | 1st of month 00:00 UTC | treasury.forceRebalance(), retry 6h on failure |
+| Rebalance | 1st of month 00:00 UTC | Multi-swap rebalance via LiFi: calculate drifted assets, execute swaps, call forceRebalance(), retry 6h on failure (Phase 4) |
 | NAV Snapshot | Daily 00:00 UTC | Capture prices/allocations, sync Rebalanced events |
 | Reconciliation | Every 6 hours | Compare DB allocations with on-chain, auto-sync discrepancies (Phase 2) |
 | Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records, auto-free delegated VP (Phase 3) |
 | VP Refresh Watcher | Event-driven | Watch ReputationChanged events, auto-refresh VP when reputation changes (Phase 4) |
+| Deposit Watcher | Event-driven | Watch Deposited events, diversify via LiFi (Phase 3 Treasury LiFi) |
+| Redemption Watcher | Event-driven | Watch RedemptionRequested events, liquidate assets via LiFi, fulfill redemptions (Phase 5) |
 
 ## Backend Deployment
 
@@ -551,7 +684,7 @@ test/TaskLifecycleEdgeCases.test.js  # 167 lines - Edge cases
 test/DetailedDescription.test.js     # 100 lines - IPFS
 ```
 
-**Mocks:** MockV3Aggregator (Chainlink), MockUniswapV3Router, MockERC20
+**Mocks:** MockV3Aggregator (Chainlink), MockLiFiDiamond (swap aggregator), MockERC20
 **Token acquisition:** Mint USDC → Approve Treasury → deposit() → ROSE minted
 
 ## Simulation Script
@@ -578,7 +711,21 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 |----------|---------------|
 | Root .env | ARBITRUM_SEPOLIA_RPC_URL, PRIVATE_KEY, DAO_TREASURY_ADDRESS, ARBISCAN_API_KEY, PASSPORT_SIGNER_ADDRESS |
 | frontend/.env | VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS, VITE_PINATA_*, VITE_PASSPORT_SIGNER_URL |
-| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE |
+| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE, DEPOSIT_WATCHER_*, REDEMPTION_WATCHER_* |
+
+**Deposit Watcher Env Vars (Phase 3 Treasury LiFi):**
+- `DEPOSIT_WATCHER_ENABLED` - Enable deposit watching (default: true)
+- `DEPOSIT_WATCHER_DEBOUNCE_MS` - Debounce time in ms (default: 30000)
+- `DEPOSIT_WATCHER_EXECUTE` - Execute swaps vs dry run (default: true when enabled)
+- `DEPOSIT_WATCHER_SLIPPAGE_BPS` - Slippage tolerance (default: 100 = 1%)
+- `DEPOSIT_WATCHER_STARTUP_LOOKBACK` - Blocks to look back on startup (default: 0)
+
+**Redemption Watcher Env Vars (Phase 5):**
+- `REDEMPTION_WATCHER_ENABLED` - Enable redemption watching (default: true)
+- `REDEMPTION_WATCHER_DEBOUNCE_MS` - Debounce time before processing (default: 15000)
+- `REDEMPTION_WATCHER_EXECUTE` - Execute liquidation swaps vs dry run (default: true)
+- `REDEMPTION_WATCHER_SLIPPAGE_BPS` - Slippage tolerance for liquidations (default: 150 = 1.5%)
+- `REDEMPTION_WATCHER_STARTUP_LOOKBACK` - Blocks to scan for pending on startup (default: 100)
 
 ## Token Decimals Reference
 
@@ -588,7 +735,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 | VP (votingPower, availableVP, delegatedOut) | 9 | formatUnits(value, 9) |
 | USDC/NAV prices | 6 | formatUnits(value, 6) |
 | TBTC | 8 | - |
-| PAXG | 18 | - |
+| XAUt (Tether Gold) | 6 | - |
 | Chainlink feeds | 8 | - |
 
 ## Key Technical Details
@@ -598,6 +745,19 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 - **Networks:** Arbitrum Sepolia (421614), Arbitrum One (42161)
 - **Frontend:** Vite 7.x, wagmi + viem + RainbowKit
 - **Backend:** Express.js + TypeScript + PostgreSQL + ethers.js
+
+## Arbitrum One Mainnet Addresses
+
+| Asset | Address | Notes |
+|-------|---------|-------|
+| USDC | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | Native USDC on Arbitrum |
+| TBTC | `0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40` | Threshold BTC |
+| XAUt | `0x40461291347e1ecbb09499f3371d3f17f10d7159` | Tether Gold |
+| BTC/USD Feed | `0x6ce185860a4963106506C203335A2910D6ce18586` | Chainlink |
+| XAU/USD Feed | `0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c` | Chainlink |
+| LiFi Diamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | DEX Aggregator |
+
+**Testnet:** All addresses are mocked via `MockERC20`, `MockV3Aggregator`, and `MockLiFiDiamond`.
 
 ## Git Workflow
 

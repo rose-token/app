@@ -57,10 +57,10 @@ async function loadContracts() {
   const ext = deployment.externalAddresses;
   contracts.usdc = (await hre.ethers.getContractAt("MockERC20", ext.usdc)).connect(deployer);
   contracts.tbtc = (await hre.ethers.getContractAt("MockERC20", ext.tbtc)).connect(deployer);
-  contracts.paxg = (await hre.ethers.getContractAt("MockERC20", ext.paxg)).connect(deployer);
+  contracts.xaut = (await hre.ethers.getContractAt("MockERC20", ext.xaut)).connect(deployer);
   contracts.btcFeed = (await hre.ethers.getContractAt("MockV3Aggregator", ext.btcUsdFeed)).connect(deployer);
   contracts.xauFeed = (await hre.ethers.getContractAt("MockV3Aggregator", ext.xauUsdFeed)).connect(deployer);
-  contracts.swapRouter = (await hre.ethers.getContractAt("MockUniswapV3Router", ext.swapRouter)).connect(deployer);
+  contracts.lifiDiamond = (await hre.ethers.getContractAt("MockLiFiDiamond", ext.lifiDiamond)).connect(deployer);
 
   log.success("Connected to all contracts");
 }
@@ -124,33 +124,74 @@ async function syncRatesWithOracles() {
   // TBTC: 8 decimals
   const btcForward = calcForwardRate(btcPrice, 8);
   const btcReverse = calcReverseRate(btcPrice, 8);
-  await (await contracts.swapRouter.setExchangeRate(ext.usdc, ext.tbtc, btcForward)).wait();
-  await (await contracts.swapRouter.setExchangeRate(ext.tbtc, ext.usdc, btcReverse)).wait();
+  await (await contracts.lifiDiamond.setExchangeRate(ext.usdc, ext.tbtc, btcForward)).wait();
+  await (await contracts.lifiDiamond.setExchangeRate(ext.tbtc, ext.usdc, btcReverse)).wait();
 
-  // PAXG: 18 decimals
-  const goldForward = calcForwardRate(xauPrice, 18);
-  const goldReverse = calcReverseRate(xauPrice, 18);
-  await (await contracts.swapRouter.setExchangeRate(ext.usdc, ext.paxg, goldForward)).wait();
-  await (await contracts.swapRouter.setExchangeRate(ext.paxg, ext.usdc, goldReverse)).wait();
+  // XAUt (Tether Gold): 6 decimals
+  const goldForward = calcForwardRate(xauPrice, 6);
+  const goldReverse = calcReverseRate(xauPrice, 6);
+  await (await contracts.lifiDiamond.setExchangeRate(ext.usdc, ext.xaut, goldForward)).wait();
+  await (await contracts.lifiDiamond.setExchangeRate(ext.xaut, ext.usdc, goldReverse)).wait();
 
   log.success(`Exchange rates synced: BTC=$${btcPrice.toLocaleString()}, Gold=$${xauPrice.toLocaleString()}`);
 }
 
 // ============ Treasury Module ============
 
+// Helper to convert bytes32 to string
+function bytes32ToString(bytes32) {
+  try {
+    return hre.ethers.decodeBytes32String(bytes32);
+  } catch {
+    return bytes32.replace(/\x00/g, '');
+  }
+}
+
 async function getVaultBreakdown() {
-  const breakdown = await contracts.treasury.getVaultBreakdown();
+  // Get dynamic assets from the new Treasury interface
+  const [keys, assetList] = await contracts.treasury.getAllAssets();
   const rosePrice = await contracts.treasury.rosePrice();
   const needsRebalance = await contracts.treasury.needsRebalance();
+  const hardAssetValueUSD = await contracts.treasury.hardAssetValueUSD();
+  const circulatingSupply = await contracts.treasury.circulatingSupply();
+
+  // Fetch breakdown for each active asset
+  const assets = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (!assetList[i].active) continue;
+
+    const key = bytes32ToString(keys[i]);
+    const breakdown = await contracts.treasury.getAssetBreakdown(keys[i]);
+    // breakdown returns: (token, balance, valueUSD, targetBps, actualBps, active)
+
+    assets.push({
+      key,
+      token: breakdown[0],
+      balance: breakdown[1],
+      valueUSD: Number(breakdown[2]) / 1e6,
+      targetBps: Number(breakdown[3]),
+      actualBps: Number(breakdown[4]),
+      active: breakdown[5],
+    });
+  }
+
+  // Extract individual asset values for backwards compatibility
+  const btcAsset = assets.find(a => a.key === 'BTC');
+  const goldAsset = assets.find(a => a.key === 'GOLD');
+  const stableAsset = assets.find(a => a.key === 'STABLE');
+  const roseAsset = assets.find(a => a.key === 'ROSE');
 
   return {
-    btcValue: Number(breakdown[0]) / 1e6,
-    goldValue: Number(breakdown[1]) / 1e6,
-    usdcValue: Number(breakdown[2]) / 1e6,
-    roseValue: Number(breakdown[3]) / 1e6,
-    totalHardAssets: Number(breakdown[4]) / 1e6,
+    // Dynamic assets array
+    assets,
+    // Legacy fields for backwards compatibility
+    btcValue: btcAsset?.valueUSD || 0,
+    goldValue: goldAsset?.valueUSD || 0,
+    usdcValue: stableAsset?.valueUSD || 0,
+    roseValue: roseAsset?.valueUSD || 0,
+    totalHardAssets: Number(hardAssetValueUSD) / 1e6,
     rosePrice: Number(rosePrice) / 1e6,
-    circulatingSupply: Number(breakdown[6]) / 1e18,
+    circulatingSupply: Number(circulatingSupply) / 1e18,
     needsRebalance,
   };
 }
@@ -159,10 +200,27 @@ async function displayVaultBreakdown() {
   const v = await getVaultBreakdown();
 
   log.header("=== VAULT BREAKDOWN ===");
-  console.log(`  BTC Value:        $${v.btcValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
-  console.log(`  Gold Value:       $${v.goldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
-  console.log(`  USDC Value:       $${v.usdcValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
-  console.log(`  ROSE Value:       $${v.roseValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`);
+
+  // Display each asset dynamically
+  const DRIFT_THRESHOLD = 500; // 5% in basis points
+  for (const asset of v.assets) {
+    const targetPct = (asset.targetBps / 100).toFixed(1);
+    const actualPct = (asset.actualBps / 100).toFixed(1);
+    const driftBps = Math.abs(asset.actualBps - asset.targetBps);
+    const driftIndicator = driftBps > DRIFT_THRESHOLD ? colors.yellow + " !" : "";
+
+    // Format display name
+    const displayName = {
+      BTC: "Bitcoin",
+      GOLD: "Gold (XAUt)",
+      STABLE: "USDC",
+      ROSE: "ROSE",
+    }[asset.key] || asset.key;
+
+    console.log(`  ${displayName.padEnd(12)} $${asset.valueUSD.toLocaleString(undefined, { minimumFractionDigits: 2 }).padStart(14)}  (${actualPct}% / ${targetPct}% target)${driftIndicator}${colors.reset}`);
+  }
+
+  console.log(`  ${"─".repeat(50)}`);
   console.log(`  ${colors.bright}Total Hard Assets: $${v.totalHardAssets.toLocaleString(undefined, { minimumFractionDigits: 2 })}${colors.reset}`);
   console.log(`  ${colors.cyan}ROSE Price:        $${v.rosePrice.toFixed(6)}${colors.reset}`);
   console.log(`  Circulating:      ${v.circulatingSupply.toLocaleString()} ROSE`);
@@ -680,13 +738,14 @@ async function mintTokens(token, amount) {
       decimals = 8;
       name = "TBTC";
       break;
-    case "paxg":
-      contract = contracts.paxg;
-      decimals = 18;
-      name = "PAXG";
+    case "xaut":
+    case "gold":
+      contract = contracts.xaut;
+      decimals = 6;
+      name = "XAUt";
       break;
     default:
-      log.error(`Unknown token: ${token}`);
+      log.error(`Unknown token: ${token}. Valid options: usdc, tbtc, xaut/gold`);
       return;
   }
 
@@ -695,15 +754,15 @@ async function mintTokens(token, amount) {
   log.success(`Minted ${amount} ${name} to ${deployer.address}`);
 }
 
-async function fundRouter() {
+async function fundLiFi() {
   const ext = deployment.externalAddresses;
-  log.info("Funding swap router with liquidity...");
+  log.info("Funding LiFi Diamond with liquidity...");
 
-  await (await contracts.usdc.mint(ext.swapRouter, hre.ethers.parseUnits("10000000", 6))).wait();
-  await (await contracts.tbtc.mint(ext.swapRouter, hre.ethers.parseUnits("1000", 8))).wait();
-  await (await contracts.paxg.mint(ext.swapRouter, hre.ethers.parseUnits("100000", 18))).wait();
+  await (await contracts.usdc.mint(ext.lifiDiamond, hre.ethers.parseUnits("10000000", 6))).wait();
+  await (await contracts.tbtc.mint(ext.lifiDiamond, hre.ethers.parseUnits("1000", 8))).wait();
+  await (await contracts.xaut.mint(ext.lifiDiamond, hre.ethers.parseUnits("100000", 6))).wait();
 
-  log.success("Router funded: 10M USDC, 1000 TBTC, 100K PAXG");
+  log.success("LiFi funded: 10M USDC, 1000 TBTC, 100K XAUt");
 }
 
 async function getBalances(address = null) {
@@ -1025,7 +1084,7 @@ ${colors.cyan}--- UTILITIES ---${colors.reset}
 
   1. View balances
   2. Mint mock tokens
-  3. Fund swap router
+  3. Fund LiFi Diamond
   0. Back
 `);
 
@@ -1036,12 +1095,12 @@ ${colors.cyan}--- UTILITIES ---${colors.reset}
       await getBalances();
       break;
     case "2":
-      const token = await prompt(rl, "Token (usdc/tbtc/paxg): ");
+      const token = await prompt(rl, "Token (usdc/tbtc/xaut): ");
       const amount = await prompt(rl, "Amount: ");
       await mintTokens(token, parseFloat(amount));
       break;
     case "3":
-      await fundRouter();
+      await fundLiFi();
       break;
   }
 }

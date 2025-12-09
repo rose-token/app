@@ -1,33 +1,33 @@
 {
-  "network": "arbitrumSepolia",
-  "chainId": 421614,
+  "network": "hardhat",
+  "chainId": 1337,
   "isTestnet": true,
-  "deployer": "0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "contracts": {
-    "roseToken": "0xfDc539cEFf25B1DdF778Db2f4f18b35f4827F647",
-    "vRose": "0xAaF954E4F8E2791fb1107f38AC86dB579f137f6D",
-    "roseTreasury": "0x247A0880fE221237F9c5082E7521dA2db3b0d114",
-    "roseMarketplace": "0x7938A842C069ac517Afa96560065019163Bdd179",
-    "roseReputation": "0xe2b81deCD5baB0ef1d17dbCfFb2A39e76923143e",
-    "roseGovernance": "0xC3766C66836Ec51114076723FD258f424C014390"
+    "roseToken": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+    "vRose": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+    "roseTreasury": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+    "roseMarketplace": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+    "roseReputation": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+    "roseGovernance": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E"
   },
-  "tokenAddress": "0xfDc539cEFf25B1DdF778Db2f4f18b35f4827F647",
-  "vRoseAddress": "0xAaF954E4F8E2791fb1107f38AC86dB579f137f6D",
-  "treasuryAddress": "0x247A0880fE221237F9c5082E7521dA2db3b0d114",
-  "marketplaceAddress": "0x7938A842C069ac517Afa96560065019163Bdd179",
-  "reputationAddress": "0xe2b81deCD5baB0ef1d17dbCfFb2A39e76923143e",
-  "governanceAddress": "0xC3766C66836Ec51114076723FD258f424C014390",
-  "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
+  "tokenAddress": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+  "vRoseAddress": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+  "treasuryAddress": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+  "marketplaceAddress": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+  "reputationAddress": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+  "governanceAddress": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+  "passportSignerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "externalAddresses": {
-    "usdc": "0xaA451fcebfcCa7100bF679a0B0Bd2Ef3fa8b1FE7",
-    "tbtc": "0x719E5685981b0615533570E603b9C9Be1265fa3e",
-    "paxg": "0x21E9cb92B2E9Cbb4238227DbcAda56C48A30a280",
-    "btcUsdFeed": "0x67Bec5D05d2ba9BD2b388d86d2343501370A8BCb",
-    "xauUsdFeed": "0xF38853ECaf2ea8884271b79BeeC46E2BDD0Bff34",
-    "swapRouter": "0xaBc252E575483C80efdA405555d2479B66bB79d2",
-    "roseUsdFeed": "0xf9F772E9620708b2790DDE78092B51faE84A45ED",
-    "mockRouter": {
-      "target": "0xaBc252E575483C80efdA405555d2479B66bB79d2",
+    "usdc": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "tbtc": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "xaut": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "btcUsdFeed": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "xauUsdFeed": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+    "lifiDiamond": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+    "roseUsdFeed": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+    "mockLiFi": {
+      "target": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
       "interface": {
         "fragments": [
           {
@@ -54,7 +54,7 @@
             "type": "event",
             "inputs": [
               {
-                "name": "tokenIn",
+                "name": "fromToken",
                 "type": "address",
                 "baseType": "address",
                 "indexed": true,
@@ -63,7 +63,41 @@
                 "arrayChildren": null
               },
               {
-                "name": "tokenOut",
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "indexed": true,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "rate",
+                "type": "uint256",
+                "baseType": "uint256",
+                "indexed": false,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "ExchangeRateSet",
+            "anonymous": false
+          },
+          {
+            "type": "event",
+            "inputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "indexed": true,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
                 "type": "address",
                 "baseType": "address",
                 "indexed": true,
@@ -93,106 +127,98 @@
                 "name": "recipient",
                 "type": "address",
                 "baseType": "address",
-                "indexed": false,
+                "indexed": true,
                 "components": null,
                 "arrayLength": null,
                 "arrayChildren": null
               }
             ],
-            "name": "Swap",
+            "name": "SwapExecuted",
             "anonymous": false
+          },
+          {
+            "type": "fallback",
+            "inputs": [
+              {
+                "name": "",
+                "type": "bytes",
+                "baseType": "bytes",
+                "indexed": null,
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "payable": true
+          },
+          {
+            "type": "function",
+            "inputs": [],
+            "name": "clearSwapHistory",
+            "constant": false,
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
           },
           {
             "type": "function",
             "inputs": [
               {
-                "name": "params",
-                "type": "tuple",
-                "baseType": "tuple",
-                "components": [
-                  {
-                    "name": "tokenIn",
-                    "type": "address",
-                    "baseType": "address",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "tokenOut",
-                    "type": "address",
-                    "baseType": "address",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "fee",
-                    "type": "uint24",
-                    "baseType": "uint24",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "recipient",
-                    "type": "address",
-                    "baseType": "address",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "deadline",
-                    "type": "uint256",
-                    "baseType": "uint256",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "amountIn",
-                    "type": "uint256",
-                    "baseType": "uint256",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "amountOutMinimum",
-                    "type": "uint256",
-                    "baseType": "uint256",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  },
-                  {
-                    "name": "sqrtPriceLimitX96",
-                    "type": "uint160",
-                    "baseType": "uint160",
-                    "components": null,
-                    "arrayLength": null,
-                    "arrayChildren": null
-                  }
-                ],
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
                 "arrayLength": null,
                 "arrayChildren": null
-              }
-            ],
-            "name": "exactInputSingle",
-            "constant": false,
-            "outputs": [
+              },
               {
-                "name": "amountOut",
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
                 "type": "uint256",
                 "baseType": "uint256",
                 "components": null,
                 "arrayLength": null,
                 "arrayChildren": null
+              },
+              {
+                "name": "minAmountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
               }
             ],
-            "stateMutability": "payable",
-            "payable": true,
+            "name": "encodeSwapCalldata",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "bytes",
+                "baseType": "bytes",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "pure",
+            "payable": false,
             "gas": null
           },
           {
@@ -233,9 +259,12 @@
           },
           {
             "type": "function",
-            "inputs": [
+            "inputs": [],
+            "name": "getLastSwap",
+            "constant": true,
+            "outputs": [
               {
-                "name": "tokenIn",
+                "name": "fromToken",
                 "type": "address",
                 "baseType": "address",
                 "components": null,
@@ -243,7 +272,194 @@
                 "arrayChildren": null
               },
               {
-                "name": "tokenOut",
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "timestamp",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "getQuote",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "index",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "getSwap",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "timestamp",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [],
+            "name": "getSwapCount",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
                 "type": "address",
                 "baseType": "address",
                 "components": null,
@@ -298,6 +514,134 @@
             "inputs": [
               {
                 "name": "",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "swapHistory",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "timestamp",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "fromToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "toToken",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "amountIn",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "minAmountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
+                "name": "recipient",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "swapSimple",
+            "constant": false,
+            "outputs": [
+              {
+                "name": "amountOut",
+                "type": "uint256",
+                "baseType": "uint256",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "",
                 "type": "address",
                 "baseType": "address",
                 "components": null,
@@ -333,12 +677,26 @@
           "payable": false,
           "gas": null
         },
-        "fallback": null,
+        "fallback": {
+          "type": "fallback",
+          "inputs": [
+            {
+              "name": "",
+              "type": "bytes",
+              "baseType": "bytes",
+              "indexed": null,
+              "components": null,
+              "arrayLength": null,
+              "arrayChildren": null
+            }
+          ],
+          "payable": true
+        },
         "receive": true
       },
-      "runner": "<SignerWithAddress 0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1>",
+      "runner": "<SignerWithAddress 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266>",
       "filters": {}
     }
   },
-  "timestamp": "2025-12-09T04:01:51.101Z"
+  "timestamp": "2025-12-09T07:39:25.254Z"
 }

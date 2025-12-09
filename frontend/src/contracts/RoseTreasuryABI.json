@@ -13,32 +13,32 @@
       },
       {
         "internalType": "address",
-        "name": "_tbtc",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_paxg",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_btcUsdFeed",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_xauUsdFeed",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_swapRouter",
+        "name": "_lifiDiamond",
         "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "AssetAlreadyExists",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AssetNotActive",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AssetNotFound",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "CannotDeactivateRequired",
+    "type": "error"
   },
   {
     "inputs": [
@@ -87,6 +87,21 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "InvalidTargetSum",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "LiFiSwapFailed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotRebalancer",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -124,6 +139,16 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "RequestAlreadyFulfilled",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RequestNotFound",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -146,6 +171,11 @@
   },
   {
     "inputs": [],
+    "name": "UserHasPendingRedemption",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ZeroAddress",
     "type": "error"
   },
@@ -158,31 +188,94 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "btc",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "priceFeed",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "decimals",
+        "type": "uint8"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "gold",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "usdc",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "rose",
+        "name": "targetBps",
         "type": "uint256"
       }
     ],
-    "name": "AllocationUpdated",
+    "name": "AssetAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AssetDeactivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AssetReactivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "priceFeed",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "targetBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "AssetUpdated",
     "type": "event"
   },
   {
@@ -274,35 +367,24 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "btcValue",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "goldValue",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "usdcValue",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "roseValue",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
         "name": "totalHardAssets",
         "type": "uint256"
       }
     ],
     "name": "Rebalanced",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newRebalancer",
+        "type": "address"
+      }
+    ],
+    "name": "RebalancerUpdated",
     "type": "event"
   },
   {
@@ -328,6 +410,62 @@
       }
     ],
     "name": "Redeemed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "RedemptionFulfilled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "roseAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcOwed",
+        "type": "uint256"
+      }
+    ],
+    "name": "RedemptionRequested",
     "type": "event"
   },
   {
@@ -372,6 +510,37 @@
       }
     ],
     "name": "RoseSpent",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "fromAsset",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "toAsset",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amountOut",
+        "type": "uint256"
+      }
+    ],
+    "name": "SwapExecuted",
     "type": "event"
   },
   {
@@ -454,45 +623,6 @@
   },
   {
     "inputs": [],
-    "name": "PAXG_DECIMALS",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "POOL_FEE_STABLE",
-    "outputs": [
-      {
-        "internalType": "uint24",
-        "name": "",
-        "type": "uint24"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "POOL_FEE_VOLATILE",
-    "outputs": [
-      {
-        "internalType": "uint24",
-        "name": "",
-        "type": "uint24"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "REBALANCE_COOLDOWN",
     "outputs": [
       {
@@ -506,12 +636,12 @@
   },
   {
     "inputs": [],
-    "name": "ROSE_DECIMALS",
+    "name": "ROSE_KEY",
     "outputs": [
       {
-        "internalType": "uint8",
+        "internalType": "bytes32",
         "name": "",
-        "type": "uint8"
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -519,12 +649,12 @@
   },
   {
     "inputs": [],
-    "name": "TBTC_DECIMALS",
+    "name": "STABLE_KEY",
     "outputs": [
       {
-        "internalType": "uint8",
+        "internalType": "bytes32",
         "name": "",
-        "type": "uint8"
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -557,65 +687,91 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "allocBTC",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "allocGold",
-    "outputs": [
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "allocROSE",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "allocUSDC",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "btcUsdFeed",
-    "outputs": [
-      {
-        "internalType": "contract AggregatorV3Interface",
-        "name": "",
+        "internalType": "address",
+        "name": "token",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "priceFeed",
+        "type": "address"
+      },
+      {
+        "internalType": "uint8",
+        "name": "decimals",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "addAsset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "assetKeys",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "assets",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "priceFeed",
+        "type": "address"
+      },
+      {
+        "internalType": "uint8",
+        "name": "decimals",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetBps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -660,6 +816,35 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roseAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "canRedeemInstantly",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "ready",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcAvailable",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcNeeded",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "circulatingSupply",
     "outputs": [
@@ -670,6 +855,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "deactivateAsset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -686,6 +884,52 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
+    "name": "emergencyRefundRedemption",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "fromAsset",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "toAsset",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "minAmountOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "lifiData",
+        "type": "bytes"
+      }
+    ],
+    "name": "executeSwap",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "forceRebalance",
     "outputs": [],
@@ -693,48 +937,115 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "requestIds",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "fulfillMultipleRedemptions",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
+    "name": "fulfillRedemption",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
-    "name": "getAllocationStatus",
+    "name": "getAllAssets",
     "outputs": [
       {
+        "internalType": "bytes32[]",
+        "name": "keys",
+        "type": "bytes32[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "priceFeed",
+            "type": "address"
+          },
+          {
+            "internalType": "uint8",
+            "name": "decimals",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint256",
+            "name": "targetBps",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "active",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct RoseTreasury.Asset[]",
+        "name": "assetList",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getAssetBreakdown",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
         "internalType": "uint256",
-        "name": "targetBTC",
+        "name": "balance",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "targetGold",
+        "name": "valueUSD",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "targetUSDC",
+        "name": "targetBps",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "targetROSE",
+        "name": "actualBps",
         "type": "uint256"
       },
       {
-        "internalType": "uint256",
-        "name": "actualBTC",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "actualGold",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "actualUSDC",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "actualROSE",
-        "type": "uint256"
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -742,7 +1053,7 @@
   },
   {
     "inputs": [],
-    "name": "getBTCPrice",
+    "name": "getAssetCount",
     "outputs": [
       {
         "internalType": "uint256",
@@ -754,8 +1065,72 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getGoldPrice",
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getAssetPrice",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getRedemptionRequest",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "roseAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "requestedAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "fulfilled",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getUserPendingRedemption",
     "outputs": [
       {
         "internalType": "uint256",
@@ -770,26 +1145,6 @@
     "inputs": [],
     "name": "getVaultBreakdown",
     "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "btcValue",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "goldValue",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "usdcValue",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "roseValue",
-        "type": "uint256"
-      },
       {
         "internalType": "uint256",
         "name": "totalHardAssets",
@@ -893,6 +1248,19 @@
   },
   {
     "inputs": [],
+    "name": "lifiDiamond",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "marketplace",
     "outputs": [
       {
@@ -932,6 +1300,19 @@
   },
   {
     "inputs": [],
+    "name": "nextRedemptionId",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "owner",
     "outputs": [
       {
@@ -964,16 +1345,16 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "paxg",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
       }
     ],
-    "stateMutability": "view",
+    "name": "reactivateAsset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -981,6 +1362,19 @@
     "name": "rebalance",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rebalancer",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -997,9 +1391,67 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "redemptionRequests",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "roseAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "requestedAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "fulfilled",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roseAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "requestRedemption",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -1027,34 +1479,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_btc",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_gold",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_usdc",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_rose",
-        "type": "uint256"
-      }
-    ],
-    "name": "setAllocation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -1100,6 +1524,19 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "_rebalancer",
+        "type": "address"
+      }
+    ],
+    "name": "setRebalancer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "_to",
         "type": "address"
       },
@@ -1117,32 +1554,6 @@
     "name": "spendRose",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "swapRouter",
-    "outputs": [
-      {
-        "internalType": "contract ISwapRouter",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "tbtc",
-    "outputs": [
-      {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1197,6 +1608,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "totalPendingUsdcOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -1230,6 +1654,60 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newTargetBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateAssetAllocation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "newPriceFeed",
+        "type": "address"
+      }
+    ],
+    "name": "updateAssetPriceFeed",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "newToken",
+        "type": "address"
+      }
+    ],
+    "name": "updateAssetToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "usdc",
     "outputs": [
@@ -1243,13 +1721,32 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "xauUsdFeed",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "contract AggregatorV3Interface",
+        "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "name": "userPendingRedemptionId",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "validateAllocations",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

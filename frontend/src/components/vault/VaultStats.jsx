@@ -1,7 +1,7 @@
 import React from 'react';
 import { Skeleton } from '../ui/skeleton';
 
-const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false }) => (
+const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false, subtext = null }) => (
   <div
     className="rounded-xl p-5 transition-all duration-300"
     style={{
@@ -18,12 +18,19 @@ const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight
     {isLoading ? (
       <Skeleton className="h-8 w-24" />
     ) : (
-      <p
-        className="font-display text-2xl font-semibold"
-        style={{ color: 'var(--rose-pink-light)', letterSpacing: '-0.02em' }}
-      >
-        {prefix}{value !== null ? value : '--'}{suffix}
-      </p>
+      <>
+        <p
+          className="font-display text-2xl font-semibold"
+          style={{ color: 'var(--rose-pink-light)', letterSpacing: '-0.02em' }}
+        >
+          {prefix}{value !== null ? value : '--'}{suffix}
+        </p>
+        {subtext && (
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            {subtext}
+          </p>
+        )}
+      </>
     )}
   </div>
 );
@@ -34,6 +41,8 @@ const VaultStats = ({
   circulatingSupply,
   roseBalance,
   usdcBalance,
+  assetCount,
+  needsRebalance,
   isLoading,
   isConnected
 }) => {
@@ -56,9 +65,23 @@ const VaultStats = ({
         boxShadow: 'var(--shadow-card)'
       }}
     >
-      <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-        Vault Overview
-      </h2>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="font-display text-xl font-medium" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+          Vault Overview
+        </h2>
+        {needsRebalance && (
+          <span
+            className="text-xs px-2 py-1 rounded-full"
+            style={{
+              background: 'rgba(255, 165, 0, 0.15)',
+              color: '#ffa500',
+              border: '1px solid rgba(255, 165, 0, 0.3)'
+            }}
+          >
+            Drift Detected
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
@@ -73,6 +96,13 @@ const VaultStats = ({
           label="ROSE Supply"
           value={formatTokens(circulatingSupply, 0)}
           isLoading={isLoading}
+        />
+
+        <StatCard
+          label="Assets"
+          value={assetCount || '--'}
+          isLoading={isLoading}
+          subtext="Configured"
         />
 
         {isConnected && (

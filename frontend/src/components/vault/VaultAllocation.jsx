@@ -2,22 +2,53 @@ import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Skeleton } from '../ui/skeleton';
 
+// Default colors for known assets, with dynamic fallback for new assets
 const ASSET_COLORS = {
   BTC: '#F7931A',
-  Gold: '#FFD700',
-  USDC: '#2775CA',
+  GOLD: '#FFD700',
+  STABLE: '#2775CA',
   ROSE: '#D4AF8C',
 };
 
-const VaultAllocation = ({ breakdown, isLoading }) => {
+// Generate a color from asset key hash for unknown assets
+function generateAssetColor(key) {
+  if (ASSET_COLORS[key]) return ASSET_COLORS[key];
+
+  // Simple hash to generate consistent color
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash % 360);
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+const VaultAllocation = ({ breakdown, isLoading, needsRebalance }) => {
+  // Use dynamic assets if available, fall back to legacy structure
   const chartData = useMemo(() => {
     if (!breakdown) return [];
 
+    // Check if we have the new dynamic assets array
+    if (breakdown.assets && breakdown.assets.length > 0) {
+      return breakdown.assets
+        .map(asset => ({
+          key: asset.key,
+          name: asset.displayName,
+          value: asset.value,
+          percentage: asset.percentage,
+          targetPercentage: asset.targetPercentage,
+          driftBps: asset.driftBps,
+          color: generateAssetColor(asset.key),
+        }))
+        .filter(item => item.value > 0);
+    }
+
+    // Fallback to legacy structure
     return [
-      { name: 'BTC', value: breakdown.btc.value, percentage: breakdown.btc.percentage },
-      { name: 'Gold', value: breakdown.gold.value, percentage: breakdown.gold.percentage },
-      { name: 'USDC', value: breakdown.usdc.value, percentage: breakdown.usdc.percentage },
-      { name: 'ROSE', value: breakdown.rose.value, percentage: breakdown.rose.percentage },
+      { key: 'BTC', name: 'BTC', value: breakdown.btc.value, percentage: breakdown.btc.percentage, color: ASSET_COLORS.BTC },
+      { key: 'GOLD', name: 'Gold', value: breakdown.gold.value, percentage: breakdown.gold.percentage, color: ASSET_COLORS.GOLD },
+      { key: 'STABLE', name: 'USDC', value: breakdown.usdc.value, percentage: breakdown.usdc.percentage, color: ASSET_COLORS.STABLE },
+      { key: 'ROSE', name: 'ROSE', value: breakdown.rose.value, percentage: breakdown.rose.percentage, color: ASSET_COLORS.ROSE },
     ].filter(item => item.value > 0);
   }, [breakdown]);
 
@@ -42,37 +73,75 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
             boxShadow: 'var(--shadow-card)'
           }}
         >
-          <p className="font-semibold mb-1" style={{ color: ASSET_COLORS[data.name] }}>{data.name}</p>
+          <p className="font-semibold mb-1" style={{ color: data.color }}>{data.name}</p>
           <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{formatUSD(data.value)}</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{data.percentage.toFixed(1)}%</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {data.percentage.toFixed(1)}%
+            {data.targetPercentage !== undefined && (
+              <span className="ml-2">
+                (Target: {data.targetPercentage.toFixed(1)}%)
+              </span>
+            )}
+          </p>
         </div>
       );
     }
     return null;
   };
 
-  const renderLegend = () => (
-    <div className="grid grid-cols-2 gap-4 mt-4">
-      {chartData.map((entry) => (
-        <div
-          key={entry.name}
-          className="flex items-center gap-3 p-3 rounded-xl"
-          style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)' }}
-        >
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: ASSET_COLORS[entry.name] }}
-          />
-          <div className="flex-1">
-            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{entry.name}</p>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {entry.percentage.toFixed(1)}% ({formatUSD(entry.value)})
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  const renderLegend = () => {
+    // Dynamically calculate grid columns based on asset count
+    const gridCols = chartData.length <= 4 ? 'grid-cols-2' : 'grid-cols-3';
+
+    return (
+      <div className={`grid ${gridCols} gap-4 mt-4`}>
+        {chartData.map((entry) => {
+          const isOverTarget = entry.targetPercentage !== undefined &&
+            entry.percentage > entry.targetPercentage + 0.5;
+          const isUnderTarget = entry.targetPercentage !== undefined &&
+            entry.percentage < entry.targetPercentage - 0.5;
+
+          return (
+            <div
+              key={entry.key}
+              className="flex items-center gap-3 p-3 rounded-xl"
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: entry.driftBps > 500 ? '1px solid rgba(255, 165, 0, 0.4)' : '1px solid var(--border-subtle)'
+              }}
+            >
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                  {entry.name}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {entry.percentage.toFixed(1)}%
+                  {entry.targetPercentage !== undefined && (
+                    <span
+                      className="ml-1"
+                      style={{
+                        color: isOverTarget ? '#ffa500' : isUnderTarget ? '#87CEEB' : 'var(--text-muted)'
+                      }}
+                    >
+                      ({isOverTarget ? '+' : isUnderTarget ? '-' : ''}
+                      {Math.abs(entry.percentage - entry.targetPercentage).toFixed(1)}%)
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {formatUSD(entry.value)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -130,9 +199,23 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
         boxShadow: 'var(--shadow-card)'
       }}
     >
-      <h2 className="font-display text-xl font-medium mb-5" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-        Vault Allocation
-      </h2>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="font-display text-xl font-medium" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+          Vault Allocation
+        </h2>
+        {needsRebalance && (
+          <span
+            className="text-xs px-2 py-1 rounded-full"
+            style={{
+              background: 'rgba(255, 165, 0, 0.15)',
+              color: '#ffa500',
+              border: '1px solid rgba(255, 165, 0, 0.3)'
+            }}
+          >
+            Rebalance Needed
+          </span>
+        )}
+      </div>
 
       <div className="flex flex-col md:flex-row items-center gap-6">
         <div className="w-48 h-48">
@@ -149,8 +232,8 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
               >
                 {chartData.map((entry) => (
                   <Cell
-                    key={`cell-${entry.name}`}
-                    fill={ASSET_COLORS[entry.name]}
+                    key={`cell-${entry.key}`}
+                    fill={entry.color}
                     stroke="none"
                   />
                 ))}
@@ -168,7 +251,12 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
             style={{ borderTop: '1px solid var(--border-subtle)' }}
           >
             <div className="flex justify-between items-center">
-              <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Total Vault Value</p>
+              <div>
+                <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Total Vault Value</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {chartData.length} assets
+                </p>
+              </div>
               <p className="font-display text-xl font-semibold" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
                 {formatUSD(breakdown.total)}
               </p>

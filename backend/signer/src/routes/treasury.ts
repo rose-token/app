@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
 import navService from '../services/nav';
+import {
+  getVaultStatus,
+  checkRebalanceNeeded,
+  getLastRebalanceInfo,
+  executeRebalance,
+} from '../services/treasury';
 
 const router = Router();
 
@@ -90,6 +96,98 @@ router.get('/stats', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Treasury API] Error fetching stats:', error);
     return res.status(500).json({ error: 'Failed to fetch NAV stats' });
+  }
+});
+
+// ============ Phase 4: Rebalance Endpoints ============
+
+/**
+ * GET /api/treasury/vault-status
+ * Get current vault status including all asset breakdowns
+ */
+router.get('/vault-status', async (req: Request, res: Response) => {
+  try {
+    const status = await getVaultStatus();
+    return res.json(status);
+  } catch (error) {
+    console.error('[Treasury API] Error fetching vault status:', error);
+    return res.status(500).json({ error: 'Failed to fetch vault status' });
+  }
+});
+
+/**
+ * GET /api/treasury/rebalance/status
+ * Check if rebalance is needed and get planned swaps
+ */
+router.get('/rebalance/status', async (req: Request, res: Response) => {
+  try {
+    const [rebalanceCheck, lastInfo] = await Promise.all([
+      checkRebalanceNeeded(),
+      getLastRebalanceInfo(),
+    ]);
+
+    return res.json({
+      needed: rebalanceCheck.needed,
+      lastRebalanceTime: lastInfo.lastRebalanceTime,
+      timeUntilNext: lastInfo.timeUntilNext,
+      canRebalance: lastInfo.canRebalance,
+      assets: rebalanceCheck.assets.map((a) => ({
+        key: a.key,
+        token: a.token,
+        balance: a.balance.toString(),
+        valueUSD: a.valueUSD.toString(),
+        targetBps: a.targetBps,
+        actualBps: a.actualBps,
+        active: a.active,
+      })),
+      plannedSwaps: rebalanceCheck.swapsPlanned.map((s) => ({
+        fromAsset: s.fromAsset,
+        toAsset: s.toAsset,
+        amountIn: s.amountIn.toString(),
+        estimatedOut: s.estimatedOut.toString(),
+      })),
+    });
+  } catch (error) {
+    console.error('[Treasury API] Error checking rebalance status:', error);
+    return res.status(500).json({ error: 'Failed to check rebalance status' });
+  }
+});
+
+/**
+ * GET /api/treasury/rebalance/last
+ * Get info about the last rebalance
+ */
+router.get('/rebalance/last', async (req: Request, res: Response) => {
+  try {
+    const lastInfo = await getLastRebalanceInfo();
+    return res.json(lastInfo);
+  } catch (error) {
+    console.error('[Treasury API] Error fetching last rebalance:', error);
+    return res.status(500).json({ error: 'Failed to fetch last rebalance info' });
+  }
+});
+
+/**
+ * POST /api/treasury/rebalance/run
+ * Manually trigger a rebalance (admin only in production)
+ * Note: In production, this should be protected by auth
+ */
+router.post('/rebalance/run', async (req: Request, res: Response) => {
+  try {
+    console.log('[Treasury API] Manual rebalance triggered');
+    const result = await executeRebalance();
+    return res.json({
+      success: true,
+      txHash: result.txHash,
+      swapsExecuted: result.swapsExecuted,
+      swapDetails: result.swapDetails,
+      totalHardAssets: result.totalHardAssets,
+      rebalanceNeeded: result.rebalanceNeeded,
+    });
+  } catch (error) {
+    console.error('[Treasury API] Error executing rebalance:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: 'Failed to execute rebalance', message });
   }
 });
 
