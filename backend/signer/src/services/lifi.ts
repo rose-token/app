@@ -8,6 +8,115 @@ const LIFI_API_BASE = 'https://li.quest/v1';
 const ARBITRUM_CHAIN_ID = 42161;
 const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 
+/**
+ * Check if running on testnet (Sepolia)
+ * LiFi API only supports mainnet chains
+ */
+export function isTestnet(): boolean {
+  const rpcUrl = config.rpc.url.toLowerCase();
+  return rpcUrl.includes('sepolia') || rpcUrl.includes('testnet');
+}
+
+/**
+ * Generate mock swap calldata for MockLiFiDiamond on testnet
+ * The mock uses swapSimple(address,address,uint256,uint256,address)
+ */
+function generateMockSwapData(
+  fromToken: string,
+  toToken: string,
+  amountIn: bigint,
+  minAmountOut: bigint,
+  recipient: string
+): string {
+  const iface = new ethers.Interface([
+    'function swapSimple(address fromToken, address toToken, uint256 amountIn, uint256 minAmountOut, address recipient)'
+  ]);
+  return iface.encodeFunctionData('swapSimple', [
+    fromToken, toToken, amountIn, minAmountOut, recipient
+  ]);
+}
+
+// Asset keys as bytes32
+const BTC_KEY = ethers.encodeBytes32String('BTC');
+const GOLD_KEY = ethers.encodeBytes32String('GOLD');
+const STABLE_KEY = ethers.encodeBytes32String('STABLE');
+
+// Treasury ABI for price lookups
+const PRICE_LOOKUP_ABI = [
+  'function getAssetPrice(bytes32 key) external view returns (uint256)',
+  'function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)',
+];
+
+// Token decimals for mock calculations
+const ASSET_DECIMALS: Record<string, number> = {
+  'BTC': 8,    // TBTC uses 8 decimals
+  'GOLD': 6,   // XAUt uses 6 decimals
+  'STABLE': 6, // USDC uses 6 decimals
+};
+
+/**
+ * Map token address to asset key by looking up treasury assets
+ */
+async function getAssetKeyForToken(tokenAddress: string, treasuryAddress: string): Promise<string | null> {
+  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const treasury = new ethers.Contract(treasuryAddress, PRICE_LOOKUP_ABI, provider);
+
+  // Check each asset key
+  for (const key of ['BTC', 'GOLD', 'STABLE']) {
+    try {
+      const keyBytes = ethers.encodeBytes32String(key);
+      const asset = await treasury.assets(keyBytes);
+      if (asset.token.toLowerCase() === tokenAddress.toLowerCase()) {
+        return key;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Calculate realistic swap output using mock Chainlink prices
+ * Prices are in 8 decimals (Chainlink standard)
+ */
+async function calculateMockSwapOutput(
+  fromToken: string,
+  toToken: string,
+  amountIn: bigint,
+  treasuryAddress: string
+): Promise<bigint> {
+  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const treasury = new ethers.Contract(treasuryAddress, PRICE_LOOKUP_ABI, provider);
+
+  // Identify asset keys
+  const fromKey = await getAssetKeyForToken(fromToken, treasuryAddress);
+  const toKey = await getAssetKeyForToken(toToken, treasuryAddress);
+
+  if (!fromKey || !toKey) {
+    console.warn(`[LiFi] Could not identify asset keys for ${fromToken} -> ${toToken}, using 1:1`);
+    return amountIn;
+  }
+
+  // Get prices (STABLE = $1 = 1e8 in Chainlink decimals)
+  const fromPrice = fromKey === 'STABLE' ? BigInt(1e8) : await treasury.getAssetPrice(ethers.encodeBytes32String(fromKey));
+  const toPrice = toKey === 'STABLE' ? BigInt(1e8) : await treasury.getAssetPrice(ethers.encodeBytes32String(toKey));
+
+  const fromDecimals = ASSET_DECIMALS[fromKey] || 18;
+  const toDecimals = ASSET_DECIMALS[toKey] || 18;
+
+  // Calculate: valueUSD = amountIn * fromPrice / 10^(fromDecimals + 8)
+  // outputAmount = valueUSD * 10^(toDecimals + 8) / toPrice
+  // Simplified: outputAmount = amountIn * fromPrice * 10^toDecimals / (10^fromDecimals * toPrice)
+
+  const output = (amountIn * fromPrice * BigInt(10 ** toDecimals)) / (BigInt(10 ** fromDecimals) * toPrice);
+
+  console.log(`[LiFi] Mock price calc: ${fromKey}(${fromPrice.toString()}) -> ${toKey}(${toPrice.toString()})`);
+  console.log(`[LiFi] Input: ${amountIn.toString()} (${fromDecimals} dec) -> Output: ${output.toString()} (${toDecimals} dec)`);
+
+  return output;
+}
+
 interface LiFiQuoteParams {
   fromChain: number;
   toChain: number;
@@ -51,7 +160,7 @@ function getChainId(): number {
 }
 
 /**
- * Get a swap quote from LiFi API
+ * Get a swap quote from LiFi API (mainnet) or generate mock data (testnet)
  */
 export async function getSwapQuote(
   fromToken: string,
@@ -65,6 +174,42 @@ export async function getSwapQuote(
   estimatedAmountOut: bigint;
   gasCost: bigint;
 }> {
+  // On testnet, generate mock calldata for MockLiFiDiamond
+  // LiFi API only supports mainnet chains
+  if (isTestnet()) {
+    console.log(`[LiFi] Testnet detected - generating mock swap data with oracle prices`);
+
+    // Calculate realistic output using mock Chainlink prices
+    const estimatedAmountOut = await calculateMockSwapOutput(
+      fromToken,
+      toToken,
+      amountIn,
+      treasuryAddress
+    );
+
+    // Apply slippage to minAmountOut
+    const minAmountOut = (estimatedAmountOut * BigInt(10000 - slippageBps)) / 10000n;
+
+    const lifiData = generateMockSwapData(
+      fromToken,
+      toToken,
+      amountIn,
+      minAmountOut,
+      treasuryAddress
+    );
+
+    console.log(`[LiFi] Mock swap: ${fromToken} -> ${toToken}`);
+    console.log(`[LiFi] Amount in: ${amountIn.toString()}, Expected out: ${estimatedAmountOut.toString()}, Min out: ${minAmountOut.toString()}`);
+
+    return {
+      lifiData,
+      minAmountOut,
+      estimatedAmountOut,
+      gasCost: 0n,
+    };
+  }
+
+  // Mainnet: call LiFi API
   const chainId = getChainId();
 
   const params: LiFiQuoteParams = {
