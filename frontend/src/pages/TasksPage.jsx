@@ -15,10 +15,12 @@ import { GAS_SETTINGS } from '../constants/gas';
 // Import ABIs directly
 import RoseMarketplaceABI from '../contracts/RoseMarketplaceABI.json';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
+import vROSEABI from '../contracts/vROSEABI.json';
 
 // Contract addresses from environment
 const MARKETPLACE_ADDRESS = import.meta.env.VITE_MARKETPLACE_ADDRESS;
 const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS;
+const VROSE_ADDRESS = import.meta.env.VITE_VROSE_ADDRESS;
 
 const TasksPage = () => {
   const [tasks, setTasks] = useState([]);
@@ -520,39 +522,48 @@ const TasksPage = () => {
       const depositAmount = taskDepositBigInt / 10n;
       console.log("💰 Staking as stakeholder for task:", taskId, "with deposit:", depositAmount.toString());
 
-      // Check user's ROSE token balance (explicit BigInt handling)
-      const userBalanceBigInt = userBalance ? BigInt(userBalance.toString()) : 0n;
-      console.log("👛 User balance:", userBalanceBigInt.toString(), "ROSE");
+      // Check user's vROSE token balance (stakeholder staking requires vROSE)
+      const vRoseBalance = await publicClient.readContract({
+        address: VROSE_ADDRESS,
+        abi: vROSEABI,
+        functionName: 'balanceOf',
+        args: [account]
+      });
+      const vRoseBalanceBigInt = BigInt(vRoseBalance);
+      console.log("👛 User vROSE balance:", vRoseBalanceBigInt.toString(), "vROSE");
 
-      if (userBalanceBigInt < depositAmount) {
-        const shortfall = depositAmount - userBalanceBigInt;
-        const shortfallInRose = Number(formatUnits(shortfall, 18));
+      if (vRoseBalanceBigInt < depositAmount) {
+        const shortfall = depositAmount - vRoseBalanceBigInt;
+        const shortfallInVRose = Number(formatUnits(shortfall, 18));
         setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
-        setError(`Insufficient ROSE tokens. You need ${shortfallInRose.toFixed(2)} more ROSE tokens to stake.`);
+        setError(`Insufficient vROSE tokens. You need ${shortfallInVRose.toFixed(2)} more vROSE. Deposit ROSE to governance first to receive vROSE.`);
         return;
       }
 
-      // Step 1: Approve token transfer
-      console.log("⛽ Approving token transfer with hardcoded 2 gwei gas...");
+      // Step 1: Approve vROSE token transfer to marketplace
+      console.log("⛽ Approving vROSE transfer with hardcoded 2 gwei gas...");
       console.log('💡 Please confirm the approval transaction in MetaMask');
       const approveHash = await writeContractAsync({
-        address: TOKEN_ADDRESS,
-        abi: RoseTokenABI,
+        address: VROSE_ADDRESS,
+        abi: vROSEABI,
         functionName: 'approve',
         args: [MARKETPLACE_ADDRESS, depositAmount],
         ...GAS_SETTINGS,
       });
-      console.log("✅ Token approval transaction sent:", approveHash);
+      console.log("✅ vROSE approval transaction sent:", approveHash);
       console.log('⏳ Waiting for approval confirmation...');
 
-      // Wait for approval confirmation
-      await publicClient.waitForTransactionReceipt({
+      // Wait for approval confirmation and check status
+      const approveReceipt = await publicClient.waitForTransactionReceipt({
         hash: approveHash,
         confirmations: 1
       });
+      if (approveReceipt.status !== 'success') {
+        throw new Error('vROSE approval transaction failed');
+      }
       await new Promise(r => setTimeout(r, 1000))
 
-      console.log('✅ Token approval confirmed on blockchain!');
+      console.log('✅ vROSE approval confirmed on blockchain!');
 
       // Step 2: Get passport signature
       console.log('🔐 Requesting passport signature...');
@@ -573,11 +584,15 @@ const TasksPage = () => {
       console.log("✅ Stake transaction sent:", stakeHash);
       console.log('⏳ Waiting for stake confirmation...');
 
-      // Wait for stake confirmation
-      await publicClient.waitForTransactionReceipt({
+      // Wait for stake confirmation and check status
+      const stakeReceipt = await publicClient.waitForTransactionReceipt({
         hash: stakeHash,
         confirmations: 1
       });
+
+      if (stakeReceipt.status !== 'success') {
+        throw new Error('Stake transaction reverted on-chain');
+      }
 
       console.log('🎉 Staked successfully and confirmed on blockchain!');
       setLoadingStates(prev => ({ ...prev, stake: { ...prev.stake, [taskId]: false } }));
@@ -591,8 +606,14 @@ const TasksPage = () => {
 
       if (err.message.includes('Not eligible stakeholder')) {
         errorMessage = 'You are not eligible to be a stakeholder. There may be a role conflict or insufficient tokens.';
+      } else if (err.message.includes('InsufficientVRose') || err.message.includes('Insufficient vROSE')) {
+        errorMessage = 'Insufficient vROSE tokens. Deposit ROSE to governance first to receive vROSE.';
+      } else if (err.message.includes('vROSE approval transaction failed')) {
+        errorMessage = 'vROSE approval failed. Make sure the marketplace is allowed to receive vROSE transfers.';
+      } else if (err.message.includes('Stake transaction reverted')) {
+        errorMessage = 'Stake transaction failed on-chain. The task may already have a stakeholder or there was a contract error.';
       } else if (err.message.includes('Insufficient tokens')) {
-        errorMessage = 'Insufficient ROSE tokens.';
+        errorMessage = 'Insufficient vROSE tokens.';
       } else if (err.message.includes('Role conflict')) {
         errorMessage = 'Role conflict detected. You cannot be a stakeholder for this task (you may be the customer or worker).';
       } else if (err.message.includes('Customer cannot be stakeholder')) {
