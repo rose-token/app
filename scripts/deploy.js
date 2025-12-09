@@ -144,8 +144,10 @@ async function main() {
     //
     // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
     await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.tbtc, 1666666666666666n)).wait();
-    // Gold @ $2,000: (1e6 / 2000) * 1e18 / 1e6 = 5e11 (XAUt has 6 decimals)
-    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.xaut, 500000000000n)).wait();
+    // Gold @ $2,000: rate = outputUnits * 1e18 / inputUnits
+    // $1 USDC = 0.0005 oz XAUt = 500 XAUt units
+    // rate = 500 * 1e18 / 1e6 = 5e14
+    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.xaut, 500000000000000n)).wait();
     console.log("Forward exchange rates (USDC → Asset) configured ✓");
 
     // Reverse rates: Asset -> USDC (for redemption liquidation)
