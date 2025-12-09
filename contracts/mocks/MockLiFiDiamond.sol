@@ -5,6 +5,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
+ * @dev Minimal interface for Treasury price queries
+ */
+interface ITreasury {
+    function getAssetPrice(bytes32 key) external view returns (uint256);
+}
+
+/**
  * @title MockLiFiDiamond
  * @dev Mock LiFi Diamond for testing. Simulates cross-chain/DEX aggregator swaps.
  *
@@ -25,6 +32,12 @@ contract MockLiFiDiamond {
 
     // Token decimals for conversion
     mapping(address => uint8) public tokenDecimals;
+
+    // Treasury reference for dynamic pricing (optional, can be zero)
+    address public treasury;
+
+    // Token address => Asset key mapping (for Treasury.getAssetPrice())
+    mapping(address => bytes32) public tokenAssetKeys;
 
     // Track swaps for test assertions
     struct SwapRecord {
@@ -76,6 +89,23 @@ contract MockLiFiDiamond {
      */
     function setTokenDecimals(address token, uint8 decimals) external {
         tokenDecimals[token] = decimals;
+    }
+
+    /**
+     * @dev Set treasury address for dynamic pricing (optional)
+     * @param _treasury Treasury contract address
+     */
+    function setTreasury(address _treasury) external {
+        treasury = _treasury;
+    }
+
+    /**
+     * @dev Set token to asset key mapping for Treasury price lookups
+     * @param token Token address
+     * @param key Asset key in Treasury (e.g., bytes32("ROSE"), bytes32("STABLE"))
+     */
+    function setTokenAssetKey(address token, bytes32 key) external {
+        tokenAssetKeys[token] = key;
     }
 
     /**
@@ -177,12 +207,40 @@ contract MockLiFiDiamond {
 
     /**
      * @dev Calculate output amount based on exchange rate and decimals
+     * Priority: 1) Treasury dynamic pricing, 2) Static exchange rates, 3) 1:1 fallback
      */
     function _calculateAmountOut(
         address fromToken,
         address toToken,
         uint256 amountIn
     ) internal view returns (uint256) {
+        // Try dynamic pricing via Treasury first
+        if (treasury != address(0)) {
+            bytes32 fromKey = tokenAssetKeys[fromToken];
+            bytes32 toKey = tokenAssetKeys[toToken];
+
+            if (fromKey != bytes32(0) && toKey != bytes32(0)) {
+                // Query Treasury for prices (8 decimals, Chainlink format)
+                uint256 fromPrice = ITreasury(treasury).getAssetPrice(fromKey);
+                uint256 toPrice = ITreasury(treasury).getAssetPrice(toKey);
+
+                if (fromPrice > 0 && toPrice > 0) {
+                    // Get decimals
+                    uint8 decimalsIn = tokenDecimals[fromToken];
+                    uint8 decimalsOut = tokenDecimals[toToken];
+                    if (decimalsIn == 0) decimalsIn = 18;
+                    if (decimalsOut == 0) decimalsOut = 18;
+
+                    // Calculate: amountOut = amountIn * fromPrice / toPrice (adjusted for decimals)
+                    // valueInUSD = amountIn * fromPrice / 10^decimalsIn (result in 8 decimals)
+                    // amountOut = valueInUSD * 10^decimalsOut / toPrice
+                    uint256 valueIn8Dec = (amountIn * fromPrice) / (10 ** decimalsIn);
+                    return (valueIn8Dec * (10 ** decimalsOut)) / toPrice;
+                }
+            }
+        }
+
+        // Fallback to static exchange rates
         uint256 rate = exchangeRates[fromToken][toToken];
 
         if (rate == 0) {

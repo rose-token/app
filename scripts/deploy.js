@@ -274,6 +274,25 @@ async function main() {
   const validAllocations = await roseTreasury.validateAllocations();
   console.log("  Allocations valid:", validAllocations ? "✓" : "✗");
 
+  // ============ Step 2.5: Configure MockLiFi with Treasury (Testnet) ============
+  if (isTestnet && addresses.mockLiFi) {
+    console.log("\n--- Step 2.5: Configuring MockLiFi with Treasury for Dynamic Pricing ---");
+    const mockLiFi = addresses.mockLiFi;
+
+    // Set treasury address for dynamic pricing
+    await (await mockLiFi.setTreasury(treasuryAddress)).wait();
+    console.log("  Treasury address set ✓");
+
+    // Set token → asset key mappings
+    await (await mockLiFi.setTokenAssetKey(addresses.tbtc, btcKey)).wait();
+    await (await mockLiFi.setTokenAssetKey(addresses.xaut, goldKey)).wait();
+    await (await mockLiFi.setTokenAssetKey(addresses.usdc, stableKey)).wait();
+    await (await mockLiFi.setTokenAssetKey(roseTokenAddress, roseKey)).wait();
+    console.log("  Token asset key mappings set (BTC, GOLD, STABLE, ROSE) ✓");
+
+    console.log("MockLiFi configured with Treasury for dynamic pricing ✓");
+  }
+
   // ============ Step 3: Deploy RoseMarketplace ============
   console.log("\n--- Step 3: Deploying RoseMarketplace ---");
 
