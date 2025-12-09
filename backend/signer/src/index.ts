@@ -12,6 +12,7 @@ import treasuryRoutes from './routes/treasury';
 import reconciliationRoutes from './routes/reconciliation';
 import delegateScoringRoutes from './routes/delegateScoring';
 import vpRefreshRoutes from './routes/vpRefresh';
+import auctionRoutes from './routes/auction';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -56,6 +57,7 @@ app.use('/api/treasury', treasuryRoutes);
 app.use('/api/reconciliation', reconciliationRoutes);
 app.use('/api/delegate-scoring', delegateScoringRoutes);
 app.use('/api/vp-refresh', vpRefreshRoutes);
+app.use('/api/auction', auctionRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

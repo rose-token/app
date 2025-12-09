@@ -59,6 +59,12 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     error InsufficientVRose();
     error ZeroAddress();
 
+    // Auction errors
+    error NotAuctionTask();
+    error IsAuctionTask();
+    error InvalidWinningBid();
+    error NotCustomer();
+
     // A simple enum to track task status
     enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
 
@@ -81,6 +87,8 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         bool stakeholderApproval;
         TaskSource source;         // Customer or DAO sourced
         uint256 proposalId;        // If DAO sourced, the proposal ID
+        bool isAuction;            // true = reverse auction mode (bids collected off-chain)
+        uint256 winningBid;        // Final price for auctions (0 until winner selected)
     }
     
 
@@ -108,6 +116,11 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event VRoseTokenUpdated(address indexed newVRoseToken);
     event ReputationContractUpdated(address indexed newReputation);
     event ReputationChanged(address indexed user, uint256 taskValue);
+
+    // Auction events
+    event AuctionTaskCreated(uint256 taskId, address indexed customer, uint256 maxBudget);
+    event AuctionWinnerSelected(uint256 taskId, address indexed worker, uint256 winningBid);
+    event SurplusRefunded(uint256 taskId, address indexed customer, uint256 amount);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -251,6 +264,46 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Create a new auction task with a max budget. Workers will submit bids off-chain,
+     * and the customer selects a winner. The deposit represents the maximum budget.
+     * @param _title Short public title of the task
+     * @param _maxBudget Maximum budget in ROSE tokens (deposited upfront)
+     * @param _detailedDescriptionHash IPFS hash containing detailed task description (mandatory)
+     * @param _expiry Signature expiry timestamp
+     * @param _signature Passport verification signature from backend
+     */
+    function createAuctionTask(
+        string calldata _title,
+        uint256 _maxBudget,
+        string calldata _detailedDescriptionHash,
+        uint256 _expiry,
+        bytes calldata _signature
+    ) external requiresPassport("createTask", _expiry, _signature) {
+        require(_maxBudget > 0, "Max budget must be greater than zero");
+        require(bytes(_title).length > 0, "Title cannot be empty");
+        require(bytes(_detailedDescriptionHash).length > 0, "Detailed description hash is required");
+
+        // Transfer tokens from customer to the contract using SafeERC20
+        roseToken.safeTransferFrom(msg.sender, address(this), _maxBudget);
+
+        taskCounter++;
+        Task storage newTask = tasks[taskCounter];
+        newTask.customer = msg.sender;
+        newTask.deposit = _maxBudget;
+        newTask.title = _title;
+        newTask.detailedDescriptionHash = _detailedDescriptionHash;
+        newTask.status = TaskStatus.StakeholderRequired;
+        newTask.customerApproval = false;
+        newTask.stakeholderApproval = false;
+        newTask.source = TaskSource.Customer;
+        newTask.proposalId = 0;
+        newTask.isAuction = true;
+        newTask.winningBid = 0;
+
+        emit AuctionTaskCreated(taskCounter, msg.sender, _maxBudget);
+    }
+
+    /**
      * @dev Create a DAO-sourced task from a passed governance proposal
      * Only callable by the governance contract
      * @param _proposer The address of the proposal creator (acts as customer)
@@ -327,6 +380,59 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Customer selects the winning bid for an auction task.
+     * - Assigns the worker and records the winning bid
+     * - Stakeholder keeps full 10% of max budget stake until task completion
+     * - Transitions task to InProgress
+     * @param _taskId ID of the auction task
+     * @param _worker Address of the winning bidder
+     * @param _winningBid The winning bid amount (must be <= deposit/maxBudget)
+     * @param _expiry Signature expiry timestamp
+     * @param _signature Backend signature authorizing winner selection
+     */
+    function selectAuctionWinner(
+        uint256 _taskId,
+        address _worker,
+        uint256 _winningBid,
+        uint256 _expiry,
+        bytes calldata _signature
+    ) external nonReentrant {
+        // Verify signature (backend validates bid was actually submitted)
+        if (block.timestamp > _expiry) revert SignatureExpired();
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            msg.sender,
+            "selectWinner",
+            _taskId,
+            _worker,
+            _winningBid,
+            _expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+        address recovered = ethSignedHash.recover(_signature);
+        if (recovered != passportSigner) revert InvalidSignature();
+
+        Task storage t = tasks[_taskId];
+
+        // Validations
+        if (t.customer != msg.sender) revert NotCustomer();
+        if (!t.isAuction) revert NotAuctionTask();
+        require(t.status == TaskStatus.Open, "Task must be Open");
+        require(_worker != address(0), "Worker cannot be zero address");
+        require(_worker != t.customer, "Customer cannot be worker");
+        require(_worker != t.stakeholder, "Stakeholder cannot be worker");
+        if (_winningBid == 0 || _winningBid > t.deposit) revert InvalidWinningBid();
+
+        // Update state - stakeholder keeps full 10% of max budget stake
+        t.worker = _worker;
+        t.winningBid = _winningBid;
+        t.status = TaskStatus.InProgress;
+
+        emit AuctionWinnerSelected(_taskId, _worker, _winningBid);
+    }
+
+    /**
      * @dev Cancel a task before a worker claims it. Refunds deposits to customer and returns stakeholder vROSE.
      * Can be called by either the customer or the stakeholder.
      * @param _taskId ID of the task to cancel
@@ -384,6 +490,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         bytes calldata _signature
     ) external requiresPassport("claim", _expiry, _signature) {
         Task storage t = tasks[_taskId];
+
+        // Auction tasks use selectAuctionWinner instead of claimTask
+        if (t.isAuction) revert IsAuctionTask();
+
         require(t.worker == address(0), "Task already claimed");
         require(t.customer != msg.sender, "Customer cannot claim their own task");
         require(t.stakeholder != msg.sender, "Stakeholder cannot claim task they are validating");
@@ -501,7 +611,14 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         emit TaskClosed(_taskId);
 
         if (_payout) {
-            uint256 taskValue = t.deposit;
+            // For auctions, use winningBid as task value; for fixed-price, use deposit
+            uint256 taskValue = t.isAuction ? t.winningBid : t.deposit;
+
+            // Calculate customer surplus for auctions (deposit - winningBid)
+            uint256 customerSurplus = 0;
+            if (t.isAuction && t.deposit > t.winningBid) {
+                customerSurplus = t.deposit - t.winningBid;
+            }
 
             // Mint 2% of task value to DAO treasury (this creates the 2% growth)
             // This goes directly to DAO, NOT to the distribution pot
@@ -509,7 +626,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             IRoseToken(address(roseToken)).mint(daoTreasury, mintAmount);
             emit TokensMinted(daoTreasury, mintAmount);
 
-            // Total pot = customer deposit ONLY (minted tokens already went to DAO)
+            // Total pot = task value (winningBid for auctions, deposit for fixed-price)
             uint256 totalPot = taskValue;
 
             // Calculate distributions from the pot
@@ -531,6 +648,12 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             // Transfer stakeholder fee in ROSE (from customer's deposit)
             roseToken.safeTransfer(t.stakeholder, stakeholderFee);
             emit StakeholderFeeEarned(_taskId, t.stakeholder, stakeholderFee);
+
+            // Refund surplus to customer for auction tasks
+            if (customerSurplus > 0) {
+                roseToken.safeTransfer(t.customer, customerSurplus);
+                emit SurplusRefunded(_taskId, t.customer, customerSurplus);
+            }
 
             // Update reputation directly in RoseReputation contract
             if (address(reputationContract) != address(0)) {

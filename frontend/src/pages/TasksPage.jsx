@@ -123,8 +123,9 @@ const TasksPage = () => {
         console.log(`🔍 Task ${index + 1} status value:`, task.status, 'Type:', typeof task.status);
 
         // Defensive parsing — works with both object (old) and tuple array (wagmi v2)
-        // Struct fields: customer, worker, stakeholder, deposit, stakeholderDeposit,
-        //                title, detailedDescriptionHash, prUrl, status, customerApproval, stakeholderApproval
+        // Struct fields (15 total): customer, worker, stakeholder, deposit, stakeholderDeposit,
+        //                title, detailedDescriptionHash, prUrl, status, customerApproval, stakeholderApproval,
+        //                source, proposalId, isAuction, winningBid
         const [
           customer,
           worker,
@@ -136,7 +137,11 @@ const TasksPage = () => {
           prUrl,
           statusRaw,
           customerApproval,
-          stakeholderApproval
+          stakeholderApproval,
+          source,
+          proposalId,
+          isAuction,
+          winningBidBig
         ] = Array.isArray(task) ? task : [
           task.customer,
           task.worker,
@@ -148,7 +153,11 @@ const TasksPage = () => {
           task.prUrl,
           task.status,
           task.customerApproval,
-          task.stakeholderApproval
+          task.stakeholderApproval,
+          task.source ?? 0,
+          task.proposalId ?? 0n,
+          task.isAuction ?? false,
+          task.winningBid ?? 0n
         ];
 
         return {
@@ -163,7 +172,11 @@ const TasksPage = () => {
           prUrl: prUrl || '',
           status: Number(statusRaw),          // ← critical — forces number for your enum
           customerApproval,
-          stakeholderApproval
+          stakeholderApproval,
+          source: Number(source ?? 0),
+          proposalId: proposalId?.toString() ?? '0',
+          isAuction: Boolean(isAuction),
+          winningBid: winningBidBig?.toString() ?? '0'
         };
       })
       .filter(task => task !== null);

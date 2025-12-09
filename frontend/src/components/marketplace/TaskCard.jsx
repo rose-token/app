@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
+import { formatUnits } from 'viem';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
 import { TaskStatus, getStatusText, getStatusColor } from '../../utils/taskStatus';
 import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 import ProfileBadge from '../profile/ProfileBadge';
+import BidSubmissionModal from './BidSubmissionModal';
+import BidSelectionModal from './BidSelectionModal';
+import { useAuction } from '../../hooks/useAuction';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -19,6 +23,15 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const [prUrl, setPrUrl] = useState('');
   const [prUrlError, setPrUrlError] = useState('');
 
+  // Bid modal state (for auction tasks)
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [showBidSelectionModal, setShowBidSelectionModal] = useState(false);
+  const [bidCount, setBidCount] = useState(0);
+  const [myBid, setMyBid] = useState(null);
+  const [isLoadingBid, setIsLoadingBid] = useState(false);
+
+  const { getBidCount, getMyBid } = useAuction();
+
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
 
   const formatTokens = (wei) => {
@@ -29,6 +42,41 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isWorker = account && task.worker && task.worker === account;
   const isStakeholder = account && task.stakeholder && task.stakeholder === account;
   const isParticipant = isCustomer || isWorker || isStakeholder;
+
+  // Auction-specific checks
+  const isAuction = task.isAuction || false;
+  const isOpenAuction = isAuction && task.status === TaskStatus.Open;
+
+  // Fetch bid count and my bid for auction tasks
+  const fetchBidInfo = useCallback(async () => {
+    if (!isAuction || !task.id) return;
+
+    setIsLoadingBid(true);
+    try {
+      // Fetch bid count (public)
+      const countData = await getBidCount(task.id);
+      setBidCount(countData.bidCount || 0);
+
+      // Fetch my bid if connected
+      if (account && !isCustomer && !isStakeholder) {
+        const myBidData = await getMyBid(task.id);
+        setMyBid(myBidData.hasBid ? myBidData.bid : null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch bid info:', err);
+    } finally {
+      setIsLoadingBid(false);
+    }
+  }, [isAuction, task.id, account, isCustomer, isStakeholder, getBidCount, getMyBid]);
+
+  useEffect(() => {
+    fetchBidInfo();
+  }, [fetchBidInfo]);
+
+  // Handle bid submission callback
+  const handleBidSubmitted = useCallback(() => {
+    fetchBidInfo();
+  }, [fetchBidInfo]);
 
   // Fetch detailed description from IPFS
   const loadDetailedDescription = async () => {
@@ -80,7 +128,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     onComplete(task.id, prUrl);
   };
 
-  const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker;
+  // Workers can claim fixed-price tasks, but must bid on auctions
+  const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker && !isAuction;
+  const canBid = !isCustomer && !isStakeholder && isOpenAuction && !isWorker;
+  // Customers can view bids on open auctions
+  const canViewBids = isCustomer && isOpenAuction;
   const canUnclaim = isWorker && task.status === TaskStatus.InProgress;
   const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
@@ -137,12 +189,27 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         <h3 className="font-display text-xl font-medium" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
           {task.description}
         </h3>
-        <span
-          className="px-3.5 py-1.5 rounded-full text-[0.6875rem] font-semibold uppercase tracking-wide"
-          style={getStatusBadgeStyle(task.status)}
-        >
-          {getStatusText(task.status)}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Bid count badge for auctions */}
+          {isAuction && task.status <= TaskStatus.Open && (
+            <span
+              className="px-3 py-1.5 rounded-full text-[0.6875rem] font-semibold"
+              style={{
+                background: 'var(--rose-pink-muted)',
+                border: '1px solid rgba(212, 165, 165, 0.3)',
+                color: 'var(--rose-pink-light)'
+              }}
+            >
+              {bidCount} {bidCount === 1 ? 'bid' : 'bids'}
+            </span>
+          )}
+          <span
+            className="px-3.5 py-1.5 rounded-full text-[0.6875rem] font-semibold uppercase tracking-wide"
+            style={getStatusBadgeStyle(task.status)}
+          >
+            {getStatusText(task.status, isAuction)}
+          </span>
+        </div>
       </div>
 
       {/* Detailed Description Section */}
@@ -219,7 +286,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </div>
         </div>
         <div>
-          <p style={labelStyle}>Deposit</p>
+          <p style={labelStyle}>{isAuction ? 'Max Budget' : 'Deposit'}</p>
           <p className="text-sm font-medium mt-1" style={{ color: 'var(--rose-gold)' }}>{formatTokens(task.deposit)} ROSE</p>
         </div>
         <div>
@@ -248,7 +315,36 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{formatTokens(task.stakeholderDeposit)} ROSE</p>
           </div>
         )}
+        {/* Show winning bid for auctions in progress or beyond */}
+        {isAuction && task.winningBid && task.winningBid !== '0' && (
+          <div>
+            <p style={labelStyle}>Winning Bid</p>
+            <p className="text-sm font-medium mt-1" style={{ color: 'var(--success)' }}>{formatTokens(task.winningBid)} ROSE</p>
+          </div>
+        )}
       </div>
+
+      {/* Show worker's current bid for open auctions */}
+      {isOpenAuction && myBid && (
+        <div
+          className="mb-5 p-4 rounded-xl"
+          style={{ background: 'var(--rose-pink-muted)', border: '1px solid rgba(212, 165, 165, 0.3)' }}
+        >
+          <div className="flex justify-between items-center">
+            <span className="text-sm" style={{ color: 'var(--rose-pink-light)' }}>
+              Your Current Bid
+            </span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--rose-pink-light)' }}>
+              {formatUnits(BigInt(myBid.bidAmount), 18)} ROSE
+            </span>
+          </div>
+          {myBid.message && (
+            <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+              "{myBid.message}"
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Display PR URL if task is completed or beyond */}
       {task.prUrl && task.status >= TaskStatus.Completed && (
@@ -332,6 +428,48 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             ) : (
               'Claim Task'
             )}
+          </button>
+        )}
+
+        {canBid && (
+          <button
+            onClick={() => setShowBidModal(true)}
+            disabled={isLoadingBid}
+            className={buttonBaseClass}
+            style={{
+              background: isLoadingBid ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--info) 0%, #3b82f6 100%)',
+              color: isLoadingBid ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isLoadingBid ? 'none' : '0 4px 16px rgba(96, 165, 250, 0.3)',
+              opacity: isLoadingBid ? 0.6 : 1
+            }}
+          >
+            {isLoadingBid ? (
+              <>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
+                Loading...
+              </>
+            ) : myBid ? (
+              'Update Bid'
+            ) : (
+              'Place Bid'
+            )}
+          </button>
+        )}
+
+        {canViewBids && (
+          <button
+            onClick={() => setShowBidSelectionModal(true)}
+            className={buttonBaseClass}
+            style={{
+              background: bidCount > 0
+                ? 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)'
+                : 'var(--bg-secondary)',
+              color: bidCount > 0 ? 'var(--bg-primary)' : 'var(--text-muted)',
+              boxShadow: bidCount > 0 ? '0 4px 16px rgba(212, 165, 165, 0.3)' : 'none',
+              opacity: bidCount > 0 ? 1 : 0.8
+            }}
+          >
+            View Bids ({bidCount})
           </button>
         )}
 
@@ -552,6 +690,25 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </div>
         </div>
       )}
+
+      {/* Bid Submission Modal for auctions */}
+      <BidSubmissionModal
+        isOpen={showBidModal}
+        onClose={() => setShowBidModal(false)}
+        taskId={task.id}
+        maxBudget={task.deposit?.toString()}
+        existingBid={myBid}
+        onBidSubmitted={handleBidSubmitted}
+      />
+
+      {/* Bid Selection Modal for customers to select winner */}
+      <BidSelectionModal
+        isOpen={showBidSelectionModal}
+        onClose={() => setShowBidSelectionModal(false)}
+        taskId={task.id}
+        maxBudget={task.deposit?.toString()}
+        onWinnerSelected={handleBidSubmitted}
+      />
     </div>
   );
 };

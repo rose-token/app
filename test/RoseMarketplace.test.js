@@ -874,4 +874,279 @@ describe("RoseMarketplace", function () {
       expect(await roseMarketplace.passportSigner()).to.equal(passportSigner.address);
     });
   });
+
+  describe("Auction Tasks", function () {
+    const taskTitle = "Build an auction feature";
+    const maxBudget = ethers.parseEther("1000"); // 1000 ROSE max budget
+
+    // Helper function to generate selectWinner signature
+    async function generateSelectWinnerSignature(customer, taskId, worker, winningBid, expiry) {
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["address", "string", "uint256", "address", "uint256", "uint256"],
+        [customer, "selectWinner", taskId, worker, winningBid, expiry]
+      );
+      return await passportSigner.signMessage(ethers.getBytes(messageHash));
+    }
+
+    describe("Auction Task Creation", function () {
+      it("Should allow customers to create auction tasks", async function () {
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), maxBudget);
+
+        const expiry = await getFutureExpiry();
+        const signature = await generatePassportSignature(customer.address, "createTask", expiry);
+
+        await expect(
+          roseMarketplace.connect(customer).createAuctionTask(taskTitle, maxBudget, ipfsHash, expiry, signature)
+        )
+          .to.emit(roseMarketplace, "AuctionTaskCreated")
+          .withArgs(1, customer.address, maxBudget);
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.customer).to.equal(customer.address);
+        expect(task.deposit).to.equal(maxBudget);
+        expect(task.isAuction).to.equal(true);
+        expect(task.winningBid).to.equal(0);
+        expect(task.status).to.equal(1); // TaskStatus.StakeholderRequired
+      });
+
+      it("Should revert auction task creation with zero budget", async function () {
+        const expiry = await getFutureExpiry();
+        const signature = await generatePassportSignature(customer.address, "createTask", expiry);
+
+        await expect(
+          roseMarketplace.connect(customer).createAuctionTask(taskTitle, 0, ipfsHash, expiry, signature)
+        ).to.be.revertedWith("Max budget must be greater than zero");
+      });
+    });
+
+    describe("Auction Winner Selection", function () {
+      beforeEach(async function () {
+        // Create auction task
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), maxBudget);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createAuctionTask(taskTitle, maxBudget, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes 10% of max budget (100 ROSE as vROSE)
+        const stakeholderDeposit = maxBudget / 10n; // 100 ROSE worth of vROSE
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+      });
+
+      it("Should allow customer to select auction winner", async function () {
+        const winningBid = ethers.parseEther("600"); // 600 ROSE winning bid
+        const expiry = await getFutureExpiry();
+        const signature = await generateSelectWinnerSignature(customer.address, 1, worker.address, winningBid, expiry);
+
+        // Stakeholder keeps full 10% of max budget stake (no refund at selection)
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        await expect(
+          roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, winningBid, expiry, signature)
+        )
+          .to.emit(roseMarketplace, "AuctionWinnerSelected")
+          .withArgs(1, worker.address, winningBid);
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.worker).to.equal(worker.address);
+        expect(task.winningBid).to.equal(winningBid);
+        expect(task.status).to.equal(2); // TaskStatus.InProgress
+        expect(task.stakeholderDeposit).to.equal(ethers.parseEther("100")); // Full 10% of max budget
+
+        // Verify stakeholder vROSE unchanged (no refund at selection)
+        const stakeholderVRoseAfter = await vRose.balanceOf(stakeholder.address);
+        expect(stakeholderVRoseAfter).to.equal(stakeholderVRoseBefore);
+      });
+
+      it("Should block claimTask for auction tasks", async function () {
+        const expiry = await getFutureExpiry();
+        const signature = await generatePassportSignature(worker.address, "claim", expiry);
+
+        await expect(
+          roseMarketplace.connect(worker).claimTask(1, expiry, signature)
+        ).to.be.revertedWithCustomError(roseMarketplace, "IsAuctionTask");
+      });
+
+      it("Should reject winner selection by non-customer", async function () {
+        const winningBid = ethers.parseEther("600");
+        const expiry = await getFutureExpiry();
+        const signature = await generateSelectWinnerSignature(worker.address, 1, worker.address, winningBid, expiry);
+
+        await expect(
+          roseMarketplace.connect(worker).selectAuctionWinner(1, worker.address, winningBid, expiry, signature)
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotCustomer");
+      });
+
+      it("Should reject winning bid greater than max budget", async function () {
+        const winningBid = ethers.parseEther("1500"); // More than 1000 max
+        const expiry = await getFutureExpiry();
+        const signature = await generateSelectWinnerSignature(customer.address, 1, worker.address, winningBid, expiry);
+
+        await expect(
+          roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, winningBid, expiry, signature)
+        ).to.be.revertedWithCustomError(roseMarketplace, "InvalidWinningBid");
+      });
+
+      it("Should reject zero winning bid", async function () {
+        const expiry = await getFutureExpiry();
+        const signature = await generateSelectWinnerSignature(customer.address, 1, worker.address, 0, expiry);
+
+        await expect(
+          roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, 0, expiry, signature)
+        ).to.be.revertedWithCustomError(roseMarketplace, "InvalidWinningBid");
+      });
+    });
+
+    describe("Auction Payment Flow", function () {
+      const winningBid = ethers.parseEther("600"); // 600 ROSE winning bid out of 1000 max
+
+      beforeEach(async function () {
+        // Create auction task
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), maxBudget);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createAuctionTask(taskTitle, maxBudget, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes 10% of max budget
+        const stakeholderDeposit = maxBudget / 10n;
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+        // Customer selects winner
+        const selectExpiry = await getFutureExpiry();
+        const selectSig = await generateSelectWinnerSignature(customer.address, 1, worker.address, winningBid, selectExpiry);
+        await roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, winningBid, selectExpiry, selectSig);
+
+        // Worker completes task
+        await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+
+        // Both approve
+        await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
+        await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+      });
+
+      it("Should distribute payment correctly based on winning bid and refund surplus", async function () {
+        const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+        const stakeholderRoseBalanceBefore = await roseToken.balanceOf(stakeholder.address);
+        const stakeholderVRoseBalanceBefore = await vRose.balanceOf(stakeholder.address);
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+        const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
+
+        // Calculate expected amounts based on 600 ROSE winning bid
+        const mintAmount = (winningBid * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR); // 12 ROSE
+        const workerAmount = (winningBid * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR); // 570 ROSE
+        const stakeholderFee = (winningBid * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR); // 30 ROSE
+        const stakeholderVRoseReturned = ethers.parseEther("100"); // Full 10% of max budget
+        const customerSurplus = maxBudget - winningBid; // 400 ROSE
+
+        await expect(roseMarketplace.connect(worker).acceptPayment(1))
+          .to.emit(roseMarketplace, "TaskClosed")
+          .and.to.emit(roseMarketplace, "PaymentReleased")
+          .withArgs(1, worker.address, workerAmount)
+          .and.to.emit(roseMarketplace, "SurplusRefunded")
+          .withArgs(1, customer.address, customerSurplus);
+
+        // Verify worker received 95% of winning bid (570 ROSE)
+        expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + workerAmount);
+
+        // Verify stakeholder received 5% fee of winning bid (30 ROSE)
+        expect(await roseToken.balanceOf(stakeholder.address)).to.equal(stakeholderRoseBalanceBefore + stakeholderFee);
+
+        // Verify stakeholder received full vROSE back (100 vROSE - 10% of max budget)
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBalanceBefore + stakeholderVRoseReturned);
+
+        // Verify customer received surplus (400 ROSE)
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore + customerSurplus);
+
+        // Verify DAO received 2% of winning bid (12 ROSE minted)
+        expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
+
+        // Task should be closed
+        const task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(4); // TaskStatus.Closed
+      });
+
+      it("Should emit StakeholderFeeEarned with correct amount based on winning bid", async function () {
+        const stakeholderFee = (winningBid * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR);
+
+        await expect(roseMarketplace.connect(worker).acceptPayment(1))
+          .to.emit(roseMarketplace, "StakeholderFeeEarned")
+          .withArgs(1, stakeholder.address, stakeholderFee);
+      });
+    });
+
+    describe("Auction Cancellation", function () {
+      it("Should return full max budget deposit on auction cancellation", async function () {
+        // Create auction task
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), maxBudget);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createAuctionTask(taskTitle, maxBudget, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes
+        const stakeholderDeposit = maxBudget / 10n;
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        // Cancel task
+        await expect(roseMarketplace.connect(customer).cancelTask(1))
+          .to.emit(roseMarketplace, "TaskCancelled")
+          .withArgs(1, customer.address, maxBudget, stakeholderDeposit);
+
+        // Verify customer got full deposit back
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore + maxBudget);
+
+        // Verify stakeholder got full vROSE back
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+      });
+    });
+
+    describe("Fixed-Price Task (Non-Auction)", function () {
+      it("Should set isAuction to false for regular createTask", async function () {
+        const taskDeposit = ethers.parseEther("100");
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+        const expiry = await getFutureExpiry();
+        const signature = await generatePassportSignature(customer.address, "createTask", expiry);
+        await roseMarketplace.connect(customer).createTask("Fixed price task", taskDeposit, ipfsHash, expiry, signature);
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.isAuction).to.equal(false);
+        expect(task.winningBid).to.equal(0);
+      });
+
+      it("Should allow claimTask for non-auction tasks", async function () {
+        const taskDeposit = ethers.parseEther("100");
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createTask("Fixed price task", taskDeposit, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes
+        const stakeholderDeposit = taskDeposit / 10n;
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+        // Worker should be able to claim
+        const claimExpiry = await getFutureExpiry();
+        const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+
+        await expect(roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig))
+          .to.emit(roseMarketplace, "TaskClaimed")
+          .withArgs(1, worker.address);
+      });
+    });
+  });
 });

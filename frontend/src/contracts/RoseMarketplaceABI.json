@@ -59,6 +59,26 @@
   },
   {
     "inputs": [],
+    "name": "InvalidWinningBid",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "IsAuctionTask",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotAuctionTask",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotCustomer",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotGovernance",
     "type": "error"
   },
@@ -119,6 +139,56 @@
     "inputs": [],
     "name": "ZeroAddressSigner",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "customer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maxBudget",
+        "type": "uint256"
+      }
+    ],
+    "name": "AuctionTaskCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "worker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "winningBid",
+        "type": "uint256"
+      }
+    ],
+    "name": "AuctionWinnerSelected",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -288,6 +358,31 @@
       }
     ],
     "name": "StakeholderStaked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "taskId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "customer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "SurplusRefunded",
     "type": "event"
   },
   {
@@ -616,6 +711,39 @@
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "_title",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_maxBudget",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_detailedDescriptionHash",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "createAuctionTask",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_proposer",
         "type": "address"
@@ -810,6 +938,39 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "_taskId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_worker",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_winningBid",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "selectAuctionWinner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_governance",
         "type": "address"
@@ -973,6 +1134,16 @@
       {
         "internalType": "uint256",
         "name": "proposalId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "isAuction",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "winningBid",
         "type": "uint256"
       }
     ],

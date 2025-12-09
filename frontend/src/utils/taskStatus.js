@@ -9,10 +9,16 @@ export const TaskStatus = {
   ApprovedPendingPayment: 5
 };
 
-export const getStatusText = (status) => {
+/**
+ * Get human-readable status text for a task.
+ * @param {number} status - Task status enum value
+ * @param {boolean} isAuction - Whether the task is an auction
+ * @returns {string} Status text
+ */
+export const getStatusText = (status, isAuction = false) => {
   switch (parseInt(status)) {
     case TaskStatus.Open:
-      return 'Open';
+      return isAuction ? 'Accepting Bids' : 'Open';
     case TaskStatus.StakeholderRequired:
       return 'Needs Stakeholder';
     case TaskStatus.InProgress:
