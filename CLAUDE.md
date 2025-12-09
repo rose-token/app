@@ -127,7 +127,7 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 
 **Architecture:** Contract is "dumb" (safety rails only), backend is "smart" (routing decisions).
 
-**Testnet Support:** LiFi API only supports mainnet chains. On Arbitrum Sepolia, the backend generates mock calldata for `MockLiFiDiamond.swapSimple()` instead of calling LiFi API. The mock does 1:1 swaps (adjusted for decimals), which is sufficient for testing. Detection via `isTestnet()` in `lifi.ts`.
+**Testnet Support:** LiFi API only supports mainnet chains. On Arbitrum Sepolia, the backend generates mock calldata for `MockLiFiDiamond.swapSimple()` instead of calling LiFi API. Swap amounts are calculated using mock Chainlink prices from the treasury contract (`getAssetPrice()`), so NAV remains realistic. Detection via `isTestnet()` in `lifi.ts`.
 
 **Key Changes:**
 - `executeSwap(fromAsset, toAsset, amountIn, minAmountOut, lifiData)` - Backend-driven swaps via LiFi Diamond
