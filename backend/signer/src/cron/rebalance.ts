@@ -37,6 +37,10 @@ function startRetryTask(): void {
       try {
         const result = await executeRebalance();
         console.log(`[Cron] Retry succeeded. TX: ${result.txHash}`);
+        console.log(`[Cron] Swaps executed: ${result.swapsExecuted}`);
+        if (result.swapDetails.length > 0) {
+          console.log(`[Cron] Swap details:`, result.swapDetails);
+        }
         stopRetryTask();
       } catch (error) {
         console.error(`[Cron] Retry ${retryAttempt} failed:`, error);
@@ -74,6 +78,11 @@ export function startRebalanceCron(): void {
       try {
         const result = await executeRebalance();
         console.log(`[Cron] Rebalance succeeded. TX: ${result.txHash}`);
+        console.log(`[Cron] Swaps executed: ${result.swapsExecuted}`);
+        console.log(`[Cron] Total hard assets: $${result.totalHardAssets}`);
+        if (result.swapDetails.length > 0) {
+          console.log(`[Cron] Swap details:`, result.swapDetails);
+        }
       } catch (error) {
         console.error('[Cron] Rebalance failed:', error);
         console.log('[Cron] Starting retry schedule...');

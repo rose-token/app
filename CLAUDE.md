@@ -152,6 +152,33 @@ mapping(bytes32 => Asset) public assets;  // e.g., encodeBytes32String("BTC") =>
 - `getAllAssets()` - Returns all registered assets
 - `setRebalancer(address)` - Set rebalancer wallet (usually same as signer)
 
+### Rebalance Automation (Phase 4)
+
+**Purpose:** Backend orchestrates multi-swap rebalances to keep vault allocations within 5% drift threshold.
+
+**Rebalance Strategy:**
+1. Calculate current vs target allocations for all hard assets (ROSE excluded)
+2. Identify over-allocated assets (>5% above target) and under-allocated (<5% below target)
+3. Sell over-allocated assets to USDC first (most liquid intermediate)
+4. Buy under-allocated assets with USDC proceeds
+5. Call `forceRebalance()` to update timestamp and emit event
+
+**Backend Functions (`treasury.ts`):**
+- `getAssetBreakdowns()` - Get all asset balances and USD values from contract
+- `getVaultStatus()` - Full vault status including rebalance need
+- `calculateRebalanceSwaps(assets)` - Calculate optimal swap sequence
+- `executeRebalance()` - Execute multi-swap rebalance via LiFi
+- `checkRebalanceNeeded()` - View-only check with planned swaps
+- `getLastRebalanceInfo()` - Last rebalance time and cooldown status
+
+**API Endpoints (Phase 4 Rebalance):**
+- `GET /api/treasury/vault-status` - Full vault status with asset breakdowns
+- `GET /api/treasury/rebalance/status` - Check if rebalance needed + planned swaps
+- `GET /api/treasury/rebalance/last` - Last rebalance info
+- `POST /api/treasury/rebalance/run` - Manually trigger rebalance (admin only in production)
+
+**Cron Schedule:** 1st of month at 00:00 UTC. Retries every 6 hours on failure, max 10 attempts.
+
 ## Security Patterns
 
 - **ReentrancyGuard:** All 5 core contracts (Marketplace, Treasury, Governance, Reputation, vROSE)
@@ -511,6 +538,10 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | /api/treasury/history | GET | NAV snapshots |
 | /api/treasury/rebalances | GET | Rebalance events |
 | /api/treasury/stats | GET | NAV statistics |
+| /api/treasury/vault-status | GET | Phase 4: Full vault status with asset breakdowns |
+| /api/treasury/rebalance/status | GET | Phase 4: Check if rebalance needed + planned swaps |
+| /api/treasury/rebalance/last | GET | Phase 4: Last rebalance info |
+| /api/treasury/rebalance/run | POST | Phase 4: Manually trigger rebalance |
 | /api/vp-refresh/stats | GET | Phase 4: VP refresh watcher statistics |
 | /api/vp-refresh/pending | GET | Phase 4: Users pending VP check |
 | /api/vp-refresh/config | GET | Phase 4: VP refresh configuration |
@@ -544,13 +575,13 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
 | nav.ts | fetchNavSnapshot, storeNavSnapshot, syncRebalanceEvents, getNavHistory, getNavStats |
-| treasury.ts | executeRebalance |
+| treasury.ts | executeRebalance, getAssetBreakdowns, getVaultStatus, calculateRebalanceSwaps, checkRebalanceNeeded, getLastRebalanceInfo (Phase 4 Treasury LiFi Rebalance) |
 
 ## Backend Scheduled Jobs
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| Rebalance | 1st of month 00:00 UTC | treasury.forceRebalance(), retry 6h on failure |
+| Rebalance | 1st of month 00:00 UTC | Multi-swap rebalance via LiFi: calculate drifted assets, execute swaps, call forceRebalance(), retry 6h on failure (Phase 4) |
 | NAV Snapshot | Daily 00:00 UTC | Capture prices/allocations, sync Rebalanced events |
 | Reconciliation | Every 6 hours | Compare DB allocations with on-chain, auto-sync discrepancies (Phase 2) |
 | Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records, auto-free delegated VP (Phase 3) |
