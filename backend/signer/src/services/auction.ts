@@ -9,6 +9,87 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
+
+// Marketplace ABI - minimal interface for reading task data
+const MARKETPLACE_ABI = [
+  'function tasks(uint256) external view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, uint8 status, string ipfsHash, bool isAuction, uint256 winningBid)',
+];
+
+// Task status enum (matches contract)
+enum TaskStatus {
+  None = 0,
+  StakeholderRequired = 1,
+  Open = 2,
+  InProgress = 3,
+  Completed = 4,
+  ApprovedPendingPayment = 5,
+  Closed = 6,
+}
+
+let provider: ethers.JsonRpcProvider | null = null;
+let marketplaceContract: ethers.Contract | null = null;
+
+function getProvider(): ethers.JsonRpcProvider {
+  if (!provider) {
+    provider = new ethers.JsonRpcProvider(config.rpc.url);
+  }
+  return provider;
+}
+
+function getMarketplaceContract(): ethers.Contract {
+  if (!marketplaceContract) {
+    if (!config.contracts.marketplace) {
+      throw new Error('MARKETPLACE_ADDRESS not configured');
+    }
+    marketplaceContract = new ethers.Contract(
+      config.contracts.marketplace,
+      MARKETPLACE_ABI,
+      getProvider()
+    );
+  }
+  return marketplaceContract;
+}
+
+/**
+ * Get task data from on-chain contract.
+ */
+async function getOnChainTask(taskId: number): Promise<{
+  customer: string;
+  worker: string;
+  stakeholder: string;
+  deposit: bigint;
+  stakeholderDeposit: bigint;
+  status: TaskStatus;
+  ipfsHash: string;
+  isAuction: boolean;
+  winningBid: bigint;
+} | null> {
+  try {
+    const contract = getMarketplaceContract();
+    const task = await contract.tasks(taskId);
+
+    // Check if task exists (customer address is zero for non-existent tasks)
+    if (task.customer === ethers.ZeroAddress) {
+      return null;
+    }
+
+    return {
+      customer: task.customer,
+      worker: task.worker,
+      stakeholder: task.stakeholder,
+      deposit: task.deposit,
+      stakeholderDeposit: task.stakeholderDeposit,
+      status: Number(task.status) as TaskStatus,
+      ipfsHash: task.ipfsHash,
+      isAuction: task.isAuction,
+      winningBid: task.winningBid,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch on-chain task ${taskId}:`, error);
+    return null;
+  }
+}
+
 import {
   AuctionTaskRow,
   AuctionBidRow,
@@ -358,6 +439,9 @@ export async function signWinnerSelection(
 /**
  * Conclude auction after on-chain winner selection confirms.
  * Called by frontend after selectAuctionWinner tx confirms.
+ *
+ * SECURITY: Verifies on-chain state before updating DB to prevent
+ * unauthorized updates from callers who haven't actually executed the tx.
  */
 export async function concludeAuction(
   taskId: number,
@@ -366,6 +450,34 @@ export async function concludeAuction(
 ): Promise<void> {
   if (!ethers.isAddress(winner)) {
     throw new Error('Invalid winner address');
+  }
+
+  // Verify on-chain state matches the request
+  const onChainTask = await getOnChainTask(taskId);
+
+  if (!onChainTask) {
+    throw new Error('Task not found on-chain');
+  }
+
+  if (!onChainTask.isAuction) {
+    throw new Error('Task is not an auction');
+  }
+
+  // Verify task is in InProgress status (winner has been selected on-chain)
+  if (onChainTask.status !== TaskStatus.InProgress) {
+    throw new Error('Auction winner not yet selected on-chain');
+  }
+
+  // Verify winner matches on-chain worker
+  if (onChainTask.worker.toLowerCase() !== winner.toLowerCase()) {
+    throw new Error('Winner does not match on-chain worker');
+  }
+
+  // Verify winning bid matches on-chain
+  const onChainBid = onChainTask.winningBid;
+  const requestedBid = BigInt(winningBid);
+  if (onChainBid !== requestedBid) {
+    throw new Error('Winning bid does not match on-chain value');
   }
 
   const pool = getPool();

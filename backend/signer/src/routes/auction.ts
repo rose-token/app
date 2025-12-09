@@ -370,7 +370,14 @@ router.post('/confirm-winner', async (req: Request, res: Response) => {
     console.error('Confirm winner error:', error);
 
     if (error instanceof Error) {
-      if (error.message.includes('Invalid')) {
+      // Return specific error messages for validation failures
+      if (
+        error.message.includes('Invalid') ||
+        error.message.includes('not found') ||
+        error.message.includes('not an auction') ||
+        error.message.includes('not yet selected') ||
+        error.message.includes('does not match')
+      ) {
         return res.status(400).json({
           error: error.message,
         } as AuctionErrorResponse);
