@@ -4,30 +4,30 @@
   "isTestnet": true,
   "deployer": "0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1",
   "contracts": {
-    "roseToken": "0xEb2840Cfc211C4114e214a1a1BB84572cb8E207F",
-    "vRose": "0xD74D512217a9e6625D305B83b0A1cA1164F2C4d0",
-    "roseTreasury": "0xE04857eE07b1b2Ea0ff9D6f9FcDBa6BdB8a0974b",
-    "roseMarketplace": "0x9EbcbA497FF19cFafdb65a55745f30CfEe60B339",
-    "roseReputation": "0xDdF19c5d0760f539e137FbC1983b5c21f91Dd9A4",
-    "roseGovernance": "0x5E218C3360Fb5eBE2906B1C22efadC762f79fB46"
+    "roseToken": "0x8D79B3D59eB7cD2E535687d53739ecc9E6447408",
+    "vRose": "0x2874d650b047668c091cdE242D0882e428F50131",
+    "roseTreasury": "0x5cf1492cEE525c88AB22481b493D1690d41DD9a5",
+    "roseMarketplace": "0xE7Df1a4693bbFEBb5a4ED3aF554da5CD61d6Ee2a",
+    "roseReputation": "0x9B5ba34627737D4aA5e730f34AFbfDBc60dE9F08",
+    "roseGovernance": "0xb3bA3766BA102d645C627C3c578FEF8C231cDA78"
   },
-  "tokenAddress": "0xEb2840Cfc211C4114e214a1a1BB84572cb8E207F",
-  "vRoseAddress": "0xD74D512217a9e6625D305B83b0A1cA1164F2C4d0",
-  "treasuryAddress": "0xE04857eE07b1b2Ea0ff9D6f9FcDBa6BdB8a0974b",
-  "marketplaceAddress": "0x9EbcbA497FF19cFafdb65a55745f30CfEe60B339",
-  "reputationAddress": "0xDdF19c5d0760f539e137FbC1983b5c21f91Dd9A4",
-  "governanceAddress": "0x5E218C3360Fb5eBE2906B1C22efadC762f79fB46",
+  "tokenAddress": "0x8D79B3D59eB7cD2E535687d53739ecc9E6447408",
+  "vRoseAddress": "0x2874d650b047668c091cdE242D0882e428F50131",
+  "treasuryAddress": "0x5cf1492cEE525c88AB22481b493D1690d41DD9a5",
+  "marketplaceAddress": "0xE7Df1a4693bbFEBb5a4ED3aF554da5CD61d6Ee2a",
+  "reputationAddress": "0x9B5ba34627737D4aA5e730f34AFbfDBc60dE9F08",
+  "governanceAddress": "0xb3bA3766BA102d645C627C3c578FEF8C231cDA78",
   "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
   "externalAddresses": {
-    "usdc": "0x030b94b3dE9A5009cfC2CA3fA742d193eE2a4693",
-    "tbtc": "0x397444F4961BC14d4dAb64F605be65f7c912702C",
-    "xaut": "0xc05cAdd5dEc2E41dEb470208b1502fe205191d20",
-    "btcUsdFeed": "0x5377c2b8f206634bF794376e2dB5420dB5BC7d72",
-    "xauUsdFeed": "0x2b612c05811B480d3Fab9FFdcFA0f70572Abf95c",
-    "lifiDiamond": "0x5B48B888bFC367A162e782667541Fa23D735b339",
-    "roseUsdFeed": "0x752D27150465AAf47793006dC2aF8cDE6Db06ECE",
+    "usdc": "0x037533FA7a5e960424815A4B96D3d52a9028140E",
+    "tbtc": "0x4778e3f52cd67B60b891f9d40cD78B7280c7cCE4",
+    "xaut": "0x9951E64e52bdbBa1a46190A3ed818B1c01dc3fED",
+    "btcUsdFeed": "0xE459563Fe1d9473DEc895013A7fe64dff7b1B664",
+    "xauUsdFeed": "0xf13EEa80a741e64f292B22c7ED3aB0C68E7c9AE8",
+    "lifiDiamond": "0x54F63E3F98b227cbA033ECb9283c33AcE458F1De",
+    "roseUsdFeed": "0x847fF591E61082e4888861fC9C951744661eD8BF",
     "mockLiFi": {
-      "target": "0x5B48B888bFC367A162e782667541Fa23D735b339",
+      "target": "0x54F63E3F98b227cbA033ECb9283c33AcE458F1De",
       "interface": {
         "fragments": [
           {
@@ -494,6 +494,33 @@
                 "arrayChildren": null
               },
               {
+                "name": "key",
+                "type": "bytes32",
+                "baseType": "bytes32",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "setTokenAssetKey",
+            "constant": false,
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "token",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              },
+              {
                 "name": "decimals",
                 "type": "uint8",
                 "baseType": "uint8",
@@ -503,6 +530,25 @@
               }
             ],
             "name": "setTokenDecimals",
+            "constant": false,
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "_treasury",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "name": "setTreasury",
             "constant": false,
             "outputs": [],
             "stateMutability": "nonpayable",
@@ -649,6 +695,34 @@
                 "arrayChildren": null
               }
             ],
+            "name": "tokenAssetKeys",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "bytes32",
+                "baseType": "bytes32",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "baseType": "address",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
             "name": "tokenDecimals",
             "constant": true,
             "outputs": [
@@ -656,6 +730,25 @@
                 "name": "",
                 "type": "uint8",
                 "baseType": "uint8",
+                "components": null,
+                "arrayLength": null,
+                "arrayChildren": null
+              }
+            ],
+            "stateMutability": "view",
+            "payable": false,
+            "gas": null
+          },
+          {
+            "type": "function",
+            "inputs": [],
+            "name": "treasury",
+            "constant": true,
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "baseType": "address",
                 "components": null,
                 "arrayLength": null,
                 "arrayChildren": null
@@ -698,5 +791,5 @@
       "filters": {}
     }
   },
-  "timestamp": "2025-12-09T19:46:26.688Z"
+  "timestamp": "2025-12-09T20:22:57.316Z"
 }

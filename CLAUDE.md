@@ -177,3 +177,12 @@ gh pr create --title "feat: ..." --body "..." && gh pr checks --watch
 ```
 
 Never push directly to main.
+
+## MockLiFi (Testnet)
+
+**Critical:** MockLiFiDiamond calculates swap output **before** transferring tokens. This is required because ROSE price depends on Treasury's ROSE balance (`circulatingSupply = totalSupply - treasuryBalance`). Transferring ROSE first would change the price and cause slippage failures.
+
+**Order in `_executeSwap()`:**
+1. Calculate output amount (preserves price state)
+2. Check slippage
+3. Transfer tokens in/out

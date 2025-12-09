@@ -179,15 +179,14 @@ contract MockLiFiDiamond {
         require(amountIn > 0, "Amount must be > 0");
         require(recipient != address(0), "Invalid recipient");
 
-        // Transfer tokens from caller
-        IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amountIn);
-
-        // Calculate output amount
+        // Calculate output amount BEFORE transferring (preserves price state for ROSE)
+        // This is critical because ROSE price depends on Treasury's ROSE balance,
+        // which affects circulatingSupply. Transferring first would change the price.
         amountOut = _calculateAmountOut(fromToken, toToken, amountIn);
-
         require(amountOut >= minAmountOut, "Slippage exceeded");
 
-        // Transfer output tokens to recipient
+        // Now execute transfers
+        IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amountIn);
         IERC20(toToken).safeTransfer(recipient, amountOut);
 
         // Record swap for test assertions
