@@ -11,8 +11,25 @@ import { config } from '../config';
 import { query, getPool } from '../db/pool';
 
 // Marketplace ABI - minimal interface for reading task data
+// Must match all 15 fields in Task struct (RoseMarketplace.sol:76-92)
 const MARKETPLACE_ABI = [
-  'function tasks(uint256) external view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, uint8 status, string ipfsHash, bool isAuction, uint256 winningBid)',
+  `function tasks(uint256) external view returns (
+    address customer,
+    address worker,
+    address stakeholder,
+    uint256 deposit,
+    uint256 stakeholderDeposit,
+    string title,
+    string detailedDescriptionHash,
+    string prUrl,
+    uint8 status,
+    bool customerApproval,
+    bool stakeholderApproval,
+    uint8 source,
+    uint256 proposalId,
+    bool isAuction,
+    uint256 winningBid
+  )`,
 ];
 
 // Task status enum (matches contract)
@@ -52,15 +69,12 @@ function getMarketplaceContract(): ethers.Contract {
 
 /**
  * Get task data from on-chain contract.
+ * Returns only the fields we need for auction verification.
  */
 async function getOnChainTask(taskId: number): Promise<{
   customer: string;
   worker: string;
-  stakeholder: string;
-  deposit: bigint;
-  stakeholderDeposit: bigint;
   status: TaskStatus;
-  ipfsHash: string;
   isAuction: boolean;
   winningBid: bigint;
 } | null> {
@@ -76,11 +90,7 @@ async function getOnChainTask(taskId: number): Promise<{
     return {
       customer: task.customer,
       worker: task.worker,
-      stakeholder: task.stakeholder,
-      deposit: task.deposit,
-      stakeholderDeposit: task.stakeholderDeposit,
       status: Number(task.status) as TaskStatus,
-      ipfsHash: task.ipfsHash,
       isAuction: task.isAuction,
       winningBid: task.winningBid,
     };
