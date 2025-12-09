@@ -7,6 +7,7 @@ import { fetchTaskDescription } from '../../utils/ipfs/pinataService';
 import ProgressTracker from '../governance/ProgressTracker';
 import ProfileBadge from '../profile/ProfileBadge';
 import BidSubmissionModal from './BidSubmissionModal';
+import BidSelectionModal from './BidSelectionModal';
 import { useAuction } from '../../hooks/useAuction';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, loadingStates = {} }) => {
@@ -24,6 +25,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
   // Bid modal state (for auction tasks)
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showBidSelectionModal, setShowBidSelectionModal] = useState(false);
   const [bidCount, setBidCount] = useState(0);
   const [myBid, setMyBid] = useState(null);
   const [isLoadingBid, setIsLoadingBid] = useState(false);
@@ -129,6 +131,8 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   // Workers can claim fixed-price tasks, but must bid on auctions
   const canClaim = !isCustomer && !isStakeholder && task.status === TaskStatus.Open && !isWorker && !isAuction;
   const canBid = !isCustomer && !isStakeholder && isOpenAuction && !isWorker;
+  // Customers can view bids on open auctions
+  const canViewBids = isCustomer && isOpenAuction;
   const canUnclaim = isWorker && task.status === TaskStatus.InProgress;
   const canStake = !isCustomer && !isWorker && task.status === TaskStatus.StakeholderRequired && task.stakeholder === '0x0000000000000000000000000000000000000000';
   const canComplete = isWorker && task.status === TaskStatus.InProgress;
@@ -452,6 +456,23 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </button>
         )}
 
+        {canViewBids && (
+          <button
+            onClick={() => setShowBidSelectionModal(true)}
+            className={buttonBaseClass}
+            style={{
+              background: bidCount > 0
+                ? 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)'
+                : 'var(--bg-secondary)',
+              color: bidCount > 0 ? 'var(--bg-primary)' : 'var(--text-muted)',
+              boxShadow: bidCount > 0 ? '0 4px 16px rgba(212, 165, 165, 0.3)' : 'none',
+              opacity: bidCount > 0 ? 1 : 0.8
+            }}
+          >
+            View Bids ({bidCount})
+          </button>
+        )}
+
         {canUnclaim && (
           <button
             onClick={() => onUnclaim(task.id)}
@@ -678,6 +699,15 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         maxBudget={task.deposit?.toString()}
         existingBid={myBid}
         onBidSubmitted={handleBidSubmitted}
+      />
+
+      {/* Bid Selection Modal for customers to select winner */}
+      <BidSelectionModal
+        isOpen={showBidSelectionModal}
+        onClose={() => setShowBidSelectionModal(false)}
+        taskId={task.id}
+        maxBudget={task.deposit?.toString()}
+        onWinnerSelected={handleBidSubmitted}
       />
     </div>
   );
