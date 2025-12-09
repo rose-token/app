@@ -331,6 +331,8 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | useProposals | proposals, userVotes, loading | createProposal, vote, voteCombined, freeVP, finalize, execute, cancel |
 | useDelegation | delegations, receivedDelegations, availableDelegatedPower | delegateTo, undelegateFrom (auto-uses vote reduction if active votes), castDelegatedVote, claimAllRewards |
 | useNavHistory | snapshots, pagination | refetch (default 3 years daily) |
+| useAuction | error, actionLoading | registerAuction, submitBid, getBids, getBidCount, getMyBid, getAuctionInfo, selectWinner, confirmWinner |
+| useAuctionTask | task, auctionInfo, bidCount, myBid, maxBudget, winningBid | refetch, refetchBid (auto-fetches on mount) |
 
 **Note:** deposit/withdraw/vote/delegate methods internally fetch reputation attestation from backend. `voteCombined` calls `/api/delegation/confirm-vote` after successful delegated votes for reward tracking.
 
@@ -378,6 +380,15 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | /api/vp-refresh/config | GET | Phase 4: VP refresh configuration |
 | /api/vp-refresh/check/:address | POST | Phase 4: Manually check and refresh user VP |
 | /api/vp-refresh/process | POST | Phase 4: Force process all pending users |
+| /api/auction/register | POST | Register auction task after on-chain creation |
+| /api/auction/bid | POST | Submit/update bid (requires worker signature) |
+| /api/auction/:taskId/bids | GET | Get all bids for auction (customer only) |
+| /api/auction/:taskId/count | GET | Get bid count (public) |
+| /api/auction/:taskId/my-bid/:worker | GET | Get worker's own bid |
+| /api/auction/:taskId | GET | Get auction task info (public) |
+| /api/auction/:taskId/exists | GET | Check if auction exists |
+| /api/auction/select-winner | POST | Get signature for on-chain winner selection |
+| /api/auction/confirm-winner | POST | Confirm winner after on-chain tx |
 
 ## Backend Services
 
@@ -390,6 +401,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
 | delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
+| auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
 | nav.ts | fetchNavSnapshot, storeNavSnapshot, syncRebalanceEvents, getNavHistory, getNavStats |
@@ -418,6 +430,8 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
 - `delegate_scores` - Per-delegate voting statistics (Phase 3)
 - `scored_proposals` - Tracks which proposals have been scored (Phase 3)
 - `proposal_blocks` - Cached block ranges for efficient event queries (Phase 3)
+- `auction_tasks` - Auction task registry with max_budget, winner, bid_count
+- `auction_bids` - Off-chain bids per worker per task (UNIQUE task_id, worker_address)
 
 ```bash
 cd backend/signer && npm install && cp .env.example .env && npm run dev
