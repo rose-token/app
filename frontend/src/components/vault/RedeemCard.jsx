@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
+
+const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 // Format cooldown seconds to human readable
 const formatCooldown = (seconds) => {
@@ -25,6 +27,7 @@ const RedeemCard = ({
   tokenAddress,
   onSuccess,
   redeemCooldown = 0,
+  pendingRedemptionId: initialPendingId = null,
 }) => {
   const { chain } = useAccount();
   const publicClient = usePublicClient();
@@ -34,6 +37,21 @@ const RedeemCard = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [cooldownRemaining, setCooldownRemaining] = useState(redeemCooldown);
+
+  // Hybrid redemption state (Phase 5)
+  const [redemptionMode, setRedemptionMode] = useState(initialPendingId ? 'queued' : null);
+  const [pendingRequestId, setPendingRequestId] = useState(initialPendingId);
+  const [isPolling, setIsPolling] = useState(!!initialPendingId);
+  const [availabilityInfo, setAvailabilityInfo] = useState(null);
+
+  // Initialize polling if there's an existing pending redemption
+  useEffect(() => {
+    if (initialPendingId && !pendingRequestId) {
+      setPendingRequestId(initialPendingId);
+      setIsPolling(true);
+      setRedemptionMode('queued');
+    }
+  }, [initialPendingId, pendingRequestId]);
 
   // Live countdown timer - updates every 5 seconds to reduce re-renders
   // (cooldowns are typically hours, so second precision isn't needed)
@@ -53,6 +71,69 @@ const RedeemCard = ({
 
     return () => clearInterval(interval);
   }, [redeemCooldown]);
+
+  // Check if redemption can be fulfilled instantly
+  const checkRedeemAvailability = useCallback(async (roseAmountWei) => {
+    if (!roseAmountWei || roseAmountWei <= 0n) {
+      setAvailabilityInfo(null);
+      setRedemptionMode(null);
+      return null;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/treasury/redeem-check?amount=${roseAmountWei.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setAvailabilityInfo(data);
+      setRedemptionMode(data.canRedeemInstantly ? 'instant' : 'queued');
+      return data;
+    } catch (err) {
+      console.error('[RedeemCard] Error checking availability:', err);
+      // Assume instant mode if check fails (fallback to old behavior)
+      setRedemptionMode('instant');
+      return null;
+    }
+  }, []);
+
+  // Poll for pending redemption fulfillment
+  useEffect(() => {
+    if (!isPolling || !pendingRequestId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/treasury/redemption/${pendingRequestId}`
+        );
+
+        if (!response.ok) {
+          console.error('[RedeemCard] Poll error:', response.status);
+          return;
+        }
+
+        const data = await response.json();
+
+        if (data.fulfilled) {
+          console.log('🎉 Redemption fulfilled!', data);
+          setIsPolling(false);
+          setPendingRequestId(null);
+          setRedemptionMode(null);
+          setAmount('');
+          setIsSubmitting(false);
+          if (onSuccess) onSuccess();
+        }
+      } catch (err) {
+        console.error('[RedeemCard] Polling error:', err);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [isPolling, pendingRequestId, onSuccess]);
 
   // Calculate ROSE amount in wei
   const amountInWei = useMemo(() => {
@@ -112,7 +193,12 @@ const RedeemCard = ({
     setError('');
 
     try {
-      // Step 1: Approve if needed
+      // Step 1: Check availability
+      console.log('🔍 Checking redemption availability...');
+      const availability = await checkRedeemAvailability(amountInWei);
+      const canInstant = availability?.canRedeemInstantly ?? true;
+
+      // Step 2: Approve if needed (required for both instant and queued)
       if (needsApproval) {
         console.log('⛽ Approving ROSE transfer...');
         const approveHash = await writeContractAsync({
@@ -130,45 +216,104 @@ const RedeemCard = ({
           hash: approveHash,
           confirmations: 1
         });
-        await new Promise(r => setTimeout(r, 1000))
+        await new Promise(r => setTimeout(r, 1000));
       }
 
-      // Step 2: Redeem
-      console.log('⛽ Redeeming ROSE...');
-      const redeemHash = await writeContractAsync({
-        address: treasuryAddress,
-        abi: RoseTreasuryABI,
-        functionName: 'redeem',
-        args: [amountInWei],
-        ...GAS_SETTINGS,
-      });
+      if (canInstant) {
+        // Step 3a: Instant redemption (existing flow)
+        console.log('⛽ Redeeming ROSE (instant)...');
+        const redeemHash = await writeContractAsync({
+          address: treasuryAddress,
+          abi: RoseTreasuryABI,
+          functionName: 'redeem',
+          args: [amountInWei],
+          ...GAS_SETTINGS,
+        });
 
-      console.log('✅ Redeem transaction sent:', redeemHash);
-      console.log('⏳ Waiting for redeem confirmation...');
+        console.log('✅ Redeem transaction sent:', redeemHash);
+        console.log('⏳ Waiting for redeem confirmation...');
 
-      await publicClient.waitForTransactionReceipt({
-        hash: redeemHash,
-        confirmations: 1,
-      });
+        await publicClient.waitForTransactionReceipt({
+          hash: redeemHash,
+          confirmations: 1,
+        });
 
-      console.log('🎉 Redemption completed successfully!');
-      setAmount('');
-      if (onSuccess) onSuccess();
+        console.log('🎉 Redemption completed successfully!');
+        setAmount('');
+        setRedemptionMode(null);
+        setAvailabilityInfo(null);
+        if (onSuccess) onSuccess();
+      } else {
+        // Step 3b: Queued redemption (new hybrid flow)
+        console.log('⛽ Requesting queued redemption...');
+        console.log(`📊 Shortfall: ${availability?.shortfall} USDC`);
+
+        const requestHash = await writeContractAsync({
+          address: treasuryAddress,
+          abi: RoseTreasuryABI,
+          functionName: 'requestRedemption',
+          args: [amountInWei],
+          ...GAS_SETTINGS,
+        });
+
+        console.log('✅ Request transaction sent:', requestHash);
+        console.log('⏳ Waiting for request confirmation...');
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: requestHash,
+          confirmations: 1,
+        });
+
+        // Parse the RedemptionRequested event to get the request ID
+        // Event signature: RedemptionRequested(uint256 indexed requestId, address indexed user, uint256 roseAmount, uint256 usdcOwed)
+        const redemptionRequestedTopic = '0x'; // We'll find it from logs
+        let requestId = null;
+
+        for (const log of receipt.logs) {
+          // The first topic is the event signature, second is requestId (indexed)
+          if (log.topics.length >= 2 && log.address.toLowerCase() === treasuryAddress.toLowerCase()) {
+            // RedemptionRequested has indexed requestId as first indexed param
+            try {
+              requestId = BigInt(log.topics[1]).toString();
+              break;
+            } catch {
+              // Continue looking
+            }
+          }
+        }
+
+        if (requestId) {
+          console.log(`📋 Redemption request queued with ID: ${requestId}`);
+          setPendingRequestId(requestId);
+          setIsPolling(true);
+          // Keep isSubmitting true while polling - shows "Processing..." state
+        } else {
+          console.log('⚠️ Could not find request ID, but transaction succeeded');
+          // Transaction succeeded, let user know
+          setError('Redemption queued. Check back later for fulfillment.');
+          setIsSubmitting(false);
+        }
+      }
     } catch (err) {
       console.error('❌ Redeem error:', err);
+      setIsPolling(false);
+      setPendingRequestId(null);
+
       if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
       } else if (err.message.includes('InsufficientBalance')) {
         setError('Insufficient ROSE balance');
       } else if (err.message.includes('InsufficientLiquidity')) {
-        setError('Insufficient liquidity in vault');
+        setError('Insufficient liquidity. Your redemption will be queued.');
+        // Could auto-retry with requestRedemption here
+      } else if (err.message.includes('UserHasPendingRedemption')) {
+        setError('You already have a pending redemption. Please wait for it to be fulfilled.');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Redemption failed');
       } else {
         setError('Redemption failed. Please try again.');
       }
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -290,20 +435,49 @@ const RedeemCard = ({
           </div>
         )}
 
+        {/* Queued Processing Status */}
+        {isPolling && pendingRequestId && (
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'var(--warning-bg)', border: '1px solid rgba(251, 191, 36, 0.3)' }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="animate-spin">⏳</span>
+              <p className="text-sm font-medium" style={{ color: 'var(--warning)' }}>
+                Processing Redemption
+              </p>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Request #{pendingRequestId} queued. Backend is liquidating assets to fulfill your redemption.
+              This may take a few minutes.
+            </p>
+            {availabilityInfo?.shortfall && (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Shortfall: {availabilityInfo.shortfall} USDC being sourced...
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Button */}
         <button
           onClick={handleRedeem}
-          disabled={!canRedeem}
+          disabled={!canRedeem || isPolling}
           className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300"
           style={{
-            background: canRedeem ? 'transparent' : 'var(--bg-secondary)',
-            border: canRedeem ? '1px solid rgba(212, 165, 165, 0.3)' : 'none',
-            color: canRedeem ? 'var(--rose-pink)' : 'var(--text-muted)',
-            cursor: canRedeem ? 'pointer' : 'not-allowed',
-            opacity: canRedeem ? 1 : 0.6
+            background: (canRedeem && !isPolling) ? 'transparent' : 'var(--bg-secondary)',
+            border: (canRedeem && !isPolling) ? '1px solid rgba(212, 165, 165, 0.3)' : 'none',
+            color: (canRedeem && !isPolling) ? 'var(--rose-pink)' : 'var(--text-muted)',
+            cursor: (canRedeem && !isPolling) ? 'pointer' : 'not-allowed',
+            opacity: (canRedeem && !isPolling) ? 1 : 0.6
           }}
         >
-          {isSubmitting ? (
+          {isPolling ? (
+            <span className="flex items-center justify-center">
+              <span className="animate-spin mr-2">⏳</span>
+              Awaiting Fulfillment...
+            </span>
+          ) : isSubmitting ? (
             <span className="flex items-center justify-center">
               <span className="animate-pulse mr-2">⚡</span>
               Redeeming...

@@ -181,6 +181,13 @@ const useVaultData = () => {
         functionName: 'timeUntilRedeem',
         args: [address],
       },
+      // Phase 5: Hybrid redemption - check for pending redemption
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'getUserPendingRedemption',
+        args: [address],
+      },
     ];
   }, [address, tokenAddress, usdcAddress, treasuryAddress]);
 
@@ -346,6 +353,7 @@ const useVaultData = () => {
         usdcAllowance: null,
         depositCooldown: 0,
         redeemCooldown: 0,
+        pendingRedemptionId: null,
       };
     }
 
@@ -356,7 +364,13 @@ const useVaultData = () => {
       usdcAllowanceResult,
       depositCooldownResult,
       redeemCooldownResult,
+      pendingRedemptionResult,
     ] = userData;
+
+    // Phase 5: Pending redemption ID (0 means no pending)
+    const pendingRedemptionId = pendingRedemptionResult?.result
+      ? (pendingRedemptionResult.result > 0n ? pendingRedemptionResult.result.toString() : null)
+      : null;
 
     return {
       roseBalance: roseBalanceResult?.result
@@ -381,6 +395,7 @@ const useVaultData = () => {
       redeemCooldown: redeemCooldownResult?.result
         ? Number(redeemCooldownResult.result)
         : 0,
+      pendingRedemptionId,
     };
   }, [userData]);
 

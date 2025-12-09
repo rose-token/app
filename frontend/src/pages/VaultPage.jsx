@@ -31,6 +31,8 @@ const VaultPage = () => {
     // Cooldowns
     depositCooldown,
     redeemCooldown,
+    // Phase 5: Pending redemption
+    pendingRedemptionId,
     // Addresses
     treasuryAddress,
     tokenAddress,
@@ -112,6 +114,7 @@ const VaultPage = () => {
             tokenAddress={tokenAddress}
             onSuccess={handleSuccess}
             redeemCooldown={redeemCooldown}
+            pendingRedemptionId={pendingRedemptionId}
           />
         </div>
       )}
