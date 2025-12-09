@@ -4,30 +4,30 @@
   "isTestnet": true,
   "deployer": "0x3dbEf3f83bA2248fB500dd537436FC65E6F96BF1",
   "contracts": {
-    "roseToken": "0x8D79B3D59eB7cD2E535687d53739ecc9E6447408",
-    "vRose": "0x2874d650b047668c091cdE242D0882e428F50131",
-    "roseTreasury": "0x5cf1492cEE525c88AB22481b493D1690d41DD9a5",
-    "roseMarketplace": "0xE7Df1a4693bbFEBb5a4ED3aF554da5CD61d6Ee2a",
-    "roseReputation": "0x9B5ba34627737D4aA5e730f34AFbfDBc60dE9F08",
-    "roseGovernance": "0xb3bA3766BA102d645C627C3c578FEF8C231cDA78"
+    "roseToken": "0xF72069823868CF4868eb31a2d67dce81D6054138",
+    "vRose": "0xC61eA15926744B0a2067528FF402e4e45848514f",
+    "roseTreasury": "0xA7817d570942258A00df6b17Cc7c42Bc0119301A",
+    "roseMarketplace": "0x928b870CBe27E74a695e8A01AE03De5E8159a6aF",
+    "roseReputation": "0x0502160005fA50da8Ed79ba9321CbcE2A84C8c53",
+    "roseGovernance": "0x43dCA39Eea8ebD0F0a1D9110F60641bB05C5E9aD"
   },
-  "tokenAddress": "0x8D79B3D59eB7cD2E535687d53739ecc9E6447408",
-  "vRoseAddress": "0x2874d650b047668c091cdE242D0882e428F50131",
-  "treasuryAddress": "0x5cf1492cEE525c88AB22481b493D1690d41DD9a5",
-  "marketplaceAddress": "0xE7Df1a4693bbFEBb5a4ED3aF554da5CD61d6Ee2a",
-  "reputationAddress": "0x9B5ba34627737D4aA5e730f34AFbfDBc60dE9F08",
-  "governanceAddress": "0xb3bA3766BA102d645C627C3c578FEF8C231cDA78",
+  "tokenAddress": "0xF72069823868CF4868eb31a2d67dce81D6054138",
+  "vRoseAddress": "0xC61eA15926744B0a2067528FF402e4e45848514f",
+  "treasuryAddress": "0xA7817d570942258A00df6b17Cc7c42Bc0119301A",
+  "marketplaceAddress": "0x928b870CBe27E74a695e8A01AE03De5E8159a6aF",
+  "reputationAddress": "0x0502160005fA50da8Ed79ba9321CbcE2A84C8c53",
+  "governanceAddress": "0x43dCA39Eea8ebD0F0a1D9110F60641bB05C5E9aD",
   "passportSignerAddress": "0x3dbef3f83ba2248fb500dd537436fc65e6f96bf1",
   "externalAddresses": {
-    "usdc": "0x037533FA7a5e960424815A4B96D3d52a9028140E",
-    "tbtc": "0x4778e3f52cd67B60b891f9d40cD78B7280c7cCE4",
-    "xaut": "0x9951E64e52bdbBa1a46190A3ed818B1c01dc3fED",
-    "btcUsdFeed": "0xE459563Fe1d9473DEc895013A7fe64dff7b1B664",
-    "xauUsdFeed": "0xf13EEa80a741e64f292B22c7ED3aB0C68E7c9AE8",
-    "lifiDiamond": "0x54F63E3F98b227cbA033ECb9283c33AcE458F1De",
-    "roseUsdFeed": "0x847fF591E61082e4888861fC9C951744661eD8BF",
+    "usdc": "0xCFddB0676d733fd2502298a092FE9bf73478f00c",
+    "tbtc": "0xFb8BAdCf2995A34eC87E7d9391DE84616A86FA69",
+    "xaut": "0x0ba937ec16A51d41c446CdcfEAC08E1E145314f7",
+    "btcUsdFeed": "0xCf472Dd699acA377E03F1929BddfC5Afa66eD3dD",
+    "xauUsdFeed": "0x998ea4A05582A9311Cefbc0d5Dec91B5A8214523",
+    "lifiDiamond": "0x691Cb73A76BD4557112D51E6bEA95fF14f894511",
+    "roseUsdFeed": "0x6282F3D3C15a4D988A5243E6EB86cFe202BD7133",
     "mockLiFi": {
-      "target": "0x54F63E3F98b227cbA033ECb9283c33AcE458F1De",
+      "target": "0x691Cb73A76BD4557112D51E6bEA95fF14f894511",
       "interface": {
         "fragments": [
           {
@@ -791,5 +791,5 @@
       "filters": {}
     }
   },
-  "timestamp": "2025-12-09T20:22:57.316Z"
+  "timestamp": "2025-12-09T20:46:52.282Z"
 }

@@ -221,40 +221,124 @@ export function applySlippage(amount: bigint, slippageBps: number): bigint {
 }
 
 /**
- * Calculate diversification swaps based on deposit amount and target allocations
+ * Calculate diversification swaps with smart rebalancing.
+ * Prioritizes underweight assets (USDC buffer first, then RWA proportionally).
+ * Only uses target ratios for excess after all deficits are filled.
+ * Note: Does NOT buy ROSE - that's handled by rebalance() buybacks.
+ *
  * @param depositAmountUsdc - USDC deposited (6 decimals)
- * @param targetAllocations - Map of asset key to target bps (e.g., { BTC: 3000, GOLD: 3000 })
+ * @param targetAllocations - Map of asset key to target bps
+ * @param currentBalances - Map of asset key to current USD value (6 decimals)
  * @returns Array of swap instructions
  */
 export function calculateDiversificationSwaps(
   depositAmountUsdc: bigint,
+  targetAllocations: Map<string, number>,
+  currentBalances: Map<string, bigint>
+): { assetKey: string; usdcAmount: bigint }[] {
+  const swaps: { assetKey: string; usdcAmount: bigint }[] = [];
+
+  // Get current balances (pre-deposit)
+  const currentBTC = currentBalances.get('BTC') ?? 0n;
+  const currentGOLD = currentBalances.get('GOLD') ?? 0n;
+  const currentUSDC = currentBalances.get('STABLE') ?? 0n;
+
+  // First deposit - use simple ratio split to RWA only
+  if (currentBTC === 0n && currentGOLD === 0n) {
+    return diversifyByRatio(depositAmountUsdc, targetAllocations);
+  }
+
+  // Calculate targets based on hard assets only (exclude ROSE allocation)
+  const allocBTC = targetAllocations.get('BTC') ?? 0;
+  const allocGOLD = targetAllocations.get('GOLD') ?? 0;
+  const allocUSDC = targetAllocations.get('STABLE') ?? 0;
+  const hardAllocTotal = allocBTC + allocGOLD + allocUSDC;
+
+  if (hardAllocTotal === 0) return swaps;
+
+  // Total hard assets AFTER deposit
+  const newHardTotal = currentBTC + currentGOLD + currentUSDC + depositAmountUsdc;
+
+  // Target values based on hard assets only
+  const targetBTC = (newHardTotal * BigInt(allocBTC)) / BigInt(hardAllocTotal);
+  const targetGOLD = (newHardTotal * BigInt(allocGOLD)) / BigInt(hardAllocTotal);
+  const targetUSDC = (newHardTotal * BigInt(allocUSDC)) / BigInt(hardAllocTotal);
+
+  // Pre-deposit USDC balance
+  const preDepositUSDC = currentUSDC;
+
+  // Calculate deficits
+  const deficitUSDC = targetUSDC > preDepositUSDC ? targetUSDC - preDepositUSDC : 0n;
+  const deficitBTC = targetBTC > currentBTC ? targetBTC - currentBTC : 0n;
+  const deficitGOLD = targetGOLD > currentGOLD ? targetGOLD - currentGOLD : 0n;
+
+  let remaining = depositAmountUsdc;
+
+  // Phase 1: Fill USDC buffer first (critical for redemption liquidity)
+  if (deficitUSDC > 0n && remaining > 0n) {
+    const toUSDC = remaining < deficitUSDC ? remaining : deficitUSDC;
+    remaining -= toUSDC;
+    // USDC stays in contract, no swap needed
+    console.log(`[LiFi] Phase 1: Keeping ${ethers.formatUnits(toUSDC, 6)} USDC for buffer`);
+  }
+
+  // Phase 2: Fill RWA deficits proportionally
+  if (remaining > 0n) {
+    const totalRWADeficit = deficitBTC + deficitGOLD;
+
+    if (totalRWADeficit > 0n) {
+      const toSpend = remaining < totalRWADeficit ? remaining : totalRWADeficit;
+
+      if (deficitBTC > 0n) {
+        const spentBTC = (toSpend * deficitBTC) / totalRWADeficit;
+        if (spentBTC > 0n) {
+          swaps.push({ assetKey: 'BTC', usdcAmount: spentBTC });
+          console.log(`[LiFi] Phase 2: ${ethers.formatUnits(spentBTC, 6)} USDC -> BTC (deficit fill)`);
+        }
+      }
+      if (deficitGOLD > 0n) {
+        const spentGOLD = toSpend - ((toSpend * deficitBTC) / totalRWADeficit);
+        if (spentGOLD > 0n) {
+          swaps.push({ assetKey: 'GOLD', usdcAmount: spentGOLD });
+          console.log(`[LiFi] Phase 2: ${ethers.formatUnits(spentGOLD, 6)} USDC -> GOLD (deficit fill)`);
+        }
+      }
+
+      remaining -= toSpend;
+    }
+  }
+
+  // Phase 3: Excess goes to RWA by ratio
+  if (remaining > 0n) {
+    console.log(`[LiFi] Phase 3: ${ethers.formatUnits(remaining, 6)} USDC excess -> RWA by ratio`);
+    const ratioSwaps = diversifyByRatio(remaining, targetAllocations);
+    swaps.push(...ratioSwaps);
+  }
+
+  return swaps;
+}
+
+/**
+ * Simple ratio-based diversification for first deposit or excess funds
+ * Splits between BTC and GOLD only (not USDC, not ROSE)
+ */
+function diversifyByRatio(
+  amount: bigint,
   targetAllocations: Map<string, number>
 ): { assetKey: string; usdcAmount: bigint }[] {
   const swaps: { assetKey: string; usdcAmount: bigint }[] = [];
 
-  // Calculate total allocation for hard assets that need swaps (exclude USDC and ROSE)
-  let totalSwapBps = 0;
-  for (const [key, bps] of targetAllocations) {
-    if (key !== 'STABLE' && key !== 'ROSE') {
-      totalSwapBps += bps;
-    }
-  }
+  const allocBTC = targetAllocations.get('BTC') ?? 0;
+  const allocGOLD = targetAllocations.get('GOLD') ?? 0;
+  const rwaTotal = allocBTC + allocGOLD;
 
-  // If no swaps needed, return empty
-  if (totalSwapBps === 0) return swaps;
+  if (rwaTotal === 0) return swaps;
 
-  // Calculate amount for each asset
-  for (const [key, bps] of targetAllocations) {
-    if (key !== 'STABLE' && key !== 'ROSE') {
-      // Rescale: if BTC is 30% and total swap is 60%, BTC gets 50% of deposit
-      const rescaledBps = (bps * 10000) / totalSwapBps;
-      const usdcAmount = (depositAmountUsdc * BigInt(rescaledBps)) / 10000n;
+  const toBTC = (amount * BigInt(allocBTC)) / BigInt(rwaTotal);
+  const toGOLD = amount - toBTC; // Give remainder to GOLD to avoid dust
 
-      if (usdcAmount > 0n) {
-        swaps.push({ assetKey: key, usdcAmount });
-      }
-    }
-  }
+  if (toBTC > 0n) swaps.push({ assetKey: 'BTC', usdcAmount: toBTC });
+  if (toGOLD > 0n) swaps.push({ assetKey: 'GOLD', usdcAmount: toGOLD });
 
   return swaps;
 }

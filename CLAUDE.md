@@ -48,9 +48,16 @@ Web3 marketplace with task-value-based token distribution.
 **Formula:** `ROSE Price = HardAssetsUSD / CirculatingSupply` (BTC+Gold+USDC, excludes treasury ROSE)
 
 **Flows:**
-- **Deposit:** USDC → Treasury → ROSE minted → Backend diversifies via LiFi
+- **Deposit:** USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
 - **Redeem:** Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
 - **Rebalance:** >5% drift triggers, 7d cooldown, monthly cron
+
+**Smart Diversification** (deposit watcher):
+1. Phase 1: Fill USDC buffer deficit first (critical for redemption liquidity)
+2. Phase 2: Fill BTC/GOLD deficits proportionally
+3. Phase 3: Any remaining excess → RWA by target ratio
+- Does NOT buy ROSE (handled by monthly rebalance buybacks)
+- First deposit uses simple 50/50 BTC/GOLD ratio split
 
 **Redemption Queue:** NAV locked at request, 1 pending/user, no cancel, FIFO. Events: `RedemptionRequested`, `RedemptionFulfilled`
 

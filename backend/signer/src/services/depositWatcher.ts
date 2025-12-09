@@ -13,6 +13,7 @@ const TREASURY_ABI = [
   'event Deposited(address indexed user, uint256 usdcAmount, uint256 roseMinted)',
   'function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)',
   'function getAllAssets() external view returns (bytes32[] memory keys, tuple(address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)[] memory assetList)',
+  'function getAssetBreakdown(bytes32 key) external view returns (address token, uint256 balance, uint256 valueUSD, uint256 targetBps, uint256 actualBps, bool active)',
 ];
 
 // Types
@@ -86,6 +87,26 @@ function getTreasuryContract(): ethers.Contract {
 }
 
 /**
+ * Get current USD value of each asset in the treasury
+ * Used for smart rebalancing to calculate deficits
+ */
+async function getCurrentAssetBalances(): Promise<Map<string, bigint>> {
+  const treasury = getTreasuryContract();
+  const balances = new Map<string, bigint>();
+
+  const [keys] = await treasury.getAllAssets();
+  for (const keyBytes32 of keys) {
+    const key = ethers.decodeBytes32String(keyBytes32);
+    if (key === 'ROSE') continue; // Skip ROSE
+
+    const breakdown = await treasury.getAssetBreakdown(keyBytes32);
+    balances.set(key, breakdown.valueUSD);
+  }
+
+  return balances;
+}
+
+/**
  * Process a single deposit by diversifying the USDC via LiFi swaps
  */
 async function processDiversification(
@@ -108,8 +129,14 @@ async function processDiversification(
     const allocations = await getTargetAllocations();
     console.log(`[DepositWatcher] Target allocations:`, Object.fromEntries(allocations));
 
-    // Calculate which swaps to make
-    const swapInstructions = calculateDiversificationSwaps(usdcAmount, allocations);
+    // Get current asset values for smart rebalancing
+    const currentBalances = await getCurrentAssetBalances();
+    console.log(`[DepositWatcher] Current balances (USD):`, Object.fromEntries(
+      Array.from(currentBalances.entries()).map(([k, v]) => [k, ethers.formatUnits(v, 6)])
+    ));
+
+    // Calculate which swaps to make with smart rebalancing
+    const swapInstructions = calculateDiversificationSwaps(usdcAmount, allocations, currentBalances);
     console.log(`[DepositWatcher] Planned swaps:`, swapInstructions);
 
     if (swapInstructions.length === 0) {
