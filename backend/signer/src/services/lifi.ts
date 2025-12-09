@@ -36,51 +36,11 @@ function generateMockSwapData(
   ]);
 }
 
-// Asset keys as bytes32
-const BTC_KEY = ethers.encodeBytes32String('BTC');
-const GOLD_KEY = ethers.encodeBytes32String('GOLD');
-const STABLE_KEY = ethers.encodeBytes32String('STABLE');
-const ROSE_KEY = ethers.encodeBytes32String('ROSE');
-
-// Treasury ABI for price lookups
-const PRICE_LOOKUP_ABI = [
-  'function getAssetPrice(bytes32 key) external view returns (uint256)',
-  'function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)',
-];
-
-// Token decimals for mock calculations
-const ASSET_DECIMALS: Record<string, number> = {
-  'BTC': 8,    // TBTC uses 8 decimals
-  'GOLD': 6,   // XAUt uses 6 decimals
-  'STABLE': 6, // USDC uses 6 decimals
-  'ROSE': 18,  // ROSE uses 18 decimals
-};
 
 /**
- * Map token address to asset key by looking up treasury assets
- */
-async function getAssetKeyForToken(tokenAddress: string, treasuryAddress: string): Promise<string | null> {
-  const provider = new ethers.JsonRpcProvider(config.rpc.url);
-  const treasury = new ethers.Contract(treasuryAddress, PRICE_LOOKUP_ABI, provider);
-
-  // Check each asset key (including ROSE for rebalancing)
-  for (const key of ['BTC', 'GOLD', 'STABLE', 'ROSE']) {
-    try {
-      const keyBytes = ethers.encodeBytes32String(key);
-      const asset = await treasury.assets(keyBytes);
-      if (asset.token.toLowerCase() === tokenAddress.toLowerCase()) {
-        return key;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-/**
- * Calculate realistic swap output using mock Chainlink prices
- * Prices are in 8 decimals (Chainlink standard)
+ * Calculate swap output by querying MockLiFiDiamond.getQuote()
+ * This ensures the expected output matches what MockLiFi will actually produce,
+ * avoiding slippage failures from price mismatches between Chainlink and MockLiFi rates.
  */
 async function calculateMockSwapOutput(
   fromToken: string,
@@ -89,34 +49,25 @@ async function calculateMockSwapOutput(
   treasuryAddress: string
 ): Promise<bigint> {
   const provider = new ethers.JsonRpcProvider(config.rpc.url);
-  const treasury = new ethers.Contract(treasuryAddress, PRICE_LOOKUP_ABI, provider);
 
-  // Identify asset keys
-  const fromKey = await getAssetKeyForToken(fromToken, treasuryAddress);
-  const toKey = await getAssetKeyForToken(toToken, treasuryAddress);
+  // Get lifiDiamond address from Treasury contract (it's immutable)
+  const treasuryAbi = ['function lifiDiamond() view returns (address)'];
+  const treasury = new ethers.Contract(treasuryAddress, treasuryAbi, provider);
+  const lifiDiamondAddr = await treasury.lifiDiamond();
 
-  if (!fromKey || !toKey) {
-    console.warn(`[LiFi] Could not identify asset keys for ${fromToken} -> ${toToken}, using 1:1`);
-    return amountIn;
+  // Query MockLiFiDiamond for exact output
+  const mockLiFiAbi = ['function getQuote(address fromToken, address toToken, uint256 amountIn) view returns (uint256)'];
+  const mockLiFi = new ethers.Contract(lifiDiamondAddr, mockLiFiAbi, provider);
+
+  try {
+    const output = await mockLiFi.getQuote(fromToken, toToken, amountIn);
+    console.log(`[LiFi] MockLiFi quote: ${fromToken} -> ${toToken}`);
+    console.log(`[LiFi] Input: ${amountIn.toString()} -> Output: ${output.toString()}`);
+    return output;
+  } catch (err) {
+    console.warn(`[LiFi] getQuote failed, using 1:1 fallback:`, err);
+    return amountIn; // Fallback
   }
-
-  // Get prices (STABLE = $1 = 1e8 in Chainlink decimals)
-  const fromPrice = fromKey === 'STABLE' ? BigInt(1e8) : await treasury.getAssetPrice(ethers.encodeBytes32String(fromKey));
-  const toPrice = toKey === 'STABLE' ? BigInt(1e8) : await treasury.getAssetPrice(ethers.encodeBytes32String(toKey));
-
-  const fromDecimals = ASSET_DECIMALS[fromKey] || 18;
-  const toDecimals = ASSET_DECIMALS[toKey] || 18;
-
-  // Calculate: valueUSD = amountIn * fromPrice / 10^(fromDecimals + 8)
-  // outputAmount = valueUSD * 10^(toDecimals + 8) / toPrice
-  // Simplified: outputAmount = amountIn * fromPrice * 10^toDecimals / (10^fromDecimals * toPrice)
-
-  const output = (amountIn * fromPrice * BigInt(10 ** toDecimals)) / (BigInt(10 ** fromDecimals) * toPrice);
-
-  console.log(`[LiFi] Mock price calc: ${fromKey}(${fromPrice.toString()}) -> ${toKey}(${toPrice.toString()})`);
-  console.log(`[LiFi] Input: ${amountIn.toString()} (${fromDecimals} dec) -> Output: ${output.toString()} (${toDecimals} dec)`);
-
-  return output;
 }
 
 interface LiFiQuoteParams {
