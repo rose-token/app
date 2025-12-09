@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { parseEther } from 'viem';
+import { parseEther, decodeEventLog } from 'viem';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { uploadTaskDescription } from '../../utils/ipfs/pinataService';
 import RoseMarketplaceABI from '../../contracts/RoseMarketplaceABI.json';
@@ -7,18 +7,21 @@ import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import PassportGate from '../passport/PassportGate';
 import { PASSPORT_THRESHOLDS } from '../../constants/passport';
 import { usePassportVerify } from '../../hooks/usePassportVerify';
+import { useAuction } from '../../hooks/useAuction';
 import { GAS_SETTINGS } from '../../constants/gas';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
   const [detailedDescription, setDetailedDescription] = useState('');
   const [deposit, setDeposit] = useState('');
+  const [isAuction, setIsAuction] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { getSignature } = usePassportVerify();
+  const { registerAuction } = useAuction();
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
   const tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS;
@@ -91,33 +94,90 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       const { expiry, signature } = await getSignature('createTask');
       console.log('✅ Passport signature obtained');
 
-      // Step 4: Create task
-      console.log('⛽ Creating task...');
-      console.log('💡 Please confirm the create task transaction in MetaMask');
+      // Step 4: Create task (fixed-price or auction)
+      if (isAuction) {
+        console.log('⛽ Creating auction task...');
+        console.log('💡 Please confirm the create auction task transaction in MetaMask');
 
-      const createTaskHash = await writeContractAsync({
-        address: marketplaceAddress,
-        abi: RoseMarketplaceABI,
-        functionName: 'createTask',
-        args: [title, tokenAmount, hash, BigInt(expiry), signature],
-        ...GAS_SETTINGS,
-      });
+        const createTaskHash = await writeContractAsync({
+          address: marketplaceAddress,
+          abi: RoseMarketplaceABI,
+          functionName: 'createAuctionTask',
+          args: [title, tokenAmount, hash, BigInt(expiry), signature],
+          ...GAS_SETTINGS,
+        });
 
-      console.log('✅ Task creation transaction sent:', createTaskHash);
-      console.log('⏳ Waiting for transaction confirmation...');
+        console.log('✅ Auction task creation transaction sent:', createTaskHash);
+        console.log('⏳ Waiting for transaction confirmation...');
 
-      // Wait for transaction to be confirmed
-      await publicClient.waitForTransactionReceipt({
-        hash: createTaskHash,
-        confirmations: 1
-      });
+        // Wait for transaction to be confirmed
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: createTaskHash,
+          confirmations: 1
+        });
 
-      console.log('🎉 Task created successfully and confirmed on blockchain!');
+        // Parse AuctionTaskCreated event to get taskId
+        let taskId = null;
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: RoseMarketplaceABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'AuctionTaskCreated') {
+              taskId = decoded.args.taskId;
+              break;
+            }
+          } catch {
+            // Not the event we're looking for
+          }
+        }
+
+        if (taskId !== null) {
+          // Register auction with backend
+          console.log('📝 Registering auction with backend...');
+          try {
+            await registerAuction(Number(taskId), tokenAmount.toString());
+            console.log('✅ Auction registered with backend');
+          } catch (regErr) {
+            console.warn('⚠️ Failed to register auction with backend:', regErr);
+            // Non-fatal - tx succeeded on-chain
+          }
+        } else {
+          console.warn('⚠️ Could not extract taskId from transaction logs');
+        }
+
+        console.log('🎉 Auction task created successfully!');
+      } else {
+        console.log('⛽ Creating task...');
+        console.log('💡 Please confirm the create task transaction in MetaMask');
+
+        const createTaskHash = await writeContractAsync({
+          address: marketplaceAddress,
+          abi: RoseMarketplaceABI,
+          functionName: 'createTask',
+          args: [title, tokenAmount, hash, BigInt(expiry), signature],
+          ...GAS_SETTINGS,
+        });
+
+        console.log('✅ Task creation transaction sent:', createTaskHash);
+        console.log('⏳ Waiting for transaction confirmation...');
+
+        // Wait for transaction to be confirmed
+        await publicClient.waitForTransactionReceipt({
+          hash: createTaskHash,
+          confirmations: 1
+        });
+
+        console.log('🎉 Task created successfully and confirmed on blockchain!');
+      }
 
       // Reset form
       setTitle('');
       setDetailedDescription('');
       setDeposit('');
+      setIsAuction(false);
       setIsSubmitting(false);
 
       if (onTaskCreated) {
@@ -243,9 +303,47 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           </p>
         </div>
 
+        {/* Task Type Toggle */}
+        <div className="mb-5">
+          <label style={labelStyle}>
+            Task Type
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAuction(false)}
+              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200"
+              style={{
+                background: !isAuction ? 'var(--rose-gold)' : 'var(--bg-secondary)',
+                color: !isAuction ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                border: `1px solid ${!isAuction ? 'var(--rose-gold)' : 'var(--border-subtle)'}`,
+              }}
+            >
+              Fixed Price
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAuction(true)}
+              className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200"
+              style={{
+                background: isAuction ? 'var(--rose-gold)' : 'var(--bg-secondary)',
+                color: isAuction ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                border: `1px solid ${isAuction ? 'var(--rose-gold)' : 'var(--border-subtle)'}`,
+              }}
+            >
+              Auction
+            </button>
+          </div>
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            {isAuction
+              ? 'Workers will bid to complete this task. You select the winning bid.'
+              : 'Set a fixed payment amount. Workers can claim this task directly.'}
+          </p>
+        </div>
+
         <div className="mb-6">
           <label htmlFor="deposit" style={labelStyle}>
-            Payment Amount *
+            {isAuction ? 'Maximum Budget *' : 'Payment Amount *'}
           </label>
           <div className="relative">
             <input
@@ -268,7 +366,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             </div>
           </div>
           <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-            This amount will be paid to the worker upon successful completion
+            {isAuction
+              ? 'Maximum amount you\'re willing to pay. Workers will bid below this.'
+              : 'This amount will be paid to the worker upon successful completion'}
           </p>
         </div>
 
@@ -306,10 +406,10 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           {isSubmitting ? (
             <>
               <span className="inline-block mr-2 animate-pulse">⚡</span>
-              Creating Task...
+              {isAuction ? 'Creating Auction...' : 'Creating Task...'}
             </>
           ) : (
-            'Create Task'
+            isAuction ? 'Create Auction Task' : 'Create Task'
           )}
         </button>
         </form>
