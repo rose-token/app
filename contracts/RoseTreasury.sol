@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 /**
  * @title RoseTreasury
@@ -17,16 +16,21 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
  * Each asset has a target allocation in basis points.
  *
  * Users deposit USDC, receive ROSE at current NAV.
- * Treasury automatically diversifies into RWA.
- * Users redeem ROSE for USDC at current NAV.
+ * Backend watches Deposited events and diversifies via LiFi.
+ * Users redeem ROSE for USDC at current NAV (requires sufficient USDC buffer).
  *
  * NAV = Hard Assets (all non-ROSE assets) / Circulating ROSE Supply
  * Treasury ROSE is NOT counted in NAV - it's a buyback/spending reserve.
  *
+ * Swap Routing:
+ * - All swaps executed via LiFi Diamond with backend-generated calldata
+ * - executeSwap() called by rebalancer role (backend signer)
+ * - Contract is "dumb" (safety rails only), backend is "smart" (routing)
+ *
  * Rebalancing:
  * - Threshold-based (5% drift triggers rebalance)
  * - 7-day cooldown between rebalances
- * - Backend orchestrates swaps via LiFi (Phase 3)
+ * - Backend orchestrates multi-swap rebalances via executeSwap()
  */
 contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
@@ -51,10 +55,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     bytes32 public constant ROSE_KEY = "ROSE";
     bytes32 public constant STABLE_KEY = "STABLE";
 
-    // ============ DEX (Temporary - Phase 3 replaces with LiFi) ============
-    ISwapRouter public immutable swapRouter;
-    uint24 public constant POOL_FEE_STABLE = 500;   // 0.05% for USDC pairs
-    uint24 public constant POOL_FEE_VOLATILE = 3000; // 0.3% for volatile pairs
+    // ============ LiFi Integration ============
+    address public immutable lifiDiamond;
+    address public rebalancer;
 
     // ============ Constants ============
     uint256 public constant ALLOC_DENOMINATOR = 10000;
@@ -86,6 +89,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     event RoseBuyback(uint256 usdcSpent, uint256 roseBought);
     event MarketplaceUpdated(address indexed newMarketplace);
     event GovernanceUpdated(address indexed newGovernance);
+    event SwapExecuted(bytes32 indexed fromAsset, bytes32 indexed toAsset, uint256 amountIn, uint256 amountOut);
+    event RebalancerUpdated(address indexed newRebalancer);
 
     // ============ Errors ============
     error InvalidPrice();
@@ -105,23 +110,31 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error AssetNotActive();
     error InvalidTargetSum();
     error CannotDeactivateRequired();
+    error NotRebalancer();
+    error LiFiSwapFailed();
+
+    // ============ Modifiers ============
+    modifier onlyRebalancer() {
+        if (msg.sender != rebalancer && msg.sender != owner()) revert NotRebalancer();
+        _;
+    }
 
     constructor(
         address _roseToken,
         address _usdc,
-        address _swapRouter
+        address _lifiDiamond
     ) Ownable(msg.sender) {
-        if (_roseToken == address(0) || _usdc == address(0) || _swapRouter == address(0)) {
+        if (_roseToken == address(0) || _usdc == address(0) || _lifiDiamond == address(0)) {
             revert ZeroAddress();
         }
 
         roseToken = IERC20(_roseToken);
         usdc = IERC20(_usdc);
-        swapRouter = ISwapRouter(_swapRouter);
+        lifiDiamond = _lifiDiamond;
 
-        // Approve router for swaps
-        IERC20(_usdc).approve(_swapRouter, type(uint256).max);
-        IERC20(_roseToken).approve(_swapRouter, type(uint256).max);
+        // Approve LiFi Diamond for base tokens
+        IERC20(_usdc).approve(_lifiDiamond, type(uint256).max);
+        IERC20(_roseToken).approve(_lifiDiamond, type(uint256).max);
     }
 
     // ============ Asset Management ============
@@ -154,8 +167,8 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         assetKeys.push(key);
 
-        // Approve router for this asset
-        IERC20(token).approve(address(swapRouter), type(uint256).max);
+        // Approve LiFi Diamond for this asset
+        IERC20(token).approve(lifiDiamond, type(uint256).max);
 
         emit AssetAdded(key, token, priceFeed, decimals, targetBps);
     }
@@ -171,12 +184,12 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         if (newToken == address(0)) revert ZeroAddress();
 
         // Revoke old approval
-        IERC20(asset.token).approve(address(swapRouter), 0);
+        IERC20(asset.token).approve(lifiDiamond, 0);
 
         asset.token = newToken;
 
-        // Approve new token
-        IERC20(newToken).approve(address(swapRouter), type(uint256).max);
+        // Approve new token for LiFi
+        IERC20(newToken).approve(lifiDiamond, type(uint256).max);
 
         emit AssetUpdated(key, newToken, asset.priceFeed, asset.targetBps);
     }
@@ -277,6 +290,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     /**
      * @dev Deposit USDC, receive ROSE at current NAV
      * 24hr cooldown between deposits (owner exempt)
+     * Note: Backend watches Deposited events and diversifies via LiFi
      */
     function deposit(uint256 usdcAmount) external nonReentrant whenNotPaused {
         if (msg.sender != owner()) {
@@ -293,7 +307,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         usdc.safeTransferFrom(msg.sender, address(this), usdcAmount);
         IRoseToken(address(roseToken)).mint(msg.sender, roseToMint);
 
-        _diversify(usdcAmount);
+        // NO _diversify() - backend handles via Deposited event + executeSwap()
 
         lastDepositTime[msg.sender] = block.timestamp;
         emit Deposited(msg.sender, usdcAmount, roseToMint);
@@ -302,6 +316,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     /**
      * @dev Redeem ROSE for USDC at current NAV
      * 24hr cooldown between redemptions (owner exempt)
+     * Note: Requires sufficient USDC buffer. Backend maintains buffer via rebalancing.
      */
     function redeem(uint256 roseAmount) external nonReentrant whenNotPaused {
         if (msg.sender != owner()) {
@@ -315,13 +330,11 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         uint256 usdcOwed = calculateUsdcForRedemption(roseAmount);
 
-        IRoseToken(address(roseToken)).burn(msg.sender, roseAmount);
-
+        // Check USDC buffer - backend is responsible for maintaining liquidity
         uint256 usdcBalance = usdc.balanceOf(address(this));
-        if (usdcBalance < usdcOwed) {
-            _liquidateForRedemption(usdcOwed - usdcBalance);
-        }
+        if (usdcBalance < usdcOwed) revert InsufficientLiquidity();
 
+        IRoseToken(address(roseToken)).burn(msg.sender, roseAmount);
         usdc.safeTransfer(msg.sender, usdcOwed);
 
         lastRedeemTime[msg.sender] = block.timestamp;
@@ -416,24 +429,25 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     // ============ Rebalancing ============
 
     /**
-     * @dev Check if rebalance is needed (any asset >5% off target)
+     * @dev Check if rebalance is needed (any hard asset >5% off target)
+     * Note: ROSE is excluded from drift calculations since treasury doesn't hold ROSE
+     * (ROSE is minted to users on deposit, burned on redemption)
      */
     function needsRebalance() public view returns (bool) {
         uint256 hardAssets = hardAssetValueUSD();
         if (hardAssets == 0) return false;
 
-        uint256 roseValue = treasuryRoseValueUSD();
-        uint256 totalForAlloc = hardAssets + roseValue;
-
+        // For drift calculations, we only consider hard assets (BTC, GOLD, STABLE)
+        // ROSE is excluded since treasury mints/burns rather than holds it
         for (uint256 i = 0; i < assetKeys.length; i++) {
             bytes32 key = assetKeys[i];
+            if (key == ROSE_KEY) continue; // Skip ROSE - treasury doesn't hold it
+
             Asset memory asset = assets[key];
             if (!asset.active) continue;
 
             uint256 currentValue;
-            if (key == ROSE_KEY) {
-                currentValue = roseValue;
-            } else if (key == STABLE_KEY) {
+            if (key == STABLE_KEY) {
                 currentValue = IERC20(asset.token).balanceOf(address(this));
             } else {
                 uint256 balance = IERC20(asset.token).balanceOf(address(this));
@@ -441,7 +455,10 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
                 currentValue = _getAssetValueUSD(balance, price, asset.decimals);
             }
 
-            uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
+            // Calculate target based on hard assets only (since ROSE is excluded)
+            // Rescale target: if BTC is 30% of total and ROSE is 20%, BTC is 30/80 = 37.5% of hard assets
+            uint256 hardAssetTargetBps = (asset.targetBps * ALLOC_DENOMINATOR) / (ALLOC_DENOMINATOR - assets[ROSE_KEY].targetBps);
+            uint256 targetValue = (hardAssets * hardAssetTargetBps) / ALLOC_DENOMINATOR;
 
             if (_isDrifted(currentValue, targetValue)) return true;
         }
@@ -466,140 +483,64 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Permissionless rebalance - anyone can call if threshold met and cooldown passed
+     * @dev Permissionless rebalance check - anyone can call if threshold met and cooldown passed
+     * Note: This only updates the timestamp. Backend handles actual swaps via executeSwap().
      */
     function rebalance() external nonReentrant whenNotPaused {
         if (!needsRebalance()) revert RebalanceNotNeeded();
         if (block.timestamp < lastRebalanceTime + REBALANCE_COOLDOWN) revert RebalanceCooldown();
 
         lastRebalanceTime = block.timestamp;
-        _executeRebalance();
-    }
-
-    /**
-     * @dev Force rebalance (owner only, bypasses cooldown and threshold)
-     */
-    function forceRebalance() external onlyOwner whenNotPaused {
-        lastRebalanceTime = block.timestamp;
-        _executeRebalance();
-    }
-
-    /**
-     * @dev Internal rebalance logic - sells overweight assets, buys underweight
-     */
-    function _executeRebalance() internal {
-        uint256 hardAssets = hardAssetValueUSD();
-        uint256 roseValue = treasuryRoseValueUSD();
-        uint256 totalForAlloc = hardAssets + roseValue;
-
-        // Phase 1: Sell overweight hard assets to USDC
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY || key == STABLE_KEY) continue;
-
-            Asset memory asset = assets[key];
-            if (!asset.active) continue;
-
-            uint256 balance = IERC20(asset.token).balanceOf(address(this));
-            if (balance == 0) continue;
-
-            uint256 price = _getAssetPrice(asset.priceFeed);
-            uint256 currentValue = _getAssetValueUSD(balance, price, asset.decimals);
-            uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
-
-            if (currentValue > targetValue) {
-                uint256 diff = currentValue - targetValue;
-                uint256 toSell = (balance * diff) / currentValue;
-                if (toSell > 0) _swapAssetToUSDC(asset.token, toSell, asset.priceFeed, asset.decimals);
-            }
-        }
-
-        // Phase 2: Sell overweight ROSE to USDC
-        Asset memory roseAsset = assets[ROSE_KEY];
-        if (roseAsset.active && roseValue > 0) {
-            uint256 targetROSE = (totalForAlloc * roseAsset.targetBps) / ALLOC_DENOMINATOR;
-            if (roseValue > targetROSE) {
-                uint256 diff = roseValue - targetROSE;
-                uint256 roseToSell = (roseToken.balanceOf(address(this)) * diff) / roseValue;
-                if (roseToSell >= MIN_SWAP_AMOUNT) {
-                    _swapROSEToUSDC(roseToSell);
-                }
-            }
-        }
-
-        // Refresh values after sells
-        uint256 currentUSDC = usdc.balanceOf(address(this));
-        Asset memory stableAsset = assets[STABLE_KEY];
-        uint256 targetUSDC = (totalForAlloc * stableAsset.targetBps) / ALLOC_DENOMINATOR;
-        uint256 minBuffer = (totalForAlloc * 500) / ALLOC_DENOMINATOR; // 5% min buffer
-
-        // Phase 3: Buy underweight assets with excess USDC
-        if (currentUSDC > targetUSDC && currentUSDC > minBuffer) {
-            uint256 excess = currentUSDC - targetUSDC;
-            uint256 maxSpend = currentUSDC - minBuffer;
-            if (excess > maxSpend) excess = maxSpend;
-
-            // Calculate total deficit
-            uint256 totalDeficit = 0;
-            for (uint256 i = 0; i < assetKeys.length; i++) {
-                bytes32 key = assetKeys[i];
-                if (key == STABLE_KEY) continue;
-
-                Asset memory asset = assets[key];
-                if (!asset.active) continue;
-
-                uint256 currentValue;
-                if (key == ROSE_KEY) {
-                    currentValue = treasuryRoseValueUSD();
-                } else {
-                    uint256 balance = IERC20(asset.token).balanceOf(address(this));
-                    uint256 price = _getAssetPrice(asset.priceFeed);
-                    currentValue = _getAssetValueUSD(balance, price, asset.decimals);
-                }
-
-                uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
-                if (targetValue > currentValue) {
-                    totalDeficit += targetValue - currentValue;
-                }
-            }
-
-            // Buy underweight assets proportionally
-            if (totalDeficit > 0 && excess > 0) {
-                for (uint256 i = 0; i < assetKeys.length; i++) {
-                    bytes32 key = assetKeys[i];
-                    if (key == STABLE_KEY) continue;
-
-                    Asset memory asset = assets[key];
-                    if (!asset.active) continue;
-
-                    uint256 currentValue;
-                    if (key == ROSE_KEY) {
-                        currentValue = treasuryRoseValueUSD();
-                    } else {
-                        uint256 balance = IERC20(asset.token).balanceOf(address(this));
-                        uint256 price = _getAssetPrice(asset.priceFeed);
-                        currentValue = _getAssetValueUSD(balance, price, asset.decimals);
-                    }
-
-                    uint256 targetValue = (totalForAlloc * asset.targetBps) / ALLOC_DENOMINATOR;
-                    if (targetValue > currentValue) {
-                        uint256 deficit = targetValue - currentValue;
-                        uint256 buyAmount = (excess * deficit) / totalDeficit;
-
-                        if (buyAmount >= MIN_SWAP_AMOUNT) {
-                            if (key == ROSE_KEY) {
-                                uint256 roseBought = _swapUSDCToROSE(buyAmount);
-                                emit RoseBuyback(buyAmount, roseBought);
-                            } else {
-                                _swapUSDCToAsset(asset.token, buyAmount, asset.priceFeed, asset.decimals);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         emit Rebalanced(hardAssetValueUSD());
+    }
+
+    /**
+     * @dev Force rebalance (owner/rebalancer only, bypasses cooldown and threshold)
+     * Note: This only updates the timestamp. Backend handles actual swaps via executeSwap().
+     */
+    function forceRebalance() external onlyRebalancer whenNotPaused {
+        lastRebalanceTime = block.timestamp;
+        emit Rebalanced(hardAssetValueUSD());
+    }
+
+    // ============ LiFi Swap Functions ============
+
+    /**
+     * @dev Execute a swap via LiFi Diamond
+     * Backend generates lifiData using LiFi SDK with optimal routing
+     * @param fromAsset Source asset key (e.g., "STABLE", "BTC")
+     * @param toAsset Destination asset key
+     * @param amountIn Amount of source token to swap
+     * @param minAmountOut Minimum acceptable output (slippage protection)
+     * @param lifiData Calldata for LiFi Diamond (generated by backend)
+     */
+    function executeSwap(
+        bytes32 fromAsset,
+        bytes32 toAsset,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bytes calldata lifiData
+    ) external onlyRebalancer nonReentrant whenNotPaused {
+        Asset memory from = assets[fromAsset];
+        Asset memory to = assets[toAsset];
+
+        if (from.token == address(0)) revert AssetNotFound();
+        if (to.token == address(0)) revert AssetNotFound();
+        if (!from.active) revert AssetNotActive();
+        if (!to.active) revert AssetNotActive();
+        if (amountIn == 0) revert ZeroAmount();
+
+        uint256 balBefore = IERC20(to.token).balanceOf(address(this));
+
+        // Execute swap via LiFi Diamond
+        // Note: Approval already granted in addAsset() / constructor
+        (bool success, ) = lifiDiamond.call(lifiData);
+        if (!success) revert LiFiSwapFailed();
+
+        uint256 received = IERC20(to.token).balanceOf(address(this)) - balBefore;
+        if (received < minAmountOut) revert SlippageExceeded();
+
+        emit SwapExecuted(fromAsset, toAsset, amountIn, received);
     }
 
     // ============ Price Functions ============
@@ -646,293 +587,16 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         }
     }
 
-    /**
-     * @dev Diversify deposited USDC into RWA with smart rebalancing.
-     * Prioritizes underweight assets (USDC buffer first, then RWA proportionally).
-     * Note: Does NOT buy ROSE - that's handled by rebalance() buybacks.
-     */
-    function _diversify(uint256 usdcAmount) internal {
-        if (usdcAmount == 0) return;
-
-        // Get total hard allocation excluding ROSE
-        uint256 hardAllocTotal = 0;
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY) continue;
-            Asset memory asset = assets[key];
-            if (asset.active) hardAllocTotal += asset.targetBps;
-        }
-
-        if (hardAllocTotal == 0) return;
-
-        // Check if this is first deposit (no RWA held yet)
-        bool isFirstDeposit = true;
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY || key == STABLE_KEY) continue;
-            Asset memory asset = assets[key];
-            if (asset.active && IERC20(asset.token).balanceOf(address(this)) > 0) {
-                isFirstDeposit = false;
-                break;
-            }
-        }
-
-        if (isFirstDeposit) {
-            _diversifyByRatio(usdcAmount, hardAllocTotal);
-            return;
-        }
-
-        // Smart diversification based on current holdings
-        uint256 usdcBal = usdc.balanceOf(address(this));
-        uint256 preDepositUSDC = usdcBal - usdcAmount;
-
-        // Calculate current hard asset total
-        uint256 currentHardTotal = 0;
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY) continue;
-            Asset memory asset = assets[key];
-            if (!asset.active) continue;
-
-            if (key == STABLE_KEY) {
-                currentHardTotal += usdcBal;
-            } else {
-                uint256 balance = IERC20(asset.token).balanceOf(address(this));
-                if (balance > 0) {
-                    uint256 price = _getAssetPrice(asset.priceFeed);
-                    currentHardTotal += _getAssetValueUSD(balance, price, asset.decimals);
-                }
-            }
-        }
-
-        // Calculate target USDC based on allocation
-        Asset memory stableAsset = assets[STABLE_KEY];
-        uint256 targetUSDC = (currentHardTotal * stableAsset.targetBps) / hardAllocTotal;
-        uint256 deficitUSDC = targetUSDC > preDepositUSDC ? targetUSDC - preDepositUSDC : 0;
-
-        uint256 remaining = usdcAmount;
-
-        // Phase 1: Fill USDC buffer first
-        if (deficitUSDC > 0 && remaining > 0) {
-            uint256 toUSDC = remaining < deficitUSDC ? remaining : deficitUSDC;
-            remaining -= toUSDC;
-        }
-
-        // Phase 2: Fill RWA deficits proportionally
-        if (remaining > 0) {
-            uint256 totalRWADeficit = 0;
-
-            // Calculate RWA deficits
-            for (uint256 i = 0; i < assetKeys.length; i++) {
-                bytes32 key = assetKeys[i];
-                if (key == ROSE_KEY || key == STABLE_KEY) continue;
-                Asset memory asset = assets[key];
-                if (!asset.active) continue;
-
-                uint256 balance = IERC20(asset.token).balanceOf(address(this));
-                uint256 currentValue = 0;
-                if (balance > 0) {
-                    uint256 price = _getAssetPrice(asset.priceFeed);
-                    currentValue = _getAssetValueUSD(balance, price, asset.decimals);
-                }
-
-                uint256 targetValue = (currentHardTotal * asset.targetBps) / hardAllocTotal;
-                if (targetValue > currentValue) {
-                    totalRWADeficit += targetValue - currentValue;
-                }
-            }
-
-            if (totalRWADeficit > 0) {
-                uint256 toSpend = remaining < totalRWADeficit ? remaining : totalRWADeficit;
-
-                for (uint256 i = 0; i < assetKeys.length; i++) {
-                    bytes32 key = assetKeys[i];
-                    if (key == ROSE_KEY || key == STABLE_KEY) continue;
-                    Asset memory asset = assets[key];
-                    if (!asset.active) continue;
-
-                    uint256 balance = IERC20(asset.token).balanceOf(address(this));
-                    uint256 currentValue = 0;
-                    if (balance > 0) {
-                        uint256 price = _getAssetPrice(asset.priceFeed);
-                        currentValue = _getAssetValueUSD(balance, price, asset.decimals);
-                    }
-
-                    uint256 targetValue = (currentHardTotal * asset.targetBps) / hardAllocTotal;
-                    if (targetValue > currentValue) {
-                        uint256 deficit = targetValue - currentValue;
-                        uint256 spendAmount = (toSpend * deficit) / totalRWADeficit;
-                        if (spendAmount >= MIN_SWAP_AMOUNT) {
-                            _swapUSDCToAsset(asset.token, spendAmount, asset.priceFeed, asset.decimals);
-                        }
-                    }
-                }
-
-                remaining -= toSpend;
-            }
-        }
-
-        // Phase 3: Excess goes to RWA by ratio
-        if (remaining > 0) {
-            _diversifyByRatio(remaining, hardAllocTotal);
-        }
-    }
-
-    /**
-     * @dev Simple diversification using target ratios (for first deposit or excess)
-     */
-    function _diversifyByRatio(uint256 usdcAmount, uint256 hardAllocTotal) internal {
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY || key == STABLE_KEY) continue;
-
-            Asset memory asset = assets[key];
-            if (!asset.active) continue;
-
-            uint256 buyAmount = (usdcAmount * asset.targetBps) / hardAllocTotal;
-            if (buyAmount >= MIN_SWAP_AMOUNT) {
-                _swapUSDCToAsset(asset.token, buyAmount, asset.priceFeed, asset.decimals);
-            }
-        }
-    }
-
-    /**
-     * @dev Liquidate RWA to USDC for redemptions
-     */
-    function _liquidateForRedemption(uint256 usdcNeeded) internal {
-        uint256 hardAssets = hardAssetValueUSD();
-        uint256 usdcBalance = usdc.balanceOf(address(this));
-        uint256 rwaValue = hardAssets - usdcBalance;
-
-        if (rwaValue == 0) revert InsufficientLiquidity();
-
-        // Liquidate proportionally from each RWA asset
-        for (uint256 i = 0; i < assetKeys.length; i++) {
-            bytes32 key = assetKeys[i];
-            if (key == ROSE_KEY || key == STABLE_KEY) continue;
-
-            Asset memory asset = assets[key];
-            if (!asset.active) continue;
-
-            uint256 balance = IERC20(asset.token).balanceOf(address(this));
-            if (balance == 0) continue;
-
-            // Ceiling division to ensure we sell enough
-            uint256 toSell = (balance * usdcNeeded + rwaValue - 1) / rwaValue;
-            if (toSell > balance) toSell = balance;
-
-            if (toSell > 0) {
-                _swapAssetToUSDC(asset.token, toSell, asset.priceFeed, asset.decimals);
-            }
-        }
-    }
-
-    /**
-     * @dev Swap USDC to asset via Uniswap
-     */
-    function _swapUSDCToAsset(address assetToken, uint256 usdcAmount, address priceFeed, uint8 assetDecimals) internal {
-        uint256 minOut = _calculateMinOut(usdcAmount, priceFeed, assetDecimals, true);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(usdc),
-            tokenOut: assetToken,
-            fee: POOL_FEE_VOLATILE,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: usdcAmount,
-            amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0
-        });
-
-        swapRouter.exactInputSingle(params);
-    }
-
-    /**
-     * @dev Swap asset to USDC via Uniswap
-     */
-    function _swapAssetToUSDC(address assetToken, uint256 assetAmount, address priceFeed, uint8 assetDecimals) internal {
-        uint256 minOut = _calculateMinOut(assetAmount, priceFeed, assetDecimals, false);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: assetToken,
-            tokenOut: address(usdc),
-            fee: POOL_FEE_VOLATILE,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: assetAmount,
-            amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0
-        });
-
-        swapRouter.exactInputSingle(params);
-    }
-
-    /**
-     * @dev Swap USDC to ROSE via Uniswap (buyback)
-     */
-    function _swapUSDCToROSE(uint256 usdcAmount) internal returns (uint256) {
-        uint256 nav = rosePrice();
-        uint256 expectedRose = (usdcAmount * 1e18) / nav;
-        uint256 minOut = (expectedRose * (ALLOC_DENOMINATOR - maxSlippageBps)) / ALLOC_DENOMINATOR;
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(usdc),
-            tokenOut: address(roseToken),
-            fee: POOL_FEE_STABLE,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: usdcAmount,
-            amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0
-        });
-
-        return swapRouter.exactInputSingle(params);
-    }
-
-    /**
-     * @dev Swap ROSE to USDC via Uniswap
-     */
-    function _swapROSEToUSDC(uint256 roseAmount) internal returns (uint256) {
-        uint256 nav = rosePrice();
-        uint256 expectedUsdc = (roseAmount * nav) / 1e18;
-        uint256 minOut = (expectedUsdc * (ALLOC_DENOMINATOR - maxSlippageBps)) / ALLOC_DENOMINATOR;
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(roseToken),
-            tokenOut: address(usdc),
-            fee: POOL_FEE_STABLE,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: roseAmount,
-            amountOutMinimum: minOut,
-            sqrtPriceLimitX96: 0
-        });
-
-        return swapRouter.exactInputSingle(params);
-    }
-
-    /**
-     * @dev Calculate minimum output with slippage protection
-     */
-    function _calculateMinOut(
-        uint256 amountIn,
-        address priceFeed,
-        uint8 assetDecimals,
-        bool buyingAsset
-    ) internal view returns (uint256) {
-        uint256 price = _getAssetPrice(priceFeed);
-
-        uint256 expectedOut;
-        if (buyingAsset) {
-            expectedOut = (amountIn * (10 ** assetDecimals) * (10 ** CHAINLINK_DECIMALS)) / (price * (10 ** USDC_DECIMALS));
-        } else {
-            expectedOut = _getAssetValueUSD(amountIn, price, assetDecimals);
-        }
-
-        return (expectedOut * (ALLOC_DENOMINATOR - maxSlippageBps)) / ALLOC_DENOMINATOR;
-    }
-
     // ============ Admin Functions ============
+
+    /**
+     * @dev Set rebalancer address (backend signer that can call executeSwap)
+     */
+    function setRebalancer(address _rebalancer) external onlyOwner {
+        if (_rebalancer == address(0)) revert ZeroAddress();
+        rebalancer = _rebalancer;
+        emit RebalancerUpdated(_rebalancer);
+    }
 
     /**
      * @dev Set marketplace address

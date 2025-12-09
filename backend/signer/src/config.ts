@@ -103,6 +103,20 @@ export const config = {
     // Start watching from this many blocks before current (for startup catch-up)
     startupBlockLookback: parseInt(process.env.VP_REFRESH_STARTUP_LOOKBACK || '1000'),
   },
+
+  // Deposit watcher configuration (Phase 3 LiFi integration)
+  depositWatcher: {
+    // Enable deposit watching and auto-diversification (default: true)
+    enabled: process.env.DEPOSIT_WATCHER_ENABLED !== 'false',
+    // Debounce time in ms - wait before processing to batch deposits
+    debounceMs: parseInt(process.env.DEPOSIT_WATCHER_DEBOUNCE_MS || '30000'),
+    // Whether to execute swaps (default: true when enabled)
+    executeSwaps: process.env.DEPOSIT_WATCHER_EXECUTE !== 'false',
+    // Slippage tolerance in basis points (default: 100 = 1%)
+    slippageBps: parseInt(process.env.DEPOSIT_WATCHER_SLIPPAGE_BPS || '100'),
+    // Blocks to look back on startup (default: 0 - don't catch up)
+    startupBlockLookback: parseInt(process.env.DEPOSIT_WATCHER_STARTUP_LOOKBACK || '0'),
+  },
 };
 
 // Validate required env vars

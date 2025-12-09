@@ -40,11 +40,11 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 |----------|-------|---------|
 | RoseToken.sol | 167 | ERC20 with authorized mint/burn |
 | RoseMarketplace.sol | 572 | Task lifecycle, escrow, payments, passport verification |
-| RoseTreasury.sol | 861 | RWA-backed treasury (BTC/Gold/USDC via Chainlink + Uniswap V3) |
+| RoseTreasury.sol | ~700 | RWA-backed treasury (BTC/Gold/USDC via Chainlink + LiFi), configurable asset registry |
 | RoseGovernance.sol | 1235 | Proposals, quadratic voting, multi-delegation, rewards, Phase 1 liquid democracy |
 | RoseReputation.sol | 205 | User reputation tracking, monthly buckets, eligibility checks |
 | vROSE.sol | 205 | Soulbound governance receipt token |
-| mocks/*.sol | 260 | MockERC20, MockV3Aggregator, MockUniswapV3Router, MockMarketplace |
+| mocks/*.sol | 560 | MockERC20, MockV3Aggregator, MockUniswapV3Router, MockMarketplace, MockLiFiDiamond |
 
 **Deployment order:** RoseToken → vROSE → RoseTreasury → RoseMarketplace → RoseReputation → RoseGovernance
 
@@ -53,8 +53,9 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 2. `vROSE.setGovernance(governance)` + `setMarketplace(marketplace)`
 3. `RoseReputation.setGovernance(governance)` - After governance deployed
 4. `RoseMarketplace.setGovernance(governance)` + `setVRoseToken(vROSE)` + `setReputation(reputation)`
-5. `RoseTreasury.setMarketplace(marketplace)` + `setGovernance(governance)`
+5. `RoseTreasury.setRebalancer(signerAddress)` - Required for backend-driven swaps
 6. `RoseGovernance.setDelegationSigner(signerAddress)` - Required for delegated voting
+7. `RoseTreasury.addAsset(...)` - Register initial assets (BTC, GOLD, STABLE, ROSE)
 
 **Passport verification:** ECDSA signatures from passportSigner for `createTask`, `stakeholderStake`, `claimTask`. Replay protection via `usedSignatures` mapping.
 
@@ -91,9 +92,10 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 | Marketplace | InvalidSignature, SignatureExpired, SignatureAlreadyUsed | Passport |
 | Marketplace | NotGovernance, InsufficientVRose | Permissions |
 | Treasury | InvalidPrice, StaleOracle | Oracle issues |
-| Treasury | InsufficientLiquidity, SlippageExceeded | Swap failures |
-| Treasury | InvalidAllocation, ZeroAmount | Validation |
+| Treasury | InsufficientLiquidity, SlippageExceeded, LiFiSwapFailed | Swap failures |
+| Treasury | InvalidAllocation, ZeroAmount, AssetNotFound, AssetNotActive | Validation |
 | Treasury | RebalanceNotNeeded, RebalanceCooldown, CooldownNotElapsed | Cooldowns |
+| Treasury | NotRebalancer, AssetAlreadyExists, CannotDeactivateRequired | Admin/asset |
 | Reputation | NotOwner, NotGovernance, NotMarketplace | Auth |
 | Reputation | ZeroAddress, ZeroAddressSigner | Validation |
 | Governance | IneligibleToPropose (<90% rep or <10 tasks) | Eligibility |
@@ -116,9 +118,39 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --help
 - **Circulating Supply:** totalSupply - balanceOf(treasury)
 - **All values normalized to 6 decimals**
 
-**Deposit:** USDC → Treasury → ROSE minted → `_diversify()` swaps to RWA
-**Redeem:** ROSE burned → `_liquidateForRedemption()` if needed → USDC returned
-**Rebalance:** >5% drift triggers, 7-day cooldown, owner can force, maintains 5% USDC buffer
+**Deposit:** USDC → Treasury → ROSE minted → Backend watches `Deposited` event → Diversifies via LiFi
+**Redeem:** User approves ROSE → ROSE burned → USDC returned (requires USDC buffer)
+**Rebalance:** >5% drift triggers (hard assets only), 7-day cooldown, rebalancer/owner can force
+
+### LiFi Integration (Phase 3)
+
+**Architecture:** Contract is "dumb" (safety rails only), backend is "smart" (routing decisions).
+
+**Key Changes:**
+- `executeSwap(fromAsset, toAsset, amountIn, minAmountOut, lifiData)` - Backend-driven swaps via LiFi Diamond
+- Deposits no longer auto-diversify - backend watches `Deposited` events and calls `executeSwap()`
+- Redemptions require USDC buffer - no auto-liquidation, backend must ensure buffer via swaps
+- Rebalancer role added - `onlyRebalancer` modifier for `executeSwap()` and `forceRebalance()`
+- ROSE excluded from drift calculations (treasury doesn't hold ROSE)
+
+**Asset Registry:**
+```solidity
+struct Asset {
+    address token;
+    address priceFeed;    // Chainlink (or ZeroAddress for USDC/ROSE)
+    uint8 decimals;
+    uint256 targetBps;    // Target allocation in basis points
+    bool active;
+}
+mapping(bytes32 => Asset) public assets;  // e.g., encodeBytes32String("BTC") => Asset
+```
+
+**Functions:**
+- `addAsset(key, token, priceFeed, decimals, targetBps)` - Register new asset
+- `updateAssetAllocation(key, newTargetBps)` - Change target allocation
+- `deactivateAsset(key)` / `reactivateAsset(key)` - Toggle asset (ROSE/STABLE cannot be deactivated)
+- `getAllAssets()` - Returns all registered assets
+- `setRebalancer(address)` - Set rebalancer wallet (usually same as signer)
 
 ## Security Patterns
 
@@ -506,6 +538,8 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | reconciliation.ts | runReconciliation, reconcileProposal, syncAllocationsFromChain, clearDelegatorAllocations, validateDelegatorClaimPower, getReconciliationStats (Phase 2) |
 | delegateScoring.ts | getDelegateScore, getAllDelegateScores, validateDelegateEligibility, scoreProposal, scoreAllUnscoredProposals, getScoringStats, freeVPForProposal, freeAllPendingVP (Phase 3) |
 | vpRefresh.ts | startVPRefreshWatcher, stopVPRefreshWatcher, getVPRefreshStats, checkAndRefreshUser, forceProcessPending, getPendingUsers (Phase 4) |
+| lifi.ts | getSwapQuote, applySlippage, calculateDiversificationSwaps, executeDiversificationSwap, getAssetTokenAddress, getTargetAllocations (Phase 3 Treasury LiFi) |
+| depositWatcher.ts | startDepositWatcher, stopDepositWatcher, getDepositWatcherStats, forceProcessPending, getPendingDeposits (Phase 3 Treasury LiFi) |
 | auction.ts | registerAuctionTask, submitBid, getBidsForTask, getBidCount, getWorkerBid, signWinnerSelection, concludeAuction, auctionExists, getAuctionTask, syncAuctionFromChain |
 | profile.ts | createOrUpdateProfile, getProfile, getProfiles |
 | eip712.ts | verifyProfileSignature, isTimestampValid |
@@ -521,6 +555,7 @@ uint256 winningBid;    // Final price (0 until winner selected)
 | Reconciliation | Every 6 hours | Compare DB allocations with on-chain, auto-sync discrepancies (Phase 2) |
 | Delegate Scoring | Every hour | Score finalized proposals, update delegate win/loss records, auto-free delegated VP (Phase 3) |
 | VP Refresh Watcher | Event-driven | Watch ReputationChanged events, auto-refresh VP when reputation changes (Phase 4) |
+| Deposit Watcher | Event-driven | Watch Deposited events, diversify via LiFi (Phase 3 Treasury LiFi) |
 
 ## Backend Deployment
 
@@ -578,7 +613,14 @@ npx hardhat run scripts/simulate.js --network arbitrumSepolia -- --scenario bull
 |----------|---------------|
 | Root .env | ARBITRUM_SEPOLIA_RPC_URL, PRIVATE_KEY, DAO_TREASURY_ADDRESS, ARBISCAN_API_KEY, PASSPORT_SIGNER_ADDRESS |
 | frontend/.env | VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS, VITE_PINATA_*, VITE_PASSPORT_SIGNER_URL |
-| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE |
+| backend/.env | PORT, ALLOWED_ORIGINS, SIGNER_PRIVATE_KEY, VITE_GITCOIN_API_KEY/SCORER_ID, THRESHOLD_*, GOVERNANCE/TREASURY_ADDRESS, RPC_URL, DATABASE_URL, DB_POOL_*, NAV_CRON_SCHEDULE, RECONCILIATION_CRON_SCHEDULE, RECONCILIATION_ON_STARTUP, DELEGATE_SCORING_*, DELEGATE_MIN_*, DELEGATE_GATE_ON_SCORE, DEPOSIT_WATCHER_* |
+
+**Deposit Watcher Env Vars (Phase 3 Treasury LiFi):**
+- `DEPOSIT_WATCHER_ENABLED` - Enable deposit watching (default: true)
+- `DEPOSIT_WATCHER_DEBOUNCE_MS` - Debounce time in ms (default: 30000)
+- `DEPOSIT_WATCHER_EXECUTE` - Execute swaps vs dry run (default: true when enabled)
+- `DEPOSIT_WATCHER_SLIPPAGE_BPS` - Slippage tolerance (default: 100 = 1%)
+- `DEPOSIT_WATCHER_STARTUP_LOOKBACK` - Blocks to look back on startup (default: 0)
 
 ## Token Decimals Reference
 

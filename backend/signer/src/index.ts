@@ -21,6 +21,7 @@ import { startNavHistoryCron } from './cron/nav-history';
 import { startReconciliationCron } from './cron/reconciliation';
 import { startDelegateScoringCron } from './cron/delegateScoring';
 import { startVPRefreshWatcher } from './services/vpRefresh';
+import { startDepositWatcher } from './services/depositWatcher';
 
 const app = express();
 
@@ -106,6 +107,11 @@ async function start() {
 
   // Start event watchers (Phase 4)
   startVPRefreshWatcher();
+
+  // Start deposit watcher for LiFi diversification (Phase 3)
+  startDepositWatcher().catch((err) => {
+    console.error('[DepositWatcher] Failed to start:', err);
+  });
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);
