@@ -70,7 +70,7 @@ contract vROSE is IvROSE {
      * @param _owner The token owner
      * @param spender The spender address
      */
-    function allowance(address _owner, address spender) external view returns (uint256) {
+    function allowance(address _owner, address spender) external view override returns (uint256) {
         return _allowances[_owner][spender];
     }
 
@@ -82,7 +82,7 @@ contract vROSE is IvROSE {
      * @param to The recipient
      * @param amount The amount to transfer
      */
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external override returns (bool) {
         // Allow: user → marketplace OR marketplace → user
         if (to != marketplace && msg.sender != marketplace) revert OnlyMarketplaceTransfer();
         _transfer(msg.sender, to, amount);
@@ -96,7 +96,7 @@ contract vROSE is IvROSE {
      * @param to The recipient address
      * @param amount The amount to transfer
      */
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
         // Either from or to must be marketplace
         if (to != marketplace && from != marketplace) revert OnlyMarketplaceTransfer();
 
@@ -117,7 +117,7 @@ contract vROSE is IvROSE {
      * @param spender The spender (must be marketplace)
      * @param amount The amount to approve
      */
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address spender, uint256 amount) external override returns (bool) {
         if (spender != marketplace) revert OnlyMarketplaceApproval();
         _allowances[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);

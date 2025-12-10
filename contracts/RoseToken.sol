@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 /**
  * @title RoseToken
  * @dev ERC20 token with mint/burn capabilities for authorized contracts.
  * Both Marketplace (task completion) and Treasury (deposit/redeem) can mint/burn.
  */
-contract RoseToken {
+contract RoseToken is IERC20 {
     string public name = "Rose Token";
     string public symbol = "ROSE";
     uint8 public decimals = 18;
@@ -22,9 +24,7 @@ contract RoseToken {
     // Owner for managing authorized addresses
     address public owner;
 
-    // Events
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    // Events (Transfer and Approval inherited from IERC20)
     event AuthorizationUpdated(address indexed account, bool status);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -129,7 +129,7 @@ contract RoseToken {
     /**
      * @dev Transfer tokens from msg.sender to a recipient
      */
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external override returns (bool) {
         if (to == address(0)) revert ZeroAddress();
         if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
         balanceOf[msg.sender] -= amount;
@@ -141,7 +141,7 @@ contract RoseToken {
     /**
      * @dev Approve another address to spend tokens on behalf of msg.sender
      */
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address spender, uint256 amount) external override returns (bool) {
         if (spender == address(0)) revert ZeroAddress();
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
@@ -151,7 +151,7 @@ contract RoseToken {
     /**
      * @dev Transfer tokens from one address to another using allowance
      */
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
         if (from == address(0)) revert ZeroAddress();
         if (to == address(0)) revert ZeroAddress();
         if (balanceOf[from] < amount) revert InsufficientBalance();
