@@ -83,12 +83,24 @@ Web3 marketplace with task-value-based token distribution.
 
 ```
 StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
-        ↓               ↓
+        ↓               ↓           ↓           ↓
+        │               │           │           └─→ disputeTaskAsWorker() → Disputed
+        │               │           └─→ disputeTaskAsCustomer() → Disputed
         │               └─→ unstakeStakeholder() → StakeholderRequired (stakeholder exits, task remains)
         └───────────────┴─→ cancelTask() → Closed (refunds both parties)
+
+Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 ```
 
 **Unstake:** Stakeholders can exit tasks in `Open` status via `unstakeStakeholder()`. Returns vROSE to stakeholder, task reverts to `StakeholderRequired` for another stakeholder to step in.
+
+**Dispute Resolution:**
+- Customer can dispute `InProgress` tasks via `disputeTaskAsCustomer(taskId, reasonHash)`
+- Worker can dispute `Completed` tasks via `disputeTaskAsWorker(taskId, reasonHash)`
+- Owner resolves via `resolveDispute(taskId, workerPct)` where `workerPct` is 0-100
+- Resolution: worker gets `workerPct%` of deposit, customer gets rest, stakeholder gets vROSE back
+- NO DAO mint for disputed tasks
+- Reason stored as IPFS hash on-chain
 
 **Auction Mode:** Bids off-chain, customer sees midpoint as "bid". `selectAuctionWinner` uses actual worker bid. On completion: spread (midpoint - bid) → treasury, reduced surplus (deposit - midpoint) → customer.
 
@@ -100,9 +112,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
-**Routes:** `/` Tasks, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only)
+**Routes:** `/` Tasks, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
 
-**Key Hooks:** useVaultData (45s refresh), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance)
+**Key Hooks:** useVaultData (45s refresh), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries)
 
 **Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: manual treasury rebalance trigger.
 
@@ -124,6 +136,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Auction | `/api/auction/register`, `/bid`, `/:taskId/bids`, `/:taskId/count`, `/:taskId/my-bid/:worker`, `/:taskId`, `/select-winner`, `/confirm-winner`, `/:taskId/sync` |
 | Profile | `/api/profile` POST, `/api/profile/:addr` GET |
 | Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
+| Dispute | `/api/dispute/list`, `/api/dispute/stats`, `/api/dispute/:taskId` (admin queries, on-chain events synced to DB) |
 
 ## Backend Services
 
@@ -139,6 +152,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | depositWatcher.ts | Watch `Deposited`, diversify |
 | redemptionWatcher.ts | Watch `RedemptionRequested`, liquidate, fulfill |
 | auction.ts | Off-chain bids, winner selection |
+| dispute.ts | Dispute queries, on-chain event recording |
 
 ## Scheduled Jobs
 
@@ -154,7 +168,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 ## Database Tables
 
-`profiles`, `nav_history`, `delegation_allocations`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`
+`profiles`, `nav_history`, `delegation_allocations`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`
 
 ## Token Decimals
 

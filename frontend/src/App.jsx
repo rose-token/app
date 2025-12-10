@@ -11,6 +11,7 @@ import ProposalCreatePage from './pages/ProposalCreatePage';
 import DelegatesPage from './pages/DelegatesPage';
 import MyVotesPage from './pages/MyVotesPage';
 import AdminPage from './pages/AdminPage';
+import AdminDisputesPage from './pages/AdminDisputesPage';
 import ProtectedRoutes from './components/routing/ProtectedRoutes';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
@@ -67,6 +68,7 @@ function App() {
                         <Route path="/delegates" element={<DelegatesPage />} />
                         <Route path="/profile" element={<ProfilePage />} />
                         <Route path="/admin" element={<AdminPage />} />
+                        <Route path="/admin/disputes" element={<AdminDisputesPage />} />
                         <Route path="/help" element={<HelpPage />} />
                       </Routes>
                     </ProtectedRoutes>

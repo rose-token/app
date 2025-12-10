@@ -1441,4 +1441,234 @@ describe("RoseMarketplace", function () {
       });
     });
   });
+
+  // ============ Task Disputes ============
+  describe("Task Disputes", function () {
+    const taskTitle = "Disputable Task";
+    const taskDeposit = ethers.parseEther("100");
+    const stakeholderDeposit = taskDeposit / 10n;
+    const disputeReasonHash = "QmDisputeReasonHash123456789";
+
+    // Helper to setup an InProgress task
+    async function setupInProgressTask() {
+      // Customer creates task
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      // Stakeholder stakes
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      // Worker claims
+      const claimExpiry = await getFutureExpiry();
+      const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+      await roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig);
+    }
+
+    // Helper to setup a Completed task
+    async function setupCompletedTask() {
+      await setupInProgressTask();
+      // Worker marks completed
+      await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+    }
+
+    describe("Customer Disputes (InProgress)", function () {
+      it("Should allow customer to dispute InProgress task", async function () {
+        await setupInProgressTask();
+
+        await expect(roseMarketplace.connect(customer).disputeTaskAsCustomer(1, disputeReasonHash))
+          .to.emit(roseMarketplace, "TaskDisputed")
+          .withArgs(1, customer.address, disputeReasonHash, (await ethers.provider.getBlock("latest")).timestamp + 1);
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(6); // Disputed
+        expect(task.disputeInitiator).to.equal(customer.address);
+        expect(task.disputeReasonHash).to.equal(disputeReasonHash);
+      });
+
+      it("Should NOT allow non-customer to dispute as customer", async function () {
+        await setupInProgressTask();
+
+        await expect(
+          roseMarketplace.connect(worker).disputeTaskAsCustomer(1, disputeReasonHash)
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotCustomer");
+      });
+
+      it("Should NOT allow customer to dispute non-InProgress task", async function () {
+        await setupCompletedTask();
+
+        await expect(
+          roseMarketplace.connect(customer).disputeTaskAsCustomer(1, disputeReasonHash)
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotInDisputableStatus");
+      });
+
+      it("Should NOT allow customer to dispute twice", async function () {
+        await setupInProgressTask();
+        await roseMarketplace.connect(customer).disputeTaskAsCustomer(1, disputeReasonHash);
+
+        // After first dispute, status changes to Disputed, so second attempt fails on status check
+        await expect(
+          roseMarketplace.connect(customer).disputeTaskAsCustomer(1, "QmAnotherReason")
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotInDisputableStatus");
+      });
+
+      it("Should NOT allow empty reason hash", async function () {
+        await setupInProgressTask();
+
+        await expect(
+          roseMarketplace.connect(customer).disputeTaskAsCustomer(1, "")
+        ).to.be.revertedWith("Reason hash cannot be empty");
+      });
+    });
+
+    describe("Worker Disputes (Completed)", function () {
+      it("Should allow worker to dispute Completed task", async function () {
+        await setupCompletedTask();
+
+        await expect(roseMarketplace.connect(worker).disputeTaskAsWorker(1, disputeReasonHash))
+          .to.emit(roseMarketplace, "TaskDisputed");
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(6); // Disputed
+        expect(task.disputeInitiator).to.equal(worker.address);
+      });
+
+      it("Should NOT allow non-worker to dispute as worker", async function () {
+        await setupCompletedTask();
+
+        await expect(
+          roseMarketplace.connect(customer).disputeTaskAsWorker(1, disputeReasonHash)
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotDisputeParticipant");
+      });
+
+      it("Should NOT allow worker to dispute InProgress task", async function () {
+        await setupInProgressTask();
+
+        await expect(
+          roseMarketplace.connect(worker).disputeTaskAsWorker(1, disputeReasonHash)
+        ).to.be.revertedWithCustomError(roseMarketplace, "NotInDisputableStatus");
+      });
+    });
+
+    describe("Dispute Resolution", function () {
+      beforeEach(async function () {
+        await setupInProgressTask();
+        await roseMarketplace.connect(customer).disputeTaskAsCustomer(1, disputeReasonHash);
+      });
+
+      it("Should resolve dispute 100% in favor of worker", async function () {
+        const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        await expect(roseMarketplace.connect(owner).resolveDispute(1, 100))
+          .to.emit(roseMarketplace, "DisputeResolved")
+          .withArgs(1, 1, 100, taskDeposit, 0) // resolution=1 (FavorWorker)
+          .to.emit(roseMarketplace, "TaskClosed");
+
+        // Worker gets full deposit
+        expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + taskDeposit);
+        // Customer gets nothing
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore);
+        // Stakeholder gets vROSE back
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+
+        const task = await roseMarketplace.tasks(1);
+        expect(task.status).to.equal(4); // Closed
+        expect(task.deposit).to.equal(0);
+        expect(task.stakeholderDeposit).to.equal(0);
+      });
+
+      it("Should resolve dispute 100% in favor of customer", async function () {
+        const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        await expect(roseMarketplace.connect(owner).resolveDispute(1, 0))
+          .to.emit(roseMarketplace, "DisputeResolved")
+          .withArgs(1, 0, 0, 0, taskDeposit); // resolution=0 (FavorCustomer)
+
+        // Worker gets nothing
+        expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore);
+        // Customer gets full refund
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore + taskDeposit);
+        // Stakeholder gets vROSE back
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+      });
+
+      it("Should resolve dispute with partial split (60% worker)", async function () {
+        const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        const workerPct = 60n;
+        const expectedWorkerAmount = (taskDeposit * workerPct) / 100n;
+        const expectedCustomerRefund = taskDeposit - expectedWorkerAmount;
+
+        await expect(roseMarketplace.connect(owner).resolveDispute(1, workerPct))
+          .to.emit(roseMarketplace, "DisputeResolved")
+          .withArgs(1, 2, workerPct, expectedWorkerAmount, expectedCustomerRefund); // resolution=2 (Partial)
+
+        // Worker gets 60%
+        expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + expectedWorkerAmount);
+        // Customer gets 40%
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore + expectedCustomerRefund);
+        // Stakeholder gets vROSE back
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+      });
+
+      it("Should NOT allow non-owner to resolve dispute", async function () {
+        await expect(
+          roseMarketplace.connect(customer).resolveDispute(1, 50)
+        ).to.be.revertedWithCustomError(roseMarketplace, "OwnableUnauthorizedAccount");
+      });
+
+      it("Should NOT allow resolving non-disputed task", async function () {
+        // Create another task that's not disputed
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createTask("Another task", taskDeposit, ipfsHash, createExpiry, createSig);
+
+        await expect(
+          roseMarketplace.connect(owner).resolveDispute(2, 50)
+        ).to.be.revertedWithCustomError(roseMarketplace, "TaskNotDisputed");
+      });
+
+      it("Should NOT allow percentage > 100", async function () {
+        await expect(
+          roseMarketplace.connect(owner).resolveDispute(1, 101)
+        ).to.be.revertedWithCustomError(roseMarketplace, "InvalidResolutionPercentage");
+      });
+
+      it("Should NOT mint DAO tokens for disputed task", async function () {
+        const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
+
+        await roseMarketplace.connect(owner).resolveDispute(1, 100);
+
+        // Treasury should NOT receive minted tokens
+        const treasuryBalanceAfter = await roseToken.balanceOf(await roseTreasury.getAddress());
+        expect(treasuryBalanceAfter).to.equal(treasuryBalanceBefore);
+      });
+    });
+
+    describe("Worker Dispute Resolution", function () {
+      it("Should resolve worker's dispute in Completed status", async function () {
+        await setupCompletedTask();
+        await roseMarketplace.connect(worker).disputeTaskAsWorker(1, disputeReasonHash);
+
+        const workerBalanceBefore = await roseToken.balanceOf(worker.address);
+        const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+
+        await roseMarketplace.connect(owner).resolveDispute(1, 100);
+
+        expect(await roseToken.balanceOf(worker.address)).to.equal(workerBalanceBefore + taskDeposit);
+        expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+      });
+    });
+  });
 });

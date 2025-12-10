@@ -8,7 +8,9 @@ import ProgressTracker from '../governance/ProgressTracker';
 import ProfileBadge from '../profile/ProfileBadge';
 import BidSubmissionModal from './BidSubmissionModal';
 import BidSelectionModal from './BidSelectionModal';
+import DisputeModal from './DisputeModal';
 import { useAuction } from '../../hooks/useAuction';
+import { useDispute } from '../../hooks/useDispute';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -30,7 +32,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const [myBid, setMyBid] = useState(null);
   const [isLoadingBid, setIsLoadingBid] = useState(false);
 
+  // Dispute modal state
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+
   const { getBidCount, getMyBid } = useAuction();
+  const { canDispute, actionLoading: disputeLoading } = useDispute();
 
   const marketplaceAddress = import.meta.env.VITE_MARKETPLACE_ADDRESS;
 
@@ -148,6 +154,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const canCancel = (isCustomer && (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open)) ||
     (isStakeholder && task.status === TaskStatus.StakeholderRequired);
 
+  // Dispute eligibility
+  const disputeEligibility = canDispute(task, account);
+  const canRaiseDispute = disputeEligibility.canDispute;
+  const disputeRole = disputeEligibility.role;
+
   // Check loading states for each button type
   const isStaking = loadingStates.stake?.[task.id] || false;
   const isUnstaking = loadingStates.unstake?.[task.id] || false;
@@ -158,6 +169,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isApprovingStakeholder = loadingStates.approveStakeholder?.[task.id] || false;
   const isAcceptingPayment = loadingStates.acceptPayment?.[task.id] || false;
   const isCancelling = loadingStates.cancel?.[task.id] || false;
+  const isDisputing = disputeLoading.disputeAsCustomer || disputeLoading.disputeAsWorker;
 
   // Status badge styling
   const getStatusBadgeStyle = (status) => {
@@ -168,6 +180,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       [TaskStatus.Completed]: { background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)', color: 'var(--success)' },
       [TaskStatus.ApprovedPendingPayment]: { background: 'var(--success-bg)', border: '1px solid rgba(74, 222, 128, 0.3)', color: 'var(--success)' },
       [TaskStatus.Closed]: { background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' },
+      [TaskStatus.Disputed]: { background: 'var(--error-bg)', border: '1px solid rgba(248, 113, 113, 0.3)', color: 'var(--error)' },
     };
     return styles[status] || styles[TaskStatus.Closed];
   };
@@ -640,6 +653,29 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             )}
           </button>
         )}
+
+        {canRaiseDispute && (
+          <button
+            onClick={() => setShowDisputeModal(true)}
+            disabled={isDisputing}
+            className={buttonBaseClass}
+            style={{
+              background: isDisputing ? 'var(--bg-secondary)' : 'var(--error-bg)',
+              border: '1px solid rgba(248, 113, 113, 0.3)',
+              color: isDisputing ? 'var(--text-muted)' : 'var(--error)',
+              opacity: isDisputing ? 0.6 : 1
+            }}
+          >
+            {isDisputing ? (
+              <>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
+                Raising Dispute...
+              </>
+            ) : (
+              'Raise Dispute'
+            )}
+          </button>
+        )}
       </div>
 
       {/* Progress Tracker - visible to all participants */}
@@ -737,6 +773,19 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
         taskId={task.id}
         maxBudget={task.deposit?.toString()}
         onWinnerSelected={handleBidSubmitted}
+      />
+
+      {/* Dispute Modal */}
+      <DisputeModal
+        isOpen={showDisputeModal}
+        onClose={() => setShowDisputeModal(false)}
+        taskId={task.id}
+        role={disputeRole}
+        onDisputeRaised={() => {
+          setShowDisputeModal(false);
+          // Force a refresh - parent component should handle this
+          window.location.reload();
+        }}
       />
     </div>
   );

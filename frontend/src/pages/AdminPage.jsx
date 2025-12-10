@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { useRebalance } from '../hooks/useRebalance';
@@ -153,6 +153,63 @@ const AdminPage = () => {
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
           Treasury Management & System Controls
         </p>
+      </div>
+
+      {/* Quick Navigation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Link
+          to="/admin/disputes"
+          className="rounded-[20px] p-6 transition-all hover:border-[rgba(248,113,113,0.5)]"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-lg" style={{ color: 'var(--text-primary)' }}>
+                Dispute Resolution
+              </h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                Review and resolve marketplace disputes
+              </p>
+            </div>
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--error-bg)' }}
+            >
+              <span style={{ color: 'var(--error)', fontSize: '1.5rem' }}>!</span>
+            </div>
+          </div>
+        </Link>
+
+        <div
+          className="rounded-[20px] p-6"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)',
+            opacity: 0.6,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-lg" style={{ color: 'var(--text-primary)' }}>
+                More Tools Coming
+              </h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                Additional admin features planned
+              </p>
+            </div>
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--bg-secondary)' }}
+            >
+              <span style={{ color: 'var(--text-muted)', fontSize: '1.5rem' }}>+</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Rebalance Card */}
