@@ -653,10 +653,10 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Permissionless rebalance check - anyone can call if threshold met and cooldown passed
+     * @dev Owner-restricted rebalance - only owner can call if threshold met and cooldown passed
      * Note: This only updates the timestamp. Backend handles actual swaps via executeSwap().
      */
-    function rebalance() external nonReentrant whenNotPaused {
+    function rebalance() external onlyOwner nonReentrant whenNotPaused {
         if (!needsRebalance()) revert RebalanceNotNeeded();
         if (block.timestamp < lastRebalanceTime + REBALANCE_COOLDOWN) revert RebalanceCooldown();
 

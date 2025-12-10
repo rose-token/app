@@ -52,7 +52,7 @@ Web3 marketplace with task-value-based token distribution.
 **Flows:**
 - **Deposit:** USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
 - **Redeem:** Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
-- **Rebalance:** >5% drift triggers, 7d cooldown, monthly cron
+- **Rebalance:** >5% drift triggers, 7d cooldown, monthly cron. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only (bypasses checks). Backend `/api/treasury/rebalance/run` requires signed message authentication.
 
 **Smart Diversification** (deposit watcher):
 1. Phase 1: Fill USDC buffer deficit first (critical for redemption liquidity)

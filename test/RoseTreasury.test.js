@@ -404,7 +404,7 @@ describe("RoseTreasury with LiFi Integration", function () {
   });
 
   describe("Rebalance and forceRebalance", function () {
-    it("Should allow anyone to call rebalance when threshold met", async function () {
+    it("Should allow owner to call rebalance when threshold met", async function () {
       // Setup: deposit and diversify to create drift
       const depositAmount = ethers.parseUnits("10000", 6);
       await deposit(user, depositAmount);
@@ -423,9 +423,33 @@ describe("RoseTreasury with LiFi Integration", function () {
       // Check needsRebalance
       expect(await roseTreasury.needsRebalance()).to.be.true;
 
-      // Anyone can call rebalance
-      await expect(roseTreasury.connect(user2).rebalance())
+      // Only owner can call rebalance
+      await expect(roseTreasury.connect(owner).rebalance())
         .to.emit(roseTreasury, "Rebalanced");
+    });
+
+    it("Should revert rebalance when called by non-owner", async function () {
+      // Setup: deposit and diversify to create drift
+      const depositAmount = ethers.parseUnits("10000", 6);
+      await deposit(user, depositAmount);
+
+      // Diversify everything to BTC (creates 100% drift from target)
+      const treasuryUsdc = await usdc.balanceOf(await roseTreasury.getAddress());
+      const lifiData = await generateSwapCalldata(
+        await usdc.getAddress(),
+        await tbtc.getAddress(),
+        treasuryUsdc,
+        1n,
+        await roseTreasury.getAddress()
+      );
+      await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, treasuryUsdc, 1n, lifiData);
+
+      // Check needsRebalance
+      expect(await roseTreasury.needsRebalance()).to.be.true;
+
+      // Non-owner should be rejected
+      await expect(roseTreasury.connect(user2).rebalance())
+        .to.be.revertedWithCustomError(roseTreasury, "OwnableUnauthorizedAccount");
     });
 
     it("Should revert rebalance if threshold not met", async function () {
@@ -467,7 +491,7 @@ describe("RoseTreasury with LiFi Integration", function () {
 
       // Now vault should be balanced: BTC ~30%, Gold ~30%, USDC ~20%, ROSE ~20%
       await expect(
-        roseTreasury.connect(user).rebalance()
+        roseTreasury.connect(owner).rebalance()
       ).to.be.revertedWithCustomError(roseTreasury, "RebalanceNotNeeded");
     });
 
@@ -486,15 +510,15 @@ describe("RoseTreasury with LiFi Integration", function () {
       );
       await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, treasuryUsdc, 1n, lifiData);
 
-      // First rebalance
-      await roseTreasury.connect(user).rebalance();
+      // First rebalance (owner only)
+      await roseTreasury.connect(owner).rebalance();
 
       // Deposit more USDC to treasury to recreate conditions for rebalance
       await usdc.mint(await roseTreasury.getAddress(), ethers.parseUnits("10000", 6));
 
-      // Second rebalance should fail due to cooldown
+      // Second rebalance should fail due to cooldown (owner trying again)
       await expect(
-        roseTreasury.connect(user).rebalance()
+        roseTreasury.connect(owner).rebalance()
       ).to.be.revertedWithCustomError(roseTreasury, "RebalanceCooldown");
     });
 

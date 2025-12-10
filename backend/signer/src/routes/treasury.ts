@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { ethers } from 'ethers';
 import navService from '../services/nav';
 import {
   getVaultStatus,
@@ -6,8 +7,78 @@ import {
   getLastRebalanceInfo,
   executeRebalance,
 } from '../services/treasury';
+import { config } from '../config';
 
 const router = Router();
+
+// Track used signatures to prevent replay attacks within the 5-minute window
+const usedSignatures = new Map<string, number>(); // signature -> timestamp used
+const SIGNATURE_TTL = 300; // 5 minutes
+
+// Clean up expired signatures periodically (every minute)
+setInterval(() => {
+  const now = Math.floor(Date.now() / 1000);
+  for (const [sig, timestamp] of usedSignatures.entries()) {
+    if (now - timestamp > SIGNATURE_TTL) {
+      usedSignatures.delete(sig);
+    }
+  }
+}, 60000);
+
+/**
+ * Verify admin signature for rebalance authorization.
+ * Signer signs: keccak256(abi.encodePacked(signerAddress, "rebalance", timestamp))
+ *
+ * The signature must be from the backend signer's private key.
+ * Timestamp prevents replay attacks (must be within 5 minutes).
+ * Each signature can only be used once (nonce-like protection).
+ */
+function verifyRebalanceSignature(timestamp: number, signature: string): { valid: boolean; error?: string } {
+  try {
+    // Check if signature was already used (replay protection)
+    if (usedSignatures.has(signature)) {
+      console.log('[Treasury API] Signature already used (replay attempt)');
+      return { valid: false, error: 'Signature already used' };
+    }
+
+    const wallet = new ethers.Wallet(config.signer.privateKey);
+    const expectedSigner = wallet.address;
+
+    // Check timestamp is within acceptable window (5 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    const timeDiff = Math.abs(now - timestamp);
+    if (timeDiff > SIGNATURE_TTL) {
+      console.log('[Treasury API] Signature timestamp expired:', { now, timestamp, diff: timeDiff });
+      return { valid: false, error: 'Signature expired' };
+    }
+
+    // Recreate the message hash
+    const messageHash = ethers.solidityPackedKeccak256(
+      ['address', 'string', 'uint256'],
+      [expectedSigner, 'rebalance', timestamp]
+    );
+
+    // Recover signer from signature
+    const recovered = ethers.verifyMessage(ethers.getBytes(messageHash), signature);
+
+    // Verify recovered address matches expected signer
+    const valid = recovered.toLowerCase() === expectedSigner.toLowerCase();
+    if (!valid) {
+      console.log('[Treasury API] Signature verification failed:', {
+        expected: expectedSigner,
+        recovered,
+      });
+      return { valid: false, error: 'Invalid signature' };
+    }
+
+    // Mark signature as used (only after successful verification)
+    usedSignatures.set(signature, now);
+    return { valid: true };
+  } catch (error) {
+    console.error('[Treasury API] Signature verification error:', error);
+    return { valid: false, error: 'Signature verification failed' };
+  }
+}
 
 /**
  * GET /api/treasury/history
@@ -169,12 +240,39 @@ router.get('/rebalance/last', async (req: Request, res: Response) => {
 
 /**
  * POST /api/treasury/rebalance/run
- * Manually trigger a rebalance (admin only in production)
- * Note: In production, this should be protected by auth
+ * Manually trigger a rebalance (protected with signed message authentication)
+ *
+ * Request body:
+ * - timestamp: Unix timestamp when signature was created (must be within 5 minutes)
+ * - signature: Signed message from admin wallet
+ *
+ * The message format is: keccak256(abi.encodePacked(signerAddress, "rebalance", timestamp))
  */
 router.post('/rebalance/run', async (req: Request, res: Response) => {
   try {
-    console.log('[Treasury API] Manual rebalance triggered');
+    const { timestamp, signature } = req.body;
+
+    // Validate required fields
+    if (!timestamp || !signature) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['timestamp', 'signature'],
+      });
+    }
+
+    // Validate timestamp is a number
+    const ts = parseInt(timestamp);
+    if (isNaN(ts)) {
+      return res.status(400).json({ error: 'Invalid timestamp format' });
+    }
+
+    // Verify signature
+    const verification = verifyRebalanceSignature(ts, signature);
+    if (!verification.valid) {
+      return res.status(403).json({ error: verification.error || 'Invalid or expired signature' });
+    }
+
+    console.log('[Treasury API] Authorized rebalance triggered');
     const result = await executeRebalance();
     return res.json({
       success: true,
