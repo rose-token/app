@@ -295,3 +295,109 @@ export const fetchTaskDescription = async (ipfsHash) => {
     throw new Error('Failed to fetch task description from IPFS');
   }
 };
+
+/**
+ * Upload dispute reason to IPFS
+ * @param {number} taskId - Task ID
+ * @param {string} reason - Dispute reason text
+ * @param {string} initiator - Address of dispute initiator
+ * @param {string} role - 'customer' or 'worker'
+ * @returns {Promise<string>} IPFS hash
+ */
+export const uploadDisputeReason = async (taskId, reason, initiator, role) => {
+  if (!reason || reason.trim().length < 20) {
+    throw new Error('Dispute reason must be at least 20 characters');
+  }
+
+  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
+  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
+
+  if (!apiKey || !apiSecret) {
+    throw new Error('Pinata API keys not configured');
+  }
+
+  const content = {
+    taskId: taskId,
+    reason: reason.trim(),
+    initiator: initiator,
+    role: role,
+    timestamp: Date.now(),
+    version: '1.0'
+  };
+
+  try {
+    const url = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
+    const data = {
+      pinataContent: content,
+      pinataMetadata: {
+        name: `dispute-reason-task-${taskId}-${Date.now()}`,
+        keyvalues: {
+          type: 'dispute-reason',
+          taskId: taskId.toString(),
+          role: role
+        }
+      }
+    };
+
+    const response = await axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'pinata_api_key': apiKey,
+        'pinata_secret_api_key': apiSecret
+      }
+    });
+
+    // Cache the content
+    ipfsCache.set(response.data.IpfsHash, content);
+
+    return response.data.IpfsHash;
+  } catch (error) {
+    console.error('Error uploading dispute reason to IPFS:', error);
+    throw new Error('Failed to upload dispute reason to IPFS');
+  }
+};
+
+/**
+ * Fetch dispute reason from IPFS
+ * @param {string} ipfsHash - IPFS hash
+ * @returns {Promise<Object>} Dispute reason object
+ */
+export const fetchDisputeReason = async (ipfsHash) => {
+  if (!ipfsHash || ipfsHash.length === 0) {
+    throw new Error('IPFS hash is required');
+  }
+
+  // Check cache first
+  if (ipfsCache.has(ipfsHash)) {
+    return ipfsCache.get(ipfsHash);
+  }
+
+  const fetchWithRetry = async (retries) => {
+    try {
+      const url = `${PINATA_GATEWAY}${ipfsHash}`;
+      const response = await axios.get(url);
+
+      if (!response.data) {
+        throw new Error('No data returned from IPFS');
+      }
+
+      // Cache the result
+      ipfsCache.set(ipfsHash, response.data);
+
+      return response.data;
+    } catch (error) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchWithRetry(retries - 1);
+      }
+      throw error;
+    }
+  };
+
+  try {
+    return await fetchWithRetry(MAX_RETRIES);
+  } catch (error) {
+    console.error('Error fetching dispute reason from IPFS:', error);
+    throw new Error('Failed to fetch dispute reason from IPFS');
+  }
+};

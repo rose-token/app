@@ -515,3 +515,72 @@ export interface AuctionErrorResponse {
   error: string;
   details?: Record<string, string>;
 }
+
+// ==========================================
+// Dispute Types
+// ==========================================
+
+export enum ResolutionType {
+  FavorCustomer = 0,
+  FavorWorker = 1,
+  Partial = 2,
+}
+
+// Database row type
+export interface DisputeRow {
+  id: number;
+  task_id: number;
+  initiator: string;
+  reason_hash: string;
+  disputed_at: string;
+  resolution_type: number | null;
+  worker_pct: number | null;
+  worker_amount: string | null;
+  customer_refund: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  block_number: number;
+  tx_hash: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// API response types
+export interface DisputeInfo {
+  taskId: number;
+  initiator: string;
+  reasonHash: string;
+  disputedAt: string;
+  isResolved: boolean;
+  resolution?: {
+    type: ResolutionType;
+    workerPct: number;
+    workerAmount: string;
+    customerRefund: string;
+    resolvedAt: string;
+    resolvedBy: string;
+  };
+}
+
+export interface DisputeListResponse {
+  disputes: DisputeInfo[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface DisputeStatsResponse {
+  totalDisputes: number;
+  openDisputes: number;
+  resolvedDisputes: number;
+  avgResolutionTimeHours: number;
+  resolutionBreakdown: {
+    favorCustomer: number;
+    favorWorker: number;
+    partial: number;
+  };
+}
+
+export interface DisputeErrorResponse {
+  error: string;
+}

@@ -1,12 +1,13 @@
 // Task status enum matching RoseMarketplace.sol contract
-// enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
+// enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment, Disputed }
 export const TaskStatus = {
   Open: 0,
   StakeholderRequired: 1,
   InProgress: 2,
   Completed: 3,
   Closed: 4,
-  ApprovedPendingPayment: 5
+  ApprovedPendingPayment: 5,
+  Disputed: 6
 };
 
 /**
@@ -29,6 +30,8 @@ export const getStatusText = (status, isAuction = false) => {
       return 'Closed';
     case TaskStatus.ApprovedPendingPayment:
       return 'Ready for Payment';
+    case TaskStatus.Disputed:
+      return 'Disputed';
     default:
       return 'Unknown';
   }
@@ -48,6 +51,8 @@ export const getStatusColor = (status) => {
       return 'bg-status-closed text-status-closed-foreground';
     case TaskStatus.ApprovedPendingPayment:
       return 'bg-status-approved text-status-approved-foreground';
+    case TaskStatus.Disputed:
+      return 'bg-destructive text-destructive-foreground';
     default:
       return 'bg-status-closed text-status-closed-foreground';
   }

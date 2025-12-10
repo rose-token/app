@@ -65,8 +65,15 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     error InvalidWinningBid();
     error NotCustomer();
 
+    // Dispute errors
+    error NotInDisputableStatus();
+    error NotDisputeParticipant();
+    error DisputeAlreadyRaised();
+    error TaskNotDisputed();
+    error InvalidResolutionPercentage();
+
     // A simple enum to track task status
-    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment }
+    enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment, Disputed }
 
     // Task source - whether created by customer or DAO governance
     enum TaskSource { Customer, DAO }
@@ -89,6 +96,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         uint256 proposalId;        // If DAO sourced, the proposal ID
         bool isAuction;            // true = reverse auction mode (bids collected off-chain)
         uint256 winningBid;        // Final price for auctions (0 until winner selected)
+        // Dispute fields
+        address disputeInitiator;  // Address who raised the dispute
+        uint256 disputedAt;        // Timestamp when dispute was raised
+        string disputeReasonHash;  // IPFS hash of dispute reason
     }
     
 
@@ -123,6 +134,10 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event AuctionWinnerSelected(uint256 taskId, address indexed worker, uint256 winningBid);
     event SurplusRefunded(uint256 taskId, address indexed customer, uint256 amount);
     event SpreadCaptured(uint256 indexed taskId, uint256 spreadAmount, uint256 midpointPrice);
+
+    // Dispute events
+    event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp);
+    event DisputeResolved(uint256 indexed taskId, uint8 resolution, uint256 workerPct, uint256 workerAmount, uint256 customerRefund);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -727,6 +742,139 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         }
     }
 
+
+    // ============ Dispute Functions ============
+
+    /**
+     * @dev Customer raises a dispute on a task in progress.
+     * Can only be called when task status is InProgress.
+     * @param _taskId ID of the task to dispute
+     * @param _reasonHash IPFS hash containing dispute reason
+     */
+    function disputeTaskAsCustomer(
+        uint256 _taskId,
+        string calldata _reasonHash
+    ) external nonReentrant {
+        Task storage t = tasks[_taskId];
+
+        // Validations
+        if (t.customer != msg.sender) revert NotCustomer();
+        if (t.status != TaskStatus.InProgress) revert NotInDisputableStatus();
+        if (t.disputeInitiator != address(0)) revert DisputeAlreadyRaised();
+        require(bytes(_reasonHash).length > 0, "Reason hash cannot be empty");
+
+        // Record dispute
+        t.disputeInitiator = msg.sender;
+        t.disputedAt = block.timestamp;
+        t.disputeReasonHash = _reasonHash;
+        t.status = TaskStatus.Disputed;
+
+        emit TaskDisputed(_taskId, msg.sender, _reasonHash, block.timestamp);
+    }
+
+    /**
+     * @dev Worker raises a dispute on a completed task where approvals are withheld.
+     * Can only be called when task status is Completed.
+     * @param _taskId ID of the task to dispute
+     * @param _reasonHash IPFS hash containing dispute reason
+     */
+    function disputeTaskAsWorker(
+        uint256 _taskId,
+        string calldata _reasonHash
+    ) external nonReentrant {
+        Task storage t = tasks[_taskId];
+
+        // Validations - only worker can dispute completed tasks
+        if (t.worker != msg.sender) revert NotDisputeParticipant();
+        if (t.status != TaskStatus.Completed) revert NotInDisputableStatus();
+        if (t.disputeInitiator != address(0)) revert DisputeAlreadyRaised();
+        require(bytes(_reasonHash).length > 0, "Reason hash cannot be empty");
+
+        // Record dispute
+        t.disputeInitiator = msg.sender;
+        t.disputedAt = block.timestamp;
+        t.disputeReasonHash = _reasonHash;
+        t.status = TaskStatus.Disputed;
+
+        emit TaskDisputed(_taskId, msg.sender, _reasonHash, block.timestamp);
+    }
+
+    /**
+     * @dev Owner resolves a disputed task.
+     * Distributes funds based on resolution: workerPct determines worker share.
+     * No DAO mint for disputed tasks. Stakeholder always gets vROSE back.
+     * @param _taskId ID of the disputed task
+     * @param _workerPct Percentage (0-100) of payment worker receives
+     */
+    function resolveDispute(
+        uint256 _taskId,
+        uint256 _workerPct
+    ) external nonReentrant onlyOwner {
+        Task storage t = tasks[_taskId];
+
+        // Validations
+        if (t.status != TaskStatus.Disputed) revert TaskNotDisputed();
+        if (_workerPct > 100) revert InvalidResolutionPercentage();
+
+        // Calculate task value (winningBid for auctions, deposit for fixed-price)
+        uint256 taskValue = t.isAuction ? t.winningBid : t.deposit;
+
+        // Calculate amounts - NO DAO mint for disputed tasks
+        uint256 workerAmount = (taskValue * _workerPct) / 100;
+        uint256 customerRefund = taskValue - workerAmount;
+
+        // For auctions, calculate any surplus to return to customer
+        uint256 auctionSurplus = 0;
+        if (t.isAuction && t.deposit > taskValue) {
+            auctionSurplus = t.deposit - taskValue;
+        }
+
+        // Cache values for CEI pattern
+        uint256 stakeholderDepositCache = t.stakeholderDeposit;
+        address customerCache = t.customer;
+        address workerCache = t.worker;
+        address stakeholderCache = t.stakeholder;
+
+        // Update state before external calls
+        t.deposit = 0;
+        t.stakeholderDeposit = 0;
+        t.status = TaskStatus.Closed;
+
+        // Interactions - distribute funds
+        if (workerAmount > 0) {
+            roseToken.safeTransfer(workerCache, workerAmount);
+        }
+
+        if (customerRefund > 0 || auctionSurplus > 0) {
+            roseToken.safeTransfer(customerCache, customerRefund + auctionSurplus);
+        }
+
+        // Return stakeholder's vROSE from escrow (stakeholder is neutral in disputes)
+        if (stakeholderDepositCache > 0) {
+            vRoseToken.transfer(stakeholderCache, stakeholderDepositCache);
+        }
+
+        // Determine resolution type for event (0=FavorCustomer, 1=FavorWorker, 2=Partial)
+        uint8 resolutionType;
+        if (_workerPct == 0) {
+            resolutionType = 0; // FavorCustomer
+        } else if (_workerPct == 100) {
+            resolutionType = 1; // FavorWorker
+        } else {
+            resolutionType = 2; // Partial
+        }
+
+        // Emit resolution event
+        emit DisputeResolved(
+            _taskId,
+            resolutionType,
+            _workerPct,
+            workerAmount,
+            customerRefund
+        );
+
+        emit TaskClosed(_taskId);
+    }
 
     /**
      * @dev Check if caller is a participant in the task (customer, worker, or stakeholder)
