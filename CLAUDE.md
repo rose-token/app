@@ -63,6 +63,12 @@ Web3 marketplace with task-value-based token distribution.
 
 **Redemption Queue:** NAV locked at request, 1 pending/user, no cancel, FIFO. Events: `RedemptionRequested`, `RedemptionFulfilled`
 
+**Redemption Liquidation** (redemption watcher):
+1. Calculates shortfall including 20% USDC target buffer post-redemption
+2. Adds 0.1% rounding buffer to cover integer division losses in swaps
+3. Rounds up token amounts to sell (+1 wei) to ensure sufficient USDC
+4. Never sells ROSE - only liquidates BTC/GOLD (furthest over-allocation first)
+
 ## Governance System
 
 **VP:** `√(stakedRose) × reputation` where reputation = `(success-dispute)/success×100` using ^0.6 sublinear points

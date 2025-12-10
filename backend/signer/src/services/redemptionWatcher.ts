@@ -306,17 +306,33 @@ export function getPendingRedemptions(): RedemptionRequest[] {
   return Array.from(pendingRedemptions.values());
 }
 
+// Rounding buffer: 0.1% (10 bps) to cover integer division losses in swaps
+const ROUNDING_BUFFER_BPS = 10n;
+
 /**
  * Calculate which assets to liquidate to cover a USDC shortfall
  * Strategy: Sell assets that are furthest above their target allocation first
+ *
+ * Includes:
+ * 1. Rounding buffer (0.1%) to cover integer division losses in swaps
+ * 2. Additional amount to maintain USDC at its target allocation (20%) after redemption
+ *
  * @param shortfall - Amount of USDC needed (6 decimals)
+ * @param totalUsdcNeeded - Total USDC needed for all pending redemptions (6 decimals)
  * @returns Array of liquidation swap instructions
  */
-async function calculateLiquidationSwaps(shortfall: bigint): Promise<LiquidationSwap[]> {
+async function calculateLiquidationSwaps(
+  shortfall: bigint,
+  totalUsdcNeeded: bigint
+): Promise<LiquidationSwap[]> {
   const swaps: LiquidationSwap[] = [];
 
   // Get current asset breakdowns from treasury
   const assets = await getAssetBreakdowns();
+
+  // Find STABLE asset to get target allocation
+  const stableAsset = assets.find((a) => a.keyBytes32 === STABLE_KEY);
+  const stableTargetBps = stableAsset?.targetBps ?? 2000; // Default 20%
 
   // Filter to sellable assets: active, not STABLE/ROSE, has balance
   const sellableAssets = assets.filter(
@@ -332,6 +348,48 @@ async function calculateLiquidationSwaps(shortfall: bigint): Promise<Liquidation
     return swaps;
   }
 
+  // Calculate total hard assets (excluding ROSE)
+  const totalHardAssets = assets
+    .filter((a) => a.active && a.keyBytes32 !== ROSE_KEY)
+    .reduce((sum, a) => sum + a.valueUSD, 0n);
+
+  // Calculate what USDC balance should be after redemption to maintain target allocation
+  // After redemption: newTotalHardAssets = totalHardAssets - redemptionAmount
+  // Target USDC = newTotalHardAssets * targetBps / 10000
+  const postRedemptionHardAssets = totalHardAssets > totalUsdcNeeded
+    ? totalHardAssets - totalUsdcNeeded
+    : 0n;
+  const targetUsdcAfterRedemption = (postRedemptionHardAssets * BigInt(stableTargetBps)) / 10000n;
+
+  // Current USDC balance
+  const currentUsdcBalance = stableAsset?.valueUSD ?? 0n;
+
+  // Calculate how much extra to liquidate to maintain USDC buffer after redemption
+  // After paying out totalUsdcNeeded, we want at least targetUsdcAfterRedemption remaining
+  // Required USDC = totalUsdcNeeded + targetUsdcAfterRedemption
+  // Extra needed = Required - currentBalance (if positive)
+  const requiredUsdc = totalUsdcNeeded + targetUsdcAfterRedemption;
+  const bufferDeficit = requiredUsdc > currentUsdcBalance
+    ? requiredUsdc - currentUsdcBalance
+    : 0n;
+
+  // Use the larger of: simple shortfall or buffer-adjusted shortfall
+  let adjustedShortfall = shortfall > bufferDeficit ? shortfall : bufferDeficit;
+
+  // Add rounding buffer (0.1%) to cover integer division losses in swaps
+  adjustedShortfall = adjustedShortfall + (adjustedShortfall * ROUNDING_BUFFER_BPS) / 10000n;
+
+  console.log(
+    `[RedemptionWatcher] Shortfall calculation: ` +
+    `base=${ethers.formatUnits(shortfall, 6)}, ` +
+    `withBuffer=${ethers.formatUnits(bufferDeficit, 6)}, ` +
+    `withRounding=${ethers.formatUnits(adjustedShortfall, 6)} USDC`
+  );
+  console.log(
+    `[RedemptionWatcher] Target USDC after redemption: ${ethers.formatUnits(targetUsdcAfterRedemption, 6)} ` +
+    `(${stableTargetBps} bps of ${ethers.formatUnits(postRedemptionHardAssets, 6)} hard assets)`
+  );
+
   // Sort by: furthest above target allocation first (actualBps - targetBps descending)
   sellableAssets.sort((a, b) => {
     const driftA = a.actualBps - a.targetBps;
@@ -344,7 +402,7 @@ async function calculateLiquidationSwaps(shortfall: bigint): Promise<Liquidation
     sellableAssets.map((a) => `${a.key}: ${a.actualBps - a.targetBps} bps over target`)
   );
 
-  let remainingShortfall = shortfall;
+  let remainingShortfall = adjustedShortfall;
 
   for (const asset of sellableAssets) {
     if (remainingShortfall <= 0n) break;
@@ -358,7 +416,8 @@ async function calculateLiquidationSwaps(shortfall: bigint): Promise<Liquidation
     }
 
     // Calculate token amount to sell: amount = balance * (usdcToGet / valueUSD)
-    const amountToSell = (asset.balance * usdcToGet) / asset.valueUSD;
+    // Add 1 to round up and ensure we get enough USDC
+    const amountToSell = (asset.balance * usdcToGet) / asset.valueUSD + 1n;
 
     if (amountToSell > 0n) {
       swaps.push({
@@ -446,7 +505,7 @@ async function processPendingRedemptions(): Promise<void> {
       console.log(`[RedemptionWatcher] USDC shortfall: ${ethers.formatUnits(shortfall, 6)}`);
 
       if (config.redemptionWatcher?.executeSwaps !== false) {
-        const liquidationSwaps = await calculateLiquidationSwaps(shortfall);
+        const liquidationSwaps = await calculateLiquidationSwaps(shortfall, totalUsdcNeeded);
 
         // Get STABLE token address for swaps
         const stableTokenAddress = await getAssetTokenAddress('STABLE');
