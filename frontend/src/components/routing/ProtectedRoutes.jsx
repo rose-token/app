@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAccount } from 'wagmi';
 import { useLocation } from 'react-router-dom';
 import { usePassport } from '../../hooks/usePassport';
@@ -22,7 +21,7 @@ const UNPROTECTED_ROUTES = ['/help'];
 const ProtectedRoutes = ({ children }) => {
   const { isConnected } = useAccount();
   const location = useLocation();
-  const { score, loading, meetsThreshold, isConfigured, error } = usePassport();
+  const { loading, meetsThreshold, isConfigured } = usePassport();
 
   // Check if current route is unprotected
   const isUnprotectedRoute = UNPROTECTED_ROUTES.includes(location.pathname);
@@ -66,51 +65,8 @@ const ProtectedRoutes = ({ children }) => {
     );
   }
 
-  // Graceful degradation: Allow access on API errors (same pattern as PassportGate)
-  const isTimeoutError = error && (
-    error.includes('timeout') ||
-    error.includes('AbortError') ||
-    error.includes('Rate limited')
-  );
-  if (isTimeoutError && score === null) {
-    // Show warning but allow access to prevent lockout during API outages
-    return (
-      <>
-        <div
-          className="mb-4 p-4 rounded-xl flex items-start gap-3"
-          style={{
-            background: 'var(--warning-bg)',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-          }}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="h-5 w-5 flex-shrink-0 mt-0.5"
-            style={{ color: 'var(--warning)' }}
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--warning)' }}>
-              Passport verification unavailable
-            </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              Proceeding without verification. {error}
-            </p>
-          </div>
-        </div>
-        {children}
-      </>
-    );
-  }
-
   // Gate 2: Passport score (whitelist is checked by usePassport's loadScore)
+  // No graceful degradation - strict blocking for sybil protection
   if (!meetsThreshold(PASSPORT_THRESHOLD)) {
     return <PassportBlockedPage threshold={PASSPORT_THRESHOLD} />;
   }
