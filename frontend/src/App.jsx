@@ -10,6 +10,7 @@ import ProposalDetailPage from './pages/ProposalDetailPage';
 import ProposalCreatePage from './pages/ProposalCreatePage';
 import DelegatesPage from './pages/DelegatesPage';
 import MyVotesPage from './pages/MyVotesPage';
+import AdminPage from './pages/AdminPage';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -63,6 +64,7 @@ function App() {
                       <Route path="/governance/:id" element={<ProposalDetailPage />} />
                       <Route path="/delegates" element={<DelegatesPage />} />
                       <Route path="/profile" element={<ProfilePage />} />
+                      <Route path="/admin" element={<AdminPage />} />
                       <Route path="/help" element={<HelpPage />} />
                     </Routes>
                   </Layout>

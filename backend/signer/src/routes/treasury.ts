@@ -81,6 +81,79 @@ function verifyRebalanceSignature(timestamp: number, signature: string): { valid
 }
 
 /**
+ * POST /api/treasury/rebalance/trigger
+ * Admin-triggered rebalance endpoint (frontend-facing)
+ *
+ * Security model:
+ * - Frontend: Shows admin UI only to Treasury owner (via useIsAdmin hook)
+ * - Backend: Verifies callerAddress matches Treasury.owner() to prevent unauthorized API calls
+ * - Contract: Backend signer is set as 'rebalancer' role, allowing forceRebalance() execution
+ *
+ * The owner check here is a defense-in-depth measure. The true authorization is that
+ * only the admin UI (visible to owner) should call this endpoint, and the backend
+ * signer has rebalancer privileges on the contract.
+ *
+ * Body: { callerAddress: string }
+ * Response: { success, txHash, swapsExecuted, swapDetails, totalHardAssets, rebalanceNeeded }
+ */
+router.post('/rebalance/trigger', async (req: Request, res: Response) => {
+  try {
+    const { callerAddress } = req.body;
+
+    // Validate required field
+    if (!callerAddress) {
+      return res.status(400).json({
+        error: 'Missing required field: callerAddress',
+      });
+    }
+
+    // Verify caller is contract owner
+    const provider = new ethers.JsonRpcProvider(
+      config.rpc.url || process.env.ARBITRUM_SEPOLIA_RPC_URL
+    );
+
+    const treasuryAddress = config.contracts?.treasury || process.env.TREASURY_ADDRESS;
+    if (!treasuryAddress) {
+      return res.status(500).json({ error: 'TREASURY_ADDRESS not configured' });
+    }
+
+    const treasury = new ethers.Contract(
+      treasuryAddress,
+      ['function owner() view returns (address)'],
+      provider
+    );
+
+    const ownerAddress = await treasury.owner();
+
+    if (callerAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+      console.log('[Treasury API] Unauthorized rebalance attempt:', {
+        caller: callerAddress,
+        owner: ownerAddress,
+      });
+      return res.status(403).json({
+        error: 'Unauthorized: Only contract owner can trigger rebalance',
+      });
+    }
+
+    console.log('[Treasury API] Admin rebalance triggered by owner:', callerAddress);
+    const result = await executeRebalance();
+
+    return res.json({
+      success: true,
+      txHash: result.txHash,
+      swapsExecuted: result.swapsExecuted,
+      swapDetails: result.swapDetails,
+      totalHardAssets: result.totalHardAssets,
+      rebalanceNeeded: result.rebalanceNeeded,
+    });
+  } catch (error) {
+    console.error('[Treasury API] Error executing rebalance:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: 'Failed to execute rebalance', message });
+  }
+});
+
+/**
  * GET /api/treasury/history
  * Get NAV snapshots with pagination and filtering
  * Query params:

@@ -1,11 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAccount } from 'wagmi';
+import { useIsAdmin } from '../../hooks/useIsAdmin';
 import TokenBalance from '../wallet/TokenBalance';
 import ExchangeRate from '../wallet/ExchangeRate';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const { isConnected } = useAccount();
+  const { isAdmin } = useIsAdmin();
 
   const navLinkBaseClasses = "flex items-center gap-3 px-4 py-3 rounded-xl text-[0.9375rem] font-medium transition-all duration-200";
 
@@ -145,6 +147,20 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                 <circle cx="12" cy="7" r="4" />
               </svg>
               Profile
+            </NavLink>
+          )}
+
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => getNavLinkClasses(isActive)}
+              style={({ isActive }) => getNavLinkStyle(isActive)}
+              onClick={() => window.innerWidth < 768 && toggleSidebar()}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 opacity-80">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Admin
             </NavLink>
           )}
 
