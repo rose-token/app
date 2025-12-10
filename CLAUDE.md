@@ -17,6 +17,8 @@ Web3 marketplace with task-value-based token distribution.
 
 **Tokenomics:** Customer deposits ROSE → Stakeholder stakes 10% → On completion: Worker 95%, Stakeholder 5% + stake, DAO mints 2%.
 
+**Auction Spread:** For auctions, customer sees midpoint price: `(maxBudget + workerBid) / 2`. Spread goes to treasury. Example: ask=100, bid=80 → customer pays 90, treasury gets 10, worker gets 80.
+
 ## Contract Architecture
 
 | Contract | Purpose |
@@ -79,7 +81,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
                 └──────┴─→ cancelTask() → Closed (refunds)
 ```
 
-**Auction Mode:** Bids off-chain, customer-only visible. `selectAuctionWinner` refunds excess stake. Surplus refunded at completion.
+**Auction Mode:** Bids off-chain, customer sees midpoint as "bid". `selectAuctionWinner` uses actual worker bid. On completion: spread (midpoint - bid) → treasury, reduced surplus (deposit - midpoint) → customer.
 
 ## Security Patterns
 

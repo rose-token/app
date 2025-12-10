@@ -459,6 +459,7 @@ export interface AuctionBid {
   taskId: number;
   worker: string;
   bidAmount: string;
+  displayBid: string; // Midpoint between maxBudget and bidAmount - shown to customer
   message: string | null;
   createdAt: string;
   updatedAt: string;
