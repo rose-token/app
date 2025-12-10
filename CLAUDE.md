@@ -108,6 +108,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25
 
+**Site-Wide Gate:** `ProtectedRoutes` component gates entire app with Passport score >= 20 check. Flow: Connect wallet → Verify passport → Access site. `/help` route bypasses gate. Whitelisted addresses bypass automatically via `usePassport`. Graceful degradation on API errors.
+
 ## Backend API (`backend/signer/`)
 
 | Category | Endpoints |
