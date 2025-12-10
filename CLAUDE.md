@@ -115,6 +115,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Treasury | `/api/treasury/history`, `/rebalances`, `/stats`, `/vault-status`, `/rebalance/status`, `/rebalance/run`, `/rebalance/trigger`, `/redeem-check`, `/redemption/:id`, `/user-pending/:addr`, `/pending-redemptions`, `/redemption-watcher/*` |
 | Auction | `/api/auction/register`, `/bid`, `/:taskId/bids`, `/:taskId/count`, `/:taskId/my-bid/:worker`, `/:taskId`, `/select-winner`, `/confirm-winner`, `/:taskId/sync` |
 | Profile | `/api/profile` POST, `/api/profile/:addr` GET |
+| Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
 
 ## Backend Services
 

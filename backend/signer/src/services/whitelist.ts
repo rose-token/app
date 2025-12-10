@@ -54,3 +54,54 @@ export function getWhitelistedScore(address: string): number | null {
 export function isWhitelisted(address: string): boolean {
   return getWhitelistedScore(address) !== null;
 }
+
+/**
+ * Get all whitelisted addresses with their scores
+ * @returns Copy of the whitelist object
+ */
+export function getAllWhitelist(): Whitelist {
+  return { ...whitelist };
+}
+
+/**
+ * Add or update an address in the whitelist
+ * @param address - Ethereum address to add
+ * @param score - Passport score override (0-100)
+ */
+export function addToWhitelist(address: string, score: number): void {
+  const normalized = address.toLowerCase();
+  whitelist[normalized] = score;
+  saveWhitelist();
+  console.log(`[Whitelist] Added ${normalized} with score ${score}`);
+}
+
+/**
+ * Remove an address from the whitelist
+ * @param address - Ethereum address to remove
+ */
+export function removeFromWhitelist(address: string): void {
+  const normalized = address.toLowerCase();
+  if (whitelist[normalized] !== undefined) {
+    delete whitelist[normalized];
+    saveWhitelist();
+    console.log(`[Whitelist] Removed ${normalized}`);
+  }
+}
+
+/**
+ * Persist the whitelist to disk
+ * Hot-reload will trigger automatically via fs.watch()
+ */
+function saveWhitelist(): void {
+  try {
+    const output = {
+      _comment: 'Managed via Admin UI. Manual edits will trigger hot-reload.',
+      ...whitelist,
+    };
+    fs.writeFileSync(WHITELIST_PATH, JSON.stringify(output, null, 2) + '\n');
+    console.log(`[Whitelist] Saved with ${Object.keys(whitelist).length} addresses`);
+  } catch (error) {
+    console.error('[Whitelist] Failed to save:', error);
+    throw error;
+  }
+}

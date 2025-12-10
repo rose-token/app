@@ -3,20 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { useRebalance } from '../hooks/useRebalance';
+import { useWhitelist } from '../hooks/useWhitelist';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
+import { ethers } from 'ethers';
 
 const AdminPage = () => {
   const { isConnected } = useAccount();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
   const { triggerRebalance } = useRebalance();
+  const {
+    whitelist,
+    isLoading: whitelistLoading,
+    error: whitelistError,
+    fetchWhitelist,
+    addAddress,
+    removeAddress,
+    clearError: clearWhitelistError,
+  } = useWhitelist();
 
   // Rebalance state
   const [rebalanceLoading, setRebalanceLoading] = useState(false);
   const [rebalanceError, setRebalanceError] = useState(null);
   const [rebalanceResult, setRebalanceResult] = useState(null);
+
+  // Whitelist form state
+  const [newAddress, setNewAddress] = useState('');
+  const [newScore, setNewScore] = useState('');
+  const [addressToRemove, setAddressToRemove] = useState(null);
+  const [whitelistActionLoading, setWhitelistActionLoading] = useState(false);
 
   // Redirect non-admins to home
   useEffect(() => {
@@ -24,6 +41,57 @@ const AdminPage = () => {
       navigate('/');
     }
   }, [isAdmin, adminLoading, isConnected, navigate]);
+
+  // Fetch whitelist when admin is confirmed
+  useEffect(() => {
+    if (isAdmin) {
+      fetchWhitelist();
+    }
+  }, [isAdmin, fetchWhitelist]);
+
+  // Handle adding a new address to whitelist
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+
+    if (!newAddress || !newScore) {
+      return;
+    }
+
+    if (!ethers.isAddress(newAddress)) {
+      alert('Please enter a valid Ethereum address');
+      return;
+    }
+
+    const scoreNum = Number(newScore);
+    if (isNaN(scoreNum) || scoreNum < 0 || scoreNum > 100) {
+      alert('Score must be a number between 0 and 100');
+      return;
+    }
+
+    setWhitelistActionLoading(true);
+    try {
+      await addAddress(newAddress, scoreNum);
+      setNewAddress('');
+      setNewScore('');
+    } catch (error) {
+      console.error('Failed to add address:', error);
+    } finally {
+      setWhitelistActionLoading(false);
+    }
+  };
+
+  // Handle removing an address from whitelist
+  const handleRemoveAddress = async (addr) => {
+    setWhitelistActionLoading(true);
+    try {
+      await removeAddress(addr);
+      setAddressToRemove(null);
+    } catch (error) {
+      console.error('Failed to remove address:', error);
+    } finally {
+      setWhitelistActionLoading(false);
+    }
+  };
 
   // Handle rebalance trigger
   const handleRebalance = async () => {
@@ -205,6 +273,165 @@ const AdminPage = () => {
           </div>
         </div>
       )}
+
+      {/* Whitelist Management Card */}
+      <div
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all hover:border-[rgba(212,175,140,0.35)]"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <h2
+          className="font-display text-2xl font-medium mb-4"
+          style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}
+        >
+          Passport Whitelist
+        </h2>
+
+        <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
+          Override Gitcoin Passport scores for testing. Whitelisted addresses bypass the Passport API
+          and use the score specified here instead.
+        </p>
+
+        {whitelistError && (
+          <ErrorMessage message={whitelistError} onDismiss={clearWhitelistError} />
+        )}
+
+        {/* Add Address Form */}
+        <form onSubmit={handleAddAddress} className="mb-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="0x... (Ethereum address)"
+              value={newAddress}
+              onChange={(e) => setNewAddress(e.target.value)}
+              className="flex-1 px-4 py-2.5 rounded-lg font-mono text-sm"
+              style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+              disabled={whitelistActionLoading}
+            />
+            <input
+              type="number"
+              placeholder="Score (0-100)"
+              value={newScore}
+              onChange={(e) => setNewScore(e.target.value)}
+              min="0"
+              max="100"
+              className="w-full sm:w-32 px-4 py-2.5 rounded-lg text-sm"
+              style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+              disabled={whitelistActionLoading}
+            />
+            <Button
+              type="submit"
+              disabled={whitelistActionLoading || !newAddress || !newScore}
+              className="w-full sm:w-auto"
+            >
+              {whitelistActionLoading ? (
+                <>
+                  <div
+                    className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                    style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                  />
+                  Adding...
+                </>
+              ) : (
+                'Add Address'
+              )}
+            </Button>
+          </div>
+        </form>
+
+        {/* Whitelist Entries */}
+        <div>
+          <h3 className="font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
+            Current Whitelist ({Object.keys(whitelist).length} addresses)
+          </h3>
+
+          {whitelistLoading && Object.keys(whitelist).length === 0 ? (
+            <div className="flex justify-center py-8">
+              <div
+                className="inline-block w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+                style={{ borderColor: 'var(--rose-pink)', borderTopColor: 'transparent' }}
+              />
+            </div>
+          ) : Object.keys(whitelist).length === 0 ? (
+            <div
+              className="text-center py-8 rounded-lg"
+              style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
+            >
+              No addresses in whitelist
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(whitelist).map(([addr, score]) => (
+                <div
+                  key={addr}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg gap-3"
+                  style={{ background: 'var(--bg-primary)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <span
+                      className="font-mono text-sm break-all"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {addr}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span
+                      className="px-3 py-1 rounded-full text-sm font-medium"
+                      style={{
+                        background: 'rgba(212, 175, 140, 0.15)',
+                        color: 'var(--rose-pink)',
+                      }}
+                    >
+                      Score: {score}
+                    </span>
+                    {addressToRemove === addr ? (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleRemoveAddress(addr)}
+                          disabled={whitelistActionLoading}
+                        >
+                          {whitelistActionLoading ? 'Removing...' : 'Confirm'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddressToRemove(null)}
+                          disabled={whitelistActionLoading}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddressToRemove(addr)}
+                        disabled={whitelistActionLoading}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Info Card */}
       <div

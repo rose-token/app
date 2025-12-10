@@ -1,23 +1,26 @@
+const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
+
 let whitelist = null;
 let loadPromise = null;
 
+/**
+ * Load whitelist from backend API
+ * Backend is the single source of truth for whitelist data
+ */
 async function loadWhitelist() {
   try {
-    const response = await fetch(`${import.meta.env.BASE_URL}config/whitelist.json`);
+    const response = await fetch(`${API_URL}/api/whitelist`);
     if (response.ok) {
       const data = await response.json();
-      // Normalize addresses to lowercase, filter out comments
-      whitelist = Object.fromEntries(
-        Object.entries(data)
-          .filter(([key]) => !key.startsWith('_'))
-          .map(([addr, score]) => [addr.toLowerCase(), score])
-      );
+      // Data comes pre-normalized from backend (lowercase addresses, no comments)
+      whitelist = data;
       console.log(`Loaded whitelist with ${Object.keys(whitelist).length} addresses`);
     } else {
+      console.log('Failed to load whitelist from backend');
       whitelist = {};
     }
   } catch (error) {
-    console.log('No whitelist configured');
+    console.log('No whitelist configured or backend unavailable');
     whitelist = {};
   }
 }
@@ -51,7 +54,7 @@ export async function isWhitelisted(address) {
 }
 
 /**
- * Force reload the whitelist from the server
+ * Force reload the whitelist from the backend
  */
 export function reloadWhitelist() {
   loadPromise = null;
