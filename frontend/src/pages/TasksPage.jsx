@@ -31,6 +31,7 @@ const TasksPage = () => {
   // Loading states for each button type
   const [loadingStates, setLoadingStates] = useState({
     stake: {},
+    unstake: {},
     claim: {},
     unclaim: {},
     complete: {},
@@ -697,6 +698,64 @@ const TasksPage = () => {
     }
   };
 
+  const handleUnstakeTask = async (taskId) => {
+    if (!isConnected || !MARKETPLACE_ADDRESS) return;
+
+    try {
+      setError('');
+      setLoadingStates(prev => ({ ...prev, unstake: { ...prev.unstake, [taskId]: true } }));
+
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        setLoadingStates(prev => ({ ...prev, unstake: { ...prev.unstake, [taskId]: false } }));
+        setError('Task not found');
+        return;
+      }
+
+      console.log("⛽ Unstaking from task:", taskId);
+      console.log('💡 Please confirm the unstake transaction in MetaMask');
+      const hash = await writeContractAsync({
+        address: MARKETPLACE_ADDRESS,
+        abi: RoseMarketplaceABI,
+        functionName: 'unstakeStakeholder',
+        args: [BigInt(taskId)],
+        ...GAS_SETTINGS,
+      });
+
+      console.log("✅ Unstake transaction sent:", hash);
+      console.log('⏳ Waiting for transaction confirmation...');
+
+      await publicClient.waitForTransactionReceipt({
+        hash: hash,
+        confirmations: 1
+      });
+
+      console.log('🎉 Unstaked successfully and confirmed on blockchain!');
+      setLoadingStates(prev => ({ ...prev, unstake: { ...prev.unstake, [taskId]: false } }));
+      debouncedFetchTasks();
+    } catch (err) {
+      console.error('Error unstaking:', err);
+      setLoadingStates(prev => ({ ...prev, unstake: { ...prev.unstake, [taskId]: false } }));
+
+      let errorMessage = 'Failed to unstake';
+
+      if (err.message.includes('Only stakeholder can unstake')) {
+        errorMessage = 'You are not the stakeholder for this task.';
+      } else if (err.message.includes('Task must be Open to unstake')) {
+        errorMessage = 'Task cannot be unstaked at this stage. Only tasks in Open status can be unstaked.';
+      } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+        errorMessage = 'Transaction rejected. Please approve the transaction in MetaMask to continue.';
+      } else if (err.message.includes('execution reverted')) {
+        const revertReason = err.message.split('execution reverted:')[1]?.split('"')[0].trim();
+        if (revertReason) {
+          errorMessage = revertReason;
+        }
+      }
+
+      setError(errorMessage);
+    }
+  };
+
   // Event listeners using useWatchContractEvent
   useWatchContractEvent({
     address: MARKETPLACE_ADDRESS,
@@ -737,6 +796,17 @@ const TasksPage = () => {
     eventName: 'StakeholderStaked',
     onLogs: (logs) => {
       console.log("Stakeholder staked event:", logs);
+      debouncedFetchTasks();
+    },
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'StakeholderUnstaked',
+    onLogs: (logs) => {
+      console.log("Stakeholder unstaked event:", logs);
       debouncedFetchTasks();
     },
     enabled: isConnected && !!MARKETPLACE_ADDRESS
@@ -883,6 +953,7 @@ const TasksPage = () => {
               onApprove={handleApproveTask}
               onAcceptPayment={handleAcceptPayment}
               onStake={handleStakeTask}
+              onUnstake={handleUnstakeTask}
               onCancel={handleCancelTask}
               isLoading={isLoading || isLoadingTasks}
               isRefreshing={isRefreshing}

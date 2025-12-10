@@ -10,7 +10,7 @@ import BidSubmissionModal from './BidSubmissionModal';
 import BidSelectionModal from './BidSelectionModal';
 import { useAuction } from '../../hooks/useAuction';
 
-const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, loadingStates = {} }) => {
+const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
 
   const [detailedContent, setDetailedContent] = useState(null);
@@ -140,12 +140,17 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const canApproveAsStakeholder = isStakeholder && task.status === TaskStatus.Completed && !task.stakeholderApproval;
   const canAcceptPayment = isWorker && task.status === TaskStatus.ApprovedPendingPayment;
 
-  // Task can be cancelled by customer or stakeholder before worker claims
-  const canCancel = (isCustomer || isStakeholder) &&
-    (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open);
+  // Stakeholder can unstake in Open status only (before worker claims)
+  const canUnstake = isStakeholder && task.status === TaskStatus.Open;
+
+  // Task can be cancelled by customer (anytime before worker claims) or stakeholder (only in StakeholderRequired)
+  // In Open status, stakeholder uses unstake instead of cancel
+  const canCancel = (isCustomer && (task.status === TaskStatus.StakeholderRequired || task.status === TaskStatus.Open)) ||
+    (isStakeholder && task.status === TaskStatus.StakeholderRequired);
 
   // Check loading states for each button type
   const isStaking = loadingStates.stake?.[task.id] || false;
+  const isUnstaking = loadingStates.unstake?.[task.id] || false;
   const isClaiming = loadingStates.claim?.[task.id] || false;
   const isUnclaiming = loadingStates.unclaim?.[task.id] || false;
   const isCompleting = loadingStates.complete?.[task.id] || false;
@@ -585,6 +590,30 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
               </>
             ) : (
               'Accept Payment'
+            )}
+          </button>
+        )}
+
+        {canUnstake && (
+          <button
+            onClick={() => onUnstake(task.id)}
+            disabled={isUnstaking}
+            className={buttonBaseClass}
+            style={{
+              background: isUnstaking ? 'var(--bg-secondary)' : 'linear-gradient(135deg, var(--warning) 0%, #f59e0b 100%)',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              color: isUnstaking ? 'var(--text-muted)' : 'var(--bg-primary)',
+              boxShadow: isUnstaking ? 'none' : '0 4px 16px rgba(251, 191, 36, 0.3)',
+              opacity: isUnstaking ? 0.6 : 1
+            }}
+          >
+            {isUnstaking ? (
+              <>
+                <span className="animate-pulse inline-block mr-2">⚡</span>
+                Unstaking...
+              </>
+            ) : (
+              'Unstake'
             )}
           </button>
         )}

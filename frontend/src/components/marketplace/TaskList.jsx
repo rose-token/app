@@ -3,7 +3,7 @@ import TaskCard from './TaskCard';
 import ErrorMessage from '../ui/ErrorMessage';
 import { RefreshCw } from 'lucide-react';
 
-const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onCancel, isLoading, isRefreshing, error, onErrorDismiss, roseMarketplace, onRefresh, loadingStates }) => {
+const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, isLoading, isRefreshing, error, onErrorDismiss, roseMarketplace, onRefresh, loadingStates }) => {
   if (isLoading && tasks.length === 0) {
     return (
       <div className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>
@@ -88,6 +88,7 @@ const TaskList = ({ tasks, onClaim, onUnclaim, onComplete, onApprove, onAcceptPa
           onApprove={onApprove}
           onAcceptPayment={onAcceptPayment}
           onStake={onStake}
+          onUnstake={onUnstake}
           onCancel={onCancel}
           roseMarketplace={roseMarketplace}
           loadingStates={loadingStates}

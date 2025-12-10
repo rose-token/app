@@ -855,6 +855,155 @@ describe("RoseMarketplace", function () {
 
   });
 
+  describe("Stakeholder Unstaking", function () {
+    const taskTitle = "Build a website";
+    const taskDeposit = ethers.parseEther("1");
+
+    it("Should allow stakeholder to unstake in Open status", async function () {
+      // Customer creates task
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      // Stakeholder stakes
+      const stakeholderDeposit = taskDeposit / 10n;
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      const stakeholderVRoseBefore = await vRose.balanceOf(stakeholder.address);
+      const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+
+      // Stakeholder unstakes
+      await expect(roseMarketplace.connect(stakeholder).unstakeStakeholder(1))
+        .to.emit(roseMarketplace, "StakeholderUnstaked")
+        .withArgs(1, stakeholder.address, stakeholderDeposit);
+
+      // Verify task state
+      const task = await roseMarketplace.tasks(1);
+      expect(task.status).to.equal(1); // TaskStatus.StakeholderRequired
+      expect(task.stakeholder).to.equal(ethers.ZeroAddress);
+      expect(task.stakeholderDeposit).to.equal(0);
+      expect(task.deposit).to.equal(taskDeposit); // Customer deposit remains
+
+      // Verify vROSE returned
+      const stakeholderVRoseAfter = await vRose.balanceOf(stakeholder.address);
+      expect(stakeholderVRoseAfter).to.equal(stakeholderVRoseBefore + stakeholderDeposit);
+
+      // Verify customer balance unchanged
+      const customerBalanceAfter = await roseToken.balanceOf(customer.address);
+      expect(customerBalanceAfter).to.equal(customerBalanceBefore);
+    });
+
+    it("Should NOT allow customer to unstake", async function () {
+      // Setup task with stakeholder
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      const stakeholderDeposit = taskDeposit / 10n;
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      // Customer tries to unstake
+      await expect(
+        roseMarketplace.connect(customer).unstakeStakeholder(1)
+      ).to.be.revertedWith("Only stakeholder can unstake");
+    });
+
+    it("Should NOT allow worker to unstake", async function () {
+      // Setup task with stakeholder
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      const stakeholderDeposit = taskDeposit / 10n;
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      // Worker tries to unstake
+      await expect(
+        roseMarketplace.connect(worker).unstakeStakeholder(1)
+      ).to.be.revertedWith("Only stakeholder can unstake");
+    });
+
+    it("Should NOT allow unstake after worker claims (InProgress status)", async function () {
+      // Setup task
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      const stakeholderDeposit = taskDeposit / 10n;
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      // Worker claims
+      const claimExpiry = await getFutureExpiry();
+      const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+      await roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig);
+
+      // Stakeholder tries to unstake
+      await expect(
+        roseMarketplace.connect(stakeholder).unstakeStakeholder(1)
+      ).to.be.revertedWith("Task must be Open to unstake");
+    });
+
+    it("Should allow another stakeholder to stake after first unstakes", async function () {
+      // Customer creates task
+      await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+      const createExpiry = await getFutureExpiry();
+      const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+      await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+      // First stakeholder stakes
+      const stakeholderDeposit = taskDeposit / 10n;
+      await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stakeExpiry = await getFutureExpiry();
+      const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+      await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+      // First stakeholder unstakes
+      await roseMarketplace.connect(stakeholder).unstakeStakeholder(1);
+
+      // Second stakeholder (use worker account - needs vROSE first)
+      const secondStakeholder = worker;
+      // Get ROSE tokens for worker
+      const depositAmount = ethers.parseUnits("1000", 6); // 1000 USDC
+      await usdc.mint(secondStakeholder.address, depositAmount);
+      await usdc.connect(secondStakeholder).approve(await roseTreasury.getAddress(), depositAmount);
+      await roseTreasury.connect(secondStakeholder).deposit(depositAmount);
+
+      // Deposit ROSE to governance to get vROSE
+      const vRoseAmount = ethers.parseEther("1");
+      await roseToken.connect(secondStakeholder).approve(await governance.getAddress(), vRoseAmount);
+      const repAttest = await getRepAttestation(secondStakeholder);
+      await governance.connect(secondStakeholder).deposit(vRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
+
+      await vRose.connect(secondStakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+      const stake2Expiry = await getFutureExpiry();
+      const stake2Sig = await generatePassportSignature(secondStakeholder.address, "stake", stake2Expiry);
+      await expect(
+        roseMarketplace.connect(secondStakeholder).stakeholderStake(1, stakeholderDeposit, stake2Expiry, stake2Sig)
+      ).to.emit(roseMarketplace, "StakeholderStaked")
+        .withArgs(1, secondStakeholder.address, stakeholderDeposit);
+
+      const task = await roseMarketplace.tasks(1);
+      expect(task.stakeholder).to.equal(secondStakeholder.address);
+      expect(task.status).to.equal(0); // TaskStatus.Open
+    });
+  });
+
   describe("Passport Signer Administration", function () {
     it("Should allow owner to update passport signer", async function () {
       const [, , , , , newSigner] = await ethers.getSigners();

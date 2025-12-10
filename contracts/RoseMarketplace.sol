@@ -111,6 +111,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event TokensMinted(address indexed to, uint256 amount);
     event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund);
     event TaskUnclaimed(uint256 indexed taskId, address indexed previousWorker);
+    event StakeholderUnstaked(uint256 indexed taskId, address indexed stakeholder, uint256 stakeholderDeposit);
     event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee);
     event GovernanceUpdated(address indexed newGovernance);
     event VRoseTokenUpdated(address indexed newVRoseToken);
@@ -378,6 +379,39 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         t.status = TaskStatus.Open;
 
         emit StakeholderStaked(_taskId, msg.sender, _tokenAmount);
+    }
+
+    /**
+     * @dev Stakeholder withdraws from a task before a worker claims it.
+     * Returns vROSE from escrow and reverts task to StakeholderRequired status.
+     * Only callable in Open status (after staking, before worker claims).
+     * @param _taskId ID of the task to unstake from
+     */
+    function unstakeStakeholder(uint256 _taskId) external nonReentrant {
+        Task storage t = tasks[_taskId];
+
+        // Check caller is the stakeholder
+        require(t.stakeholder == msg.sender, "Only stakeholder can unstake");
+
+        // Check task status - only allow unstake in Open status (before worker claims)
+        require(t.status == TaskStatus.Open, "Task must be Open to unstake");
+
+        // Defensive check - ensure there's actually a deposit to refund
+        require(t.stakeholderDeposit > 0, "No deposit to refund");
+
+        // Cache values for event and external call (CEI pattern)
+        uint256 stakeholderDepositCache = t.stakeholderDeposit;
+        address stakeholderCache = t.stakeholder;
+
+        // Update state (effects)
+        t.stakeholder = address(0);
+        t.stakeholderDeposit = 0;
+        t.status = TaskStatus.StakeholderRequired;
+
+        // Return stakeholder's vROSE from escrow (interactions)
+        vRoseToken.transfer(stakeholderCache, stakeholderDepositCache);
+
+        emit StakeholderUnstaked(_taskId, stakeholderCache, stakeholderDepositCache);
     }
 
     /**

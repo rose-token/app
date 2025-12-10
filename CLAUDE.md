@@ -77,9 +77,12 @@ Web3 marketplace with task-value-based token distribution.
 
 ```
 StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
-                ↓      ↓
-                └──────┴─→ cancelTask() → Closed (refunds)
+        ↓               ↓
+        │               └─→ unstakeStakeholder() → StakeholderRequired (stakeholder exits, task remains)
+        └───────────────┴─→ cancelTask() → Closed (refunds both parties)
 ```
+
+**Unstake:** Stakeholders can exit tasks in `Open` status via `unstakeStakeholder()`. Returns vROSE to stakeholder, task reverts to `StakeholderRequired` for another stakeholder to step in.
 
 **Auction Mode:** Bids off-chain, customer sees midpoint as "bid". `selectAuctionWinner` uses actual worker bid. On completion: spread (midpoint - bid) → treasury, reduced surplus (deposit - midpoint) → customer.
 
