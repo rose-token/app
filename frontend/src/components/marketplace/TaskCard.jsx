@@ -11,6 +11,7 @@ import BidSelectionModal from './BidSelectionModal';
 import DisputeModal from './DisputeModal';
 import { useAuction } from '../../hooks/useAuction';
 import { useDispute } from '../../hooks/useDispute';
+import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrlWithBackend } from '../../constants/github';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -24,6 +25,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const [showPrUrlModal, setShowPrUrlModal] = useState(false);
   const [prUrl, setPrUrl] = useState('');
   const [prUrlError, setPrUrlError] = useState('');
+  const [isValidatingPr, setIsValidatingPr] = useState(false);
 
   // Bid modal state (for auction tasks)
   const [showBidModal, setShowBidModal] = useState(false);
@@ -107,27 +109,43 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   };
 
   // Handle PR URL validation and submission
-  const validatePrUrl = (url) => {
-    if (!url || url.trim().length === 0) {
-      return 'PR URL is required';
-    }
-    if (!url.includes('github.com') || !url.includes('/pull/')) {
-      return 'Please enter a valid GitHub Pull Request URL (must contain "github.com" and "/pull/")';
-    }
-    return '';
-  };
-
   const handleMarkCompleted = () => {
     setPrUrl('');
     setPrUrlError('');
+    setIsValidatingPr(false);
     setShowPrUrlModal(true);
   };
 
-  const handleSubmitCompletion = () => {
-    const error = validatePrUrl(prUrl);
-    if (error) {
-      setPrUrlError(error);
+  const handleSubmitCompletion = async () => {
+    // Step 1: Client-side format validation
+    const formatError = validatePrUrlFormat(prUrl);
+    if (formatError) {
+      setPrUrlError(formatError);
       return;
+    }
+
+    // Step 2: Backend validation (checks if PR exists, app has access, PR is open)
+    // Only validate with backend if the PR URL looks like a GitHub PR
+    if (GITHUB_INTEGRATION.PR_URL_REGEX.test(prUrl.trim())) {
+      setIsValidatingPr(true);
+      setPrUrlError('');
+
+      try {
+        const signerUrl = import.meta.env.VITE_PASSPORT_SIGNER_URL;
+        const result = await validatePrUrlWithBackend(prUrl, signerUrl);
+
+        if (!result.valid) {
+          setPrUrlError(result.error || 'Failed to validate PR URL');
+          setIsValidatingPr(false);
+          return;
+        }
+      } catch (err) {
+        console.error('PR validation error:', err);
+        // Don't block on validation errors - allow submission with warning
+        console.warn('Could not validate PR with backend, proceeding anyway');
+      } finally {
+        setIsValidatingPr(false);
+      }
     }
 
     setShowPrUrlModal(false);
@@ -731,25 +749,38 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowPrUrlModal(false)}
+                disabled={isValidatingPr}
                 className="px-5 py-2.5 text-sm font-semibold rounded-xl"
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-secondary)'
+                  color: 'var(--text-secondary)',
+                  opacity: isValidatingPr ? 0.6 : 1,
                 }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmitCompletion}
+                disabled={isValidatingPr}
                 className="px-5 py-2.5 text-sm font-semibold rounded-xl"
                 style={{
-                  background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
-                  color: 'var(--bg-primary)',
-                  boxShadow: '0 4px 16px rgba(212, 165, 165, 0.3)'
+                  background: isValidatingPr
+                    ? 'var(--bg-secondary)'
+                    : 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                  color: isValidatingPr ? 'var(--text-muted)' : 'var(--bg-primary)',
+                  boxShadow: isValidatingPr ? 'none' : '0 4px 16px rgba(212, 165, 165, 0.3)',
+                  opacity: isValidatingPr ? 0.6 : 1,
                 }}
               >
-                Submit
+                {isValidatingPr ? (
+                  <>
+                    <span className="animate-pulse inline-block mr-2">...</span>
+                    Validating
+                  </>
+                ) : (
+                  'Submit'
+                )}
               </button>
             </div>
           </div>

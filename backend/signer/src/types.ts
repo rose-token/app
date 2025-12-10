@@ -584,3 +584,83 @@ export interface DisputeStatsResponse {
 export interface DisputeErrorResponse {
   error: string;
 }
+
+// ==========================================
+// GitHub Bot Types
+// ==========================================
+
+// Database row type
+export interface GitHubMergeLogRow {
+  id: number;
+  task_id: number;
+  pr_url: string;
+  action: string;  // 'approve', 'merge', 'approve_and_merge'
+  success: boolean;
+  error_message: string | null;
+  pr_owner: string | null;
+  pr_repo: string | null;
+  pr_number: number | null;
+  merge_sha: string | null;
+  created_at: string;
+}
+
+// API request/response types
+export interface ValidatePrRequest {
+  prUrl: string;
+}
+
+export interface ValidatePrResponse {
+  valid: boolean;
+  error?: string;
+  state?: string;  // 'open', 'closed', 'merged'
+  title?: string;
+  mergeable?: boolean;
+}
+
+export interface GitHubStatusResponse {
+  github: {
+    enabled: boolean;
+    configured: boolean;
+    appId: number;
+  };
+  watcher: {
+    isRunning: boolean;
+    startedAt: Date | null;
+    eventsProcessed: number;
+    mergesAttempted: number;
+    mergesSucceeded: number;
+    mergesFailed: number;
+    lastError: string | null;
+    lastEventBlock: number;
+  };
+}
+
+export interface GitHubLogsResponse {
+  logs: GitHubMergeLogRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface GitHubTaskLogsResponse {
+  taskId: number;
+  logs: GitHubMergeLogRow[];
+}
+
+export interface GitHubRetryResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ParsePrResponse {
+  valid: boolean;
+  error?: string;
+  owner?: string;
+  repo?: string;
+  pullNumber?: number;
+}
+
+export interface GitHubErrorResponse {
+  error: string;
+}

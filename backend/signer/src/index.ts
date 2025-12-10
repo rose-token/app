@@ -16,6 +16,7 @@ import vpRefreshRoutes from './routes/vpRefresh';
 import auctionRoutes from './routes/auction';
 import whitelistRoutes from './routes/whitelist';
 import disputeRoutes from './routes/dispute';
+import githubRoutes from './routes/github';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -26,6 +27,7 @@ import { startDelegateScoringCron } from './cron/delegateScoring';
 import { startVPRefreshWatcher } from './services/vpRefresh';
 import { startDepositWatcher } from './services/depositWatcher';
 import { startRedemptionWatcher } from './services/redemptionWatcher';
+import { startTaskWatcher } from './services/taskWatcher';
 
 const app = express();
 
@@ -66,6 +68,7 @@ app.use('/api/vp-refresh', vpRefreshRoutes);
 app.use('/api/auction', auctionRoutes);
 app.use('/api/whitelist', whitelistRoutes);
 app.use('/api/dispute', disputeRoutes);
+app.use('/api/github', githubRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -123,6 +126,11 @@ async function start() {
   // Start redemption watcher for on-demand liquidation (Phase 5)
   startRedemptionWatcher().catch((err) => {
     console.error('[RedemptionWatcher] Failed to start:', err);
+  });
+
+  // Start task watcher for GitHub PR auto-merge
+  startTaskWatcher().catch((err) => {
+    console.error('[TaskWatcher] Failed to start:', err);
   });
 
   app.listen(config.port, () => {
