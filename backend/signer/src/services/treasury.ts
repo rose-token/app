@@ -171,20 +171,14 @@ export function calculateRebalanceSwaps(assets: AssetBreakdown[]): SwapInstructi
     const targetValueUSD = (totalValue * BigInt(asset.targetBps)) / 10000n;
     const currentValueUSD = asset.valueUSD;
 
-    // Calculate drift (5% threshold = 500 bps)
-    const diff = currentValueUSD > targetValueUSD
-      ? currentValueUSD - targetValueUSD
-      : targetValueUSD - currentValueUSD;
-    const driftBps = Number((diff * 10000n) / (targetValueUSD || 1n));
-
-    if (driftBps < 500) continue; // Within threshold, 5% or more drift triggers rebalance
+    // Drift check removed - rebalance all assets regardless of drift percentage
 
     if (currentValueUSD > targetValueUSD) {
       overAllocated.push({
         asset,
         excessUSD: currentValueUSD - targetValueUSD,
       });
-    } else {
+    } else if (currentValueUSD < targetValueUSD) {
       underAllocated.push({
         asset,
         deficitUSD: targetValueUSD - currentValueUSD,
@@ -424,16 +418,12 @@ export async function getLastRebalanceInfo(): Promise<{
   canRebalance: boolean;
 }> {
   const treasury = getTreasuryContract();
-  const [lastTime, timeUntil, breakdown] = await Promise.all([
-    treasury.lastRebalanceTime(),
-    treasury.timeUntilRebalance(),
-    treasury.getVaultBreakdown(),
-  ]);
+  const lastTime = await treasury.lastRebalanceTime();
 
   const lastTimestamp = Number(lastTime);
   return {
     lastRebalanceTime: lastTimestamp > 0 ? new Date(lastTimestamp * 1000) : null,
-    timeUntilNext: Number(timeUntil),
-    canRebalance: Number(timeUntil) === 0 && breakdown.rebalanceNeeded,
+    timeUntilNext: 0, // Cooldown disabled
+    canRebalance: true, // Always allowed - drift/cooldown checks removed
   };
 }

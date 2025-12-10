@@ -657,9 +657,6 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      * Note: This only updates the timestamp. Backend handles actual swaps via executeSwap().
      */
     function rebalance() external onlyOwner nonReentrant whenNotPaused {
-        if (!needsRebalance()) revert RebalanceNotNeeded();
-        if (block.timestamp < lastRebalanceTime + REBALANCE_COOLDOWN) revert RebalanceCooldown();
-
         lastRebalanceTime = block.timestamp;
         emit Rebalanced(hardAssetValueUSD());
     }
@@ -867,13 +864,10 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Time until next rebalance is allowed
+     * @dev Time until next rebalance is allowed (always 0 - cooldown disabled)
      */
-    function timeUntilRebalance() external view returns (uint256) {
-        if (block.timestamp >= lastRebalanceTime + REBALANCE_COOLDOWN) {
-            return 0;
-        }
-        return (lastRebalanceTime + REBALANCE_COOLDOWN) - block.timestamp;
+    function timeUntilRebalance() external pure returns (uint256) {
+        return 0;
     }
 
     /**
