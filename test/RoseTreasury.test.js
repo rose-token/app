@@ -404,7 +404,7 @@ describe("RoseTreasury with LiFi Integration", function () {
   });
 
   describe("Rebalance and forceRebalance", function () {
-    it("Should allow anyone to call rebalance when threshold met", async function () {
+    it("Should allow owner to call rebalance when threshold met", async function () {
       // Setup: deposit and diversify to create drift
       const depositAmount = ethers.parseUnits("10000", 6);
       await deposit(user, depositAmount);
@@ -423,35 +423,47 @@ describe("RoseTreasury with LiFi Integration", function () {
       // Check needsRebalance
       expect(await roseTreasury.needsRebalance()).to.be.true;
 
-      // Anyone can call rebalance
-      await expect(roseTreasury.connect(user2).rebalance())
+      // Only owner can call rebalance
+      await expect(roseTreasury.connect(owner).rebalance())
         .to.emit(roseTreasury, "Rebalanced");
     });
 
-    it("Should revert rebalance if threshold not met", async function () {
+    it("Should revert rebalance when called by non-owner", async function () {
+      // Setup: deposit and diversify to create drift
+      const depositAmount = ethers.parseUnits("10000", 6);
+      await deposit(user, depositAmount);
+
+      // Diversify everything to BTC (creates 100% drift from target)
+      const treasuryUsdc = await usdc.balanceOf(await roseTreasury.getAddress());
+      const lifiData = await generateSwapCalldata(
+        await usdc.getAddress(),
+        await tbtc.getAddress(),
+        treasuryUsdc,
+        1n,
+        await roseTreasury.getAddress()
+      );
+      await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, treasuryUsdc, 1n, lifiData);
+
+      // Check needsRebalance
+      expect(await roseTreasury.needsRebalance()).to.be.true;
+
+      // Non-owner should be rejected
+      await expect(roseTreasury.connect(user2).rebalance())
+        .to.be.revertedWithCustomError(roseTreasury, "OwnableUnauthorizedAccount");
+    });
+
+    it("Should allow rebalance even when balanced (no drift check)", async function () {
       // Deposit and diversify to approximately match target allocation
-      // Target: BTC 30%, GOLD 30%, USDC 20%, ROSE 20% (of total including ROSE)
-      // Without diversification, vault is 100% USDC which IS drifted
-      // So we need to diversify to get within threshold, AND have ROSE in treasury
+      // Drift check removed - rebalance should succeed even when balanced
       const depositAmount = ethers.parseUnits("10000", 6);
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
       await roseTreasury.connect(user).deposit(depositAmount);
 
       // User got ~10000 ROSE minted. To balance ROSE at 20% of total:
-      // NAV = hardAssets / circulatingSupply, and circulatingSupply = total - treasuryHeld
-      // Let x = ROSE in treasury
-      // roseValue = x * NAV = x * ($10000 / (10000 - x))
-      // We want roseValue = 20% of total = 0.2 * ($10000 + roseValue)
-      // Solving: x * 10000 / (10000 - x) = 0.2 * (10000 + x * 10000 / (10000 - x))
-      // After algebra: x = 2000 ROSE tokens
       const roseForTreasury = ethers.parseUnits("2000", 18);
       await roseToken.connect(user).transfer(await roseTreasury.getAddress(), roseForTreasury);
 
-      // Now: circulating = 8000 ROSE, NAV = $10000/8000 = $1.25
-      // Treasury ROSE value = 2000 * $1.25 = $2500
-      // Total = $10000 (hard) + $2500 (ROSE) = $12500
-      // Targets: BTC 30% = $3750, Gold 30% = $3750, USDC 20% = $2500, ROSE 20% = $2500
       const btcAmount = ethers.parseUnits("3750", 6); // 30%
       const goldAmount = ethers.parseUnits("3750", 6); // 30%
 
@@ -465,37 +477,27 @@ describe("RoseTreasury with LiFi Integration", function () {
       await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, btcAmount, 1n, btcData);
       await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, GOLD_KEY, goldAmount, 1n, goldData);
 
-      // Now vault should be balanced: BTC ~30%, Gold ~30%, USDC ~20%, ROSE ~20%
-      await expect(
-        roseTreasury.connect(user).rebalance()
-      ).to.be.revertedWithCustomError(roseTreasury, "RebalanceNotNeeded");
+      // Now vault should be balanced, but rebalance() should still succeed (no drift check)
+      await expect(roseTreasury.connect(owner).rebalance())
+        .to.emit(roseTreasury, "Rebalanced");
     });
 
-    it("Should enforce rebalance cooldown", async function () {
-      // Setup drift
+    it("Should allow rebalance without cooldown", async function () {
+      // Cooldown check removed - multiple rebalances should succeed
       const depositAmount = ethers.parseUnits("10000", 6);
       await deposit(user, depositAmount);
 
-      const treasuryUsdc = await usdc.balanceOf(await roseTreasury.getAddress());
-      const lifiData = await generateSwapCalldata(
-        await usdc.getAddress(),
-        await tbtc.getAddress(),
-        treasuryUsdc,
-        1n,
-        await roseTreasury.getAddress()
-      );
-      await roseTreasury.connect(rebalancer).executeSwap(STABLE_KEY, BTC_KEY, treasuryUsdc, 1n, lifiData);
-
       // First rebalance
-      await roseTreasury.connect(user).rebalance();
+      await expect(roseTreasury.connect(owner).rebalance())
+        .to.emit(roseTreasury, "Rebalanced");
 
-      // Deposit more USDC to treasury to recreate conditions for rebalance
-      await usdc.mint(await roseTreasury.getAddress(), ethers.parseUnits("10000", 6));
+      // Second rebalance should succeed immediately (no cooldown)
+      await expect(roseTreasury.connect(owner).rebalance())
+        .to.emit(roseTreasury, "Rebalanced");
 
-      // Second rebalance should fail due to cooldown
-      await expect(
-        roseTreasury.connect(user).rebalance()
-      ).to.be.revertedWithCustomError(roseTreasury, "RebalanceCooldown");
+      // Third rebalance should also succeed
+      await expect(roseTreasury.connect(owner).rebalance())
+        .to.emit(roseTreasury, "Rebalanced");
     });
 
     it("Should allow rebalancer to forceRebalance", async function () {

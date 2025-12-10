@@ -41,10 +41,10 @@ const BidSelectionModal = ({
 
     try {
       const data = await getBids(taskId);
-      // Sort by bid amount (lowest first - best deal for customer)
+      // Sort by display bid (midpoint) - lowest first = best deal for customer
       const sortedBids = (data.bids || []).sort((a, b) => {
-        const aAmount = BigInt(a.bidAmount);
-        const bAmount = BigInt(b.bidAmount);
+        const aAmount = BigInt(a.displayBid);
+        const bAmount = BigInt(b.displayBid);
         if (aAmount < bAmount) return -1;
         if (aAmount > bAmount) return 1;
         return 0;
@@ -108,9 +108,9 @@ const BidSelectionModal = ({
     letterSpacing: '0.08em',
   };
 
-  // Calculate savings for display
-  const getSavings = (bidAmount) => {
-    const bid = parseFloat(formatUnits(BigInt(bidAmount), 18));
+  // Calculate savings for display (based on displayBid - the midpoint shown to customer)
+  const getSavings = (displayBid) => {
+    const bid = parseFloat(formatUnits(BigInt(displayBid), 18));
     const max = parseFloat(maxBudgetFormatted);
     const savings = max - bid;
     const savingsPercent = max > 0 ? ((savings / max) * 100).toFixed(0) : 0;
@@ -167,7 +167,7 @@ const BidSelectionModal = ({
                       className="text-xl font-semibold"
                       style={{ color: 'var(--success)' }}
                     >
-                      {parseFloat(formatUnits(BigInt(selectedBid.bidAmount), 18)).toFixed(2)} ROSE
+                      {parseFloat(formatUnits(BigInt(selectedBid.displayBid), 18)).toFixed(2)} ROSE
                     </p>
                   </div>
                 </div>
@@ -183,7 +183,7 @@ const BidSelectionModal = ({
 
                 {/* Savings info */}
                 {(() => {
-                  const { savings, percent } = getSavings(selectedBid.bidAmount);
+                  const { savings, percent } = getSavings(selectedBid.displayBid);
                   return parseFloat(savings) > 0 ? (
                     <div
                       className="mt-4 p-3 rounded-xl"
@@ -231,8 +231,9 @@ const BidSelectionModal = ({
             // Bid list
             <div className="space-y-3">
               {bids.map((bid, index) => {
-                const bidAmountFormatted = parseFloat(formatUnits(BigInt(bid.bidAmount), 18)).toFixed(2);
-                const { savings, percent } = getSavings(bid.bidAmount);
+                // Display the midpoint (displayBid) as "the bid" to customer
+                const displayBidFormatted = parseFloat(formatUnits(BigInt(bid.displayBid), 18)).toFixed(2);
+                const { savings, percent } = getSavings(bid.displayBid);
                 const isLowestBid = index === 0;
 
                 return (
@@ -267,7 +268,7 @@ const BidSelectionModal = ({
                           className="text-lg font-semibold"
                           style={{ color: isLowestBid ? 'var(--success)' : 'var(--text-primary)' }}
                         >
-                          {bidAmountFormatted} ROSE
+                          {displayBidFormatted} ROSE
                         </p>
                         {parseFloat(savings) > 0 && (
                           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>

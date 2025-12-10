@@ -17,6 +17,8 @@ Web3 marketplace with task-value-based token distribution.
 
 **Tokenomics:** Customer deposits ROSE → Stakeholder stakes 10% → On completion: Worker 95%, Stakeholder 5% + stake, DAO mints 2%.
 
+**Auction Spread:** For auctions, customer sees midpoint price: `(maxBudget + workerBid) / 2`. Spread goes to treasury. Example: ask=100, bid=80 → customer pays 90, treasury gets 10, worker gets 80.
+
 ## Contract Architecture
 
 | Contract | Purpose |
@@ -37,7 +39,7 @@ Web3 marketplace with task-value-based token distribution.
 | Area | Constant | Value |
 |------|----------|-------|
 | Payment | Worker/Stakeholder/DAO | 95%/5%/2% mint |
-| Treasury | Drift/Cooldown/Oracle | 5%/7d/24h/1h stale |
+| Treasury | Drift/Cooldown/Oracle | disabled/disabled/24h/1h stale |
 | Treasury | Allocations | BTC=30%, Gold=30%, USDC=20%, ROSE=20% |
 | Governance | Vote/Quorum/Pass | 2wk/33%/58.33% |
 | Reputation | Propose/Vote/Delegate | 90%+10tasks/70%/90%+10tasks |
@@ -50,7 +52,7 @@ Web3 marketplace with task-value-based token distribution.
 **Flows:**
 - **Deposit:** USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
 - **Redeem:** Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
-- **Rebalance:** >5% drift triggers, 7d cooldown, monthly cron
+- **Rebalance:** No drift threshold or cooldown. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only. Backend `/api/treasury/rebalance/run` requires signed message authentication.
 
 **Smart Diversification** (deposit watcher):
 1. Phase 1: Fill USDC buffer deficit first (critical for redemption liquidity)
@@ -79,7 +81,7 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
                 └──────┴─→ cancelTask() → Closed (refunds)
 ```
 
-**Auction Mode:** Bids off-chain, customer-only visible. `selectAuctionWinner` refunds excess stake. Surplus refunded at completion.
+**Auction Mode:** Bids off-chain, customer sees midpoint as "bid". `selectAuctionWinner` uses actual worker bid. On completion: spread (midpoint - bid) → treasury, reduced surplus (deposit - midpoint) → customer.
 
 ## Security Patterns
 

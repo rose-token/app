@@ -276,14 +276,24 @@ export async function getBidsForTask(taskId: number): Promise<GetBidsResponse> {
     [taskId]
   );
 
-  const bids: AuctionBid[] = bidsResult.rows.map((row) => ({
-    taskId: row.task_id,
-    worker: row.worker_address,
-    bidAmount: row.bid_amount,
-    message: row.message,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  // Calculate displayBid (midpoint) for each bid
+  // displayBid = (maxBudget + bidAmount) / 2 - this is what customer sees
+  const maxBudgetBn = BigInt(auction.max_budget);
+
+  const bids: AuctionBid[] = bidsResult.rows.map((row) => {
+    const bidAmountBn = BigInt(row.bid_amount);
+    const displayBidBn = (maxBudgetBn + bidAmountBn) / 2n;
+
+    return {
+      taskId: row.task_id,
+      worker: row.worker_address,
+      bidAmount: row.bid_amount,
+      displayBid: displayBidBn.toString(),
+      message: row.message,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
 
   return {
     taskId,
@@ -335,7 +345,17 @@ export async function getWorkerBid(taskId: number, worker: string): Promise<GetW
     };
   }
 
+  // Get maxBudget for displayBid calculation
+  const auctionResult = await query<AuctionTaskRow>(
+    'SELECT max_budget FROM auction_tasks WHERE task_id = $1',
+    [taskId]
+  );
+
   const row = result.rows[0];
+  const maxBudgetBn = auctionResult.rowCount ? BigInt(auctionResult.rows[0].max_budget) : BigInt(row.bid_amount);
+  const bidAmountBn = BigInt(row.bid_amount);
+  const displayBidBn = (maxBudgetBn + bidAmountBn) / 2n;
+
   return {
     taskId,
     worker,
@@ -344,6 +364,7 @@ export async function getWorkerBid(taskId: number, worker: string): Promise<GetW
       taskId: row.task_id,
       worker: row.worker_address,
       bidAmount: row.bid_amount,
+      displayBid: displayBidBn.toString(),
       message: row.message,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

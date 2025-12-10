@@ -1078,24 +1078,29 @@ describe("RoseMarketplace", function () {
         await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
       });
 
-      it("Should distribute payment correctly based on winning bid and refund surplus", async function () {
+      it("Should distribute payment correctly based on winning bid with spread capture", async function () {
         const workerBalanceBefore = await roseToken.balanceOf(worker.address);
         const stakeholderRoseBalanceBefore = await roseToken.balanceOf(stakeholder.address);
         const stakeholderVRoseBalanceBefore = await vRose.balanceOf(stakeholder.address);
         const customerBalanceBefore = await roseToken.balanceOf(customer.address);
         const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
 
-        // Calculate expected amounts based on 600 ROSE winning bid
+        // Calculate expected amounts based on 600 ROSE winning bid out of 1000 max budget
+        // Spread scalping: midpoint = (1000 + 600) / 2 = 800, spread = 800 - 600 = 200
+        const midpoint = (maxBudget + winningBid) / 2n; // 800 ROSE
+        const spreadAmount = midpoint - winningBid; // 200 ROSE goes to treasury
         const mintAmount = (winningBid * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR); // 12 ROSE
         const workerAmount = (winningBid * BigInt(WORKER_SHARE)) / BigInt(SHARE_DENOMINATOR); // 570 ROSE
         const stakeholderFee = (winningBid * BigInt(STAKEHOLDER_SHARE)) / BigInt(SHARE_DENOMINATOR); // 30 ROSE
         const stakeholderVRoseReturned = ethers.parseEther("100"); // Full 10% of max budget
-        const customerSurplus = maxBudget - winningBid; // 400 ROSE
+        const customerSurplus = maxBudget - midpoint; // 200 ROSE (reduced from 400 due to spread)
 
         await expect(roseMarketplace.connect(worker).acceptPayment(1))
           .to.emit(roseMarketplace, "TaskClosed")
           .and.to.emit(roseMarketplace, "PaymentReleased")
           .withArgs(1, worker.address, workerAmount)
+          .and.to.emit(roseMarketplace, "SpreadCaptured")
+          .withArgs(1, spreadAmount, midpoint)
           .and.to.emit(roseMarketplace, "SurplusRefunded")
           .withArgs(1, customer.address, customerSurplus);
 
@@ -1108,11 +1113,11 @@ describe("RoseMarketplace", function () {
         // Verify stakeholder received full vROSE back (100 vROSE - 10% of max budget)
         expect(await vRose.balanceOf(stakeholder.address)).to.equal(stakeholderVRoseBalanceBefore + stakeholderVRoseReturned);
 
-        // Verify customer received surplus (400 ROSE)
+        // Verify customer received reduced surplus (200 ROSE instead of 400)
         expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore + customerSurplus);
 
-        // Verify DAO received 2% of winning bid (12 ROSE minted)
-        expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
+        // Verify treasury received: 2% mint (12 ROSE) + spread (200 ROSE) = 212 ROSE
+        expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount + spreadAmount);
 
         // Task should be closed
         const task = await roseMarketplace.tasks(1);
@@ -1125,6 +1130,95 @@ describe("RoseMarketplace", function () {
         await expect(roseMarketplace.connect(worker).acceptPayment(1))
           .to.emit(roseMarketplace, "StakeholderFeeEarned")
           .withArgs(1, stakeholder.address, stakeholderFee);
+      });
+    });
+
+    describe("Spread Capture Edge Cases", function () {
+      it("Should not capture spread when winning bid equals max budget", async function () {
+        // Create auction task
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), maxBudget);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createAuctionTask(taskTitle, maxBudget, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes 10% of max budget
+        const stakeholderDeposit = maxBudget / 10n;
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+        // Customer selects winner with bid = max budget (no discount)
+        const fullBudgetBid = maxBudget; // 1000 ROSE = max budget
+        const selectExpiry = await getFutureExpiry();
+        const selectSig = await generateSelectWinnerSignature(customer.address, 1, worker.address, fullBudgetBid, selectExpiry);
+        await roseMarketplace.connect(customer).selectAuctionWinner(1, worker.address, fullBudgetBid, selectExpiry, selectSig);
+
+        // Worker completes task
+        await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+
+        // Both approve
+        await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
+        await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+
+        const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
+        const customerBalanceBefore = await roseToken.balanceOf(customer.address);
+
+        // When bid = maxBudget, midpoint = maxBudget, spread = 0, surplus = 0
+        const mintAmount = (fullBudgetBid * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
+
+        // Should NOT emit SpreadCaptured (spread is 0)
+        await expect(roseMarketplace.connect(worker).acceptPayment(1))
+          .to.emit(roseMarketplace, "TaskClosed")
+          .and.not.to.emit(roseMarketplace, "SpreadCaptured")
+          .and.not.to.emit(roseMarketplace, "SurplusRefunded");
+
+        // Treasury should only receive DAO mint, no spread
+        expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
+
+        // Customer should receive nothing (no surplus)
+        expect(await roseToken.balanceOf(customer.address)).to.equal(customerBalanceBefore);
+      });
+
+      it("Should not apply spread to fixed-price (non-auction) tasks", async function () {
+        const taskDeposit = ethers.parseEther("100");
+
+        // Create regular task (not auction)
+        await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
+        const createExpiry = await getFutureExpiry();
+        const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
+        await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+
+        // Stakeholder stakes
+        const stakeholderDeposit = taskDeposit / 10n;
+        await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
+        const stakeExpiry = await getFutureExpiry();
+        const stakeSig = await generatePassportSignature(stakeholder.address, "stake", stakeExpiry);
+        await roseMarketplace.connect(stakeholder).stakeholderStake(1, stakeholderDeposit, stakeExpiry, stakeSig);
+
+        // Worker claims task
+        const claimExpiry = await getFutureExpiry();
+        const claimSig = await generatePassportSignature(worker.address, "claim", claimExpiry);
+        await roseMarketplace.connect(worker).claimTask(1, claimExpiry, claimSig);
+
+        // Worker completes
+        await roseMarketplace.connect(worker).markTaskCompleted(1, testPrUrl);
+
+        // Both approve
+        await roseMarketplace.connect(customer).approveCompletionByCustomer(1);
+        await roseMarketplace.connect(stakeholder).approveCompletionByStakeholder(1);
+
+        const treasuryBalanceBefore = await roseToken.balanceOf(await roseTreasury.getAddress());
+        const mintAmount = (taskDeposit * BigInt(MINT_PERCENTAGE)) / BigInt(SHARE_DENOMINATOR);
+
+        // Fixed-price tasks should not emit SpreadCaptured
+        await expect(roseMarketplace.connect(worker).acceptPayment(1))
+          .to.emit(roseMarketplace, "TaskClosed")
+          .and.not.to.emit(roseMarketplace, "SpreadCaptured")
+          .and.not.to.emit(roseMarketplace, "SurplusRefunded");
+
+        // Treasury should only receive DAO mint (2%), no spread
+        expect(await roseToken.balanceOf(await roseTreasury.getAddress())).to.equal(treasuryBalanceBefore + mintAmount);
       });
     });
 

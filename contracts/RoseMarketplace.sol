@@ -121,6 +121,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     event AuctionTaskCreated(uint256 taskId, address indexed customer, uint256 maxBudget);
     event AuctionWinnerSelected(uint256 taskId, address indexed worker, uint256 winningBid);
     event SurplusRefunded(uint256 taskId, address indexed customer, uint256 amount);
+    event SpreadCaptured(uint256 indexed taskId, uint256 spreadAmount, uint256 midpointPrice);
 
     // Tokenomics parameters
     // On successful task completion, we mint 2% of task value to DAO treasury (separate)
@@ -619,10 +620,19 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             // For auctions, use winningBid as task value; for fixed-price, use deposit
             uint256 taskValue = t.isAuction ? t.winningBid : t.deposit;
 
-            // Calculate customer surplus for auctions (deposit - winningBid)
+            // Calculate spread and customer surplus for auctions
+            // Spread = midpoint between customer ask and worker bid, goes to treasury
+            // Customer surplus = deposit - midpoint (reduced refund)
+            uint256 spreadAmount = 0;
             uint256 customerSurplus = 0;
+            uint256 midpointCache = 0;
             if (t.isAuction && t.deposit > t.winningBid) {
-                customerSurplus = t.deposit - t.winningBid;
+                // Midpoint = (deposit + winningBid) / 2
+                midpointCache = (t.deposit + t.winningBid) / 2;
+                // Spread goes to treasury
+                spreadAmount = midpointCache - t.winningBid;
+                // Customer gets reduced refund
+                customerSurplus = t.deposit - midpointCache;
             }
 
             // Mint 2% of task value to DAO treasury (this creates the 2% growth)
@@ -653,6 +663,12 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
             // Transfer stakeholder fee in ROSE (from customer's deposit)
             roseToken.safeTransfer(t.stakeholder, stakeholderFee);
             emit StakeholderFeeEarned(_taskId, t.stakeholder, stakeholderFee);
+
+            // Transfer spread to treasury (auction scalping fee)
+            if (spreadAmount > 0) {
+                roseToken.safeTransfer(daoTreasury, spreadAmount);
+                emit SpreadCaptured(_taskId, spreadAmount, midpointCache);
+            }
 
             // Refund surplus to customer for auction tasks
             if (customerSurplus > 0) {
