@@ -5,13 +5,12 @@
  * with Hot Swaps for mutable CID references.
  *
  * Flow:
- * - Backup: pg_dump | gzip → upload to Pinata → Hot Swap update
- * - Restore: Fetch from Pinata gateway → gunzip | psql
+ * - Backup: pg_dump -Fc (custom format, self-compressing) → upload to Pinata → Hot Swap update
+ * - Restore: Fetch from Pinata gateway → pg_restore
  */
 
 import { spawn } from 'child_process';
 import { createWriteStream, createReadStream, promises as fs } from 'fs';
-import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import axios from 'axios';
 import FormData from 'form-data';
@@ -154,7 +153,8 @@ async function getSwapHistory(cid: string): Promise<SwapHistoryEntry[]> {
 }
 
 /**
- * Execute pg_dump and compress the output
+ * Execute pg_dump in custom format (already compressed internally)
+ * Custom format (-Fc) is self-compressing, no need for additional gzip
  */
 async function dumpDatabase(outputPath: string): Promise<void> {
   const databaseUrl = config.database.url;
@@ -162,22 +162,38 @@ async function dumpDatabase(outputPath: string): Promise<void> {
     throw new Error('DATABASE_URL not configured');
   }
 
+  // Validate URL before using
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL is not a valid URL');
+  }
+
+  if (!url.hostname || !url.username || !url.pathname || url.pathname.length <= 1) {
+    throw new Error('DATABASE_URL is missing required components (host, user, or database name)');
+  }
+
   return new Promise((resolve, reject) => {
-    // Parse database URL for pg_dump
-    const url = new URL(databaseUrl);
+    let resolved = false;
+    const cleanup = () => {
+      if (!resolved) {
+        resolved = true;
+      }
+    };
+
     const env = {
       ...process.env,
-      PGPASSWORD: url.password,
+      PGPASSWORD: url.password || '',
     };
+
+    const output = createWriteStream(outputPath);
 
     const pgDump = spawn(
       'pg_dump',
       ['-h', url.hostname, '-p', url.port || '5432', '-U', url.username, '-d', url.pathname.slice(1), '-Fc'],
       { env }
     );
-
-    const gzip = createGzip();
-    const output = createWriteStream(outputPath);
 
     let stderr = '';
 
@@ -186,23 +202,39 @@ async function dumpDatabase(outputPath: string): Promise<void> {
     });
 
     pgDump.on('error', (error) => {
+      cleanup();
+      output.destroy();
       reject(new Error(`pg_dump spawn error: ${error.message}`));
     });
 
+    // Pipe directly to file (custom format is self-compressed)
+    pipeline(pgDump.stdout, output)
+      .then(() => {
+        cleanup();
+        resolve();
+      })
+      .catch((err) => {
+        cleanup();
+        // Check if pg_dump had an error
+        if (stderr) {
+          reject(new Error(`pg_dump failed: ${stderr}`));
+        } else {
+          reject(err);
+        }
+      });
+
     pgDump.on('close', (code) => {
-      if (code !== 0) {
+      if (code !== 0 && !resolved) {
+        cleanup();
+        output.destroy();
         reject(new Error(`pg_dump failed with code ${code}: ${stderr}`));
       }
     });
-
-    pipeline(pgDump.stdout, gzip, output)
-      .then(() => resolve())
-      .catch(reject);
   });
 }
 
 /**
- * Restore database from a compressed backup
+ * Restore database from a custom format backup
  */
 async function restoreDatabase(inputPath: string): Promise<void> {
   const databaseUrl = config.database.url;
@@ -210,12 +242,22 @@ async function restoreDatabase(inputPath: string): Promise<void> {
     throw new Error('DATABASE_URL not configured');
   }
 
+  // Validate URL before using
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL is not a valid URL');
+  }
+
+  if (!url.hostname || !url.username || !url.pathname || url.pathname.length <= 1) {
+    throw new Error('DATABASE_URL is missing required components (host, user, or database name)');
+  }
+
   return new Promise((resolve, reject) => {
-    // Parse database URL for pg_restore
-    const url = new URL(databaseUrl);
     const env = {
       ...process.env,
-      PGPASSWORD: url.password,
+      PGPASSWORD: url.password || '',
     };
 
     // Use pg_restore for custom format dumps (-Fc)
@@ -232,7 +274,7 @@ async function restoreDatabase(inputPath: string): Promise<void> {
         url.pathname.slice(1),
         '--clean', // Drop objects before recreating
         '--if-exists', // Don't error if objects don't exist
-        inputPath, // pg_restore can read gzipped custom format directly
+        inputPath, // Custom format file (not gzipped)
       ],
       { env }
     );
@@ -288,7 +330,7 @@ export async function createBackup(): Promise<BackupResult> {
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const tempPath = path.join(os.tmpdir(), `backup-${timestamp}.dump.gz`);
+  const tempPath = path.join(os.tmpdir(), `backup-${timestamp}.dump`);
 
   try {
     console.log('[Backup] Starting database dump...');
@@ -299,7 +341,7 @@ export async function createBackup(): Promise<BackupResult> {
 
     // Step 2: Upload to Pinata
     console.log('[Backup] Uploading to Pinata...');
-    const { cid, size } = await uploadToPinata(tempPath, `rose-backup-${timestamp}.dump.gz`);
+    const { cid, size } = await uploadToPinata(tempPath, `rose-backup-${timestamp}.dump`);
     console.log(`[Backup] Uploaded: ${cid} (${(size / 1024 / 1024).toFixed(2)} MB)`);
 
     // Step 3: Update Hot Swap if reference CID is configured
@@ -356,7 +398,7 @@ export async function restoreBackup(cid?: string, confirmed = false): Promise<Re
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const tempPath = path.join(os.tmpdir(), `restore-${timestamp}.dump.gz`);
+  const tempPath = path.join(os.tmpdir(), `restore-${timestamp}.dump`);
 
   try {
     console.log(`[Backup] Downloading backup: ${targetCid}`);

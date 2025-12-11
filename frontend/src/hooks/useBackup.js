@@ -1,5 +1,5 @@
 import { useAccount } from 'wagmi';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
@@ -13,6 +13,12 @@ export const useBackup = () => {
   const { address } = useAccount();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Reset state when address changes
+  useEffect(() => {
+    setIsLoading(false);
+    setError(null);
+  }, [address]);
 
   /**
    * Trigger a manual database backup.

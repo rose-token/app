@@ -215,7 +215,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 ## Database Backup (Pinata Hot Swaps)
 
-**Storage:** Compressed PostgreSQL backups (pg_dump -Fc | gzip) uploaded to Pinata IPFS as private files.
+**Storage:** PostgreSQL backups in custom format (pg_dump -Fc, self-compressing) uploaded to Pinata IPFS as private files.
 
 **Hot Swaps:** Uses Pinata's Hot Swaps plugin for mutable CID references. First backup creates a reference CID; subsequent backups update the swap mapping so the same reference CID always points to the latest backup.
 
@@ -224,8 +224,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 **Schedule:** Daily at 02:00 UTC (cron job) + manual trigger via admin panel.
 
 **Commands:**
-- **Backup:** `pg_dump -Fc | gzip → upload to Pinata → Hot Swap update`
-- **Restore:** `download from Pinata → pg_restore --clean`
+- **Backup:** `pg_dump -Fc → upload to Pinata → Hot Swap update`
+- **Restore:** `download from Pinata → pg_restore --clean --if-exists`
 
 **Endpoints:** `/api/backup/create` (POST), `/status` (GET), `/restore` (POST, requires confirmation)
 
