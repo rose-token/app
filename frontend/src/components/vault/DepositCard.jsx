@@ -1,19 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
 import Spinner from '../ui/Spinner';
-
-// Format cooldown seconds to human readable
-const formatCooldown = (seconds) => {
-  if (seconds <= 0) return '';
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${mins}m`;
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-};
 
 // Standard ERC20 ABI for approve
 const ERC20_ABI = [
@@ -38,7 +28,6 @@ const DepositCard = ({
   treasuryAddress,
   usdcAddress,
   onSuccess,
-  depositCooldown = 0,
   isPaused = false,
 }) => {
   const { chain, isConnected } = useAccount();
@@ -48,26 +37,6 @@ const DepositCard = ({
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [cooldownRemaining, setCooldownRemaining] = useState(depositCooldown);
-
-  // Live countdown timer - updates every 5 seconds to reduce re-renders
-  // (cooldowns are typically hours, so second precision isn't needed)
-  useEffect(() => {
-    setCooldownRemaining(depositCooldown);
-    if (depositCooldown <= 0) return;
-
-    const interval = setInterval(() => {
-      setCooldownRemaining((prev) => {
-        if (prev <= 5) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 5;
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [depositCooldown]);
 
   // Calculate ROSE amount to receive
   const amountInWei = useMemo(() => {
@@ -186,7 +155,7 @@ const DepositCard = ({
     }
   };
 
-  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0 && !isPaused;
+  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting && !isPaused;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -238,21 +207,6 @@ const DepositCard = ({
         >
           <span>!</span>
           <span>Deposits temporarily disabled</span>
-        </div>
-      )}
-
-      {/* Cooldown Badge */}
-      {cooldownRemaining > 0 && !isPaused && (
-        <div
-          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
-          style={{
-            background: 'var(--warning-bg)',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-            color: 'var(--warning)',
-          }}
-        >
-          <span>⏳</span>
-          <span>Available in {formatCooldown(cooldownRemaining)}</span>
         </div>
       )}
 

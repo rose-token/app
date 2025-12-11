@@ -174,18 +174,6 @@ const useVaultData = () => {
         functionName: 'allowance',
         args: [address, treasuryAddress],
       },
-      {
-        address: treasuryAddress,
-        abi: RoseTreasuryABI,
-        functionName: 'timeUntilDeposit',
-        args: [address],
-      },
-      {
-        address: treasuryAddress,
-        abi: RoseTreasuryABI,
-        functionName: 'timeUntilRedeem',
-        args: [address],
-      },
       // Phase 5: Hybrid redemption - check for pending redemption
       {
         address: treasuryAddress,
@@ -362,8 +350,6 @@ const useVaultData = () => {
         usdcBalance: null,
         roseAllowance: null,
         usdcAllowance: null,
-        depositCooldown: 0,
-        redeemCooldown: 0,
         pendingRedemptionId: null,
       };
     }
@@ -373,8 +359,6 @@ const useVaultData = () => {
       usdcBalanceResult,
       roseAllowanceResult,
       usdcAllowanceResult,
-      depositCooldownResult,
-      redeemCooldownResult,
       pendingRedemptionResult,
     ] = userData;
 
@@ -400,12 +384,6 @@ const useVaultData = () => {
         ? Number(formatUnits(usdcAllowanceResult.result, 6))
         : null,
       usdcAllowanceRaw: usdcAllowanceResult?.result || 0n,
-      depositCooldown: depositCooldownResult?.result
-        ? Number(depositCooldownResult.result)
-        : 0,
-      redeemCooldown: redeemCooldownResult?.result
-        ? Number(redeemCooldownResult.result)
-        : 0,
       pendingRedemptionId,
     };
   }, [userData]);

@@ -26,9 +26,6 @@ const VaultPage = () => {
     roseAllowanceRaw,
     usdcAllowance,
     usdcAllowanceRaw,
-    // Cooldowns
-    depositCooldown,
-    redeemCooldown,
     // Phase 5: Pending redemption
     pendingRedemptionId,
     // Addresses
@@ -123,7 +120,6 @@ const VaultPage = () => {
             treasuryAddress={treasuryAddress}
             usdcAddress={usdcAddress}
             onSuccess={handleSuccess}
-            depositCooldown={depositCooldown}
             isPaused={isPaused}
           />
 
@@ -136,7 +132,6 @@ const VaultPage = () => {
             treasuryAddress={treasuryAddress}
             tokenAddress={tokenAddress}
             onSuccess={handleSuccess}
-            redeemCooldown={redeemCooldown}
             pendingRedemptionId={pendingRedemptionId}
             isPaused={isPaused}
           />

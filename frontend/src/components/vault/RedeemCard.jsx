@@ -8,16 +8,6 @@ import Spinner from '../ui/Spinner';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
-// Format cooldown seconds to human readable
-const formatCooldown = (seconds) => {
-  if (seconds <= 0) return '';
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${mins}m`;
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-};
-
 const RedeemCard = ({
   roseBalance,
   roseBalanceRaw,
@@ -27,7 +17,6 @@ const RedeemCard = ({
   treasuryAddress,
   tokenAddress,
   onSuccess,
-  redeemCooldown = 0,
   pendingRedemptionId: initialPendingId = null,
   isPaused = false,
 }) => {
@@ -38,7 +27,6 @@ const RedeemCard = ({
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [cooldownRemaining, setCooldownRemaining] = useState(redeemCooldown);
 
   // Hybrid redemption state (Phase 5)
   const [redemptionMode, setRedemptionMode] = useState(initialPendingId ? 'queued' : null);
@@ -54,25 +42,6 @@ const RedeemCard = ({
       setRedemptionMode('queued');
     }
   }, [initialPendingId, pendingRequestId]);
-
-  // Live countdown timer - updates every 5 seconds to reduce re-renders
-  // (cooldowns are typically hours, so second precision isn't needed)
-  useEffect(() => {
-    setCooldownRemaining(redeemCooldown);
-    if (redeemCooldown <= 0) return;
-
-    const interval = setInterval(() => {
-      setCooldownRemaining((prev) => {
-        if (prev <= 5) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 5;
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [redeemCooldown]);
 
   // Check if redemption can be fulfilled instantly
   const checkRedeemAvailability = useCallback(async (roseAmountWei) => {
@@ -320,7 +289,7 @@ const RedeemCard = ({
     }
   };
 
-  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0 && !isPaused;
+  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting && !isPaused;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -372,21 +341,6 @@ const RedeemCard = ({
         >
           <span>!</span>
           <span>Redemptions temporarily disabled</span>
-        </div>
-      )}
-
-      {/* Cooldown Badge */}
-      {cooldownRemaining > 0 && !isPaused && (
-        <div
-          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
-          style={{
-            background: 'var(--warning-bg)',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-            color: 'var(--warning)',
-          }}
-        >
-          <span>⏳</span>
-          <span>Available in {formatCooldown(cooldownRemaining)}</span>
         </div>
       )}
 

@@ -63,7 +63,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     uint256 public constant ALLOC_DENOMINATOR = 10000;
     uint256 public constant DRIFT_THRESHOLD = 500; // 5% drift triggers rebalance
     uint256 public constant REBALANCE_COOLDOWN = 7 days;
-    uint256 public constant USER_COOLDOWN = 24 hours;
+    // Removed: USER_COOLDOWN - replaced with same-block protection
     uint256 public constant MAX_ORACLE_STALENESS = 1 hours;
     uint256 public constant MIN_SWAP_AMOUNT = 1e6; // 1 USDC minimum
     uint8 public constant USDC_DECIMALS = 6;
@@ -74,8 +74,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     uint256 public maxSlippageBps = 100; // 1% default
     address public marketplace;
     address public governance;
-    mapping(address => uint256) public lastDepositTime;
-    mapping(address => uint256) public lastRedeemTime;
+    mapping(address => uint256) public lastDepositBlock;
 
     // ============ Redemption Queue ============
     struct RedemptionRequest {
@@ -120,7 +119,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error InsufficientBalance();
     error RebalanceNotNeeded();
     error RebalanceCooldown();
-    error CooldownNotElapsed(uint256 timeRemaining);
+    error SameBlockRestriction();
     error AssetAlreadyExists();
     error AssetNotFound();
     error AssetNotActive();
@@ -308,16 +307,9 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
     /**
      * @dev Deposit USDC, receive ROSE at current NAV
-     * 24hr cooldown between deposits (owner exempt)
      * Note: Backend watches Deposited events and diversifies via LiFi
      */
     function deposit(uint256 usdcAmount) external nonReentrant whenNotPaused {
-        if (msg.sender != owner()) {
-            uint256 nextAllowed = lastDepositTime[msg.sender] + USER_COOLDOWN;
-            if (block.timestamp < nextAllowed) {
-                revert CooldownNotElapsed(nextAllowed - block.timestamp);
-            }
-        }
         if (usdcAmount == 0) revert ZeroAmount();
         if (usdc.balanceOf(msg.sender) < usdcAmount) revert InsufficientBalance();
 
@@ -328,22 +320,17 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         // NO _diversify() - backend handles via Deposited event + executeSwap()
 
-        lastDepositTime[msg.sender] = block.timestamp;
+        lastDepositBlock[msg.sender] = block.number;
         emit Deposited(msg.sender, usdcAmount, roseToMint);
     }
 
     /**
      * @dev Redeem ROSE for USDC at current NAV
-     * 24hr cooldown between redemptions (owner exempt)
+     * Same-block restriction: cannot redeem in the same block as a deposit
      * Note: Requires sufficient USDC buffer. Backend maintains buffer via rebalancing.
      */
     function redeem(uint256 roseAmount) external nonReentrant whenNotPaused {
-        if (msg.sender != owner()) {
-            uint256 nextAllowed = lastRedeemTime[msg.sender] + USER_COOLDOWN;
-            if (block.timestamp < nextAllowed) {
-                revert CooldownNotElapsed(nextAllowed - block.timestamp);
-            }
-        }
+        if (block.number <= lastDepositBlock[msg.sender]) revert SameBlockRestriction();
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
 
@@ -356,7 +343,6 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         IRoseToken(address(roseToken)).burn(msg.sender, roseAmount);
         usdc.safeTransfer(msg.sender, usdcOwed);
 
-        lastRedeemTime[msg.sender] = block.timestamp;
         emit Redeemed(msg.sender, roseAmount, usdcOwed);
     }
 
@@ -366,6 +352,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      * @dev Request a redemption when instant redemption isn't possible
      * Locks ROSE in treasury, records USDC owed at current NAV
      * If USDC buffer is sufficient, fulfills instantly
+     * Same-block restriction: cannot request in the same block as a deposit
      * @param roseAmount Amount of ROSE to redeem
      * @return requestId Unique ID for tracking the request
      */
@@ -373,14 +360,7 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
         if (userPendingRedemptionId[msg.sender] != 0) revert UserHasPendingRedemption();
-
-        // User cooldown (same as redeem)
-        if (msg.sender != owner()) {
-            uint256 nextAllowed = lastRedeemTime[msg.sender] + USER_COOLDOWN;
-            if (block.timestamp < nextAllowed) {
-                revert CooldownNotElapsed(nextAllowed - block.timestamp);
-            }
-        }
+        if (block.number <= lastDepositBlock[msg.sender]) revert SameBlockRestriction();
 
         // Calculate USDC owed at current NAV (locked price)
         uint256 usdcOwed = calculateUsdcForRedemption(roseAmount);
@@ -400,7 +380,6 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
 
         userPendingRedemptionId[msg.sender] = requestId;
         totalPendingUsdcOwed += usdcOwed;
-        lastRedeemTime[msg.sender] = block.timestamp;
 
         emit RedemptionRequested(requestId, msg.sender, roseAmount, usdcOwed);
 
@@ -871,21 +850,12 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * @dev Time until user can deposit again (0 if allowed now)
+     * @dev Check if user can redeem (not in same block as deposit)
+     * @param user Address to check
+     * @return True if user can redeem, false if same-block restriction applies
      */
-    function timeUntilDeposit(address user) external view returns (uint256) {
-        uint256 nextAllowed = lastDepositTime[user] + USER_COOLDOWN;
-        if (block.timestamp >= nextAllowed) return 0;
-        return nextAllowed - block.timestamp;
-    }
-
-    /**
-     * @dev Time until user can redeem again (0 if allowed now)
-     */
-    function timeUntilRedeem(address user) external view returns (uint256) {
-        uint256 nextAllowed = lastRedeemTime[user] + USER_COOLDOWN;
-        if (block.timestamp >= nextAllowed) return 0;
-        return nextAllowed - block.timestamp;
+    function canRedeemAfterDeposit(address user) external view returns (bool) {
+        return block.number > lastDepositBlock[user];
     }
 }
 
