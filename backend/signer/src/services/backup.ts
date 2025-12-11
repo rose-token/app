@@ -305,11 +305,20 @@ async function restoreDatabase(inputPath: string): Promise<void> {
 
 /**
  * Download a backup file from Pinata
+ * Note: Private files require Authorization header
  */
 async function downloadBackup(cid: string, outputPath: string): Promise<void> {
+  const jwt = config.backup.pinataJwt;
+  if (!jwt) {
+    throw new Error('PINATA_JWT not configured');
+  }
+
   const response = await axios.get(getGatewayUrl(cid), {
     responseType: 'stream',
     timeout: 5 * 60 * 1000, // 5 minute timeout
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+    },
   });
 
   const output = createWriteStream(outputPath);

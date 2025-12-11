@@ -215,6 +215,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud` (dedicated gateway for private file access)
 
+**Private File Downloads:** All uploads are private by default. Downloads from the gateway require `Authorization: Bearer <JWT>` header. Without auth, returns 403 "The owner of this gateway does not have this content".
+
 **Environment:**
 - Frontend: `VITE_PINATA_JWT` (required), `VITE_PINATA_GATEWAY` (optional, has default)
 - Backend: `PINATA_GATEWAY` (optional, has default)
