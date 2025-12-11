@@ -137,7 +137,9 @@ export const config = {
     // GitHub App ID (provided via secrets)
     appId: parseInt(process.env.MERGEBOT_APP_ID || '0'),
     // GitHub App private key (PEM format, provided via secrets)
-    privateKey: (process.env.MERGEBOT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    privateKey: process.env.MERGEBOT_PRIVATE_KEY
+      ? Buffer.from(process.env.MERGEBOT_PRIVATE_KEY, 'base64').toString('utf-8')
+      : '',
     // Enable GitHub bot functionality (default: true)
     enabled: process.env.GITHUB_BOT_ENABLED !== 'false',
     // Blocks to look back on startup for TaskReadyForPayment events
