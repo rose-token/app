@@ -3,6 +3,7 @@ import { useAccount, useReadContract, useWriteContract, usePublicClient } from '
 import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
+import Spinner from '../ui/Spinner';
 
 // Format cooldown seconds to human readable
 const formatCooldown = (seconds) => {
@@ -334,7 +335,7 @@ const DepositCard = ({
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
-              <span className="animate-pulse mr-2">⚡</span>
+              <Spinner className="h-4 w-4 mr-2" />
               Depositing...
             </span>
           ) : (

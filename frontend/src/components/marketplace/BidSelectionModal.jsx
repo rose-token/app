@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { formatUnits } from 'viem';
 import { useAuction } from '../../hooks/useAuction';
 import ProfileBadge from '../profile/ProfileBadge';
+import Spinner from '../ui/Spinner';
 
 /**
  * Modal for customers to view all bids on an auction task and select a winner.
@@ -362,7 +363,7 @@ const BidSelectionModal = ({
               >
                 {isSelecting ? (
                   <>
-                    <span className="inline-block mr-2 animate-pulse">⚡</span>
+                    <Spinner className="h-4 w-4 mr-2" />
                     Confirming...
                   </>
                 ) : (

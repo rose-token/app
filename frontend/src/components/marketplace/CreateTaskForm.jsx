@@ -10,6 +10,7 @@ import { usePassportVerify } from '../../hooks/usePassportVerify';
 import { useAuction } from '../../hooks/useAuction';
 import { GAS_SETTINGS } from '../../constants/gas';
 import { GITHUB_INTEGRATION } from '../../constants/github';
+import Spinner from '../ui/Spinner';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -482,7 +483,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         >
           {isSubmitting ? (
             <>
-              <span className="inline-block mr-2 animate-pulse">⚡</span>
+              <Spinner className="h-4 w-4 mr-2" />
               {isAuction ? 'Creating Auction...' : 'Creating Task...'}
             </>
           ) : (

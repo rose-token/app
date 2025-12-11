@@ -4,6 +4,7 @@ import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
+import Spinner from '../ui/Spinner';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
@@ -458,7 +459,7 @@ const RedeemCard = ({
             style={{ background: 'var(--warning-bg)', border: '1px solid rgba(251, 191, 36, 0.3)' }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <span className="animate-spin">⏳</span>
+              <Spinner className="h-4 w-4" />
               <p className="text-sm font-medium" style={{ color: 'var(--warning)' }}>
                 Processing Redemption
               </p>
@@ -490,12 +491,12 @@ const RedeemCard = ({
         >
           {isPolling ? (
             <span className="flex items-center justify-center">
-              <span className="animate-spin mr-2">⏳</span>
+              <Spinner className="h-4 w-4 mr-2" />
               Awaiting Fulfillment...
             </span>
           ) : isSubmitting ? (
             <span className="flex items-center justify-center">
-              <span className="animate-pulse mr-2">⚡</span>
+              <Spinner className="h-4 w-4 mr-2" />
               Redeeming...
             </span>
           ) : (

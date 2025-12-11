@@ -124,6 +124,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Site-Wide Gate:** `ProtectedRoutes` component gates entire app with Passport score >= 20 check. Flow: Connect wallet → Verify passport → Access site. `/help` route bypasses gate. Whitelisted addresses bypass automatically via `usePassport`. Strict blocking (no graceful degradation) for sybil protection.
 
+**UI Components:** Reusable components in `frontend/src/components/ui/`. Use `<Spinner />` for all loading states (default h-4 w-4, customize via className prop).
+
 ## Backend API (`backend/signer/`)
 
 | Category | Endpoints |

@@ -12,6 +12,7 @@ import DisputeModal from './DisputeModal';
 import { useAuction } from '../../hooks/useAuction';
 import { useDispute } from '../../hooks/useDispute';
 import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrlWithBackend } from '../../constants/github';
+import Spinner from '../ui/Spinner';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -266,7 +267,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isLoadingDetails ? (
               <>
-                <span className="animate-spin">⏳</span>
+                <Spinner className="h-4 w-4 inline-block" />
                 Loading details...
               </>
             ) : (
@@ -435,7 +436,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isStaking ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Staking...
               </>
             ) : (
@@ -458,7 +459,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isClaiming ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Claiming...
               </>
             ) : (
@@ -481,7 +482,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isLoadingBid ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Loading...
               </>
             ) : myBid ? (
@@ -524,7 +525,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isUnclaiming ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Unclaiming...
               </>
             ) : (
@@ -547,7 +548,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isCompleting ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Marking Complete...
               </>
             ) : (
@@ -570,7 +571,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isApprovingCustomer ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Approving...
               </>
             ) : (
@@ -593,7 +594,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isApprovingStakeholder ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Approving...
               </>
             ) : (
@@ -616,7 +617,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isAcceptingPayment ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Accepting Payment...
               </>
             ) : (
@@ -640,7 +641,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isUnstaking ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Unstaking...
               </>
             ) : (
@@ -663,7 +664,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isCancelling ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Cancelling...
               </>
             ) : (
@@ -686,7 +687,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           >
             {isDisputing ? (
               <>
-                <span className="animate-pulse inline-block mr-2">⚡</span>
+                <Spinner className="h-4 w-4 mr-2" />
                 Raising Dispute...
               </>
             ) : (

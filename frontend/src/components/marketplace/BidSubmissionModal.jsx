@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAuction } from '../../hooks/useAuction';
+import Spinner from '../ui/Spinner';
 
 /**
  * Modal for submitting or updating a bid on an auction task.
@@ -243,7 +244,7 @@ const BidSubmissionModal = ({
             >
               {isSubmitting ? (
                 <>
-                  <span className="inline-block mr-2 animate-pulse">⚡</span>
+                  <Spinner className="h-4 w-4 mr-2" />
                   {isUpdate ? 'Updating...' : 'Submitting...'}
                 </>
               ) : isUpdate ? (
