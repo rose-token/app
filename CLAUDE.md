@@ -241,8 +241,16 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 **Schedule:** Daily at 02:00 UTC (cron job) + manual trigger via admin panel.
 
 **Commands:**
-- **Backup:** `pg_dump -Fc → upload to Pinata → Hot Swap update`
+- **Backup:** `pg_dump -Fc → upload to Pinata → Hot Swap update → verify`
 - **Restore:** `download from Pinata → pg_restore --clean --if-exists`
+
+**Hot Swap Verification:** After every Hot Swap update, the system waits 2 seconds for propagation, then verifies the swap by:
+1. Fetching content from reference CID (should resolve via Hot Swap)
+2. Fetching content directly from the new backup CID
+3. Computing SHA-256 hashes and comparing (timing-safe)
+4. Throwing error on mismatch (triggers cron failure tracking)
+
+`BackupResult` now includes `swapVerified: boolean` field.
 
 **Endpoints:** `/api/backup/create` (POST), `/status` (GET), `/restore` (POST, requires confirmation)
 

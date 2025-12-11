@@ -12,6 +12,7 @@
 import { spawn } from 'child_process';
 import { createWriteStream, promises as fs } from 'fs';
 import { pipeline } from 'stream/promises';
+import { createHash, timingSafeEqual } from 'crypto';
 import { PinataSDK, NetworkError } from 'pinata';
 import { config } from '../config';
 import path from 'path';
@@ -88,6 +89,7 @@ export interface BackupResult {
   timestamp: string;
   swapUpdated: boolean;
   isFirstBackup: boolean;
+  swapVerified: boolean;
 }
 
 export interface RestoreResult {
@@ -297,6 +299,79 @@ async function downloadBackup(cid: string, outputPath: string): Promise<void> {
 }
 
 /**
+ * Extract Buffer from Blob or string response data
+ */
+async function extractBlobData(data: unknown): Promise<Buffer> {
+  if (data instanceof Blob) {
+    return Buffer.from(await data.arrayBuffer());
+  } else if (typeof data === 'string') {
+    return Buffer.from(data);
+  } else {
+    throw new Error(`Unexpected response type: ${typeof data}`);
+  }
+}
+
+/**
+ * Verify Hot Swap integrity by comparing SHA-256 hashes
+ *
+ * Downloads content from both reference CID (via Hot Swap redirect) and
+ * the expected CID directly, computes SHA-256 hashes, and verifies they match.
+ *
+ * @param referenceCid - The reference CID to verify (will resolve via Hot Swap)
+ * @param expectedCid - The expected target CID that Hot Swap should redirect to
+ * @returns Verification result with hashes
+ * @throws Error on network failures
+ */
+async function verifyHotSwap(
+  referenceCid: string,
+  expectedCid: string
+): Promise<{
+  working: boolean;
+  referenceCid: string;
+  expectedCid: string;
+  referenceHash: string;
+  directHash: string;
+}> {
+  const pinata = getPinata();
+
+  console.log(`[Backup] Verifying Hot Swap: ${referenceCid} → ${expectedCid}`);
+
+  // Fetch both CIDs in parallel
+  const [refResponse, directResponse] = await Promise.all([
+    pinata.gateways.private.get(referenceCid),
+    pinata.gateways.private.get(expectedCid),
+  ]);
+
+  // Validate responses
+  if (!(refResponse.data instanceof Blob) || !(directResponse.data instanceof Blob)) {
+    throw new Error('Unexpected response type — expected Blob');
+  }
+
+  // Compute SHA-256 hashes
+  const [referenceHash, directHash] = await Promise.all([
+    extractBlobData(refResponse.data).then((buf) => createHash('sha256').update(buf).digest('hex')),
+    extractBlobData(directResponse.data).then((buf) => createHash('sha256').update(buf).digest('hex')),
+  ]);
+
+  // Use timing-safe comparison to prevent timing attacks
+  const working = timingSafeEqual(Buffer.from(referenceHash, 'hex'), Buffer.from(directHash, 'hex'));
+
+  console.log(`[Backup] Reference CID:    ${referenceCid}`);
+  console.log(`[Backup] Expected CID:     ${expectedCid}`);
+  console.log(`[Backup] Reference hash:   ${referenceHash.slice(0, 16)}...`);
+  console.log(`[Backup] Direct hash:      ${directHash.slice(0, 16)}...`);
+  console.log(`[Backup] Match:            ${working ? '✅ HOT SWAP WORKING' : '❌ MISMATCH'}`);
+
+  return {
+    working,
+    referenceCid,
+    expectedCid,
+    referenceHash,
+    directHash,
+  };
+}
+
+/**
  * Create a database backup
  *
  * If this is the first backup (no BACKUP_REFERENCE_CID set), returns the CID
@@ -328,11 +403,29 @@ export async function createBackup(): Promise<BackupResult> {
     const referenceCid = getReferenceCid();
     let swapUpdated = false;
     let isFirstBackup = false;
+    let swapVerified = false;
 
     if (referenceCid) {
       await updateHotSwap(referenceCid, cid);
       swapUpdated = true;
       console.log('[Backup] Hot Swap updated successfully');
+
+      // Step 4: Wait for propagation and verify Hot Swap
+      console.log('[Backup] Waiting 2s for Hot Swap propagation...');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const verification = await verifyHotSwap(referenceCid, cid);
+
+      if (!verification.working) {
+        throw new Error(
+          `Hot Swap verification failed: hash mismatch\n` +
+            `  Reference CID: ${verification.referenceCid} (${verification.referenceHash})\n` +
+            `  Expected CID: ${verification.expectedCid} (${verification.directHash})`
+        );
+      }
+
+      swapVerified = true;
+      console.log('[Backup] Hot Swap verification passed');
     } else {
       isFirstBackup = true;
       console.log('[Backup] First backup created. Add this CID as BACKUP_REFERENCE_CID:');
@@ -346,6 +439,7 @@ export async function createBackup(): Promise<BackupResult> {
       timestamp: new Date().toISOString(),
       swapUpdated,
       isFirstBackup,
+      swapVerified,
     };
   } finally {
     // Cleanup temp file
