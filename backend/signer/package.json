@@ -21,7 +21,8 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "node-cron": "^3.0.3",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "pinata": "^2.5.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

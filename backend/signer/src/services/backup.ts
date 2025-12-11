@@ -10,18 +10,75 @@
  */
 
 import { spawn } from 'child_process';
-import { createWriteStream, createReadStream, promises as fs } from 'fs';
+import { createWriteStream, promises as fs } from 'fs';
 import { pipeline } from 'stream/promises';
-import axios from 'axios';
-import FormData from 'form-data';
+import { PinataSDK, NetworkError } from 'pinata';
 import { config } from '../config';
 import path from 'path';
 import os from 'os';
 
-// Pinata V3 API endpoints
-const PINATA_UPLOAD_URL = 'https://uploads.pinata.cloud/v3/files';
-const PINATA_SWAP_URL = 'https://api.pinata.cloud/v3/files/private/swap';
-const PINATA_GATEWAY = process.env.PINATA_GATEWAY || 'https://coffee-glad-felidae-720.mypinata.cloud';
+// Pinata gateway for URL generation
+const PINATA_GATEWAY = config.backup.pinataGateway || 'https://coffee-glad-felidae-720.mypinata.cloud';
+
+// Lazy-initialized Pinata SDK instance
+let pinataInstance: PinataSDK | null = null;
+
+/**
+ * Get or create Pinata SDK instance
+ */
+function getPinata(): PinataSDK {
+  if (!pinataInstance) {
+    const jwt = config.backup.pinataJwt;
+    if (!jwt) {
+      throw new Error('PINATA_JWT not configured');
+    }
+    pinataInstance = new PinataSDK({
+      pinataJwt: jwt,
+      pinataGateway: new URL(PINATA_GATEWAY).hostname,
+    });
+  }
+  return pinataInstance;
+}
+
+/**
+ * Parse and validate DATABASE_URL, returning URL object
+ */
+function parseDatabaseUrl(): URL {
+  const databaseUrl = config.database.url;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL not configured');
+  }
+
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL is not a valid URL');
+  }
+
+  if (!url.hostname || !url.username || !url.pathname || url.pathname.length <= 1) {
+    throw new Error('DATABASE_URL is missing required components (host, user, or database name)');
+  }
+
+  return url;
+}
+
+/**
+ * Get PostgreSQL connection arguments from URL
+ */
+function getPgConnectionArgs(url: URL): string[] {
+  return ['-h', url.hostname, '-p', url.port || '5432', '-U', url.username, '-d', url.pathname.slice(1)];
+}
+
+/**
+ * Get environment variables with PostgreSQL password
+ */
+function getPgEnv(url: URL): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    PGPASSWORD: url.password || '',
+  };
+}
 
 // Types
 export interface BackupResult {
@@ -72,80 +129,63 @@ export function getGatewayUrl(cid: string): string {
 }
 
 /**
- * Upload a file to Pinata V3 API (private, in Backups group)
+ * Upload a file to Pinata (private, in Backups group) using SDK
  */
 async function uploadToPinata(filePath: string, filename: string): Promise<{ cid: string; size: number }> {
-  const jwt = config.backup.pinataJwt;
-  if (!jwt) {
-    throw new Error('PINATA_JWT not configured');
-  }
-
-  const formData = new FormData();
-  const fileStream = createReadStream(filePath);
+  const pinata = getPinata();
   const stats = await fs.stat(filePath);
 
-  formData.append('file', fileStream, { filename });
-  formData.append('network', 'private');
-  formData.append('group_id', config.backup.groupId);
+  // Read file into buffer and create File object
+  const fileBuffer = await fs.readFile(filePath);
+  const file = new File([fileBuffer], filename, { type: 'application/octet-stream' });
 
-  const response = await axios.post(PINATA_UPLOAD_URL, formData, {
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      ...formData.getHeaders(),
-    },
-    maxBodyLength: Infinity,
-    timeout: 5 * 60 * 1000, // 5 minute timeout for large backups
-  });
+  // Upload using SDK with group assignment
+  const response = await pinata.upload.private.file(file).group(config.backup.groupId);
 
   return {
-    cid: response.data.data.cid,
+    cid: response.cid,
     size: stats.size,
   };
 }
 
 /**
- * Update Hot Swap mapping: referenceCid → newCid
+ * Update Hot Swap mapping: referenceCid → newCid using SDK
  */
 async function updateHotSwap(referenceCid: string, newCid: string): Promise<void> {
-  const jwt = config.backup.pinataJwt;
-  if (!jwt) {
-    throw new Error('PINATA_JWT not configured');
-  }
+  const pinata = getPinata();
 
-  await axios.put(
-    `${PINATA_SWAP_URL}/${referenceCid}`,
-    { swapCid: newCid },
-    {
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  await pinata.files.private.addSwap({
+    cid: referenceCid,
+    swapCid: newCid,
+  });
 
   console.log(`[Backup] Hot Swap updated: ${referenceCid} → ${newCid}`);
 }
 
 /**
- * Get Hot Swap history for a CID
+ * Get Hot Swap history for a CID using SDK
  */
 async function getSwapHistory(cid: string): Promise<SwapHistoryEntry[]> {
-  const jwt = config.backup.pinataJwt;
-  if (!jwt) {
-    throw new Error('PINATA_JWT not configured');
-  }
+  const pinata = getPinata();
 
   try {
-    const response = await axios.get(`${PINATA_SWAP_URL}/${cid}?domain=${new URL(PINATA_GATEWAY).hostname}`, {
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-      },
+    const history = await pinata.files.private.getSwapHistory({
+      cid,
+      domain: new URL(PINATA_GATEWAY).hostname,
     });
 
-    return response.data.data || [];
+    // SDK returns array directly with mapped_cid and created_at
+    return history.map((entry) => ({
+      mapped_cid: entry.mapped_cid,
+      created_at: entry.created_at,
+    }));
   } catch (error: unknown) {
-    // 404 means no swaps yet - that's OK
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
+    // Handle case where no swaps exist yet - SDK throws NetworkError with 404 status
+    if (error instanceof NetworkError && error.statusCode === 404) {
+      return [];
+    }
+    // Fallback: also check error message for backwards compatibility
+    if (error instanceof Error && error.message.includes('404')) {
       return [];
     }
     throw error;
@@ -157,43 +197,19 @@ async function getSwapHistory(cid: string): Promise<SwapHistoryEntry[]> {
  * Custom format (-Fc) is self-compressing, no need for additional gzip
  */
 async function dumpDatabase(outputPath: string): Promise<void> {
-  const databaseUrl = config.database.url;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL not configured');
-  }
-
-  // Validate URL before using
-  let url: URL;
-  try {
-    url = new URL(databaseUrl);
-  } catch {
-    throw new Error('DATABASE_URL is not a valid URL');
-  }
-
-  if (!url.hostname || !url.username || !url.pathname || url.pathname.length <= 1) {
-    throw new Error('DATABASE_URL is missing required components (host, user, or database name)');
-  }
+  const url = parseDatabaseUrl();
 
   return new Promise((resolve, reject) => {
-    let resolved = false;
-    const cleanup = () => {
-      if (!resolved) {
-        resolved = true;
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (!settled) {
+        settled = true;
+        fn();
       }
     };
 
-    const env = {
-      ...process.env,
-      PGPASSWORD: url.password || '',
-    };
-
     const output = createWriteStream(outputPath);
-
-    const pgDump = spawn(
-      'pg_dump',
-      ['-h', url.hostname, '-p', url.port || '5432', '-U', url.username, '-d', url.pathname.slice(1), '-Fc'],
-      { env }
-    );
+    const pgDump = spawn('pg_dump', [...getPgConnectionArgs(url), '-Fc'], { env: getPgEnv(url) });
 
     let stderr = '';
 
@@ -202,32 +218,19 @@ async function dumpDatabase(outputPath: string): Promise<void> {
     });
 
     pgDump.on('error', (error) => {
-      cleanup();
       output.destroy();
-      reject(new Error(`pg_dump spawn error: ${error.message}`));
+      settle(() => reject(new Error(`pg_dump spawn error: ${error.message}`)));
     });
 
     // Pipe directly to file (custom format is self-compressed)
     pipeline(pgDump.stdout, output)
-      .then(() => {
-        cleanup();
-        resolve();
-      })
-      .catch((err) => {
-        cleanup();
-        // Check if pg_dump had an error
-        if (stderr) {
-          reject(new Error(`pg_dump failed: ${stderr}`));
-        } else {
-          reject(err);
-        }
-      });
+      .then(() => settle(() => resolve()))
+      .catch((err) => settle(() => reject(stderr ? new Error(`pg_dump failed: ${stderr}`) : err)));
 
     pgDump.on('close', (code) => {
-      if (code !== 0 && !resolved) {
-        cleanup();
+      if (code !== 0) {
         output.destroy();
-        reject(new Error(`pg_dump failed with code ${code}: ${stderr}`));
+        settle(() => reject(new Error(`pg_dump failed with code ${code}: ${stderr}`)));
       }
     });
   });
@@ -237,46 +240,14 @@ async function dumpDatabase(outputPath: string): Promise<void> {
  * Restore database from a custom format backup
  */
 async function restoreDatabase(inputPath: string): Promise<void> {
-  const databaseUrl = config.database.url;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL not configured');
-  }
-
-  // Validate URL before using
-  let url: URL;
-  try {
-    url = new URL(databaseUrl);
-  } catch {
-    throw new Error('DATABASE_URL is not a valid URL');
-  }
-
-  if (!url.hostname || !url.username || !url.pathname || url.pathname.length <= 1) {
-    throw new Error('DATABASE_URL is missing required components (host, user, or database name)');
-  }
+  const url = parseDatabaseUrl();
 
   return new Promise((resolve, reject) => {
-    const env = {
-      ...process.env,
-      PGPASSWORD: url.password || '',
-    };
-
     // Use pg_restore for custom format dumps (-Fc)
     const pgRestore = spawn(
       'pg_restore',
-      [
-        '-h',
-        url.hostname,
-        '-p',
-        url.port || '5432',
-        '-U',
-        url.username,
-        '-d',
-        url.pathname.slice(1),
-        '--clean', // Drop objects before recreating
-        '--if-exists', // Don't error if objects don't exist
-        inputPath, // Custom format file (not gzipped)
-      ],
-      { env }
+      [...getPgConnectionArgs(url), '--clean', '--if-exists', inputPath],
+      { env: getPgEnv(url) }
     );
 
     let stderr = '';
@@ -304,25 +275,25 @@ async function restoreDatabase(inputPath: string): Promise<void> {
 }
 
 /**
- * Download a backup file from Pinata
- * Note: Private files require Authorization header
+ * Download a backup file from Pinata using SDK
  */
 async function downloadBackup(cid: string, outputPath: string): Promise<void> {
-  const jwt = config.backup.pinataJwt;
-  if (!jwt) {
-    throw new Error('PINATA_JWT not configured');
+  const pinata = getPinata();
+  const response = await pinata.gateways.private.get(cid);
+
+  if (!response.data) {
+    throw new Error('No data received from gateway');
   }
 
-  const response = await axios.get(getGatewayUrl(cid), {
-    responseType: 'stream',
-    timeout: 5 * 60 * 1000, // 5 minute timeout
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-    },
-  });
-
-  const output = createWriteStream(outputPath);
-  await pipeline(response.data, output);
+  // Handle Blob response (binary data) or string response
+  if (response.data instanceof Blob) {
+    const buffer = Buffer.from(await response.data.arrayBuffer());
+    await fs.writeFile(outputPath, buffer);
+  } else if (typeof response.data === 'string') {
+    await fs.writeFile(outputPath, response.data);
+  } else {
+    throw new Error(`Unexpected response type: ${typeof response.data}`);
+  }
 }
 
 /**
