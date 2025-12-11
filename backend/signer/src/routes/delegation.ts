@@ -500,4 +500,304 @@ router.get('/global-power/:delegate', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================
+// DelegationV2 Endpoints (Off-Chain EIP-712 Delegations)
+// ============================================================
+
+import {
+  storeDelegation,
+  getUserDelegations,
+  getReceivedDelegations,
+  revokeDelegation,
+  getNextNonce,
+  getDelegationStats,
+  getEIP712Config,
+  verifyDelegateOptIn,
+  verifyRevocationSignature,
+} from '../services/delegationV2';
+import {
+  DelegationV2Request,
+  DelegationV2Response,
+  UserDelegationsResponse,
+  ReceivedDelegationsV2Response,
+  RevokeDelegationRequest,
+  RevokeDelegationResponse,
+  NextNonceResponse,
+  DelegationV2StatsResponse,
+  DelegationEIP712ConfigResponse,
+  DelegationV2ErrorResponse,
+} from '../types';
+
+/**
+ * POST /api/delegation/v2/store
+ * Store a new EIP-712 signed delegation
+ */
+router.post('/v2/store', async (req: Request, res: Response) => {
+  try {
+    const input = req.body as DelegationV2Request;
+
+    // Validate required fields
+    if (!input.delegator || !isValidAddress(input.delegator)) {
+      return res.status(400).json({ error: 'Invalid delegator address' } as DelegationV2ErrorResponse);
+    }
+
+    if (!input.delegate || !isValidAddress(input.delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' } as DelegationV2ErrorResponse);
+    }
+
+    if (input.vpAmount === undefined || input.vpAmount === null) {
+      return res.status(400).json({ error: 'vpAmount is required' } as DelegationV2ErrorResponse);
+    }
+
+    if (typeof input.nonce !== 'number' || input.nonce < 0) {
+      return res.status(400).json({ error: 'Invalid nonce' } as DelegationV2ErrorResponse);
+    }
+
+    if (typeof input.expiry !== 'number' || input.expiry <= 0) {
+      return res.status(400).json({ error: 'Invalid expiry' } as DelegationV2ErrorResponse);
+    }
+
+    if (!input.signature || typeof input.signature !== 'string') {
+      return res.status(400).json({ error: 'Signature is required' } as DelegationV2ErrorResponse);
+    }
+
+    // Store the delegation
+    await storeDelegation(input);
+
+    return res.json({ success: true } as DelegationV2Response);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[DelegationV2] Store error:', errorMsg);
+
+    // Return specific error messages for validation failures
+    if (errorMsg.includes('Invalid signature') ||
+        errorMsg.includes('Invalid nonce') ||
+        errorMsg.includes('has already expired') ||
+        errorMsg.includes('not opted in') ||
+        errorMsg.includes('vpAmount cannot be negative') ||
+        errorMsg.includes('Invalid vpAmount')) {
+      return res.status(400).json({ error: errorMsg } as DelegationV2ErrorResponse);
+    }
+
+    // RPC errors should be 503 Service Unavailable
+    if (errorMsg.includes('Failed to verify delegate opt-in')) {
+      return res.status(503).json({ error: errorMsg } as DelegationV2ErrorResponse);
+    }
+
+    return res.status(500).json({ error: 'Failed to store delegation' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/user/:address
+ * Get all active delegations FROM a user (delegator perspective)
+ */
+router.get('/v2/user/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!isValidAddress(address)) {
+      return res.status(400).json({ error: 'Invalid address' } as DelegationV2ErrorResponse);
+    }
+
+    const state = await getUserDelegations(address);
+
+    // Format response
+    const hasFullDelegation = state.delegations.some((d) => d.vpAmount === 0n);
+    const response: UserDelegationsResponse = {
+      delegator: ethers.getAddress(address),
+      delegations: state.delegations.map((d) => ({
+        delegate: ethers.getAddress(d.delegate),
+        vpAmount: d.vpAmount.toString(),
+        nonce: d.nonce,
+        expiry: d.expiry.toISOString(),
+      })),
+      totalDelegated: state.totalDelegated.toString(),
+      hasFullDelegation,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Get user delegations error:', error);
+    return res.status(500).json({ error: 'Failed to fetch user delegations' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/received/:delegate
+ * Get all active delegations TO a delegate
+ */
+router.get('/v2/received/:delegate', async (req: Request, res: Response) => {
+  try {
+    const { delegate } = req.params;
+
+    if (!isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' } as DelegationV2ErrorResponse);
+    }
+
+    const delegations = await getReceivedDelegations(delegate);
+
+    // Calculate total received (treating 0 as special "full delegation" marker)
+    const totalReceived = delegations.reduce((sum, d) => sum + d.vpAmount, 0n);
+
+    const response: ReceivedDelegationsV2Response = {
+      delegate: ethers.getAddress(delegate),
+      delegations: delegations.map((d) => ({
+        delegator: ethers.getAddress(d.delegator),
+        vpAmount: d.vpAmount.toString(),
+        nonce: d.nonce,
+        expiry: d.expiry.toISOString(),
+      })),
+      totalReceived: totalReceived.toString(),
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Get received delegations error:', error);
+    return res.status(500).json({ error: 'Failed to fetch received delegations' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * POST /api/delegation/v2/revoke
+ * Revoke delegation(s) for a delegator.
+ * Requires signed authorization proving caller controls the delegator address.
+ */
+router.post('/v2/revoke', async (req: Request, res: Response) => {
+  try {
+    const { delegator, delegate, timestamp, signature } = req.body as RevokeDelegationRequest;
+
+    // Validate addresses
+    if (!delegator || !isValidAddress(delegator)) {
+      return res.status(400).json({ error: 'Invalid delegator address' } as DelegationV2ErrorResponse);
+    }
+
+    if (delegate !== null && !isValidAddress(delegate)) {
+      return res.status(400).json({ error: 'Invalid delegate address' } as DelegationV2ErrorResponse);
+    }
+
+    // Validate timestamp and signature
+    if (typeof timestamp !== 'number' || timestamp <= 0) {
+      return res.status(400).json({ error: 'Timestamp is required' } as DelegationV2ErrorResponse);
+    }
+
+    if (!signature || typeof signature !== 'string') {
+      return res.status(400).json({ error: 'Signature is required' } as DelegationV2ErrorResponse);
+    }
+
+    // Check timestamp freshness (5 minute window)
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - timestamp) > 300) {
+      return res.status(400).json({ error: 'Signature expired or timestamp too far in future' } as DelegationV2ErrorResponse);
+    }
+
+    // Verify signature proves caller controls delegator address
+    if (!verifyRevocationSignature(delegator, delegate, timestamp, signature)) {
+      return res.status(403).json({ error: 'Unauthorized: invalid signature' } as DelegationV2ErrorResponse);
+    }
+
+    const revokedCount = await revokeDelegation(delegator, delegate);
+
+    const response: RevokeDelegationResponse = {
+      success: true,
+      revokedCount,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Revoke error:', error);
+    return res.status(500).json({ error: 'Failed to revoke delegation' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/nonce/:address
+ * Get next nonce for a delegator
+ */
+router.get('/v2/nonce/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!isValidAddress(address)) {
+      return res.status(400).json({ error: 'Invalid address' } as DelegationV2ErrorResponse);
+    }
+
+    const nextNonce = await getNextNonce(address);
+
+    const response: NextNonceResponse = {
+      delegator: ethers.getAddress(address),
+      nextNonce,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Get nonce error:', error);
+    return res.status(500).json({ error: 'Failed to fetch nonce' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/opt-in/:address
+ * Check if an address has opted in to receive delegations
+ */
+router.get('/v2/opt-in/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    if (!isValidAddress(address)) {
+      return res.status(400).json({ error: 'Invalid address' } as DelegationV2ErrorResponse);
+    }
+
+    const optedIn = await verifyDelegateOptIn(address);
+
+    return res.json({
+      delegate: ethers.getAddress(address),
+      optedIn,
+    });
+  } catch (error) {
+    console.error('[DelegationV2] Check opt-in error:', error);
+    return res.status(500).json({ error: 'Failed to check opt-in status' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/stats
+ * Get delegation statistics for monitoring
+ */
+router.get('/v2/stats', async (req: Request, res: Response) => {
+  try {
+    const stats = await getDelegationStats();
+
+    const response: DelegationV2StatsResponse = stats;
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Get stats error:', error);
+    return res.status(500).json({ error: 'Failed to fetch stats' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/eip712-config/:chainId
+ * Get EIP-712 domain and types for frontend signature generation
+ */
+router.get('/v2/eip712-config/:chainId', async (req: Request, res: Response) => {
+  try {
+    const chainId = parseInt(req.params.chainId);
+
+    if (isNaN(chainId) || chainId <= 0) {
+      return res.status(400).json({ error: 'Invalid chainId' } as DelegationV2ErrorResponse);
+    }
+
+    const eip712Config = getEIP712Config(chainId);
+
+    const response: DelegationEIP712ConfigResponse = eip712Config;
+
+    return res.json(response);
+  } catch (error) {
+    console.error('[DelegationV2] Get EIP712 config error:', error);
+    return res.status(500).json({ error: 'Failed to fetch EIP712 config' } as DelegationV2ErrorResponse);
+  }
+});
+
 export default router;

@@ -98,7 +98,7 @@ Web3 marketplace with task-value-based token distribution.
 3. Backend tracks allocations across proposals
 4. Users vote with backend-signed attestation
 
-**Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in. Reflected in VP snapshots.
+**Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
 
 **Lifecycle:** Active → voting period → Passed/Failed. Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
 
@@ -162,6 +162,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Passport | `/api/passport/verify`, `/score/:addr`, `/signer` |
 | Governance | `/api/governance/vp/:addr`, `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
 | Delegation | `/api/delegation/vote-signature`, `/confirm-vote`, `/claim-signature`, `/claimable/:user`, `/undelegate-signature`, `/global-power/:delegate`, `/confirm-undelegate` |
+| Delegation V2 | `/api/delegation/v2/store` (POST), `/v2/user/:addr`, `/v2/received/:delegate`, `/v2/revoke` (POST, signed), `/v2/nonce/:addr`, `/v2/opt-in/:addr`, `/v2/stats`, `/v2/eip712-config/:chainId` (Off-chain EIP-712 delegations) |
 | Reconciliation | `/api/reconciliation/status`, `/last`, `/run`, `/proposal/:id`, `/sync`, `/stats` |
 | Delegate Scoring | `/api/delegate-scoring/score/:delegate`, `/eligibility/:delegate`, `/leaderboard`, `/stats`, `/run` |
 | VP Refresh | `/api/vp-refresh/stats`, `/pending`, `/config`, `/check/:addr`, `/process` |
@@ -179,6 +180,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 |---------|---------|
 | governance.ts | VP calculation, reputation attestation |
 | delegation.ts | Allocations, delegated votes, claims, vote reductions |
+| delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
 | reconciliation.ts | DB↔chain sync, discrepancy auto-fix |
 | delegateScoring.ts | Win/loss tracking, eligibility gating |
 | vpRefresh.ts | Auto-refresh VP on reputation changes |
