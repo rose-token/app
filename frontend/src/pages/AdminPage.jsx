@@ -925,6 +925,12 @@ const AdminPage = () => {
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               {restoreResult.message}
             </p>
+            {restoreResult.backedUpAt && (
+              <p className="text-sm mt-2" style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-medium">Backup was from:</span>{' '}
+                {new Date(restoreResult.backedUpAt).toLocaleString()}
+              </p>
+            )}
           </div>
         )}
 

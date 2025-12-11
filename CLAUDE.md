@@ -183,7 +183,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 ## Database Tables
 
-`profiles`, `nav_history`, `delegation_allocations`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`
+`profiles`, `nav_history`, `delegation_allocations`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`
 
 ## Token Decimals
 

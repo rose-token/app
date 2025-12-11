@@ -15,6 +15,7 @@ import { pipeline } from 'stream/promises';
 import { createHash, timingSafeEqual } from 'crypto';
 import { PinataSDK, NetworkError } from 'pinata';
 import { config } from '../config';
+import { query } from '../db/pool';
 import path from 'path';
 import os from 'os';
 
@@ -96,6 +97,7 @@ export interface RestoreResult {
   success: boolean;
   message: string;
   cid: string;
+  backedUpAt: string | null;
 }
 
 export interface BackupStatus {
@@ -114,6 +116,38 @@ export interface SwapHistoryEntry {
  */
 export function getReferenceCid(): string | null {
   return config.backup.referenceCid || null;
+}
+
+/**
+ * Update the backup_verification table with current timestamp.
+ * This is called before each backup to record when the backup was created.
+ */
+async function updateBackupVerification(): Promise<void> {
+  await query(`
+    INSERT INTO backup_verification (id, backed_up_at)
+    VALUES (1, NOW())
+    ON CONFLICT (id) DO UPDATE SET backed_up_at = NOW()
+  `);
+  console.log('[Backup] Updated backup_verification timestamp');
+}
+
+/**
+ * Read the backup_verification timestamp from the database.
+ * Returns the timestamp or null if not found or on error.
+ */
+async function getBackupVerificationTimestamp(): Promise<string | null> {
+  try {
+    const result = await query<{ backed_up_at: Date }>(
+      'SELECT backed_up_at FROM backup_verification WHERE id = 1'
+    );
+    if (result.rows.length > 0) {
+      return result.rows[0].backed_up_at.toISOString();
+    }
+    return null;
+  } catch (error) {
+    console.warn('[Backup] Failed to fetch backup verification timestamp:', error);
+    return null;
+  }
 }
 
 /**
@@ -390,6 +424,9 @@ export async function createBackup(): Promise<BackupResult> {
   try {
     console.log('[Backup] Starting database dump...');
 
+    // Step 0: Update backup_verification timestamp before dump
+    await updateBackupVerification();
+
     // Step 1: Dump and compress database
     await dumpDatabase(tempPath);
     console.log('[Backup] Database dump completed');
@@ -486,10 +523,19 @@ export async function restoreBackup(cid?: string, confirmed = false): Promise<Re
     await restoreDatabase(tempPath);
     console.log('[Backup] Database restored successfully');
 
+    // Step 3: Read and log backup verification timestamp
+    const backedUpAt = await getBackupVerificationTimestamp();
+    if (backedUpAt) {
+      console.log(`[Backup] Backup was from: ${backedUpAt}`);
+    } else {
+      console.log('[Backup] No backup verification timestamp found (backup may predate this feature)');
+    }
+
     return {
       success: true,
       message: 'Database restored successfully',
       cid: targetCid,
+      backedUpAt,
     };
   } finally {
     // Cleanup temp file
