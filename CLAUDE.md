@@ -118,9 +118,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
-**Routes:** `/` Tasks, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
+**Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
 
-**Key Hooks:** useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury)
+**Key Hooks:** useTasks (task fetching + all task actions), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury)
 
 **Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: System Status card (pause/unpause Treasury with two-step confirmation), manual treasury rebalance trigger, database backup/restore, whitelist management.
 
