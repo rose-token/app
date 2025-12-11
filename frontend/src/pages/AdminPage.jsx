@@ -4,6 +4,7 @@ import { useAccount } from 'wagmi';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { useRebalance } from '../hooks/useRebalance';
 import { useWhitelist } from '../hooks/useWhitelist';
+import { useBackup } from '../hooks/useBackup';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
@@ -23,6 +24,14 @@ const AdminPage = () => {
     removeAddress,
     clearError: clearWhitelistError,
   } = useWhitelist();
+  const {
+    createBackup,
+    getStatus: getBackupStatus,
+    restoreBackup,
+    isLoading: backupLoading,
+    error: backupError,
+    clearError: clearBackupError,
+  } = useBackup();
 
   // Rebalance state
   const [rebalanceLoading, setRebalanceLoading] = useState(false);
@@ -34,6 +43,12 @@ const AdminPage = () => {
   const [newScore, setNewScore] = useState('');
   const [addressToRemove, setAddressToRemove] = useState(null);
   const [whitelistActionLoading, setWhitelistActionLoading] = useState(false);
+
+  // Backup state
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [backupResult, setBackupResult] = useState(null);
+  const [restoreConfirm, setRestoreConfirm] = useState(false);
+  const [restoreResult, setRestoreResult] = useState(null);
 
   // Redirect non-admins to home
   useEffect(() => {
@@ -48,6 +63,15 @@ const AdminPage = () => {
       fetchWhitelist();
     }
   }, [isAdmin, fetchWhitelist]);
+
+  // Fetch backup status when admin is confirmed
+  useEffect(() => {
+    if (isAdmin) {
+      getBackupStatus()
+        .then(setBackupStatus)
+        .catch((err) => console.error('Failed to fetch backup status:', err));
+    }
+  }, [isAdmin, getBackupStatus]);
 
   // Handle adding a new address to whitelist
   const handleAddAddress = async (e) => {
@@ -107,6 +131,46 @@ const AdminPage = () => {
     } finally {
       setRebalanceLoading(false);
     }
+  };
+
+  // Handle backup creation
+  const handleCreateBackup = async () => {
+    clearBackupError();
+    setBackupResult(null);
+
+    try {
+      const result = await createBackup();
+      setBackupResult(result);
+      // Refresh status after backup
+      const status = await getBackupStatus();
+      setBackupStatus(status);
+    } catch (error) {
+      console.error('Backup failed:', error);
+    }
+  };
+
+  // Handle restore
+  const handleRestore = async () => {
+    if (!restoreConfirm) {
+      setRestoreConfirm(true);
+      return;
+    }
+
+    clearBackupError();
+    setRestoreResult(null);
+
+    try {
+      const result = await restoreBackup();
+      setRestoreResult(result);
+      setRestoreConfirm(false);
+    } catch (error) {
+      console.error('Restore failed:', error);
+      setRestoreConfirm(false);
+    }
+  };
+
+  const cancelRestore = () => {
+    setRestoreConfirm(false);
   };
 
   // Show wallet not connected
@@ -184,32 +248,36 @@ const AdminPage = () => {
           </div>
         </Link>
 
-        <div
-          className="rounded-[20px] p-6"
+        <Link
+          to="#backup"
+          onClick={(e) => {
+            e.preventDefault();
+            document.getElementById('backup-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="rounded-[20px] p-6 transition-all hover:border-[rgba(74,222,128,0.5)]"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-card)',
-            opacity: 0.6,
           }}
         >
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-medium text-lg" style={{ color: 'var(--text-primary)' }}>
-                More Tools Coming
+                Database Backup
               </h3>
               <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-                Additional admin features planned
+                Backup and restore PostgreSQL database
               </p>
             </div>
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ background: 'var(--bg-secondary)' }}
+              style={{ background: 'rgba(74, 222, 128, 0.15)' }}
             >
-              <span style={{ color: 'var(--text-muted)', fontSize: '1.5rem' }}>+</span>
+              <span style={{ color: 'var(--success)', fontSize: '1.5rem' }}>&#x1F4BE;</span>
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Rebalance Card */}
@@ -488,6 +556,182 @@ const AdminPage = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Database Backup Card */}
+      <div
+        id="backup-section"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all hover:border-[rgba(74,222,128,0.35)]"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <h2
+          className="font-display text-2xl font-medium mb-4"
+          style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}
+        >
+          Database Backup & Restore
+        </h2>
+
+        <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
+          Backup the PostgreSQL database to Pinata IPFS with Hot Swaps for mutable references.
+          Backups run automatically daily at 02:00 UTC. You can also trigger manual backups or
+          restore from the latest backup.
+        </p>
+
+        {backupError && (
+          <ErrorMessage message={backupError} onDismiss={clearBackupError} />
+        )}
+
+        {/* Status */}
+        {backupStatus && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{ background: 'var(--bg-primary)' }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+              Backup Status
+            </h4>
+            <div className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                <span className="font-medium">Configured:</span>{' '}
+                <span style={{ color: backupStatus.isConfigured ? 'var(--success)' : 'var(--error)' }}>
+                  {backupStatus.isConfigured ? 'Yes' : 'No'}
+                </span>
+              </p>
+              {backupStatus.referenceCid && (
+                <p>
+                  <span className="font-medium">Reference CID:</span>{' '}
+                  <span className="font-mono text-xs break-all">{backupStatus.referenceCid}</span>
+                </p>
+              )}
+              {backupStatus.lastSwap && (
+                <p>
+                  <span className="font-medium">Last Backup:</span>{' '}
+                  {new Date(backupStatus.lastSwap.created_at).toLocaleString()}
+                </p>
+              )}
+              {!backupStatus.referenceCid && (
+                <p style={{ color: 'var(--warning)' }}>
+                  No BACKUP_REFERENCE_CID set. First backup will create the reference CID.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Backup Result */}
+        {backupResult && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+            }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--success)' }}>
+              Backup Created Successfully
+            </h4>
+            <div className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                <span className="font-medium">CID:</span>{' '}
+                <span className="font-mono text-xs break-all">{backupResult.cid}</span>
+              </p>
+              <p>
+                <span className="font-medium">Size:</span>{' '}
+                {(backupResult.size / 1024 / 1024).toFixed(2)} MB
+              </p>
+              <p>
+                <span className="font-medium">Timestamp:</span>{' '}
+                {new Date(backupResult.timestamp).toLocaleString()}
+              </p>
+              {backupResult.isFirstBackup && (
+                <p className="mt-2 p-2 rounded" style={{ background: 'rgba(251, 191, 36, 0.1)', color: 'var(--warning)' }}>
+                  <strong>Important:</strong> This is the first backup. Add this CID as{' '}
+                  <code className="font-mono">BACKUP_REFERENCE_CID</code> to GitHub secrets.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Restore Result */}
+        {restoreResult && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+            }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--success)' }}>
+              Database Restored Successfully
+            </h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {restoreResult.message}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={handleCreateBackup}
+            disabled={backupLoading}
+            className="flex items-center gap-2"
+          >
+            {backupLoading ? (
+              <>
+                <div
+                  className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                  style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                />
+                Creating Backup...
+              </>
+            ) : (
+              'Create Backup Now'
+            )}
+          </Button>
+
+          {backupStatus?.referenceCid && (
+            <>
+              {restoreConfirm ? (
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={handleRestore}
+                    disabled={backupLoading}
+                  >
+                    {backupLoading ? 'Restoring...' : 'Confirm Restore'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={cancelRestore}
+                    disabled={backupLoading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={handleRestore}
+                  disabled={backupLoading}
+                >
+                  Restore from Backup
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+
+        {restoreConfirm && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--error)' }}>
+            Warning: This will OVERWRITE the entire database. Are you sure?
+          </p>
+        )}
       </div>
 
       {/* Info Card */}

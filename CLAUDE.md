@@ -114,9 +114,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Routes:** `/` Tasks, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
 
-**Key Hooks:** useVaultData (45s refresh), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries)
+**Key Hooks:** useVaultData (45s refresh), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore)
 
-**Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: manual treasury rebalance trigger.
+**Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: manual treasury rebalance trigger, database backup/restore, whitelist management.
 
 **Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25
 
@@ -137,6 +137,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Profile | `/api/profile` POST, `/api/profile/:addr` GET |
 | Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
 | Dispute | `/api/dispute/list`, `/api/dispute/stats`, `/api/dispute/:taskId` (admin queries, on-chain events synced to DB) |
+| Backup | `/api/backup/create`, `/status`, `/restore` (owner-only, pg_dump → Pinata Hot Swaps) |
 
 ## Backend Services
 
@@ -153,6 +154,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | redemptionWatcher.ts | Watch `RedemptionRequested`, liquidate, fulfill |
 | auction.ts | Off-chain bids, winner selection |
 | dispute.ts | Dispute queries, on-chain event recording |
+| backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
 
 ## Scheduled Jobs
 
@@ -165,6 +167,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
+| Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
 
 ## Database Tables
 
@@ -201,6 +204,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Governance | `019b0af9-c866-7bc5-b659-8d6b70da8cd8` | Proposals |
 | Tasks | `019b0aec-a5a0-7338-be66-3d604b7ba713` | Task descriptions, Disputes |
 | Profiles | `019b0aec-c443-7ada-bcb7-5221e69121db` | Avatars |
+| Backups | `019b0aec-e295-7e9d-8ace-fb5cd077c919` | Database backups |
 
 **Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud` (dedicated gateway for private file access)
 
@@ -208,6 +212,34 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 - Frontend: `VITE_PINATA_JWT` (required), `VITE_PINATA_GATEWAY` (optional, has default)
 - Backend: `PINATA_GATEWAY` (optional, has default)
 - Legacy: `VITE_PINATA_API_KEY`, `VITE_PINATA_SECRET_API_KEY` (deprecated, kept for backward compat)
+
+## Database Backup (Pinata Hot Swaps)
+
+**Storage:** Compressed PostgreSQL backups (pg_dump -Fc | gzip) uploaded to Pinata IPFS as private files.
+
+**Hot Swaps:** Uses Pinata's Hot Swaps plugin for mutable CID references. First backup creates a reference CID; subsequent backups update the swap mapping so the same reference CID always points to the latest backup.
+
+**Reference CID:** Stored in `BACKUP_REFERENCE_CID` environment variable (GitHub secret). Set this after the first backup is created.
+
+**Schedule:** Daily at 02:00 UTC (cron job) + manual trigger via admin panel.
+
+**Commands:**
+- **Backup:** `pg_dump -Fc | gzip → upload to Pinata → Hot Swap update`
+- **Restore:** `download from Pinata → pg_restore --clean`
+
+**Endpoints:** `/api/backup/create` (POST), `/status` (GET), `/restore` (POST, requires confirmation)
+
+**Auth:** All endpoints require caller to be Treasury contract owner.
+
+**Environment:**
+| Variable | Description |
+|----------|-------------|
+| `BACKUP_ENABLED` | Enable backup system (default: true) |
+| `BACKUP_CRON_SCHEDULE` | Cron schedule (default: `0 2 * * *`) |
+| `BACKUP_ON_STARTUP` | Run backup on startup (default: false) |
+| `PINATA_JWT` | Pinata V3 API JWT token (required) |
+| `BACKUP_GROUP_ID` | Pinata Backups group ID |
+| `BACKUP_REFERENCE_CID` | Mutable reference CID for Hot Swaps |
 
 ## Mainnet Addresses (Arbitrum One)
 
