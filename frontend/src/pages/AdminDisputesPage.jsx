@@ -4,6 +4,7 @@ import { useAccount } from 'wagmi';
 import { formatUnits } from 'viem';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { useDispute } from '../hooks/useDispute';
+import { fetchDisputeReason } from '../utils/ipfs/pinataService';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
@@ -38,6 +39,11 @@ const AdminDisputesPage = () => {
   const [selectedDispute, setSelectedDispute] = useState(null);
   const [workerPct, setWorkerPct] = useState(50);
   const [resolutionError, setResolutionError] = useState(null);
+
+  // Reason content state
+  const [reasonData, setReasonData] = useState(null);
+  const [reasonLoading, setReasonLoading] = useState(false);
+  const [reasonError, setReasonError] = useState(null);
 
   // Redirect non-admins to home
   useEffect(() => {
@@ -89,6 +95,43 @@ const AdminDisputesPage = () => {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  // Fetch reason content when dispute is selected
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchReason = async () => {
+      if (!selectedDispute?.reasonHash) {
+        setReasonData(null);
+        return;
+      }
+
+      setReasonLoading(true);
+      setReasonError(null);
+
+      try {
+        const data = await fetchDisputeReason(selectedDispute.reasonHash);
+        if (!isCancelled) {
+          setReasonData(data);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to fetch dispute reason:', err);
+          setReasonError('Failed to load dispute reason from IPFS');
+        }
+      } finally {
+        if (!isCancelled) {
+          setReasonLoading(false);
+        }
+      }
+    };
+
+    fetchReason();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedDispute?.reasonHash]);
 
   // Handle resolution
   const handleResolve = async () => {
@@ -477,14 +520,35 @@ const AdminDisputesPage = () => {
               {selectedDispute.reasonHash && (
                 <div>
                   <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>
-                    Reason Hash
+                    Dispute Reason
                   </p>
-                  <p
-                    className="text-xs font-mono p-2 rounded-lg break-all"
-                    style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
-                  >
-                    {selectedDispute.reasonHash}
-                  </p>
+                  {reasonLoading ? (
+                    <div className="flex items-center gap-2 p-3 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                      <div
+                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                        style={{ borderColor: 'var(--rose-pink)', borderTopColor: 'transparent' }}
+                      />
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading reason...</span>
+                    </div>
+                  ) : reasonError ? (
+                    <div className="p-3 rounded-lg" style={{ background: 'var(--error-bg)', border: '1px solid rgba(248, 113, 113, 0.3)' }}>
+                      <p className="text-sm" style={{ color: 'var(--error)' }}>{reasonError}</p>
+                    </div>
+                  ) : reasonData?.reason ? (
+                    <div
+                      className="p-3 rounded-lg text-sm whitespace-pre-wrap"
+                      style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
+                    >
+                      {reasonData.reason}
+                    </div>
+                  ) : (
+                    <p
+                      className="text-xs font-mono p-2 rounded-lg break-all"
+                      style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
+                    >
+                      {selectedDispute.reasonHash}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
