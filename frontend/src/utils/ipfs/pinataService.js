@@ -1,49 +1,88 @@
 import axios from 'axios';
 
-const PINATA_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
+// V3 API endpoint
+const PINATA_UPLOAD_URL = 'https://uploads.pinata.cloud/v3/files';
+
+// Dedicated gateway for private files
+const PINATA_GATEWAY = import.meta.env.VITE_PINATA_GATEWAY || 'https://coffee-glad-felidae-720.mypinata.cloud';
+
+// Group IDs for organizing content
+const PINATA_GROUPS = {
+  GOVERNANCE: '019b0af9-c866-7bc5-b659-8d6b70da8cd8',
+  TASKS: '019b0aec-a5a0-7338-be66-3d604b7ba713',      // Tasks + Disputes
+  PROFILES: '019b0aec-c443-7ada-bcb7-5221e69121db',
+};
+
 const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
 
 const ipfsCache = new Map();
 
+/**
+ * Convert JSON object to Blob for V3 file upload
+ * @param {Object} data - JSON data to convert
+ * @returns {Blob} Blob containing JSON
+ */
+const jsonToBlob = (data) => new Blob([JSON.stringify(data)], { type: 'application/json' });
+
+/**
+ * Get the gateway URL for a CID
+ * @param {string} cid - IPFS CID
+ * @returns {string} Full gateway URL
+ */
+export const getGatewayUrl = (cid) => `${PINATA_GATEWAY}/ipfs/${cid}`;
+
+/**
+ * Upload content to Pinata V3 API (private by default)
+ * @param {Blob|File} file - File or Blob to upload
+ * @param {string} name - Filename for the upload
+ * @param {string} groupId - Optional group ID to organize content
+ * @returns {Promise<{cid: string}>} Upload result with CID
+ */
+const uploadToV3 = async (file, name, groupId = null) => {
+  const jwt = import.meta.env.VITE_PINATA_JWT;
+
+  if (!jwt) {
+    throw new Error('Pinata JWT not configured');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file, name);
+  formData.append('network', 'private');
+
+  if (groupId) {
+    formData.append('group_id', groupId);
+  }
+
+  const response = await axios.post(PINATA_UPLOAD_URL, formData, {
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+    maxBodyLength: Infinity,
+  });
+
+  // V3 API returns { data: { cid: '...' } }
+  return { cid: response.data.data.cid };
+};
+
 export const uploadCommentToIPFS = async (content) => {
   try {
-    const apiKey = import.meta.env.VITE_PINATA_API_KEY;
-    const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-
-    if (!apiKey || !apiSecret) {
-      throw new Error('Pinata API keys not configured');
-    }
-
-    const url = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
     const data = {
-      pinataContent: {
-        content: content,
-        timestamp: Date.now(),
-        version: '1.0'
-      },
-      pinataMetadata: {
-        name: `Rose Token Comment ${Date.now()}`
-      }
+      content: content,
+      timestamp: Date.now(),
+      version: '1.0'
     };
 
-    const response = await axios.post(url, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': apiKey,
-        'pinata_secret_api_key': apiSecret
-      }
-    });
+    const blob = jsonToBlob(data);
+    const result = await uploadToV3(blob, `comment-${Date.now()}.json`, null);
 
-    ipfsCache.set(response.data.IpfsHash, data.pinataContent);
-    
-    return response.data.IpfsHash; // This is the CID
+    ipfsCache.set(result.cid, data);
+    return result.cid;
   } catch (error) {
     console.error('Error uploading to IPFS:', error);
     throw error;
   }
 };
-
 
 export const fetchCommentFromIPFS = async (cid) => {
   try {
@@ -54,9 +93,9 @@ export const fetchCommentFromIPFS = async (cid) => {
 
     const fetchWithRetry = async (retries) => {
       try {
-        const response = await axios.get(`${PINATA_GATEWAY}${cid}`);
+        const response = await axios.get(getGatewayUrl(cid));
         ipfsCache.set(cid, response.data);
-        
+
         return response.data.isEncrypted ? response.data : response.data.content;
       } catch (error) {
         if (retries > 0) {
@@ -75,41 +114,30 @@ export const fetchCommentFromIPFS = async (cid) => {
 };
 
 export const isCID = (str) => {
-  return typeof str === 'string' && str.startsWith('Qm') && str.length >= 46;
+  if (typeof str !== 'string') return false;
+  // CIDv0: starts with Qm, 46 chars
+  // CIDv1: starts with bafy, variable length (typically 59+ chars)
+  return (str.startsWith('Qm') && str.length >= 46) ||
+         (str.startsWith('bafy') && str.length >= 50);
 };
 
 export const uploadProposalToIPFS = async (proposalData) => {
   try {
-    const apiKey = import.meta.env.VITE_PINATA_API_KEY;
-    const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-
-    if (!apiKey || !apiSecret) {
-      throw new Error('Pinata API keys not configured');
-    }
-
-    const url = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
     const data = {
-      pinataContent: {
-        ...proposalData,
-        timestamp: Date.now(),
-        version: '1.0'
-      },
-      pinataMetadata: {
-        name: `Rose Token Proposal ${Date.now()}`
-      }
+      ...proposalData,
+      timestamp: Date.now(),
+      version: '1.0'
     };
 
-    const response = await axios.post(url, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': apiKey,
-        'pinata_secret_api_key': apiSecret
-      }
-    });
+    const blob = jsonToBlob(data);
+    const result = await uploadToV3(
+      blob,
+      `proposal-${Date.now()}.json`,
+      PINATA_GROUPS.GOVERNANCE
+    );
 
-    ipfsCache.set(response.data.IpfsHash, data.pinataContent);
-    
-    return response.data.IpfsHash; // This is the CID
+    ipfsCache.set(result.cid, data);
+    return result.cid;
   } catch (error) {
     console.error('Error uploading proposal to IPFS:', error);
     throw error;
@@ -124,9 +152,9 @@ export const fetchProposalFromIPFS = async (cid) => {
 
     const fetchWithRetry = async (retries) => {
       try {
-        const response = await axios.get(`${PINATA_GATEWAY}${cid}`);
+        const response = await axios.get(getGatewayUrl(cid));
         ipfsCache.set(cid, response.data);
-        
+
         return response.data;
       } catch (error) {
         if (retries > 0) {
@@ -151,44 +179,20 @@ export const isValidUrl = (url) => {
 };
 
 /**
- * Upload a file (e.g., image) to IPFS via Pinata
+ * Upload a file (e.g., image) to IPFS via Pinata V3 API
  * @param {File} file - File to upload
  * @returns {Promise<{IpfsHash: string}>} Upload result with IPFS hash
  */
 export const uploadFileToIPFS = async (file) => {
-  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
-  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error('Pinata API keys not configured');
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const metadata = JSON.stringify({
-    name: `avatar-${Date.now()}`,
-    keyvalues: {
-      type: 'profile-avatar',
-    },
-  });
-  formData.append('pinataMetadata', metadata);
-
   try {
-    const response = await axios.post(
-      'https://api.pinata.cloud/pinning/pinFileToIPFS',
-      formData,
-      {
-        maxBodyLength: 'Infinity',
-        headers: {
-          'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,
-          pinata_api_key: apiKey,
-          pinata_secret_api_key: apiSecret,
-        },
-      }
+    const result = await uploadToV3(
+      file,
+      `avatar-${Date.now()}-${file.name}`,
+      PINATA_GROUPS.PROFILES
     );
 
-    return response.data;
+    // Maintain backward compatibility with { IpfsHash } response format
+    return { IpfsHash: result.cid };
   } catch (error) {
     console.error('Error uploading file to IPFS:', error);
     throw new Error('Failed to upload file to IPFS');
@@ -207,46 +211,24 @@ export const uploadTaskDescription = async (detailedDescription, title, githubIn
     throw new Error('Detailed description is required');
   }
 
-  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
-  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error('Pinata API keys not configured');
-  }
-
-  const content = {
-    title: title,
-    description: detailedDescription,
-    githubIntegration: githubIntegration,
-    uploadedAt: new Date().toISOString(),
-    version: '1.0'
-  };
-
   try {
-    const url = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
-    const data = {
-      pinataContent: content,
-      pinataMetadata: {
-        name: `task-description-${Date.now()}`,
-        keyvalues: {
-          type: 'task-description',
-          title: title
-        }
-      }
+    const content = {
+      title: title,
+      description: detailedDescription,
+      githubIntegration: githubIntegration,
+      uploadedAt: new Date().toISOString(),
+      version: '1.0'
     };
 
-    const response = await axios.post(url, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': apiKey,
-        'pinata_secret_api_key': apiSecret
-      }
-    });
+    const blob = jsonToBlob(content);
+    const result = await uploadToV3(
+      blob,
+      `task-description-${Date.now()}.json`,
+      PINATA_GROUPS.TASKS
+    );
 
-    // Cache the content
-    ipfsCache.set(response.data.IpfsHash, content);
-
-    return response.data.IpfsHash;
+    ipfsCache.set(result.cid, content);
+    return result.cid;
   } catch (error) {
     console.error('Error uploading to IPFS:', error);
     throw new Error('Failed to upload task description to IPFS');
@@ -270,8 +252,7 @@ export const fetchTaskDescription = async (ipfsHash) => {
 
   const fetchWithRetry = async (retries) => {
     try {
-      const url = `${PINATA_GATEWAY}${ipfsHash}`;
-      const response = await axios.get(url);
+      const response = await axios.get(getGatewayUrl(ipfsHash));
 
       if (!response.data) {
         throw new Error('No data returned from IPFS');
@@ -311,48 +292,25 @@ export const uploadDisputeReason = async (taskId, reason, initiator, role) => {
     throw new Error('Dispute reason must be at least 20 characters');
   }
 
-  const apiKey = import.meta.env.VITE_PINATA_API_KEY;
-  const apiSecret = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error('Pinata API keys not configured');
-  }
-
-  const content = {
-    taskId: taskId,
-    reason: reason.trim(),
-    initiator: initiator,
-    role: role,
-    timestamp: Date.now(),
-    version: '1.0'
-  };
-
   try {
-    const url = 'https://api.pinata.cloud/pinning/pinJSONToIPFS';
-    const data = {
-      pinataContent: content,
-      pinataMetadata: {
-        name: `dispute-reason-task-${taskId}-${Date.now()}`,
-        keyvalues: {
-          type: 'dispute-reason',
-          taskId: taskId.toString(),
-          role: role
-        }
-      }
+    const content = {
+      taskId: taskId,
+      reason: reason.trim(),
+      initiator: initiator,
+      role: role,
+      timestamp: Date.now(),
+      version: '1.0'
     };
 
-    const response = await axios.post(url, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': apiKey,
-        'pinata_secret_api_key': apiSecret
-      }
-    });
+    const blob = jsonToBlob(content);
+    const result = await uploadToV3(
+      blob,
+      `dispute-reason-task-${taskId}-${Date.now()}.json`,
+      PINATA_GROUPS.TASKS  // Disputes in Tasks group
+    );
 
-    // Cache the content
-    ipfsCache.set(response.data.IpfsHash, content);
-
-    return response.data.IpfsHash;
+    ipfsCache.set(result.cid, content);
+    return result.cid;
   } catch (error) {
     console.error('Error uploading dispute reason to IPFS:', error);
     throw new Error('Failed to upload dispute reason to IPFS');
@@ -376,8 +334,7 @@ export const fetchDisputeReason = async (ipfsHash) => {
 
   const fetchWithRetry = async (retries) => {
     try {
-      const url = `${PINATA_GATEWAY}${ipfsHash}`;
-      const response = await axios.get(url);
+      const response = await axios.get(getGatewayUrl(ipfsHash));
 
       if (!response.data) {
         throw new Error('No data returned from IPFS');

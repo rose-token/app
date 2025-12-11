@@ -70,3 +70,4 @@ jobs:
           VITE_PINATA_API_KEY: ${{ secrets.REACT_APP_PINATA_API_KEY }}
           VITE_PINATA_SECRET_API_KEY: ${{ secrets.REACT_APP_PINATA_SECRET_API_KEY }}
           VITE_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
+          VITE_PINATA_GATEWAY: ${{ secrets.REACT_APP_PINATA_GATEWAY }}

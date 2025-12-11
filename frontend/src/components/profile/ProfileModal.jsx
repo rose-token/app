@@ -8,7 +8,7 @@ import { useAccount } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
 import SkillSelect from './SkillSelect';
 import { X, Upload, Loader2, AlertCircle, Camera, Info } from 'lucide-react';
-import { uploadFileToIPFS } from '../../utils/ipfs/pinataService';
+import { uploadFileToIPFS, getGatewayUrl } from '../../utils/ipfs/pinataService';
 
 /**
  * ProfileModal - Modal for creating/editing profile
@@ -218,7 +218,7 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
                     src={
                       avatarPreview ||
                       (formData.avatarUrl.startsWith('ipfs://')
-                        ? `https://gateway.pinata.cloud/ipfs/${formData.avatarUrl.replace('ipfs://', '')}`
+                        ? getGatewayUrl(formData.avatarUrl.replace('ipfs://', ''))
                         : formData.avatarUrl)
                     }
                     alt="Avatar preview"

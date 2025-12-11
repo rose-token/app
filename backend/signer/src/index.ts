@@ -17,6 +17,7 @@ import auctionRoutes from './routes/auction';
 import whitelistRoutes from './routes/whitelist';
 import disputeRoutes from './routes/dispute';
 import githubRoutes from './routes/github';
+import backupRoutes from './routes/backup';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -24,6 +25,7 @@ import { startRebalanceCron } from './cron/rebalance';
 import { startNavHistoryCron } from './cron/nav-history';
 import { startReconciliationCron } from './cron/reconciliation';
 import { startDelegateScoringCron } from './cron/delegateScoring';
+import { startBackupCron } from './cron/backup';
 import { startVPRefreshWatcher } from './services/vpRefresh';
 import { startDepositWatcher } from './services/depositWatcher';
 import { startRedemptionWatcher } from './services/redemptionWatcher';
@@ -69,6 +71,7 @@ app.use('/api/auction', auctionRoutes);
 app.use('/api/whitelist', whitelistRoutes);
 app.use('/api/dispute', disputeRoutes);
 app.use('/api/github', githubRoutes);
+app.use('/api/backup', backupRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -114,6 +117,7 @@ async function start() {
   startNavHistoryCron();
   startReconciliationCron();
   startDelegateScoringCron();
+  startBackupCron();
 
   // Start event watchers (Phase 4)
   startVPRefreshWatcher();

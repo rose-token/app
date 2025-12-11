@@ -9,6 +9,7 @@ import { useProfile } from '../../hooks/useProfile';
 import { SkillBadgeList } from './SkillBadge';
 import ReputationStats from './ReputationStats';
 import { ExternalLink, Github, Twitter, Globe, Copy, Check, Edit2 } from 'lucide-react';
+import { getGatewayUrl } from '../../utils/ipfs/pinataService';
 
 /**
  * Generate a deterministic color from an address
@@ -150,7 +151,7 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
             <img
               src={
                 avatarUrl.startsWith('ipfs://')
-                  ? `https://gateway.pinata.cloud/ipfs/${avatarUrl.replace('ipfs://', '')}`
+                  ? getGatewayUrl(avatarUrl.replace('ipfs://', ''))
                   : avatarUrl
               }
               alt={displayName || 'Profile'}

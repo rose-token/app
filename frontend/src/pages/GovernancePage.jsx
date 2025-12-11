@@ -104,7 +104,7 @@ const GovernancePage = () => {
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
-          <span className="gradient-text">Governance</span>
+          Liquid Democratic <span className="gradient-text">Governance</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
           Shape the Future of the Rose Token Ecosystem
