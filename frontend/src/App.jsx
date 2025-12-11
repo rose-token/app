@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import TasksPage from './pages/TasksPage';
+import CreateTaskPage from './pages/CreateTaskPage';
+import TaskDetailPage from './pages/TaskDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import HelpPage from './pages/HelpPage';
 import VaultPage from './pages/VaultPage';
@@ -60,6 +62,8 @@ function App() {
                     <ProtectedRoutes>
                       <Routes>
                         <Route path="/" element={<TasksPage />} />
+                        <Route path="/create-task" element={<CreateTaskPage />} />
+                        <Route path="/task/:id" element={<TaskDetailPage />} />
                         <Route path="/vault" element={<VaultPage />} />
                         <Route path="/governance" element={<GovernancePage />} />
                         <Route path="/governance/propose" element={<ProposalCreatePage />} />
