@@ -69,7 +69,7 @@ async function handleTaskDisputed(
   initiator: string,
   reasonHash: string,
   timestamp: bigint,
-  event: ethers.Log
+  event: ethers.Log | ethers.ContractEventPayload
 ): Promise<void> {
   const taskIdNum = Number(taskId);
   const timestampNum = Number(timestamp);
@@ -78,7 +78,10 @@ async function handleTaskDisputed(
     `[DisputeWatcher] TaskDisputed: taskId=${taskIdNum}, initiator=${initiator}, reasonHash=${reasonHash.slice(0, 20)}...`
   );
 
-  stats.lastEventBlock = event.blockNumber;
+  // Extract log from ContractEventPayload (.on() listener) or use directly (queryFilter)
+  const log = 'log' in event ? event.log : event;
+
+  stats.lastEventBlock = log.blockNumber;
 
   try {
     await recordDispute(
@@ -86,8 +89,8 @@ async function handleTaskDisputed(
       initiator,
       reasonHash,
       timestampNum,
-      event.blockNumber,
-      event.transactionHash
+      log.blockNumber,
+      log.transactionHash
     );
     stats.disputesRecorded++;
     console.log(`[DisputeWatcher] Recorded dispute for task ${taskIdNum}`);
@@ -108,7 +111,7 @@ async function handleDisputeResolved(
   workerPct: bigint,
   workerAmount: bigint,
   customerRefund: bigint,
-  event: ethers.Log
+  event: ethers.Log | ethers.ContractEventPayload
 ): Promise<void> {
   const taskIdNum = Number(taskId);
   const workerPctNum = Number(workerPct);
@@ -117,11 +120,14 @@ async function handleDisputeResolved(
     `[DisputeWatcher] DisputeResolved: taskId=${taskIdNum}, resolution=${resolution}, workerPct=${workerPctNum}%`
   );
 
-  stats.lastEventBlock = event.blockNumber;
+  // Extract log from ContractEventPayload (.on() listener) or use directly (queryFilter)
+  const log = 'log' in event ? event.log : event;
+
+  stats.lastEventBlock = log.blockNumber;
 
   try {
     // Get the transaction to find who resolved it (msg.sender)
-    const tx = await getProvider().getTransaction(event.transactionHash);
+    const tx = await getProvider().getTransaction(log.transactionHash);
     const resolvedBy = tx?.from || '';
 
     await recordResolution(
@@ -131,7 +137,7 @@ async function handleDisputeResolved(
       workerAmount.toString(),
       customerRefund.toString(),
       resolvedBy,
-      event.blockNumber
+      log.blockNumber
     );
     stats.resolutionsRecorded++;
     console.log(`[DisputeWatcher] Recorded resolution for task ${taskIdNum}`);
