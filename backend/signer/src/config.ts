@@ -158,8 +158,8 @@ export const config = {
     cronSchedule: process.env.BACKUP_CRON_SCHEDULE || '0 2 * * *',
     // Run backup on startup (default: false)
     backupOnStartup: process.env.BACKUP_ON_STARTUP === 'true',
-    // Pinata JWT for V3 API (required for backups)
-    pinataJwt: process.env.PINATA_JWT || '',
+    // Pinata JWT for V3 API (uses existing REACT_APP_PINATA_JWT secret)
+    pinataJwt: process.env.REACT_APP_PINATA_JWT || process.env.PINATA_JWT || '',
     // Pinata Backups group ID
     groupId: process.env.BACKUP_GROUP_ID || '019b0aec-e295-7e9d-8ace-fb5cd077c919',
     // Reference CID for Hot Swaps (set this after first backup)

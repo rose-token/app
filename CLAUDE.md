@@ -237,9 +237,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | `BACKUP_ENABLED` | Enable backup system (default: true) |
 | `BACKUP_CRON_SCHEDULE` | Cron schedule (default: `0 2 * * *`) |
 | `BACKUP_ON_STARTUP` | Run backup on startup (default: false) |
-| `PINATA_JWT` | Pinata V3 API JWT token (required) |
-| `BACKUP_GROUP_ID` | Pinata Backups group ID |
-| `BACKUP_REFERENCE_CID` | Mutable reference CID for Hot Swaps |
+| `REACT_APP_PINATA_JWT` | Pinata V3 API JWT (existing secret, shared with frontend) |
+| `BACKUP_GROUP_ID` | Pinata Backups group ID (has default) |
+| `BACKUP_REFERENCE_CID` | Mutable reference CID for Hot Swaps (add after first backup) |
 
 ## Mainnet Addresses (Arbitrum One)
 
