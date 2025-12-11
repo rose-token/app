@@ -6,6 +6,8 @@ import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 
 const DEPOSITED_EVENT = parseAbiItem('event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted)');
 const REDEEMED_EVENT = parseAbiItem('event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut)');
+const REDEMPTION_REQUESTED_EVENT = parseAbiItem('event RedemptionRequested(uint256 indexed requestId, address indexed user, uint256 roseAmount, uint256 usdcOwed)');
+const REDEMPTION_FULFILLED_EVENT = parseAbiItem('event RedemptionFulfilled(uint256 indexed requestId, address indexed user, uint256 usdcAmount)');
 
 const TransactionHistory = ({ treasuryAddress }) => {
   const { address, isConnected } = useAccount();
@@ -42,10 +44,28 @@ const TransactionHistory = ({ treasuryAddress }) => {
         toBlock: 'latest',
       });
 
-      // Fetch redeem events
+      // Fetch redeem events (instant redemptions)
       const redeemLogs = await publicClient.getLogs({
         address: treasuryAddress,
         event: REDEEMED_EVENT,
+        args: { user: address },
+        fromBlock: fromBlock > 0n ? fromBlock : 0n,
+        toBlock: 'latest',
+      });
+
+      // Fetch redemption requested events (queued redemptions)
+      const redemptionRequestedLogs = await publicClient.getLogs({
+        address: treasuryAddress,
+        event: REDEMPTION_REQUESTED_EVENT,
+        args: { user: address },
+        fromBlock: fromBlock > 0n ? fromBlock : 0n,
+        toBlock: 'latest',
+      });
+
+      // Fetch redemption fulfilled events (completed queued redemptions)
+      const redemptionFulfilledLogs = await publicClient.getLogs({
+        address: treasuryAddress,
+        event: REDEMPTION_FULFILLED_EVENT,
         args: { user: address },
         fromBlock: fromBlock > 0n ? fromBlock : 0n,
         toBlock: 'latest',
@@ -68,8 +88,39 @@ const TransactionHistory = ({ treasuryAddress }) => {
         blockNumber: log.blockNumber,
       }));
 
+      // Build map of requested redemptions by requestId for joining
+      const redemptionRequestsMap = new Map();
+      for (const log of redemptionRequestedLogs) {
+        redemptionRequestsMap.set(log.args.requestId.toString(), {
+          roseAmount: Number(formatUnits(log.args.roseAmount, 18)),
+          usdcOwed: Number(formatUnits(log.args.usdcOwed, 6)),
+        });
+      }
+
+      // Process fulfilled queued redemptions (join with requested data)
+      const queuedRedeemTxs = redemptionFulfilledLogs
+        .map((log) => {
+          const requestId = log.args.requestId.toString();
+          const requestData = redemptionRequestsMap.get(requestId);
+
+          // Only include if we have matching request data
+          if (!requestData) {
+            console.warn(`[TransactionHistory] No matching RedemptionRequested for ID ${requestId}`);
+            return null;
+          }
+
+          return {
+            type: 'Redeem',
+            roseAmount: requestData.roseAmount,
+            usdcAmount: Number(formatUnits(log.args.usdcAmount, 6)),
+            txHash: log.transactionHash,
+            blockNumber: log.blockNumber,
+          };
+        })
+        .filter((tx) => tx !== null);
+
       // Combine and sort by block number (most recent first)
-      const allTxs = [...depositTxs, ...redeemTxs]
+      const allTxs = [...depositTxs, ...redeemTxs, ...queuedRedeemTxs]
         .sort((a, b) => Number(b.blockNumber - a.blockNumber))
         .slice(0, 10); // Limit to 10 most recent
 
@@ -101,6 +152,18 @@ const TransactionHistory = ({ treasuryAddress }) => {
     eventName: 'Redeemed',
     onLogs: () => {
       console.log('Redeemed event detected, refreshing transactions...');
+      fetchTransactions();
+    },
+    enabled: isConnected && !!treasuryAddress
+  });
+
+  // Watch for RedemptionFulfilled events to trigger refresh (queued redemptions)
+  useWatchContractEvent({
+    address: treasuryAddress,
+    abi: RoseTreasuryABI,
+    eventName: 'RedemptionFulfilled',
+    onLogs: () => {
+      console.log('RedemptionFulfilled event detected, refreshing transactions...');
       fetchTransactions();
     },
     enabled: isConnected && !!treasuryAddress

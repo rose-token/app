@@ -132,6 +132,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **UI Components:** Reusable components in `frontend/src/components/ui/`. Use `<Spinner />` for all loading states (default h-4 w-4, customize via className prop).
 
+**Transaction History:** `TransactionHistory.jsx` fetches deposit/redemption events directly from blockchain (7-day lookback). Shows `Deposited` (deposits), `Redeemed` (instant redemptions), and `RedemptionFulfilled` joined with `RedemptionRequested` (queued redemptions). Real-time updates via event watchers.
+
 ## Backend API (`backend/signer/`)
 
 | Category | Endpoints |
