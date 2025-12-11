@@ -152,6 +152,14 @@ export const config = {
     enabled: process.env.TASK_WATCHER_ENABLED !== 'false',
   },
 
+  // Dispute watcher configuration (sync disputes to database for admin panel)
+  disputeWatcher: {
+    // Enable dispute watching and auto-sync to database (default: true)
+    enabled: process.env.DISPUTE_WATCHER_ENABLED !== 'false',
+    // Blocks to look back on startup (default: 10000 - catch up on recent disputes)
+    startupBlockLookback: parseInt(process.env.DISPUTE_WATCHER_STARTUP_LOOKBACK || '10000'),
+  },
+
   // Database backup configuration (Pinata Hot Swaps)
   backup: {
     // Enable backup system (default: true)

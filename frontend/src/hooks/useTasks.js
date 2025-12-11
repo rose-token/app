@@ -671,8 +671,8 @@ export const useTasks = ({ taskId = null } = {}) => {
           return false;
         }
       } else {
-        // By default, hide closed tasks unless explicitly filtered
-        if (task.status === TaskStatus.Closed) {
+        // By default, hide closed and disputed tasks unless explicitly filtered
+        if (task.status === TaskStatus.Closed || task.status === TaskStatus.Disputed) {
           return false;
         }
       }

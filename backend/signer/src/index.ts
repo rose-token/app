@@ -30,6 +30,7 @@ import { startVPRefreshWatcher } from './services/vpRefresh';
 import { startDepositWatcher } from './services/depositWatcher';
 import { startRedemptionWatcher } from './services/redemptionWatcher';
 import { startTaskWatcher } from './services/taskWatcher';
+import { startDisputeWatcher } from './services/disputeWatcher';
 
 const app = express();
 
@@ -135,6 +136,11 @@ async function start() {
   // Start task watcher for GitHub PR auto-merge
   startTaskWatcher().catch((err) => {
     console.error('[TaskWatcher] Failed to start:', err);
+  });
+
+  // Start dispute watcher to sync disputes to database for admin panel
+  startDisputeWatcher().catch((err) => {
+    console.error('[DisputeWatcher] Failed to start:', err);
   });
 
   app.listen(config.port, () => {

@@ -122,6 +122,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Key Hooks:** useTasks (task fetching + all task actions), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury)
 
+**Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
+
 **Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: System Status card (pause/unpause Treasury with two-step confirmation), manual treasury rebalance trigger, database backup/restore, whitelist management.
 
 **Pause System:** Treasury contract inherits OpenZeppelin Pausable. When paused, deposits, redemptions, rebalancing, and swaps are disabled. Admin can pause/unpause via System Status card (two-step confirmation). Vault page shows warning banner when paused. DepositCard/RedeemCard disable operations when paused.
@@ -164,6 +166,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | treasury.ts | Rebalance orchestration, vault status |
 | depositWatcher.ts | Watch `Deposited`, diversify |
 | redemptionWatcher.ts | Watch `RedemptionRequested`, liquidate, fulfill |
+| disputeWatcher.ts | Watch `TaskDisputed`/`DisputeResolved`, sync to DB |
 | auction.ts | Off-chain bids, winner selection |
 | dispute.ts | Dispute queries, on-chain event recording |
 | backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
@@ -179,6 +182,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
+| Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
 
 ## Database Tables
@@ -205,6 +209,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Watchers | `*_WATCHER_ENABLED`, `*_WATCHER_DEBOUNCE_MS`, `*_WATCHER_EXECUTE`, `*_WATCHER_SLIPPAGE_BPS`, `*_WATCHER_STARTUP_LOOKBACK` |
 | Delegation | `RECONCILIATION_CRON_SCHEDULE`, `RECONCILIATION_ON_STARTUP`, `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
 | VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
+| Dispute Watcher | `DISPUTE_WATCHER_ENABLED` (default: true), `DISPUTE_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
