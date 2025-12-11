@@ -177,6 +177,28 @@ export const config = {
     // Reference CID for Hot Swaps (set this after first backup)
     referenceCid: process.env.BACKUP_REFERENCE_CID || '',
   },
+
+  // Staker indexer configuration (VP snapshot support)
+  stakerIndexer: {
+    // Enable staker indexing (default: true)
+    enabled: process.env.STAKER_INDEXER_ENABLED !== 'false',
+    // Blocks to look back on startup for Deposited/Withdrawn events (default: 10000)
+    startupBlockLookback: parseInt(process.env.STAKER_INDEXER_STARTUP_LOOKBACK || '10000'),
+    // Validation cron schedule (default: weekly on Sunday at 03:00 UTC)
+    validationCronSchedule: process.env.STAKER_VALIDATION_CRON || '0 3 * * 0',
+  },
+
+  // Snapshot watcher configuration (VP snapshot for Fast Track proposals)
+  snapshotWatcher: {
+    // Enable snapshot watching (default: true)
+    enabled: process.env.SNAPSHOT_WATCHER_ENABLED !== 'false',
+    // Blocks to look back on startup for ProposalCreated events (default: 10000)
+    startupBlockLookback: parseInt(process.env.SNAPSHOT_WATCHER_STARTUP_LOOKBACK || '10000'),
+    // Buffer time before votingStartsAt to compute snapshot (default: 300s = 5 minutes)
+    computeBuffer: parseInt(process.env.SNAPSHOT_WATCHER_COMPUTE_BUFFER || '300'),
+    // Whether to execute on-chain setVPMerkleRoot (default: true)
+    executeOnChain: process.env.SNAPSHOT_WATCHER_EXECUTE !== 'false',
+  },
 };
 
 // Validate required env vars

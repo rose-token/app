@@ -31,6 +31,8 @@ import { startDepositWatcher } from './services/depositWatcher';
 import { startRedemptionWatcher } from './services/redemptionWatcher';
 import { startTaskWatcher } from './services/taskWatcher';
 import { startDisputeWatcher } from './services/disputeWatcher';
+import { startStakerIndexer } from './services/stakerIndexer';
+import { startSnapshotWatcher } from './cron/snapshotWatcher';
 
 const app = express();
 
@@ -141,6 +143,16 @@ async function start() {
   // Start dispute watcher to sync disputes to database for admin panel
   startDisputeWatcher().catch((err) => {
     console.error('[DisputeWatcher] Failed to start:', err);
+  });
+
+  // Start staker indexer for VP snapshot support
+  startStakerIndexer().catch((err) => {
+    console.error('[StakerIndexer] Failed to start:', err);
+  });
+
+  // Start snapshot watcher for Fast Track proposal VP snapshots
+  startSnapshotWatcher().catch((err) => {
+    console.error('[SnapshotWatcher] Failed to start:', err);
   });
 
   app.listen(config.port, () => {
