@@ -199,6 +199,14 @@ export const config = {
     // Whether to execute on-chain setVPMerkleRoot (default: true)
     executeOnChain: process.env.SNAPSHOT_WATCHER_EXECUTE !== 'false',
   },
+
+  // Slow Track watcher configuration (VP allocation sync for Slow Track proposals)
+  slowTrackWatcher: {
+    // Enable slow track event watching (default: true)
+    enabled: process.env.SLOW_TRACK_WATCHER_ENABLED !== 'false',
+    // Blocks to look back on startup for VoteCastSlow events (default: 10000)
+    startupBlockLookback: parseInt(process.env.SLOW_TRACK_WATCHER_STARTUP_LOOKBACK || '10000'),
+  },
 };
 
 // Validate required env vars

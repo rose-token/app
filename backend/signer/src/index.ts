@@ -18,6 +18,7 @@ import whitelistRoutes from './routes/whitelist';
 import disputeRoutes from './routes/dispute';
 import githubRoutes from './routes/github';
 import backupRoutes from './routes/backup';
+import slowTrackRoutes from './routes/slowTrack';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -32,6 +33,7 @@ import { startRedemptionWatcher } from './services/redemptionWatcher';
 import { startTaskWatcher } from './services/taskWatcher';
 import { startDisputeWatcher } from './services/disputeWatcher';
 import { startStakerIndexer } from './services/stakerIndexer';
+import { startSlowTrackWatcher } from './services/slowTrackWatcher';
 import { startSnapshotWatcher } from './cron/snapshotWatcher';
 
 const app = express();
@@ -75,6 +77,7 @@ app.use('/api/whitelist', whitelistRoutes);
 app.use('/api/dispute', disputeRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/slow-track', slowTrackRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -153,6 +156,11 @@ async function start() {
   // Start snapshot watcher for Fast Track proposal VP snapshots
   startSnapshotWatcher().catch((err) => {
     console.error('[SnapshotWatcher] Failed to start:', err);
+  });
+
+  // Start slow track watcher for VP allocation sync
+  startSlowTrackWatcher().catch((err) => {
+    console.error('[SlowTrackWatcher] Failed to start:', err);
   });
 
   app.listen(config.port, () => {
