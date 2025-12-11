@@ -37,6 +37,7 @@ const VaultPage = () => {
     usdcAddress,
     // Status
     isLoading,
+    isPaused,
     refetch,
   } = useVaultData();
 
@@ -56,6 +57,32 @@ const VaultPage = () => {
           Asset-Backed Stability, Transparent On-chain Reserves
         </p>
       </div>
+
+      {/* Pause Warning Banner */}
+      {isPaused && (
+        <div
+          className="mb-6 p-4 rounded-[12px] flex items-center gap-3"
+          style={{
+            background: 'var(--error-bg)',
+            border: '1px solid rgba(248, 113, 113, 0.5)',
+          }}
+        >
+          <div
+            className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(248, 113, 113, 0.2)' }}
+          >
+            <span style={{ color: 'var(--error)', fontSize: '1.25rem' }}>!</span>
+          </div>
+          <div>
+            <h3 className="font-medium" style={{ color: 'var(--error)' }}>
+              Treasury Operations Paused
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Deposits and redemptions are temporarily disabled. Please check back later.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Wallet not connected message */}
       {!isConnected && (
@@ -97,6 +124,7 @@ const VaultPage = () => {
             usdcAddress={usdcAddress}
             onSuccess={handleSuccess}
             depositCooldown={depositCooldown}
+            isPaused={isPaused}
           />
 
           <RedeemCard
@@ -110,6 +138,7 @@ const VaultPage = () => {
             onSuccess={handleSuccess}
             redeemCooldown={redeemCooldown}
             pendingRedemptionId={pendingRedemptionId}
+            isPaused={isPaused}
           />
         </div>
       )}

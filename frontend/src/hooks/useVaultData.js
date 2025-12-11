@@ -90,6 +90,11 @@ const useVaultData = () => {
         abi: RoseTreasuryABI,
         functionName: 'needsRebalance',
       },
+      {
+        address: treasuryAddress,
+        abi: RoseTreasuryABI,
+        functionName: 'paused',
+      },
     ];
   }, [treasuryAddress]);
 
@@ -214,6 +219,7 @@ const useVaultData = () => {
         circulatingSupply: null,
         assets: null,
         needsRebalance: false,
+        isPaused: false,
       };
     }
 
@@ -223,6 +229,7 @@ const useVaultData = () => {
       supplyResult,
       allAssetsResult,
       needsRebalanceResult,
+      pausedResult,
     ] = vaultData;
 
     // rosePrice is in 6 decimals (USD)
@@ -237,6 +244,9 @@ const useVaultData = () => {
 
     // needsRebalance boolean
     const needsRebalance = needsRebalanceResult?.result ?? false;
+
+    // paused boolean
+    const isPaused = pausedResult?.result ?? false;
 
     // circulatingSupply is in 18 decimals (ROSE)
     const circulatingSupply = supplyResult?.result
@@ -340,6 +350,7 @@ const useVaultData = () => {
       circulatingSupply,
       assets,
       needsRebalance,
+      isPaused,
     };
   }, [vaultData, assetBreakdownData]);
 

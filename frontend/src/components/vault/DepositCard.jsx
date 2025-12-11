@@ -38,6 +38,7 @@ const DepositCard = ({
   usdcAddress,
   onSuccess,
   depositCooldown = 0,
+  isPaused = false,
 }) => {
   const { chain, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -184,7 +185,7 @@ const DepositCard = ({
     }
   };
 
-  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0;
+  const canDeposit = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0 && !isPaused;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -224,8 +225,23 @@ const DepositCard = ({
         Receive ROSE
       </p>
 
+      {/* Paused Badge */}
+      {isPaused && (
+        <div
+          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
+          style={{
+            background: 'var(--error-bg)',
+            border: '1px solid rgba(248, 113, 113, 0.3)',
+            color: 'var(--error)',
+          }}
+        >
+          <span>!</span>
+          <span>Deposits temporarily disabled</span>
+        </div>
+      )}
+
       {/* Cooldown Badge */}
-      {cooldownRemaining > 0 && (
+      {cooldownRemaining > 0 && !isPaused && (
         <div
           className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
           style={{

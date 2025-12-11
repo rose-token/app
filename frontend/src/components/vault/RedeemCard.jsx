@@ -28,6 +28,7 @@ const RedeemCard = ({
   onSuccess,
   redeemCooldown = 0,
   pendingRedemptionId: initialPendingId = null,
+  isPaused = false,
 }) => {
   const { chain } = useAccount();
   const publicClient = usePublicClient();
@@ -318,7 +319,7 @@ const RedeemCard = ({
     }
   };
 
-  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0;
+  const canRedeem = amountInWei > 0n && !validationError && !isSubmitting && cooldownRemaining === 0 && !isPaused;
 
   const labelStyle = {
     color: 'var(--text-muted)',
@@ -358,8 +359,23 @@ const RedeemCard = ({
         Receive USDC
       </p>
 
+      {/* Paused Badge */}
+      {isPaused && (
+        <div
+          className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
+          style={{
+            background: 'var(--error-bg)',
+            border: '1px solid rgba(248, 113, 113, 0.3)',
+            color: 'var(--error)',
+          }}
+        >
+          <span>!</span>
+          <span>Redemptions temporarily disabled</span>
+        </div>
+      )}
+
       {/* Cooldown Badge */}
-      {cooldownRemaining > 0 && (
+      {cooldownRemaining > 0 && !isPaused && (
         <div
           className="rounded-lg px-3 py-2 mb-4 text-xs font-medium flex items-center gap-2"
           style={{

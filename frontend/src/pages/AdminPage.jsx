@@ -5,6 +5,7 @@ import { useIsAdmin } from '../hooks/useIsAdmin';
 import { useRebalance } from '../hooks/useRebalance';
 import { useWhitelist } from '../hooks/useWhitelist';
 import { useBackup } from '../hooks/useBackup';
+import { usePause } from '../hooks/usePause';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
@@ -32,6 +33,20 @@ const AdminPage = () => {
     error: backupError,
     clearError: clearBackupError,
   } = useBackup();
+  const {
+    isPaused,
+    isStatusLoading: pauseStatusLoading,
+    isLoading: pauseLoading,
+    error: pauseError,
+    pause,
+    unpause,
+    clearError: clearPauseError,
+  } = usePause();
+
+  // Pause state
+  const [pauseConfirm, setPauseConfirm] = useState(false);
+  const [unpauseConfirm, setUnpauseConfirm] = useState(false);
+  const [pauseResult, setPauseResult] = useState(null);
 
   // Rebalance state
   const [rebalanceLoading, setRebalanceLoading] = useState(false);
@@ -173,6 +188,54 @@ const AdminPage = () => {
     setRestoreConfirm(false);
   };
 
+  // Handle pause
+  const handlePause = async () => {
+    if (!pauseConfirm) {
+      setPauseConfirm(true);
+      return;
+    }
+
+    clearPauseError();
+    setPauseResult(null);
+
+    try {
+      const result = await pause();
+      setPauseResult({ action: 'paused', ...result });
+      setPauseConfirm(false);
+    } catch (error) {
+      console.error('Pause failed:', error);
+      setPauseConfirm(false);
+    }
+  };
+
+  const cancelPause = () => {
+    setPauseConfirm(false);
+  };
+
+  // Handle unpause
+  const handleUnpause = async () => {
+    if (!unpauseConfirm) {
+      setUnpauseConfirm(true);
+      return;
+    }
+
+    clearPauseError();
+    setPauseResult(null);
+
+    try {
+      const result = await unpause();
+      setPauseResult({ action: 'unpaused', ...result });
+      setUnpauseConfirm(false);
+    } catch (error) {
+      console.error('Unpause failed:', error);
+      setUnpauseConfirm(false);
+    }
+  };
+
+  const cancelUnpause = () => {
+    setUnpauseConfirm(false);
+  };
+
   // Show wallet not connected
   if (!isConnected) {
     return (
@@ -280,6 +343,182 @@ const AdminPage = () => {
         </Link>
       </div>
 
+      {/* System Status Card */}
+      <div
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all"
+        style={{
+          background: 'var(--bg-card)',
+          border: isPaused
+            ? '1px solid rgba(248, 113, 113, 0.5)'
+            : '1px solid rgba(74, 222, 128, 0.3)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2
+            className="font-display text-2xl font-medium"
+            style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}
+          >
+            System Status
+          </h2>
+          {pauseStatusLoading ? (
+            <div
+              className="inline-block w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
+              style={{ borderColor: 'var(--rose-pink)', borderTopColor: 'transparent' }}
+            />
+          ) : (
+            <span
+              className="px-3 py-1 rounded-full text-sm font-medium"
+              style={{
+                background: isPaused ? 'var(--error-bg)' : 'rgba(74, 222, 128, 0.15)',
+                color: isPaused ? 'var(--error)' : 'var(--success)',
+              }}
+            >
+              {isPaused ? 'PAUSED' : 'ACTIVE'}
+            </span>
+          )}
+        </div>
+
+        <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+          {isPaused
+            ? 'The Treasury is currently paused. All deposits, redemptions, and rebalancing operations are disabled.'
+            : 'The Treasury is operating normally. All operations are enabled.'}
+        </p>
+
+        {isPaused && (
+          <div
+            className="p-3 rounded-lg mb-4"
+            style={{ background: 'var(--error-bg)' }}
+          >
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--error)' }}>
+              Disabled Operations:
+            </p>
+            <ul className="list-disc list-inside text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
+              <li>USDC Deposits</li>
+              <li>Instant Redemptions</li>
+              <li>Queued Redemptions</li>
+              <li>Redemption Fulfillment</li>
+              <li>Treasury Rebalancing</li>
+              <li>Swap Execution</li>
+            </ul>
+          </div>
+        )}
+
+        {pauseError && (
+          <ErrorMessage message={pauseError} onDismiss={clearPauseError} />
+        )}
+
+        {pauseResult && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+            }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--success)' }}>
+              Treasury {pauseResult.action === 'paused' ? 'Paused' : 'Unpaused'} Successfully
+            </h4>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Transaction:{' '}
+              <a
+                href={`https://sepolia.arbiscan.io/tx/${pauseResult.hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono hover:opacity-80 transition-opacity"
+                style={{ color: 'var(--rose-pink)' }}
+              >
+                {pauseResult.hash?.slice(0, 10)}...{pauseResult.hash?.slice(-8)}
+              </a>
+            </p>
+          </div>
+        )}
+
+        {/* Pause/Unpause Controls */}
+        <div className="flex flex-wrap gap-3">
+          {isPaused ? (
+            // Unpause controls
+            unpauseConfirm ? (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleUnpause}
+                  disabled={pauseLoading}
+                >
+                  {pauseLoading ? (
+                    <>
+                      <div
+                        className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                        style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                      />
+                      Unpausing...
+                    </>
+                  ) : (
+                    'Confirm Unpause'
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={cancelUnpause}
+                  disabled={pauseLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={handleUnpause} disabled={pauseLoading}>
+                Unpause Treasury
+              </Button>
+            )
+          ) : (
+            // Pause controls
+            pauseConfirm ? (
+              <div className="flex gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={handlePause}
+                  disabled={pauseLoading}
+                >
+                  {pauseLoading ? (
+                    <>
+                      <div
+                        className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                        style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                      />
+                      Pausing...
+                    </>
+                  ) : (
+                    'Confirm Pause'
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={cancelPause}
+                  disabled={pauseLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" onClick={handlePause} disabled={pauseLoading}>
+                Pause Treasury
+              </Button>
+            )
+          )}
+        </div>
+
+        {pauseConfirm && !isPaused && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--error)' }}>
+            Warning: This will disable all deposits, redemptions, and rebalancing operations.
+          </p>
+        )}
+
+        {unpauseConfirm && isPaused && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            This will re-enable all Treasury operations.
+          </p>
+        )}
+      </div>
+
       {/* Rebalance Card */}
       <div
         className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all hover:border-[rgba(212,175,140,0.35)]"
@@ -305,7 +544,21 @@ const AdminPage = () => {
           <ErrorMessage message={rebalanceError} onDismiss={() => setRebalanceError(null)} />
         )}
 
-        <Button onClick={handleRebalance} disabled={rebalanceLoading} className="w-full sm:w-auto">
+        {isPaused && (
+          <div
+            className="rounded-lg px-3 py-2 mb-4 text-sm flex items-center gap-2"
+            style={{
+              background: 'var(--error-bg)',
+              border: '1px solid rgba(248, 113, 113, 0.3)',
+              color: 'var(--error)',
+            }}
+          >
+            <span>!</span>
+            <span>Rebalancing disabled while Treasury is paused</span>
+          </div>
+        )}
+
+        <Button onClick={handleRebalance} disabled={rebalanceLoading || isPaused} className="w-full sm:w-auto">
           {rebalanceLoading ? (
             <>
               <div
