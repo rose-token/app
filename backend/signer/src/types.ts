@@ -754,3 +754,54 @@ export interface DelegationV2ErrorResponse {
   error: string;
   details?: Record<string, string>;
 }
+
+// ==========================================
+// Governance VP Snapshot Types (Fast Track)
+// ==========================================
+
+// Merkle proof response for Fast Track voting
+export interface MerkleProofResponse {
+  address: string;
+  effectiveVP: string;      // VP after delegations applied
+  baseVP: string;           // VP before delegations
+  delegatedTo: string | null;
+  delegatedAmount: string;
+  proof: string[];
+}
+
+export interface MerkleProofErrorResponse {
+  error: string;
+}
+
+// ==========================================
+// Governance VP Available Types (Slow Track Aliases)
+// ==========================================
+
+// Available VP response for Slow Track voting
+export interface VPAvailableResponse {
+  user: string;
+  totalVP: string;
+  allocatedVP: string;
+  availableVP: string;
+}
+
+// Attestation request for Slow Track voting
+export interface VPAttestationRequest {
+  user: string;
+  proposalId: number;
+  support: boolean;
+  vpAmount: string;
+  totalVP: string;
+}
+
+// Attestation response for Slow Track voting
+export interface VPAttestationResponse {
+  user: string;
+  proposalId: number;
+  support: boolean;
+  vpAmount: string;
+  availableVP: string;
+  nonce: string;
+  expiry: number;
+  signature: string;
+}

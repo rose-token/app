@@ -160,7 +160,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Category | Endpoints |
 |----------|-----------|
 | Passport | `/api/passport/verify`, `/score/:addr`, `/signer` |
-| Governance | `/api/governance/vp/:addr`, `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
+| Governance | `/api/governance/vp/:addr`, `/vp/available/:addr` (Slow Track alias), `/vp/attestation` (POST, Slow Track alias), `/proposals/:id/proof/:addr` (Fast Track merkle proof), `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
 | Delegation | `/api/delegation/vote-signature`, `/confirm-vote`, `/claim-signature`, `/claimable/:user`, `/undelegate-signature`, `/global-power/:delegate`, `/confirm-undelegate` |
 | Delegation V2 | `/api/delegation/v2/store` (POST), `/v2/user/:addr`, `/v2/received/:delegate`, `/v2/revoke` (POST, signed), `/v2/nonce/:addr`, `/v2/opt-in/:addr`, `/v2/stats`, `/v2/eip712-config/:chainId` (Off-chain EIP-712 delegations) |
 | Reconciliation | `/api/reconciliation/status`, `/last`, `/run`, `/proposal/:id`, `/sync`, `/stats` |
