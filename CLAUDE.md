@@ -185,11 +185,29 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Location | Variables |
 |----------|-----------|
 | Root | `ARBITRUM_SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `DAO_TREASURY_ADDRESS`, `ARBISCAN_API_KEY`, `PASSPORT_SIGNER_ADDRESS` |
-| Frontend | `VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS`, `VITE_PINATA_*`, `VITE_PASSPORT_SIGNER_URL` |
-| Backend | `PORT`, `ALLOWED_ORIGINS`, `SIGNER_PRIVATE_KEY`, `VITE_GITCOIN_API_KEY/SCORER_ID`, `THRESHOLD_*`, `*_ADDRESS`, `RPC_URL`, `DATABASE_URL`, `DB_POOL_*` |
+| Frontend | `VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS`, `VITE_PINATA_JWT`, `VITE_PINATA_GATEWAY`, `VITE_PASSPORT_SIGNER_URL` |
+| Backend | `PORT`, `ALLOWED_ORIGINS`, `SIGNER_PRIVATE_KEY`, `VITE_GITCOIN_API_KEY/SCORER_ID`, `THRESHOLD_*`, `*_ADDRESS`, `RPC_URL`, `DATABASE_URL`, `DB_POOL_*`, `PINATA_GATEWAY` |
 | Watchers | `*_WATCHER_ENABLED`, `*_WATCHER_DEBOUNCE_MS`, `*_WATCHER_EXECUTE`, `*_WATCHER_SLIPPAGE_BPS`, `*_WATCHER_STARTUP_LOOKBACK` |
 | Delegation | `RECONCILIATION_CRON_SCHEDULE`, `RECONCILIATION_ON_STARTUP`, `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
 | VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
+
+## Pinata IPFS (Private Files)
+
+**API:** Pinata V3 (`https://uploads.pinata.cloud/v3/files`) with JWT auth. All uploads are **private** by default.
+
+**Groups:** Content is organized into Pinata groups for management:
+| Group | ID | Content |
+|-------|-----|---------|
+| Governance | `019b0af9-c866-7bc5-b659-8d6b70da8cd8` | Proposals |
+| Tasks | `019b0aec-a5a0-7338-be66-3d604b7ba713` | Task descriptions, Disputes |
+| Profiles | `019b0aec-c443-7ada-bcb7-5221e69121db` | Avatars |
+
+**Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud` (dedicated gateway for private file access)
+
+**Environment:**
+- Frontend: `VITE_PINATA_JWT` (required), `VITE_PINATA_GATEWAY` (optional, has default)
+- Backend: `PINATA_GATEWAY` (optional, has default)
+- Legacy: `VITE_PINATA_API_KEY`, `VITE_PINATA_SECRET_API_KEY` (deprecated, kept for backward compat)
 
 ## Mainnet Addresses (Arbitrum One)
 

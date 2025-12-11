@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useProfile } from '../../hooks/useProfile';
 import { User } from 'lucide-react';
 import ProfileViewModal from './ProfileViewModal';
+import { getGatewayUrl } from '../../utils/ipfs/pinataService';
 
 /**
  * Generate a deterministic color from an address
@@ -162,7 +163,7 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
           // Profile image
           <img
             src={avatarUrl.startsWith('ipfs://')
-              ? `https://gateway.pinata.cloud/ipfs/${avatarUrl.replace('ipfs://', '')}`
+              ? getGatewayUrl(avatarUrl.replace('ipfs://', ''))
               : avatarUrl
             }
             alt={displayName || 'Profile'}

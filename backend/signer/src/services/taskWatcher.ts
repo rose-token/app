@@ -36,8 +36,10 @@ const MARKETPLACE_ABI = [
   )`,
 ];
 
-// IPFS Gateway for fetching task metadata
-const IPFS_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
+// IPFS Gateway for fetching task metadata (uses dedicated Pinata gateway for private files)
+const IPFS_GATEWAY = process.env.PINATA_GATEWAY
+  ? `${process.env.PINATA_GATEWAY}/ipfs/`
+  : 'https://coffee-glad-felidae-720.mypinata.cloud/ipfs/';
 
 // Types
 export interface TaskWatcherStats {
