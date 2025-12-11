@@ -68,8 +68,12 @@ Web3 marketplace with task-value-based token distribution.
 **Redemption Liquidation** (redemption watcher):
 1. Calculates shortfall including 20% USDC target buffer post-redemption
 2. Adds 0.1% rounding buffer to cover integer division losses in swaps
-3. Rounds up token amounts to sell (+1 wei) to ensure sufficient USDC
-4. Never sells ROSE - only liquidates BTC/GOLD (furthest over-allocation first)
+3. Uses ceiling division for token amounts to ensure sufficient USDC
+4. Never sells ROSE - only liquidates BTC/GOLD using **waterfall algorithm**:
+   - Goal: Bring all sellable RWA assets to equal USD values after liquidation
+   - Sells from highest-value asset first until it matches the next
+   - Once assets equalize, splits remaining shortfall equally among them
+   - Example: BTC=$150k, GOLD=$50k, need $150k → sell $125k BTC, $25k GOLD → both end at $25k
 
 ## Governance System
 

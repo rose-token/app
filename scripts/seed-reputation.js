@@ -52,7 +52,7 @@ async function main() {
   const NUM_TASKS = 10;
   const TASK_VALUE = hre.ethers.parseUnits("100", 18); // 100 ROSE per task
   const STAKE_VALUE = TASK_VALUE / 10n; // 10 ROSE (10% of task value)
-  const GAS_ETH = hre.ethers.parseEther("0.005"); // ETH for gas
+  const GAS_ETH = hre.ethers.parseEther("0.001"); // ETH for gas
 
   const customerRoseNeeded = TASK_VALUE * BigInt(NUM_TASKS + 1); // 1100 ROSE (buffer)
   const stakeholderRoseNeeded = STAKE_VALUE * BigInt(NUM_TASKS + 1); // 110 ROSE (buffer)

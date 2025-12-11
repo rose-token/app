@@ -390,51 +390,124 @@ async function calculateLiquidationSwaps(
     `(${stableTargetBps} bps of ${ethers.formatUnits(postRedemptionHardAssets, 6)} hard assets)`
   );
 
-  // Sort by: furthest above target allocation first (actualBps - targetBps descending)
-  sellableAssets.sort((a, b) => {
-    const driftA = a.actualBps - a.targetBps;
-    const driftB = b.actualBps - b.targetBps;
-    return driftB - driftA; // Highest positive drift first
-  });
+  // Sort by USD value descending for waterfall liquidation
+  sellableAssets.sort((a, b) => (b.valueUSD > a.valueUSD ? 1 : b.valueUSD < a.valueUSD ? -1 : 0));
 
   console.log(
-    `[RedemptionWatcher] Sellable assets sorted by over-allocation:`,
-    sellableAssets.map((a) => `${a.key}: ${a.actualBps - a.targetBps} bps over target`)
+    `[RedemptionWatcher] Sellable assets sorted by value:`,
+    sellableAssets.map((a) => `${a.key}: $${ethers.formatUnits(a.valueUSD, 6)}`)
   );
 
   let remainingShortfall = adjustedShortfall;
 
+  // Track how much USD to sell from each asset
+  const assetSwapAmounts = new Map<string, bigint>(
+    sellableAssets.map((a) => [a.key, 0n])
+  );
+
+  // Track remaining USD value for each asset
+  const assetValues = new Map<string, bigint>(
+    sellableAssets.map((a) => [a.key, a.valueUSD])
+  );
+
+  // Helper to get max value from array
+  const maxBigInt = (values: bigint[]): bigint => {
+    if (values.length === 0) return 0n;
+    return values.reduce((max, val) => (val > max ? val : max), values[0]);
+  };
+
+  // Waterfall algorithm: equalize from highest to lowest
+  while (remainingShortfall > 0n) {
+    // Find the highest value
+    const maxValue = maxBigInt(Array.from(assetValues.values()));
+    if (maxValue <= 0n) break; // All depleted
+
+    // Collect all assets at max value
+    const topAssets = sellableAssets.filter((a) => assetValues.get(a.key) === maxValue);
+
+    if (topAssets.length === sellableAssets.length) {
+      // All assets are equal - split remaining shortfall equally
+      const perAssetAmount = remainingShortfall / BigInt(topAssets.length);
+      const remainder = remainingShortfall % BigInt(topAssets.length);
+
+      for (let i = 0; i < topAssets.length; i++) {
+        const asset = topAssets[i];
+        const currentValue = assetValues.get(asset.key)!;
+
+        // This asset gets equal share (+ remainder for first asset to avoid dust)
+        let sellAmount = perAssetAmount;
+        if (i === 0) sellAmount += remainder;
+
+        // Cap at available value
+        if (sellAmount > currentValue) sellAmount = currentValue;
+
+        if (sellAmount > 0n) {
+          assetSwapAmounts.set(asset.key, assetSwapAmounts.get(asset.key)! + sellAmount);
+          assetValues.set(asset.key, currentValue - sellAmount);
+          remainingShortfall -= sellAmount;
+        }
+      }
+      break; // Done - all assets were equal
+    } else {
+      // Find next lower value (the "equalization target")
+      const lowerValues = Array.from(assetValues.values()).filter((v) => v < maxValue);
+      const nextValue = lowerValues.length > 0 ? maxBigInt(lowerValues) : 0n;
+
+      // Calculate total USD needed to bring all top assets down to nextValue
+      const dropPerAsset = maxValue - nextValue;
+      const totalDrop = dropPerAsset * BigInt(topAssets.length);
+
+      if (totalDrop <= remainingShortfall) {
+        // Can fully equalize - bring all top assets to nextValue
+        for (const asset of topAssets) {
+          assetSwapAmounts.set(asset.key, assetSwapAmounts.get(asset.key)! + dropPerAsset);
+          assetValues.set(asset.key, nextValue);
+          remainingShortfall -= dropPerAsset;
+        }
+        // Continue to next round
+      } else {
+        // Can only partially equalize - split remaining among top assets
+        const perAssetAmount = remainingShortfall / BigInt(topAssets.length);
+        const remainder = remainingShortfall % BigInt(topAssets.length);
+
+        for (let i = 0; i < topAssets.length; i++) {
+          const asset = topAssets[i];
+          const currentValue = assetValues.get(asset.key)!;
+
+          let sellAmount = perAssetAmount;
+          if (i === 0) sellAmount += remainder;
+
+          assetSwapAmounts.set(asset.key, assetSwapAmounts.get(asset.key)! + sellAmount);
+          assetValues.set(asset.key, currentValue - sellAmount);
+          remainingShortfall -= sellAmount;
+        }
+        break; // Shortfall exhausted
+      }
+    }
+  }
+
+  // Convert USD swap amounts to token amounts and build swap instructions
   for (const asset of sellableAssets) {
-    if (remainingShortfall <= 0n) break;
+    const usdcToGet = assetSwapAmounts.get(asset.key)!;
 
-    // Calculate how much of this asset to sell
-    // We want to sell enough to cover the shortfall (in USD terms)
-    // amountToSell = min(balance, balance * (shortfall / valueUSD))
-    let usdcToGet = remainingShortfall;
-    if (usdcToGet > asset.valueUSD) {
-      usdcToGet = asset.valueUSD; // Can't sell more than we have
-    }
+    if (usdcToGet <= 0n) continue;
 
-    // Calculate token amount to sell: amount = balance * (usdcToGet / valueUSD)
-    // Add 1 to round up and ensure we get enough USDC
-    const amountToSell = (asset.balance * usdcToGet) / asset.valueUSD + 1n;
+    // Convert USD amount to token amount: tokenAmount = balance * (usdcToGet / valueUSD)
+    // Use ceiling division to ensure we always sell enough: ceil(a*b/c) = (a*b + c - 1) / c
+    const amountToSell = ((asset.balance * usdcToGet) + asset.valueUSD - 1n) / asset.valueUSD;
 
-    if (amountToSell > 0n) {
-      swaps.push({
-        assetKey: asset.key,
-        assetKeyBytes32: asset.keyBytes32,
-        tokenAddress: asset.token,
-        amountToSell,
-        estimatedUsdcOut: usdcToGet,
-      });
+    swaps.push({
+      assetKey: asset.key,
+      assetKeyBytes32: asset.keyBytes32,
+      tokenAddress: asset.token,
+      amountToSell,
+      estimatedUsdcOut: usdcToGet,
+    });
 
-      remainingShortfall -= usdcToGet;
-
-      console.log(
-        `[RedemptionWatcher] Planning to sell ${ethers.formatUnits(amountToSell, 18)} ${asset.key} ` +
-          `for ~${ethers.formatUnits(usdcToGet, 6)} USDC`
-      );
-    }
+    console.log(
+      `[RedemptionWatcher] Waterfall: Selling ${ethers.formatUnits(amountToSell, 18)} ${asset.key} ` +
+        `for ~${ethers.formatUnits(usdcToGet, 6)} USDC`
+    );
   }
 
   if (remainingShortfall > 0n) {
