@@ -71,7 +71,8 @@ async function getOctokitForRepo(owner: string): Promise<InstanceType<typeof Oct
 
   // Find installation for this owner
   for await (const { installation } of ghApp.eachInstallation.iterator()) {
-    const accountLogin = installation.account?.login;
+    const account = installation.account;
+    const accountLogin = account && 'login' in account ? account.login : undefined;
     if (accountLogin && accountLogin.toLowerCase() === owner.toLowerCase()) {
       installationCache.set(owner.toLowerCase(), installation.id);
       return ghApp.getInstallationOctokit(installation.id);
