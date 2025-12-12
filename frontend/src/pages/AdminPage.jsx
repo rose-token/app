@@ -6,6 +6,7 @@ import { useRebalance } from '../hooks/useRebalance';
 import { useWhitelist } from '../hooks/useWhitelist';
 import { useBackup } from '../hooks/useBackup';
 import { usePause } from '../hooks/usePause';
+import { useTruncateDatabase } from '../hooks/useTruncateDatabase';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
@@ -42,6 +43,12 @@ const AdminPage = () => {
     unpause,
     clearError: clearPauseError,
   } = usePause();
+  const {
+    truncateDatabase,
+    isLoading: truncateLoading,
+    error: truncateError,
+    clearError: clearTruncateError,
+  } = useTruncateDatabase();
 
   // Pause state
   const [pauseConfirm, setPauseConfirm] = useState(false);
@@ -64,6 +71,10 @@ const AdminPage = () => {
   const [backupResult, setBackupResult] = useState(null);
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [restoreResult, setRestoreResult] = useState(null);
+
+  // Truncate state
+  const [truncateConfirm, setTruncateConfirm] = useState(false);
+  const [truncateResult, setTruncateResult] = useState(null);
 
   // Redirect non-admins to home
   useEffect(() => {
@@ -186,6 +197,30 @@ const AdminPage = () => {
 
   const cancelRestore = () => {
     setRestoreConfirm(false);
+  };
+
+  // Handle truncate
+  const handleTruncate = async () => {
+    if (!truncateConfirm) {
+      setTruncateConfirm(true);
+      return;
+    }
+
+    clearTruncateError();
+    setTruncateResult(null);
+
+    try {
+      const result = await truncateDatabase();
+      setTruncateResult(result);
+      setTruncateConfirm(false);
+    } catch (error) {
+      console.error('Truncate failed:', error);
+      setTruncateConfirm(false);
+    }
+  };
+
+  const cancelTruncate = () => {
+    setTruncateConfirm(false);
   };
 
   // Handle pause
@@ -989,6 +1024,137 @@ const AdminPage = () => {
         {restoreConfirm && (
           <p className="mt-3 text-sm" style={{ color: 'var(--error)' }}>
             Warning: This will OVERWRITE the entire database. Are you sure?
+          </p>
+        )}
+      </div>
+
+      {/* Database Truncate Card - DANGER ZONE */}
+      <div
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid rgba(248, 113, 113, 0.5)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'var(--error-bg)' }}
+          >
+            <span style={{ color: 'var(--error)', fontSize: '1.25rem' }}>&#x26A0;</span>
+          </div>
+          <h2
+            className="font-display text-2xl font-medium"
+            style={{ letterSpacing: '-0.02em', color: 'var(--error)' }}
+          >
+            Danger Zone: Truncate Database
+          </h2>
+        </div>
+
+        <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
+          Truncate all tables in the PostgreSQL database. This will <strong style={{ color: 'var(--error)' }}>permanently delete all data</strong> including
+          profiles, delegations, auction bids, disputes, and all cached data.
+        </p>
+
+        <div
+          className="p-3 rounded-lg mb-4"
+          style={{ background: 'var(--error-bg)' }}
+        >
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--error)' }}>
+            Safety Measures:
+          </p>
+          <ul className="list-disc list-inside text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
+            <li>A backup will be created automatically before truncation</li>
+            <li>The <code className="font-mono">schema_migrations</code> table is preserved</li>
+            <li>This action cannot be undone (but you can restore from backup)</li>
+          </ul>
+        </div>
+
+        {truncateError && (
+          <ErrorMessage message={truncateError} onDismiss={clearTruncateError} />
+        )}
+
+        {/* Truncate Result */}
+        {truncateResult && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+            }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--success)' }}>
+              Database Truncated Successfully
+            </h4>
+            <div className="space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                <span className="font-medium">Backup CID:</span>{' '}
+                <span className="font-mono text-xs break-all">{truncateResult.backup?.cid}</span>
+              </p>
+              <p>
+                <span className="font-medium">Backup Size:</span>{' '}
+                {truncateResult.backup?.size ? `${(truncateResult.backup.size / 1024 / 1024).toFixed(2)} MB` : 'N/A'}
+              </p>
+              <p>
+                <span className="font-medium">Tables Truncated:</span>{' '}
+                {truncateResult.truncated?.count || 0}
+              </p>
+              {truncateResult.truncated?.tables && truncateResult.truncated.tables.length > 0 && (
+                <div className="mt-2">
+                  <span className="font-medium">Tables:</span>
+                  <div className="font-mono text-xs mt-1 p-2 rounded" style={{ background: 'var(--bg-primary)' }}>
+                    {truncateResult.truncated.tables.join(', ')}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-3">
+          {truncateConfirm ? (
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                onClick={handleTruncate}
+                disabled={truncateLoading}
+              >
+                {truncateLoading ? (
+                  <>
+                    <div
+                      className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                      style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                    />
+                    Truncating...
+                  </>
+                ) : (
+                  'Confirm Truncate'
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={cancelTruncate}
+                disabled={truncateLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="destructive"
+              onClick={handleTruncate}
+              disabled={truncateLoading}
+            >
+              Truncate All Tables
+            </Button>
+          )}
+        </div>
+
+        {truncateConfirm && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--error)' }}>
+            Warning: This will DELETE ALL DATA from the database. A backup will be created first. Are you sure?
           </p>
         )}
       </div>

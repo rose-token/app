@@ -142,11 +142,11 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
 
-**Key Hooks:** useTasks (task fetching + all task actions), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury)
+**Key Hooks:** useTasks (task fetching + all task actions), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables)
 
 **Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
 
-**Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: System Status card (pause/unpause Treasury with two-step confirmation), manual treasury rebalance trigger, database backup/restore, whitelist management.
+**Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: System Status card (pause/unpause Treasury with two-step confirmation), manual treasury rebalance trigger, database backup/restore, whitelist management, database truncation (danger zone with mandatory backup).
 
 **Pause System:** Treasury contract inherits OpenZeppelin Pausable. When paused, deposits, redemptions, rebalancing, and swaps are disabled. Admin can pause/unpause via System Status card (two-step confirmation). Vault page shows warning banner when paused. DepositCard/RedeemCard disable operations when paused.
 
@@ -176,6 +176,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
 | Dispute | `/api/dispute/list`, `/api/dispute/stats`, `/api/dispute/:taskId` (admin queries, on-chain events synced to DB) |
 | Backup | `/api/backup/create`, `/status`, `/restore` (owner-only, pg_dump → Pinata Hot Swaps) |
+| Database | `/api/database/tables` (GET), `/truncate` (POST, owner-only, creates backup then truncates all tables except schema_migrations) |
 | Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
 
 ## Backend Services
@@ -199,6 +200,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | auction.ts | Off-chain bids, winner selection |
 | dispute.ts | Dispute queries, on-chain event recording |
 | backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
+| database.ts | Database admin operations, truncate all tables (excludes schema_migrations) |
 | allocations.ts | Slow Track VP allocation tracking, attestation signing |
 | slowTrackWatcher.ts | Watch `VoteCastSlow`/`ProposalFinalized`, sync allocations to DB |
 

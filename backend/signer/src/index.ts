@@ -17,6 +17,7 @@ import whitelistRoutes from './routes/whitelist';
 import disputeRoutes from './routes/dispute';
 import githubRoutes from './routes/github';
 import backupRoutes from './routes/backup';
+import databaseRoutes from './routes/database';
 import slowTrackRoutes from './routes/slowTrack';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
@@ -74,6 +75,7 @@ app.use('/api/whitelist', whitelistRoutes);
 app.use('/api/dispute', disputeRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/database', databaseRoutes);
 app.use('/api/slow-track', slowTrackRoutes);
 
 app.get('/health', (_req, res) => {
