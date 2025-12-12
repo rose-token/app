@@ -254,16 +254,30 @@ export async function startStakerIndexer(): Promise<void> {
     stats.activeStakers = parseInt(activeResult.rows[0].active);
 
     // Listen for new events
-    governance.on('Deposited', (user: string, amount: bigint, event: ethers.Log) => {
-      handleDeposit(user, amount, event.blockNumber).catch((err) => {
+    governance.on('Deposited', async (user: string, amount: bigint, event: ethers.EventLog) => {
+      try {
+        let blockNumber = event.blockNumber;
+        if (blockNumber === null || blockNumber === undefined) {
+          console.warn(`[StakerIndexer] Block number not available for Deposited event, fetching current block`);
+          blockNumber = await getProvider().getBlockNumber();
+        }
+        await handleDeposit(user, amount, blockNumber);
+      } catch (err) {
         console.error('[StakerIndexer] Error in deposit handler:', err);
-      });
+      }
     });
 
-    governance.on('Withdrawn', (user: string, amount: bigint, event: ethers.Log) => {
-      handleWithdrawal(user, amount, event.blockNumber).catch((err) => {
+    governance.on('Withdrawn', async (user: string, amount: bigint, event: ethers.EventLog) => {
+      try {
+        let blockNumber = event.blockNumber;
+        if (blockNumber === null || blockNumber === undefined) {
+          console.warn(`[StakerIndexer] Block number not available for Withdrawn event, fetching current block`);
+          blockNumber = await getProvider().getBlockNumber();
+        }
+        await handleWithdrawal(user, amount, blockNumber);
+      } catch (err) {
         console.error('[StakerIndexer] Error in withdrawal handler:', err);
-      });
+      }
     });
 
     stats.isRunning = true;
