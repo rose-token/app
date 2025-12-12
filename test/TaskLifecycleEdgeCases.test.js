@@ -190,8 +190,7 @@ describe("Task Lifecycle Edge Cases", function () {
     // 15. Stakeholder needs vROSE for staking - deposit ROSE to governance
     const stakeholderVRoseAmount = ethers.parseEther("10000");
     await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
-    const repAttest = await getRepAttestation(stakeholder);
-    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
   });
 
   it("Should not allow creating a task with zero deposit", async function() {
@@ -259,8 +258,7 @@ describe("Task Lifecycle Edge Cases", function () {
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await governance.getAddress(), ethers.parseEther("1"));
-    const custRepAttest = await getRepAttestation(customer);
-    await governance.connect(customer).deposit(ethers.parseEther("1"), custRepAttest.reputation, custRepAttest.expiry, custRepAttest.signature);
+    await governance.connect(customer).deposit(ethers.parseEther("1"));
     await vRose.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
 
     const stakeExpiry = await getFutureExpiry();
@@ -319,8 +317,7 @@ describe("Task Lifecycle Edge Cases", function () {
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
     await roseToken.connect(customer).approve(await governance.getAddress(), ethers.parseEther("1"));
-    const custRepAttest2 = await getRepAttestation(customer);
-    await governance.connect(customer).deposit(ethers.parseEther("1"), custRepAttest2.reputation, custRepAttest2.expiry, custRepAttest2.signature);
+    await governance.connect(customer).deposit(ethers.parseEther("1"));
     await vRose.connect(customer).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
 
     const custStakeExpiry = await getFutureExpiry();
