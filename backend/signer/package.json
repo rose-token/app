@@ -13,6 +13,7 @@
   "dependencies": {
     "@octokit/app": "^13.1.8",
     "@octokit/rest": "^19.0.13",
+    "@openzeppelin/merkle-tree": "^1.0.7",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

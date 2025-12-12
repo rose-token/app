@@ -189,8 +189,7 @@ describe("Task Detailed Description", function () {
     // 15. Stakeholder needs vROSE for staking - deposit ROSE to governance
     const stakeholderVRoseAmount = ethers.parseEther("10000");
     await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
-    const repAttest = await getRepAttestation(stakeholder);
-    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
   });
 
   it("Should create a task with mandatory IPFS hash", async function () {

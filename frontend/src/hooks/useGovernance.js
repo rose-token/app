@@ -84,13 +84,11 @@ export const useGovernance = () => {
   const [error, setError] = useState(null);
 
   // VP data from backend API
+  // Note: delegatedOut, proposalVPLocked, activeProposal removed - use useDelegation and useAvailableVP
   const [vpData, setVpData] = useState({
     stakedRose: '0',
     votingPower: '0',
     availableVP: '0',
-    delegatedOut: '0',
-    proposalVPLocked: '0',
-    activeProposal: 0,
   });
 
   // Total system VP from backend
@@ -249,8 +247,6 @@ export const useGovernance = () => {
     const stakedRoseRaw = BigInt(vpData.stakedRose || '0');
     const votingPowerRaw = BigInt(vpData.votingPower || '0');
     const availableVPRaw = BigInt(vpData.availableVP || '0');
-    const delegatedOutRaw = BigInt(vpData.delegatedOut || '0');
-    const proposalVPLockedRaw = BigInt(vpData.proposalVPLocked || '0');
 
     return {
       // VP data from backend
@@ -260,11 +256,6 @@ export const useGovernance = () => {
       votingPowerRaw,
       availableVP: formatUnits(availableVPRaw, 9),
       availableVPRaw,
-      delegatedOut: formatUnits(delegatedOutRaw, 9),
-      delegatedOutRaw,
-      proposalVPLocked: formatUnits(proposalVPLockedRaw, 9),
-      proposalVPLockedRaw,
-      activeProposal: vpData.activeProposal || 0,
 
       // Token balances from contract
       vRoseBalance: formatUnits(vRoseBalance, 18),

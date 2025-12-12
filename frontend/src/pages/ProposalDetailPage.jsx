@@ -10,6 +10,9 @@ import {
   ProposalStatus,
   ProposalStatusLabels,
   ProposalStatusColors,
+  Track,
+  TrackLabels,
+  TrackColors,
   formatVotePower,
 } from '../constants/contracts';
 import useProposals from '../hooks/useProposals';
@@ -30,8 +33,10 @@ const ProposalDetailPage = () => {
     error,
     actionLoading,
     vote,
+    voteFast,
+    voteSlow,
     voteCombined,
-    unvote,
+    freeVP,
     finalizeProposal,
     executeProposal,
     cancelProposal,
@@ -92,12 +97,13 @@ const ProposalDetailPage = () => {
     );
   }
 
+  const isPending = proposal.status === ProposalStatus.Pending; // Fast Track waiting for merkle root
   const isActive = proposal.status === ProposalStatus.Active;
   const isPassed = proposal.status === ProposalStatus.Passed;
   const isExecuted = proposal.status === ProposalStatus.Executed;
   const canFinalize = isActive && proposal.isExpired;
   const canExecute = isPassed;
-  const canCancel = isActive && proposal.isProposer;
+  const canCancel = (isPending || isActive) && proposal.isProposer;
 
   return (
     <div className="animate-fade-in">
@@ -121,15 +127,28 @@ const ProposalDetailPage = () => {
                 </span>
                 <h1 className="text-2xl font-bold mt-1">{proposal.title}</h1>
               </div>
-              <span
-                className="px-3 py-1 rounded-full text-sm font-medium"
-                style={{
-                  backgroundColor: `${ProposalStatusColors[proposal.status]}20`,
-                  color: ProposalStatusColors[proposal.status],
-                }}
-              >
-                {ProposalStatusLabels[proposal.status]}
-              </span>
+              <div className="flex items-center gap-2">
+                {/* Track Badge */}
+                <span
+                  className="px-3 py-1 rounded-full text-sm font-medium"
+                  style={{
+                    backgroundColor: proposal.track === Track.Fast ? 'rgba(14, 165, 233, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                    color: TrackColors[proposal.track ?? Track.Slow],
+                  }}
+                >
+                  {TrackLabels[proposal.track ?? Track.Slow]}
+                </span>
+                {/* Status Badge */}
+                <span
+                  className="px-3 py-1 rounded-full text-sm font-medium"
+                  style={{
+                    backgroundColor: `${ProposalStatusColors[proposal.status]}20`,
+                    color: ProposalStatusColors[proposal.status],
+                  }}
+                >
+                  {ProposalStatusLabels[proposal.status]}
+                </span>
+              </div>
             </div>
 
             {/* Proposer */}
@@ -267,15 +286,34 @@ const ProposalDetailPage = () => {
           {/* Vote Panel */}
           <VotePanel
             proposalId={proposal.id}
+            track={proposal.track ?? Track.Slow}
             hasVoted={proposal.hasVoted}
             userVote={proposal.userVote}
             isProposer={proposal.isProposer}
             isActive={isActive}
             onVote={vote}
+            onVoteFast={voteFast}
+            onVoteSlow={voteSlow}
             onVoteCombined={voteCombined}
-            onUnvote={unvote}
-            loading={actionLoading[`vote-${proposal.id}`] || actionLoading[`unvote-${proposal.id}`]}
+            onFreeVP={freeVP}
+            loading={actionLoading[`vote-${proposal.id}`] || actionLoading[`freeVP-${proposal.id}`]}
           />
+
+          {/* Pending Notice for Fast Track */}
+          {isPending && proposal.track === Track.Fast && (
+            <div
+              className="card"
+              style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)' }}
+            >
+              <h3 className="font-semibold mb-2" style={{ color: 'var(--warning)' }}>
+                Pending Activation
+              </h3>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                This Fast Track proposal is waiting for the VP snapshot to be computed.
+                Voting will begin once the merkle root is set (typically within 24 hours).
+              </p>
+            </div>
+          )}
 
           {/* Admin Actions */}
           {(canFinalize || canExecute || canCancel) && (

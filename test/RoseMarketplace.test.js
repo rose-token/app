@@ -209,8 +209,7 @@ describe("RoseMarketplace", function () {
     // This gives stakeholder vROSE tokens (1:1 with ROSE deposited)
     const stakeholderVRoseAmount = ethers.parseEther("10000");
     await roseToken.connect(stakeholder).approve(await governance.getAddress(), stakeholderVRoseAmount);
-    const repAttest = await getRepAttestation(stakeholder);
-    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
+    await governance.connect(stakeholder).deposit(stakeholderVRoseAmount);
   });
 
   describe("Deployment", function () {
@@ -987,8 +986,7 @@ describe("RoseMarketplace", function () {
       // Deposit ROSE to governance to get vROSE
       const vRoseAmount = ethers.parseEther("1");
       await roseToken.connect(secondStakeholder).approve(await governance.getAddress(), vRoseAmount);
-      const repAttest = await getRepAttestation(secondStakeholder);
-      await governance.connect(secondStakeholder).deposit(vRoseAmount, repAttest.reputation, repAttest.expiry, repAttest.signature);
+      await governance.connect(secondStakeholder).deposit(vRoseAmount);
 
       await vRose.connect(secondStakeholder).approve(await roseMarketplace.getAddress(), stakeholderDeposit);
       const stake2Expiry = await getFutureExpiry();

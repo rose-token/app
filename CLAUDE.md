@@ -75,13 +75,35 @@ Web3 marketplace with task-value-based token distribution.
    - Once assets equalize, splits remaining shortfall equally among them
    - Example: BTC=$150k, GOLD=$50k, need $150k → sell $125k BTC, $25k GOLD → both end at $25k
 
-## Governance System
+## Governance System (Two-Track)
 
 **VP:** `√(stakedRose) × reputation` where reputation = `(success-dispute)/success×100` using ^0.6 sublinear points
 
-**Liquid Democracy:** Max depth 1. `delegationNonce` prevents stale signatures. `delegatedUsedTotal` = global VP budget across proposals. `delegatorVoteContribution[proposal][delegate][delegator]` = on-chain allocations.
+**Two Tracks:**
+| Track | Duration | Quorum | VP Model | Treasury Limit |
+|-------|----------|--------|----------|----------------|
+| Fast | 3 days | 10% | Abundant (vote full VP on multiple proposals) | ≤1% of treasury |
+| Slow | 14 days | 25% | Scarce (VP is budget across proposals) | Any amount |
 
-**Lifecycle:** Active → 2wk voting → Passed/Failed. Quorum miss resets timer. Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
+**Fast Track Flow:**
+1. Proposal created (status: Pending)
+2. Backend computes VP snapshot after `snapshotDelay` (1 day)
+3. Backend submits merkle root via `setVPMerkleRoot()`
+4. Proposal activates, voting begins
+5. Users vote with merkle proof of their VP
+6. Voting ends → Backend auto-calls `finalizeProposal()` → Pass/Fail
+
+**Slow Track Flow:**
+1. Proposal created (status: Active, voting starts immediately)
+2. Users request attestation of available VP from backend
+3. Backend tracks allocations across proposals
+4. Users vote with backend-signed attestation
+5. Voting ends → Backend computes VP snapshot at deadline
+6. Backend calls `finalizeSlowProposal(merkleRoot, totalVP, sig)` → Pass/Fail
+
+**Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
+
+**Lifecycle:** Active → voting period → Passed/Failed. Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
 
 **Two-token:** ROSE locked in governance, vROSE as 1:1 receipt for stakeholder escrow.
 
@@ -141,8 +163,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Category | Endpoints |
 |----------|-----------|
 | Passport | `/api/passport/verify`, `/score/:addr`, `/signer` |
-| Governance | `/api/governance/vp/:addr`, `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
+| Governance | `/api/governance/vp/:addr`, `/vp/available/:addr` (Slow Track alias), `/vp/attestation` (POST, Slow Track alias), `/proposals/:id/proof/:addr` (Fast Track merkle proof), `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
 | Delegation | `/api/delegation/vote-signature`, `/confirm-vote`, `/claim-signature`, `/claimable/:user`, `/undelegate-signature`, `/global-power/:delegate`, `/confirm-undelegate` |
+| Delegation V2 | `/api/delegation/v2/store` (POST), `/v2/user/:addr`, `/v2/received/:delegate`, `/v2/revoke` (POST, signed), `/v2/nonce/:addr`, `/v2/opt-in/:addr`, `/v2/stats`, `/v2/eip712-config/:chainId` (Off-chain EIP-712 delegations) |
 | Reconciliation | `/api/reconciliation/status`, `/last`, `/run`, `/proposal/:id`, `/sync`, `/stats` |
 | Delegate Scoring | `/api/delegate-scoring/score/:delegate`, `/eligibility/:delegate`, `/leaderboard`, `/stats`, `/run` |
 | VP Refresh | `/api/vp-refresh/stats`, `/pending`, `/config`, `/check/:addr`, `/process` |
@@ -152,6 +175,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
 | Dispute | `/api/dispute/list`, `/api/dispute/stats`, `/api/dispute/:taskId` (admin queries, on-chain events synced to DB) |
 | Backup | `/api/backup/create`, `/status`, `/restore` (owner-only, pg_dump → Pinata Hot Swaps) |
+| Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
 
 ## Backend Services
 
@@ -159,9 +183,13 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 |---------|---------|
 | governance.ts | VP calculation, reputation attestation |
 | delegation.ts | Allocations, delegated votes, claims, vote reductions |
+| delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
 | reconciliation.ts | DB↔chain sync, discrepancy auto-fix |
 | delegateScoring.ts | Win/loss tracking, eligibility gating |
 | vpRefresh.ts | Auto-refresh VP on reputation changes |
+| stakerIndexer.ts | Watch `Deposited`/`Withdrawn`, maintain staker cache |
+| vpSnapshot.ts | Compute VP snapshots, build merkle trees, generate proofs |
+| snapshotWatcher.ts | Watch `ProposalCreated`, schedule/submit VP snapshots; Auto-finalize proposals at deadline |
 | lifi.ts | Swap quotes, diversification, testnet mock |
 | treasury.ts | Rebalance orchestration, vault status |
 | depositWatcher.ts | Watch `Deposited`, diversify |
@@ -170,6 +198,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | auction.ts | Off-chain bids, winner selection |
 | dispute.ts | Dispute queries, on-chain event recording |
 | backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
+| allocations.ts | Slow Track VP allocation tracking, attestation signing |
+| slowTrackWatcher.ts | Watch `VoteCastSlow`/`ProposalFinalized`, sync allocations to DB |
 
 ## Scheduled Jobs
 
@@ -180,14 +210,18 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Reconciliation | Every 6h | DB↔chain sync |
 | Delegate Scoring | Every 1h | Score proposals, free VP |
 | VP Refresh | Event-driven | ReputationChanged → refresh |
+| Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
+| Snapshot Watcher | Event-driven + 60s poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline |
+| Staker Validation | Weekly Sun 03:00 UTC | Verify staker cache matches on-chain |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
 | Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
+| Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
 
 ## Database Tables
 
-`profiles`, `nav_history`, `delegation_allocations`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`
+`profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`
 
 ## Token Decimals
 
@@ -210,6 +244,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegation | `RECONCILIATION_CRON_SCHEDULE`, `RECONCILIATION_ON_STARTUP`, `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
 | VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
 | Dispute Watcher | `DISPUTE_WATCHER_ENABLED` (default: true), `DISPUTE_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
+| Staker Indexer | `STAKER_INDEXER_ENABLED` (true), `STAKER_INDEXER_STARTUP_LOOKBACK` (10000), `STAKER_VALIDATION_CRON` (weekly Sun 03:00 UTC) |
+| Snapshot Watcher | `SNAPSHOT_WATCHER_ENABLED` (true), `SNAPSHOT_WATCHER_STARTUP_LOOKBACK` (10000), `SNAPSHOT_WATCHER_COMPUTE_BUFFER` (300s), `SNAPSHOT_WATCHER_EXECUTE` (true) |
+| Slow Track Watcher | `SLOW_TRACK_WATCHER_ENABLED` (true), `SLOW_TRACK_WATCHER_STARTUP_LOOKBACK` (10000) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`

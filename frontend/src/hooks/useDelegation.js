@@ -1,14 +1,19 @@
 /**
- * Delegation hook for managing VP delegation (multi-delegation support)
- * Handles delegating VP to multiple delegates and receiving delegations
+ * Delegation hook for managing VP delegation (off-chain EIP-712 signatures)
  *
- * VP-centric model: Users delegate VP (not ROSE). VP can be split across
- * multiple delegates. Each delegator-delegate pair has its own VP amount.
+ * Uses V2 off-chain delegation system:
+ * - Delegations are EIP-712 signed messages stored in backend database
+ * - Delegations are applied during VP snapshot computation for Fast Track proposals
+ * - Delegates must opt-in on-chain via setDelegateOptIn(true)
+ *
+ * Eligibility to receive delegations requires BOTH:
+ * - 90%+ reputation + 10 completed tasks (from RoseReputation.canDelegate)
+ * - Opt-in enabled (isDelegateOptedIn on RoseGovernance)
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useAccount, useReadContracts, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
-import { formatUnits, parseUnits } from 'viem';
+import { useAccount, useReadContracts, useWriteContract, usePublicClient, useSignTypedData, useSignMessage, useChainId } from 'wagmi';
+import { formatUnits, parseUnits, keccak256, encodePacked, toBytes, getAddress } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import { CONTRACTS } from '../constants/contracts';
@@ -17,27 +22,36 @@ import { GAS_SETTINGS } from '../constants/gas';
 // Backend signer URL
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
+// Default delegation expiry (30 days in seconds)
+const DEFAULT_DELEGATION_EXPIRY_SECONDS = 30 * 24 * 60 * 60;
+
 /**
- * Hook for managing VP delegation (multi-delegation)
+ * Hook for managing VP delegation (off-chain EIP-712)
  * @returns {Object} Delegation state and actions
  */
 export const useDelegation = () => {
   const { address: account, isConnected } = useAccount();
+  const chainId = useChainId();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
+  const { signMessageAsync } = useSignMessage();
 
-  // Multi-delegation: array of {delegate, vpAmount}
+  // V2 delegation state (from backend)
   const [delegations, setDelegations] = useState([]);
-  // Delegators who delegated to this user: array of {delegator, vpAmount}
   const [receivedDelegations, setReceivedDelegations] = useState([]);
+  const [isOptedIn, setIsOptedIn] = useState(false);
+
+  // EIP-712 config (fetched from backend)
+  const [eip712Config, setEip712Config] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState({
     delegate: false,
-    undelegate: false,
-    undelegateAll: false,
-    delegatedVote: false,
+    revoke: false,
+    revokeAll: false,
+    toggleOptIn: false,
     claimRewards: false,
   });
 
@@ -46,34 +60,13 @@ export const useDelegation = () => {
   const [claimableLoading, setClaimableLoading] = useState(false);
 
   // Get user's VP and delegation info from contract
-  const { data: delegationData, refetch: refetchDelegation } = useReadContracts({
+  const { data: contractData, refetch: refetchContract } = useReadContracts({
     contracts: [
       // User's voting power
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'votingPower',
-        args: [account],
-      },
-      // Total VP delegated out by user
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'totalDelegatedOut',
-        args: [account],
-      },
-      // Total VP delegated TO user (received)
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'totalDelegatedIn',
-        args: [account],
-      },
-      // User's available VP
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'getAvailableVP',
         args: [account],
       },
       // User's staked ROSE
@@ -83,7 +76,7 @@ export const useDelegation = () => {
         functionName: 'stakedRose',
         args: [account],
       },
-      // Check if user can be a delegate (from RoseReputation)
+      // Check if user can be a delegate (from RoseReputation - 90%+ rep + 10 tasks)
       {
         address: CONTRACTS.REPUTATION,
         abi: RoseReputationABI,
@@ -97,11 +90,18 @@ export const useDelegation = () => {
         functionName: 'getReputation',
         args: [account],
       },
-      // VP locked to proposal
+      // User's opt-in status for receiving delegations
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'proposalVPLocked',
+        functionName: 'isDelegateOptedIn',
+        args: [account],
+      },
+      // Combined eligibility check (reputation + opt-in + stake)
+      {
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canReceiveDelegation',
         args: [account],
       },
     ],
@@ -111,16 +111,40 @@ export const useDelegation = () => {
   });
 
   /**
-   * Fetch user's delegations from backend API
+   * Fetch EIP-712 configuration from backend
+   */
+  const fetchEIP712Config = useCallback(async () => {
+    if (!chainId) return;
+
+    try {
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/eip712-config/${chainId}`);
+      if (response.ok) {
+        const config = await response.json();
+        setEip712Config(config);
+      }
+    } catch (err) {
+      console.error('Failed to fetch EIP-712 config:', err);
+    }
+  }, [chainId]);
+
+  /**
+   * Fetch user's delegations from V2 backend API
    */
   const fetchDelegations = useCallback(async () => {
     if (!account) return;
 
     try {
-      const response = await fetch(`${SIGNER_URL}/api/governance/delegations/${account}`);
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/user/${account}`);
       if (response.ok) {
         const data = await response.json();
-        setDelegations(data.delegations || []);
+        // Transform to match existing format
+        const formatted = (data.delegations || []).map(d => ({
+          delegate: d.delegate,
+          vpAmount: d.vpAmount, // Keep as string
+          nonce: d.nonce,
+          expiry: d.expiry,
+        }));
+        setDelegations(formatted);
       }
     } catch (err) {
       console.error('Failed to fetch delegations:', err);
@@ -134,95 +158,116 @@ export const useDelegation = () => {
     if (!account) return;
 
     try {
-      const response = await fetch(`${SIGNER_URL}/api/governance/received/${account}`);
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/received/${account}`);
       if (response.ok) {
         const data = await response.json();
-        setReceivedDelegations(data.delegators || []);
+        // Transform to match existing format
+        const formatted = (data.delegations || []).map(d => ({
+          delegator: d.delegator,
+          vpAmount: d.vpAmount, // Keep as string
+          nonce: d.nonce,
+          expiry: d.expiry,
+        }));
+        setReceivedDelegations(formatted);
       }
     } catch (err) {
       console.error('Failed to fetch received delegations:', err);
     }
   }, [account]);
 
-  // Fetch delegations on mount and account change
-  useEffect(() => {
-    if (account) {
-      fetchDelegations();
-      fetchReceivedDelegations();
-      setIsLoading(false);
-    }
-  }, [account, fetchDelegations, fetchReceivedDelegations]);
+  /**
+   * Fetch user's opt-in status from V2 backend
+   */
+  const fetchOptInStatus = useCallback(async () => {
+    if (!account) return;
 
-  // Parse delegation data from contract
-  const parsedDelegation = useMemo(() => {
-    if (!delegationData) return null;
+    try {
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/opt-in/${account}`);
+      if (response.ok) {
+        const data = await response.json();
+        setIsOptedIn(data.optedIn || false);
+      }
+    } catch (err) {
+      console.error('Failed to fetch opt-in status:', err);
+    }
+  }, [account]);
+
+  // Fetch all delegation data on mount and account/chain change
+  useEffect(() => {
+    if (account && chainId) {
+      Promise.all([
+        fetchEIP712Config(),
+        fetchDelegations(),
+        fetchReceivedDelegations(),
+        fetchOptInStatus(),
+      ]).finally(() => setIsLoading(false));
+    }
+  }, [account, chainId, fetchEIP712Config, fetchDelegations, fetchReceivedDelegations, fetchOptInStatus]);
+
+  // Parse contract data
+  const parsedData = useMemo(() => {
+    if (!contractData) return null;
 
     const getResult = (index) => {
-      const result = delegationData[index];
+      const result = contractData[index];
       return result?.status === 'success' ? result.result : null;
     };
 
     const votingPower = getResult(0) || 0n;
-    const totalDelegatedOut = getResult(1) || 0n;
-    const totalDelegatedIn = getResult(2) || 0n;
-    const availableVP = getResult(3) || 0n;
-    const stakedRose = getResult(4) || 0n;
-    const canDelegate = getResult(5) || false;
-    const reputation = getResult(6) || 6000n;
-    const proposalVPLocked = getResult(7) || 0n;
+    const stakedRose = getResult(1) || 0n;
+    const canDelegateRep = getResult(2) || false; // From RoseReputation
+    const reputation = getResult(3) || 6000n;
+    const isDelegateOptedInContract = getResult(4) || false;
+    const canReceiveDelegation = getResult(5) || false; // Combined check
 
-    // Calculate total received VP (for display)
-    const totalReceivedVP = receivedDelegations.reduce(
+    // Calculate total delegated out from V2 delegations
+    const totalDelegatedOutRaw = delegations.reduce(
       (sum, d) => sum + BigInt(d.vpAmount || '0'),
       0n
     );
+
+    // Calculate total received VP
+    const totalReceivedVPRaw = receivedDelegations.reduce(
+      (sum, d) => sum + BigInt(d.vpAmount || '0'),
+      0n
+    );
+
+    // Available VP = voting power - delegated out
+    const availableVPRaw = votingPower > totalDelegatedOutRaw
+      ? votingPower - totalDelegatedOutRaw
+      : 0n;
 
     return {
       // VP data (VP has 9 decimals from sqrt calculation)
       votingPower: formatUnits(votingPower, 9),
       votingPowerRaw: votingPower,
-      availableVP: formatUnits(availableVP, 9),
-      availableVPRaw: availableVP,
-      totalDelegatedOut: formatUnits(totalDelegatedOut, 9),
-      totalDelegatedOutRaw: totalDelegatedOut,
-      totalDelegatedIn: formatUnits(totalDelegatedIn, 9),
-      totalDelegatedInRaw: totalDelegatedIn,
-      proposalVPLocked: formatUnits(proposalVPLocked, 9),
-      proposalVPLockedRaw: proposalVPLocked,
+      availableVP: formatUnits(availableVPRaw, 9),
+      availableVPRaw: availableVPRaw,
+      totalDelegatedOut: formatUnits(totalDelegatedOutRaw, 9),
+      totalDelegatedOutRaw: totalDelegatedOutRaw,
+      totalReceivedVP: formatUnits(totalReceivedVPRaw, 9),
+      totalReceivedVPRaw: totalReceivedVPRaw,
 
       // Staking data
       stakedRose: formatUnits(stakedRose, 18),
       stakedRoseRaw: stakedRose,
 
-      // Eligibility
-      canDelegate,
+      // Eligibility (combined: reputation + opt-in)
+      canDelegate: canDelegateRep, // Reputation-based eligibility
+      canReceiveDelegation, // Combined eligibility (reputation + opt-in + stake)
       reputation: Number(reputation),
       reputationRaw: Number(reputation),
+      isDelegateOptedIn: isDelegateOptedInContract,
 
       // Delegation arrays
       delegations, // Outgoing delegations
       receivedDelegations, // Incoming delegations
-      totalReceivedVP: formatUnits(totalReceivedVP, 9),
-      totalReceivedVPRaw: totalReceivedVP,
       delegatorCount: receivedDelegations.length,
 
       // Legacy compatibility
       isDelegating: delegations.length > 0,
     };
-  }, [delegationData, delegations, receivedDelegations]);
-
-  // Watch for delegation events
-  useWatchContractEvent({
-    address: CONTRACTS.GOVERNANCE,
-    abi: RoseGovernanceABI,
-    eventName: 'DelegationChanged',
-    onLogs: () => {
-      refetchDelegation();
-      fetchDelegations();
-      fetchReceivedDelegations();
-    },
-    enabled: !!CONTRACTS.GOVERNANCE,
-  });
+  }, [contractData, delegations, receivedDelegations]);
 
   /**
    * Fetch signed reputation attestation from backend
@@ -237,14 +282,13 @@ export const useDelegation = () => {
   }, [account]);
 
   /**
-   * Delegate VP to another user (multi-delegation)
-   * Requires reputation attestation for voter eligibility check
+   * Delegate VP to another user using EIP-712 off-chain signature
    * @param {string} delegateAddress - Address to delegate to
-   * @param {string} vpAmount - Amount of VP to delegate
+   * @param {string} vpAmount - Amount of VP to delegate (human-readable)
    */
   const delegateTo = useCallback(async (delegateAddress, vpAmount) => {
-    if (!isConnected || !CONTRACTS.GOVERNANCE) {
-      throw new Error('Not connected');
+    if (!isConnected || !account || !eip712Config) {
+      throw new Error('Not connected or EIP-712 config not loaded');
     }
 
     setActionLoading(prev => ({ ...prev, delegate: true }));
@@ -258,93 +302,130 @@ export const useDelegation = () => {
         throw new Error('Cannot delegate to yourself');
       }
 
-      if (parsedDelegation && vpWei > parsedDelegation.availableVPRaw) {
+      if (vpWei <= 0n) {
+        throw new Error('VP amount must be greater than 0');
+      }
+
+      if (parsedData && vpWei > parsedData.availableVPRaw) {
         throw new Error('Insufficient available VP');
       }
 
-      // Fetch reputation attestation from backend
-      console.log('Fetching reputation attestation...');
-      const repAttestation = await fetchReputationAttestation();
-      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
+      // 1. Fetch next nonce from backend
+      console.log('Fetching next nonce...');
+      const nonceResponse = await fetch(`${SIGNER_URL}/api/delegation/v2/nonce/${account}`);
+      if (!nonceResponse.ok) {
+        throw new Error('Failed to fetch nonce');
+      }
+      const { nextNonce } = await nonceResponse.json();
+      console.log('Next nonce:', nextNonce);
 
-      console.log(`Delegating ${vpAmount} VP to ${delegateAddress}...`);
-      const hash = await writeContractAsync({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'delegate',
-        args: [
-          delegateAddress,
-          vpWei,
-          BigInt(repAttestation.reputation),
-          BigInt(repAttestation.expiry),
-          repAttestation.signature,
-        ],
-        ...GAS_SETTINGS,
+      // 2. Calculate expiry (30 days from now)
+      const expiry = Math.floor(Date.now() / 1000) + DEFAULT_DELEGATION_EXPIRY_SECONDS;
+
+      // 3. Sign EIP-712 typed data
+      console.log('Signing delegation...');
+      const signature = await signTypedDataAsync({
+        domain: eip712Config.domain,
+        types: eip712Config.types,
+        primaryType: 'Delegation',
+        message: {
+          delegator: getAddress(account),
+          delegate: getAddress(delegateAddress),
+          vpAmount: vpWei,
+          nonce: BigInt(nextNonce),
+          expiry: BigInt(expiry),
+        },
       });
+      console.log('Signature obtained');
 
-      await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-
-      console.log('Delegation successful!');
-      await Promise.all([
-        refetchDelegation(),
-        fetchDelegations(),
-      ]);
-      return { success: true, hash };
-    } catch (err) {
-      console.error('Delegate error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('CannotDelegateToSelf')
-        ? 'Cannot delegate to yourself'
-        : err.message.includes('InsufficientAvailableVP')
-        ? 'Insufficient available VP'
-        : err.message.includes('IneligibleToDelegate')
-        ? 'Target user is not eligible to receive delegation'
-        : err.message.includes('IneligibleToVote')
-        ? 'You are not eligible to delegate (need 70%+ reputation)'
-        : err.message.includes('DelegateIneligible')
-        ? 'Target has insufficient reputation to be a delegate'
-        : err.message.includes('DelegationChainNotAllowed')
-        ? 'Delegation chains not allowed. You cannot be both a delegator and delegate.'
-        : err.message;
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(prev => ({ ...prev, delegate: false }));
-    }
-  }, [isConnected, account, parsedDelegation, writeContractAsync, publicClient, refetchDelegation, fetchDelegations, fetchReputationAttestation]);
-
-  /**
-   * Remove delegation from a specific delegate (auto-detects active votes)
-   * Uses /undelegate-signature to detect active votes and get reduction signature in one call.
-   * If reductions exist, uses undelegateWithVoteReduction; otherwise simple undelegate.
-   * @param {string} delegateAddress - Address to undelegate from
-   * @param {string} vpAmount - Amount of VP to undelegate
-   */
-  const undelegateFrom = useCallback(async (delegateAddress, vpAmount) => {
-    if (!isConnected || !CONTRACTS.GOVERNANCE) {
-      throw new Error('Not connected');
-    }
-
-    setActionLoading(prev => ({ ...prev, [`undelegate-${delegateAddress}`]: true }));
-    setError(null);
-
-    try {
-      const vpWei = parseUnits(vpAmount, 9);
-
-      console.log(`Requesting undelegate signature for ${vpAmount} VP from ${delegateAddress}...`);
-
-      // Step 1: Get signature and vote reductions from backend (also serves as detection)
-      const response = await fetch(`${SIGNER_URL}/api/delegation/undelegate-signature`, {
+      // 4. Store delegation via V2 API
+      console.log('Storing delegation...');
+      const storeResponse = await fetch(`${SIGNER_URL}/api/delegation/v2/store`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           delegator: account,
           delegate: delegateAddress,
           vpAmount: vpWei.toString(),
+          nonce: nextNonce,
+          expiry,
+          signature,
+        }),
+      });
+
+      if (!storeResponse.ok) {
+        const errorData = await storeResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend error: ${storeResponse.status}`);
+      }
+
+      console.log('Delegation stored successfully!');
+
+      // 5. Refresh delegation state
+      await Promise.all([
+        fetchDelegations(),
+        refetchContract(),
+      ]);
+
+      return { success: true };
+    } catch (err) {
+      console.error('Delegate error:', err);
+      const message = err.message.includes('User rejected')
+        ? 'Signature rejected'
+        : err.message.includes('Cannot delegate to yourself')
+        ? 'Cannot delegate to yourself'
+        : err.message.includes('Insufficient available VP')
+        ? 'Insufficient available VP'
+        : err.message.includes('not opted in')
+        ? 'Delegate has not opted in to receive delegations'
+        : err.message.includes('Invalid nonce')
+        ? 'Please try again (nonce conflict)'
+        : err.message;
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, delegate: false }));
+    }
+  }, [isConnected, account, eip712Config, parsedData, signTypedDataAsync, fetchDelegations, refetchContract]);
+
+  /**
+   * Revoke delegation to a specific delegate using signed revocation
+   * @param {string} delegateAddress - Address to revoke delegation from
+   */
+  const revokeDelegation = useCallback(async (delegateAddress) => {
+    if (!isConnected || !account) {
+      throw new Error('Not connected');
+    }
+
+    setActionLoading(prev => ({ ...prev, [`revoke-${delegateAddress}`]: true }));
+    setError(null);
+
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Sign revocation message: keccak256("REVOKE_DELEGATION", delegator, delegate, timestamp)
+      console.log('Signing revocation...');
+      const messageHash = keccak256(
+        encodePacked(
+          ['string', 'address', 'address', 'uint256'],
+          ['REVOKE_DELEGATION', account, delegateAddress, BigInt(timestamp)]
+        )
+      );
+
+      const signature = await signMessageAsync({
+        message: { raw: toBytes(messageHash) },
+      });
+      console.log('Revocation signature obtained');
+
+      // Call V2 revoke API
+      console.log('Revoking delegation...');
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegator: account,
+          delegate: delegateAddress,
+          timestamp,
+          signature,
         }),
       });
 
@@ -353,177 +434,117 @@ export const useDelegation = () => {
         throw new Error(errorData.error || `Backend error: ${response.status}`);
       }
 
-      const { reductions, expiry, signature } = await response.json();
-      let hash;
+      console.log('Delegation revoked successfully!');
 
-      // Step 2: Choose contract method based on whether there are active votes
-      if (reductions.length > 0) {
-        // Use undelegateWithVoteReduction when there are active votes
-        console.log(`Undelegating ${vpAmount} VP with ${reductions.length} vote reduction(s)...`);
-        hash = await writeContractAsync({
-          address: CONTRACTS.GOVERNANCE,
-          abi: RoseGovernanceABI,
-          functionName: 'undelegateWithVoteReduction',
-          args: [
-            delegateAddress,
-            vpWei,
-            reductions.map(r => [
-              BigInt(r.proposalId),
-              r.delegate,
-              BigInt(r.vpToRemove),
-              r.support,
-            ]),
-            BigInt(expiry),
-            signature,
-          ],
-          ...GAS_SETTINGS,
-        });
-
-        await publicClient.waitForTransactionReceipt({
-          hash,
-          confirmations: 1,
-        });
-
-        console.log('Undelegation with vote reduction successful!');
-
-        // Step 3: Confirm with backend to clear DB allocations
-        const affectedProposalIds = reductions.map(r => r.proposalId);
-        try {
-          await fetch(`${SIGNER_URL}/api/delegation/confirm-undelegate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              delegator: account,
-              delegate: delegateAddress,
-              proposalIds: affectedProposalIds,
-            }),
-          });
-          console.log('DB allocations cleared');
-        } catch (confirmErr) {
-          console.warn('Failed to confirm undelegate:', confirmErr);
-          // Non-fatal - tx succeeded, cron will reconcile
-        }
-      } else {
-        // Simple undelegate when no active votes (signature not needed)
-        console.log(`Simple undelegating ${vpAmount} VP from ${delegateAddress}...`);
-        hash = await writeContractAsync({
-          address: CONTRACTS.GOVERNANCE,
-          abi: RoseGovernanceABI,
-          functionName: 'undelegate',
-          args: [delegateAddress, vpWei],
-          ...GAS_SETTINGS,
-        });
-
-        await publicClient.waitForTransactionReceipt({
-          hash,
-          confirmations: 1,
-        });
-
-        console.log('Undelegation successful!');
-      }
-
+      // Refresh delegation state
       await Promise.all([
-        refetchDelegation(),
         fetchDelegations(),
+        refetchContract(),
       ]);
-      return { success: true, hash, reductionsApplied: reductions.length };
+
+      return { success: true };
     } catch (err) {
-      console.error('Undelegate error:', err);
+      console.error('Revoke error:', err);
       const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('InsufficientDelegated')
-        ? 'Insufficient delegated amount to undelegate'
-        : err.message.includes('SignatureExpired')
+        ? 'Signature rejected'
+        : err.message.includes('Signature expired')
         ? 'Signature expired - please try again'
-        : err.message || 'Failed to undelegate';
+        : err.message;
       setError(message);
       throw new Error(message);
     } finally {
-      setActionLoading(prev => ({ ...prev, [`undelegate-${delegateAddress}`]: false }));
+      setActionLoading(prev => ({ ...prev, [`revoke-${delegateAddress}`]: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, refetchDelegation, fetchDelegations]);
+  }, [isConnected, account, signMessageAsync, fetchDelegations, refetchContract]);
 
   /**
-   * Remove all delegation to a delegate
-   * @param {string} delegateAddress - Address to fully undelegate from
+   * Revoke all delegations using signed revocation
    */
-  const undelegateAll = useCallback(async (delegateAddress) => {
-    // Find the delegation to this delegate
-    const delegation = delegations.find(
-      d => d.delegate.toLowerCase() === delegateAddress.toLowerCase()
-    );
-
-    if (!delegation) {
-      throw new Error('No delegation found to this delegate');
+  const revokeAllDelegations = useCallback(async () => {
+    if (!isConnected || !account) {
+      throw new Error('Not connected');
     }
 
-    return undelegateFrom(delegateAddress, formatUnits(BigInt(delegation.vpAmount), 9));
-  }, [delegations, undelegateFrom]);
+    setActionLoading(prev => ({ ...prev, revokeAll: true }));
+    setError(null);
+
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Sign revocation message with null delegate (revoke all)
+      // Backend treats ZeroAddress as "revoke all"
+      const zeroAddress = '0x0000000000000000000000000000000000000000';
+      console.log('Signing revoke-all...');
+      const messageHash = keccak256(
+        encodePacked(
+          ['string', 'address', 'address', 'uint256'],
+          ['REVOKE_DELEGATION', account, zeroAddress, BigInt(timestamp)]
+        )
+      );
+
+      const signature = await signMessageAsync({
+        message: { raw: toBytes(messageHash) },
+      });
+
+      // Call V2 revoke API with null delegate
+      console.log('Revoking all delegations...');
+      const response = await fetch(`${SIGNER_URL}/api/delegation/v2/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegator: account,
+          delegate: null,
+          timestamp,
+          signature,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`Revoked ${result.revokedCount} delegation(s)`);
+
+      // Refresh delegation state
+      await Promise.all([
+        fetchDelegations(),
+        refetchContract(),
+      ]);
+
+      return { success: true, revokedCount: result.revokedCount };
+    } catch (err) {
+      console.error('Revoke all error:', err);
+      const message = err.message.includes('User rejected')
+        ? 'Signature rejected'
+        : err.message;
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, revokeAll: false }));
+    }
+  }, [isConnected, account, signMessageAsync, fetchDelegations, refetchContract]);
 
   /**
-   * Cast delegated votes on a proposal
-   * Uses backend signing for allocation computation
-   * @param {number} proposalId - Proposal ID
-   * @param {string} vpAmount - Amount of delegated VP to use
-   * @param {boolean} support - true for Yay, false for Nay
+   * Toggle opt-in status for receiving delegations (on-chain transaction)
+   * @param {boolean} optIn - True to opt in, false to opt out
    */
-  const castDelegatedVote = useCallback(async (proposalId, vpAmount, support) => {
+  const toggleOptIn = useCallback(async (optIn) => {
     if (!isConnected || !CONTRACTS.GOVERNANCE) {
       throw new Error('Not connected');
     }
 
-    setActionLoading(prev => ({ ...prev, [`delegatedVote-${proposalId}`]: true }));
+    setActionLoading(prev => ({ ...prev, toggleOptIn: true }));
     setError(null);
 
     try {
-      const vpWei = parseUnits(vpAmount, 9);
-
-      console.log(`Requesting delegated vote signature for ${vpAmount} VP on proposal ${proposalId}...`);
-
-      // Step 1: Get signature from backend
-      const response = await fetch(`${SIGNER_URL}/api/delegation/vote-signature`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          delegate: account,
-          proposalId: Number(proposalId),
-          amount: vpWei.toString(),
-          support,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Backend error: ${response.status}`);
-      }
-
-      const signatureData = await response.json();
-      console.log('Got signature from backend:', signatureData);
-
-      // Store allocations for reference
-      try {
-        const storageKey = `delegatedVoteAllocations_${proposalId}_${account}`;
-        localStorage.setItem(storageKey, JSON.stringify(signatureData.allocations));
-      } catch (storageErr) {
-        console.warn('Failed to store allocations:', storageErr);
-      }
-
-      // Step 2: Call contract with signature
-      console.log(`Casting delegated vote ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP...`);
+      console.log(`Setting delegate opt-in to ${optIn}...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'castDelegatedVote',
-        args: [
-          BigInt(proposalId),
-          BigInt(signatureData.amount),
-          support,
-          signatureData.allocationsHash,
-          signatureData.allocations.map(a => [a.delegator, BigInt(a.powerUsed)]),
-          BigInt(signatureData.nonce),
-          BigInt(signatureData.expiry),
-          signatureData.signature,
-        ],
+        functionName: 'setDelegateOptIn',
+        args: [optIn],
         ...GAS_SETTINGS,
       });
 
@@ -532,50 +553,30 @@ export const useDelegation = () => {
         confirmations: 1,
       });
 
-      console.log('Delegated vote cast successfully!');
+      console.log('Opt-in status updated!');
 
-      // Confirm vote with backend to store allocations (after tx confirmed on-chain)
-      // Pass ORIGINAL allocations from signature response to prevent state drift issues
-      // NOTE: support value is NOT sent - backend reads it from on-chain voteRecord for security
-      try {
-        await fetch(`${SIGNER_URL}/api/delegation/confirm-vote`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            delegate: account,
-            proposalId: Number(proposalId),
-            allocations: signatureData.allocations,  // Original allocations from /vote-signature
-          }),
-        });
-        console.log('Vote allocations confirmed with backend');
-      } catch (confirmErr) {
-        console.warn('Failed to confirm vote allocation:', confirmErr);
-        // Non-fatal - vote succeeded, can retry confirm later with same allocations
-      }
+      // Update local state immediately
+      setIsOptedIn(optIn);
 
-      await refetchDelegation();
-      return { success: true, hash, allocations: signatureData.allocations };
+      // Refresh contract data
+      await refetchContract();
+
+      return { success: true, hash };
     } catch (err) {
-      console.error('Delegated vote error:', err);
+      console.error('Toggle opt-in error:', err);
       const message = err.message.includes('User rejected')
         ? 'Transaction rejected'
-        : err.message.includes('InsufficientDelegatedPower')
-        ? 'Insufficient delegated VP available'
-        : err.message.includes('CannotChangeVoteDirection')
-        ? 'Cannot change vote direction on existing vote'
-        : err.message.includes('Proposal is not active')
-        ? 'Proposal is not active or voting has ended'
-        : err.message.includes('InvalidDelegationSignature')
-        ? 'Invalid signature - please try again'
-        : err.message.includes('SignatureExpired')
-        ? 'Signature expired - please try again'
-        : err.message || 'Failed to cast delegated vote';
+        : err.message;
       setError(message);
       throw new Error(message);
     } finally {
-      setActionLoading(prev => ({ ...prev, [`delegatedVote-${proposalId}`]: false }));
+      setActionLoading(prev => ({ ...prev, toggleOptIn: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, refetchDelegation]);
+  }, [isConnected, writeContractAsync, publicClient, refetchContract]);
+
+  // ============================================================
+  // Rewards Logic (KEPT FROM ORIGINAL)
+  // ============================================================
 
   /**
    * Fetch claimable voter rewards from backend
@@ -669,7 +670,7 @@ export const useDelegation = () => {
       console.log('Rewards claimed successfully!');
 
       await fetchClaimableRewards();
-      await refetchDelegation();
+      await refetchContract();
 
       return { success: true, hash };
     } catch (err) {
@@ -686,16 +687,17 @@ export const useDelegation = () => {
     } finally {
       setActionLoading(prev => ({ ...prev, claimRewards: false }));
     }
-  }, [isConnected, account, writeContractAsync, publicClient, fetchClaimableRewards, refetchDelegation, fetchReputationAttestation]);
+  }, [isConnected, account, writeContractAsync, publicClient, fetchClaimableRewards, refetchContract, fetchReputationAttestation]);
 
   return {
     // State
     isConnected,
     account,
-    ...parsedDelegation,
-    // Always return state arrays (override parsedDelegation to ensure defined)
+    ...parsedData,
+    // Always return state arrays (override parsedData to ensure defined)
     delegations,
     receivedDelegations,
+    isOptedIn,
     isLoading,
     error,
     actionLoading,
@@ -705,16 +707,17 @@ export const useDelegation = () => {
     claimableLoading,
     // Actions
     delegateTo,
-    undelegateFrom,
-    undelegateAll,
-    castDelegatedVote,
+    revokeDelegation,
+    revokeAllDelegations,
+    toggleOptIn,
     fetchClaimableRewards,
     claimAllRewards,
     refetch: async () => {
       await Promise.all([
-        refetchDelegation(),
         fetchDelegations(),
         fetchReceivedDelegations(),
+        fetchOptInStatus(),
+        refetchContract(),
       ]);
     },
   };
@@ -722,85 +725,50 @@ export const useDelegation = () => {
 
 /**
  * Hook for proposal-specific delegation data
- * Returns available delegated power and existing delegated vote for a specific proposal
+ * Returns available delegated power for a specific proposal (from merkle tree)
  * @param {number} proposalId - Proposal ID
  * @returns {Object} Proposal-specific delegation state
  */
 export const useDelegationForProposal = (proposalId) => {
   const { address: account, isConnected } = useAccount();
 
-  const { data, refetch } = useReadContracts({
-    contracts: [
-      // Existing delegated vote record
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'delegatedVotes',
-        args: [BigInt(proposalId || 0), account],
-      },
-      // Total delegated VP received (for display)
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'totalDelegatedIn',
-        args: [account],
-      },
-    ],
-    query: {
-      enabled: isConnected && !!account && !!proposalId && !!CONTRACTS.GOVERNANCE,
-    },
-  });
-
   const [availablePower, setAvailablePower] = useState('0');
+  const [proofData, setProofData] = useState(null);
 
-  // Fetch available power from backend (accounts for already used power)
-  const fetchAvailablePower = useCallback(async () => {
+  // Fetch merkle proof and effective VP from backend
+  const fetchProofData = useCallback(async () => {
     if (!account || !proposalId) return;
 
     try {
-      const res = await fetch(`${SIGNER_URL}/api/delegation/available-power/${account}/${proposalId}`);
-      const data = await res.json();
-      setAvailablePower(formatUnits(BigInt(data.availablePower || '0'), 9));
+      const res = await fetch(`${SIGNER_URL}/api/governance/proposals/${proposalId}/proof/${account}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProofData(data);
+        // Effective VP is the VP after delegations applied (from merkle tree)
+        setAvailablePower(formatUnits(BigInt(data.effectiveVP || '0'), 9));
+      } else {
+        // User not in snapshot or no snapshot yet
+        setAvailablePower('0');
+        setProofData(null);
+      }
     } catch (err) {
-      console.error('Failed to fetch available power:', err);
+      console.error('Failed to fetch proof data:', err);
+      setAvailablePower('0');
+      setProofData(null);
     }
   }, [account, proposalId]);
 
   // Fetch on mount and when account/proposalId changes
   useEffect(() => {
-    fetchAvailablePower();
-  }, [fetchAvailablePower]);
-
-  const delegatedVoteRecord = useMemo(() => {
-    if (!data?.[0] || data[0].status !== 'success' || !data[0].result) return null;
-    const result = data[0].result;
-    return {
-      hasVoted: result.hasVoted || false,
-      support: result.support || false,
-      totalPowerUsed: formatUnits(result.totalPowerUsed || 0n, 9),
-      totalPowerUsedRaw: result.totalPowerUsed || 0n,
-    };
-  }, [data]);
-
-  const totalDelegatedIn = useMemo(() => {
-    if (!data?.[1] || data[1].status !== 'success') return '0';
-    return formatUnits(data[1].result || 0n, 9);
-  }, [data]);
-
-  const totalDelegatedInRaw = useMemo(() => {
-    if (!data?.[1] || data[1].status !== 'success') return 0n;
-    return data[1].result || 0n;
-  }, [data]);
+    fetchProofData();
+  }, [fetchProofData]);
 
   return {
     availableDelegatedPower: availablePower,
     availableDelegatedPowerRaw: parseUnits(availablePower || '0', 9),
-    delegatedVoteRecord,
-    hasDelegatedVote: delegatedVoteRecord?.hasVoted || false,
-    totalDelegatedIn,
-    totalDelegatedInRaw,
-    refetch,
-    refetchAvailablePower: fetchAvailablePower,
+    proofData,
+    hasMerkleProof: !!proofData?.proof?.length,
+    refetch: fetchProofData,
   };
 };
 

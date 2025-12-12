@@ -7,7 +7,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
-import { CONTRACTS, ProposalStatus } from '../constants/contracts';
+import { CONTRACTS, ProposalStatus, Track } from '../constants/contracts';
 import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
 import { usePassportVerify } from './usePassportVerify';
 import { GAS_SETTINGS } from '../constants/gas';
@@ -168,32 +168,34 @@ export const useProposals = (options = {}) => {
 
             // Extract proposal fields using direct property access
             // This ensures correct values regardless of how viem returns the struct
+            // Note: Field names match new Two-Track contract struct
             const proposer = p.proposer;
+            const track = Number(p.track); // Track.Fast = 0, Track.Slow = 1
+            const snapshotBlock = p.snapshotBlock;
+            const vpMerkleRoot = p.vpMerkleRoot;
+            const votingStartsAt = p.votingStartsAt;
             const title = p.title;
             const descriptionHash = p.descriptionHash;
-            const value = p.value;
+            const treasuryAmount = p.treasuryAmount;
             const deadline = p.deadline;
             const deliverables = p.deliverables;
-            const createdAt = p.createdAt;
             const votingEndsAt = p.votingEndsAt;
-            const yayVotes = p.yayVotes;
-            const nayVotes = p.nayVotes;
-            const totalAllocated = p.totalAllocated;
+            const forVotes = p.forVotes;
+            const againstVotes = p.againstVotes;
             const status = p.status;
             const editCount = p.editCount;
             const taskId = p.taskId;
 
             // Get user's vote for this proposal
             const userVote = votesData?.[index]?.status === 'success' ? votesData[index].result : null;
-            const hasVoted = userVote ? userVote[0] : false;
-            const voteSupport = userVote ? userVote[1] : null;
-            const votePower = userVote ? userVote[2] : 0n;
-            const allocatedAmount = userVote ? userVote[3] : 0n;
+            const hasVoted = userVote ? userVote.hasVoted : false;
+            const voteSupport = userVote ? userVote.support : null;
+            const votePower = userVote ? userVote.vpAmount : 0n;
 
-            // Calculate vote percentages
-            const totalVotes = yayVotes + nayVotes;
-            const yayPercent = totalVotes > 0n ? Number((yayVotes * 10000n) / totalVotes) / 100 : 0;
-            const nayPercent = totalVotes > 0n ? Number((nayVotes * 10000n) / totalVotes) / 100 : 0;
+            // Calculate vote percentages (forVotes = yay, againstVotes = nay)
+            const totalVotes = forVotes + againstVotes;
+            const yayPercent = totalVotes > 0n ? Number((forVotes * 10000n) / totalVotes) / 100 : 0;
+            const nayPercent = totalVotes > 0n ? Number((againstVotes * 10000n) / totalVotes) / 100 : 0;
 
             // Calculate time remaining
             const now = Math.floor(Date.now() / 1000);
@@ -218,35 +220,39 @@ export const useProposals = (options = {}) => {
             return {
               id: proposalId,
               proposer,
+              track, // Track.Fast = 0, Track.Slow = 1
               title,
               description,
               descriptionHash,
-              value: formatUnits(value, 18),
-              valueRaw: value,
+              value: formatUnits(treasuryAmount, 18),
+              valueRaw: treasuryAmount,
               deadline: Number(deadline),
               deliverables,
-              createdAt: Number(createdAt),
+              createdAt: Number(votingStartsAt), // Use votingStartsAt as creation time for UI
+              votingStartsAt: Number(votingStartsAt),
               votingEndsAt: endsAt,
               timeRemaining,
               isExpired,
-              yayVotes: formatUnits(yayVotes, 18),
-              yayVotesRaw: yayVotes,
-              nayVotes: formatUnits(nayVotes, 18),
-              nayVotesRaw: nayVotes,
-              totalAllocated: formatUnits(totalAllocated, 18),
-              totalAllocatedRaw: totalAllocated,
+              // Voting data (forVotes/againstVotes renamed to yay/nay for UI consistency)
+              yayVotes: formatUnits(forVotes, 9), // VP uses 9 decimals
+              yayVotesRaw: forVotes,
+              nayVotes: formatUnits(againstVotes, 9),
+              nayVotesRaw: againstVotes,
+              totalVotes: formatUnits(totalVotes, 9),
+              totalVotesRaw: totalVotes,
               yayPercent,
               nayPercent,
               status: Number(status),
               editCount: Number(editCount),
               taskId: Number(taskId),
+              // Two-Track specific fields
+              snapshotBlock: Number(snapshotBlock),
+              vpMerkleRoot,
               // User's vote info
               userVote: hasVoted ? {
                 support: voteSupport,
-                votePower: formatUnits(votePower, 18),
+                votePower: formatUnits(votePower, 9),
                 votePowerRaw: votePower,
-                allocatedAmount: formatUnits(allocatedAmount, 18),
-                allocatedAmountRaw: allocatedAmount,
               } : null,
               hasVoted,
               isProposer: proposer?.toLowerCase() === account?.toLowerCase(),
@@ -428,6 +434,187 @@ export const useProposals = (options = {}) => {
         : err.message.includes('Passport score too low')
         ? err.message
         : 'Failed to cast vote';
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
+    }
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
+
+  /**
+   * Vote on a Fast Track proposal (uses merkle proof for VP verification)
+   * @param {number} proposalId - Proposal ID
+   * @param {string} vpAmount - Amount of VP to vote with
+   * @param {boolean} support - true for Yay, false for Nay
+   */
+  const voteFast = useCallback(async (proposalId, vpAmount, support) => {
+    if (!isConnected || !CONTRACTS.GOVERNANCE) {
+      throw new Error('Not connected');
+    }
+
+    setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
+    setError(null);
+
+    try {
+      const vpWei = parseUnits(vpAmount.toString(), 9);
+
+      // Fetch merkle proof from backend
+      console.log(`Fetching merkle proof for proposal ${proposalId}...`);
+      const proofResponse = await fetch(`${SIGNER_URL}/api/governance/proposals/${proposalId}/proof/${account}`);
+
+      if (!proofResponse.ok) {
+        const errorData = await proofResponse.json().catch(() => ({}));
+        if (proofResponse.status === 404) {
+          throw new Error('VP snapshot not ready or you are not in the snapshot');
+        }
+        throw new Error(errorData.error || 'Failed to fetch merkle proof');
+      }
+
+      const proofData = await proofResponse.json();
+      console.log('Got merkle proof from backend');
+
+      // Get passport signature from backend
+      console.log(`Requesting passport signature for Fast Track vote...`);
+      const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voter: account,
+          proposalId: Number(proposalId),
+          vpAmount: vpWei.toString(),
+          support,
+        }),
+      });
+
+      if (!voteResponse.ok) {
+        const errorData = await voteResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend error: ${voteResponse.status}`);
+      }
+
+      const signatureData = await voteResponse.json();
+      console.log('Got passport signature from backend');
+
+      // Fetch reputation attestation
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation);
+
+      console.log(`Voting Fast Track ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP...`);
+      const hash = await writeContractAsync({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'voteFast',
+        args: [
+          BigInt(proposalId),
+          support,
+          vpWei,
+          proofData.proof,
+          BigInt(signatureData.expiry),
+          signatureData.signature,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
+        ],
+        ...GAS_SETTINGS,
+      });
+
+      await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+
+      console.log('Fast Track vote cast successfully!');
+      await refetchProposals();
+      await refetchVotes();
+      return { success: true, hash };
+    } catch (err) {
+      console.error('Fast Track vote error:', err);
+      const message = parseTransactionError(err);
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
+    }
+  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
+
+  /**
+   * Vote on a Slow Track proposal (uses backend attestation for VP budget)
+   * @param {number} proposalId - Proposal ID
+   * @param {string} vpAmount - Amount of VP to vote with
+   * @param {boolean} support - true for Yay, false for Nay
+   * @param {string} totalVP - User's total VP (for budget calculation)
+   */
+  const voteSlow = useCallback(async (proposalId, vpAmount, support, totalVP) => {
+    if (!isConnected || !CONTRACTS.GOVERNANCE) {
+      throw new Error('Not connected');
+    }
+
+    setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
+    setError(null);
+
+    try {
+      const vpWei = parseUnits(vpAmount.toString(), 9);
+      const totalVPWei = parseUnits(totalVP.toString(), 9);
+
+      // Fetch attestation from backend (includes nonce, availableVP, signature)
+      console.log(`Fetching Slow Track attestation for proposal ${proposalId}...`);
+      const attestResponse = await fetch(`${SIGNER_URL}/api/governance/vp/attestation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: account,
+          proposalId: Number(proposalId),
+          support,
+          vpAmount: vpWei.toString(),
+          totalVP: totalVPWei.toString(),
+        }),
+      });
+
+      if (!attestResponse.ok) {
+        const errorData = await attestResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get attestation');
+      }
+
+      const attestation = await attestResponse.json();
+      console.log('Got Slow Track attestation from backend');
+
+      // Fetch reputation attestation
+      const repAttestation = await fetchReputationAttestation();
+      console.log('Reputation:', repAttestation.reputation);
+
+      console.log(`Voting Slow Track ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP...`);
+      const hash = await writeContractAsync({
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'voteSlow',
+        args: [
+          BigInt(proposalId),
+          support,
+          BigInt(attestation.vpAmount),
+          BigInt(attestation.availableVP),
+          BigInt(attestation.nonce),
+          BigInt(attestation.expiry),
+          attestation.signature,
+          BigInt(repAttestation.reputation),
+          BigInt(repAttestation.expiry),
+          repAttestation.signature,
+        ],
+        ...GAS_SETTINGS,
+      });
+
+      await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+
+      console.log('Slow Track vote cast successfully!');
+      await refetchProposals();
+      await refetchVotes();
+      return { success: true, hash };
+    } catch (err) {
+      console.error('Slow Track vote error:', err);
+      const message = err.message.includes('Insufficient available VP')
+        ? err.message
+        : parseTransactionError(err);
       setError(message);
       throw new Error(message);
     } finally {
@@ -697,7 +884,7 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const { title, description, value, deadline, deliverables, skills } = proposalData;
+      const { title, description, value, deadline, deliverables, skills, track = Track.Slow } = proposalData;
 
       // Upload description to IPFS
       console.log('Uploading proposal description to IPFS...');
@@ -716,6 +903,7 @@ export const useProposals = (options = {}) => {
       // Get passport signature from backend signer
       console.log('Getting passport signature...');
       const { expiry, signature } = await getSignature('propose');
+      console.log('Track:', track === Track.Fast ? 'Fast' : 'Slow');
 
       // ========== DEBUG LOGGING ==========
       console.log('=== CREATE PROPOSAL DEBUG ===');
@@ -788,8 +976,9 @@ export const useProposals = (options = {}) => {
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
-        functionName: 'propose',
+        functionName: 'createProposal',
         args: [
+          track, // Track enum: 0 = Fast, 1 = Slow
           title,
           descriptionHash,
           valueWei,
@@ -989,6 +1178,8 @@ export const useProposals = (options = {}) => {
     setError,
     // Actions
     vote,
+    voteFast,
+    voteSlow,
     voteCombined,
     freeVP,
     createProposal,

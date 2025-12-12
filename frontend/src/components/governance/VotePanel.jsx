@@ -2,34 +2,66 @@
  * VotePanel - Combined voting interface for proposals
  * Allows users to vote with own VP + delegated VP (if delegate)
  *
+ * Two-Track Governance:
+ * - Fast Track: Merkle proof voting (abundant VP - vote full VP on multiple proposals)
+ * - Slow Track: Attestation voting (scarce VP - VP is budget across proposals)
+ *
  * VP-centric model: Users input VP directly (not ROSE)
- * VP can only be locked to ONE proposal at a time
- * VP unlocks only after proposal resolves via freeVP()
  */
 
 import React, { useState, useMemo } from 'react';
-import { formatVotePower } from '../../constants/contracts';
+import { useAccount } from 'wagmi';
+import { formatVotePower, Track, TrackLabels, TrackColors } from '../../constants/contracts';
 import useGovernance from '../../hooks/useGovernance';
 import useDelegation, { useDelegationForProposal } from '../../hooks/useDelegation';
+import useAvailableVP from '../../hooks/useAvailableVP';
+import useProposalVP from '../../hooks/useProposalVP';
 
 const VotePanel = ({
   proposalId,
+  track = Track.Slow, // Default to Slow Track
   hasVoted,
   userVote,
   isProposer,
   isActive,
   onVote,
+  onVoteFast,
+  onVoteSlow,
   onVoteCombined,
   onFreeVP,
   loading = false,
 }) => {
+  const { address: account } = useAccount();
   const {
     availableVP,
     votingPower,
-    proposalVPLocked,
-    activeProposal,
     canVote,
   } = useGovernance();
+
+  // Slow Track VP budget (with caching)
+  const {
+    availableVP: slowTrackAvailableVP,
+    allocatedVP: slowTrackAllocatedVP,
+    totalVP: slowTrackTotalVP,
+    isLoading: slowTrackLoading,
+    error: slowTrackError,
+    clearCache: clearSlowTrackCache,
+  } = useAvailableVP({
+    enabled: track === Track.Slow && !!account && !!votingPower,
+    refetchOnVote: true,
+    staleTime: 5000,
+  });
+
+  // Fast Track merkle proof (pre-fetched)
+  const {
+    proof: merkleProof,
+    effectiveVP: snapshotVP,
+    hasSnapshot,
+    isLoading: proofLoading,
+    error: proofError,
+  } = useProposalVP(proposalId, {
+    enabled: track === Track.Fast && !!account && isActive,
+  });
 
   const {
     castDelegatedVote,
@@ -48,16 +80,19 @@ const VotePanel = ({
   // Parse VP values from strings
   const availableOwnVP = parseFloat(availableVP || '0');
   const ownVotingPower = parseFloat(votingPower || '0');
-  const lockedVP = parseFloat(proposalVPLocked || '0');
   const receivedVP = parseFloat(availableDelegatedPower || '0');
 
-  // Check if VP is locked to a different proposal
-  const vpLockedElsewhere = activeProposal && activeProposal !== 0 && activeProposal !== proposalId;
-
   // Calculate total available voting power
+  // Two-Track model: Fast Track uses abundant VP, Slow Track uses budget from useAvailableVP
   const totalAvailable = useMemo(() => {
-    // If VP is locked to another proposal, own VP is 0 available
-    const ownVP = vpLockedElsewhere ? 0 : availableOwnVP;
+    let ownVP;
+    if (track === Track.Slow) {
+      // Slow Track: Use available VP from budget hook
+      ownVP = parseFloat(slowTrackAvailableVP || '0');
+    } else {
+      // Fast Track: Use full available VP (abundant model)
+      ownVP = availableOwnVP;
+    }
     // Received VP (as delegate) is always available per-proposal
     const delegatedVP = receivedVP;
     return {
@@ -65,7 +100,7 @@ const VotePanel = ({
       delegatedVP,
       totalVP: ownVP + delegatedVP,
     };
-  }, [availableOwnVP, receivedVP, vpLockedElsewhere]);
+  }, [track, availableOwnVP, slowTrackAvailableVP, receivedVP]);
 
   // Calculate how input VP splits between own and delegated
   const amountSplit = useMemo(() => {
@@ -95,7 +130,7 @@ const VotePanel = ({
     return null;
   }, [hasVoted, userVote]);
 
-  // Handle combined vote (own VP + delegated VP)
+  // Handle vote - routes to appropriate function based on track
   const handleVote = async (support) => {
     if (!amount || parseFloat(amount) <= 0) return;
     if (!amountSplit.isValid) return;
@@ -109,18 +144,37 @@ const VotePanel = ({
     try {
       setVoteType(support ? 'yay' : 'nay');
 
-      if (onVoteCombined && (amountSplit.ownVP > 0 || amountSplit.delegatedVP > 0)) {
-        // Pass totalVP + available amounts (hook will split internally)
-        await onVoteCombined(
-          proposalId,
-          amountSplit.totalVP.toString(),
-          support,
-          totalAvailable.ownVP.toString(),
-          totalAvailable.delegatedVP.toString()
-        );
-      } else if (onVote && amountSplit.ownVP > 0) {
-        // Own vote only
-        await onVote(proposalId, amountSplit.ownVP.toString(), support);
+      // Route based on track
+      if (track === Track.Fast) {
+        // Fast Track: Use merkle proof voting
+        if (onVoteFast) {
+          await onVoteFast(proposalId, amountSplit.ownVP.toString(), support);
+        } else if (onVote) {
+          // Fallback to legacy vote
+          await onVote(proposalId, amountSplit.ownVP.toString(), support);
+        }
+      } else {
+        // Slow Track: Use attestation voting with VP budget
+        if (onVoteSlow) {
+          await onVoteSlow(
+            proposalId,
+            amountSplit.ownVP.toString(),
+            support,
+            votingPower // Pass totalVP for budget calculation
+          );
+        } else if (onVoteCombined && (amountSplit.ownVP > 0 || amountSplit.delegatedVP > 0)) {
+          // Fallback to combined vote
+          await onVoteCombined(
+            proposalId,
+            amountSplit.totalVP.toString(),
+            support,
+            totalAvailable.ownVP.toString(),
+            totalAvailable.delegatedVP.toString()
+          );
+        } else if (onVote && amountSplit.ownVP > 0) {
+          // Fallback to legacy vote
+          await onVote(proposalId, amountSplit.ownVP.toString(), support);
+        }
       }
 
       // Refetch available delegated power after successful vote
@@ -212,11 +266,11 @@ const VotePanel = ({
             </div>
           )}
 
-          {/* VP locked info */}
-          {lockedVP > 0 && (
+          {/* Slow Track allocation info */}
+          {track === Track.Slow && userVote && (
             <div className="flex justify-between text-sm mt-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
-              <span style={{ color: 'var(--text-muted)' }}>VP Locked:</span>
-              <span className="font-semibold">{formatVotePower(lockedVP)} VP</span>
+              <span style={{ color: 'var(--text-muted)' }}>Allocated to this proposal:</span>
+              <span className="font-semibold">{formatVotePower(parseFloat(userVote.votePower || '0'))} VP</span>
             </div>
           )}
         </div>
@@ -233,17 +287,7 @@ const VotePanel = ({
           </button>
         )}
 
-        {/* Free VP Button (if proposal resolved) */}
-        {!isActive && lockedVP > 0 && (
-          <button
-            onClick={handleFreeVP}
-            disabled={loading}
-            className="btn-secondary w-full"
-            style={{ opacity: loading ? 0.5 : 1 }}
-          >
-            {loading ? 'Freeing...' : 'Free VP'}
-          </button>
-        )}
+        {/* Note: Slow Track allocations auto-expire when proposals finalize */}
 
         {/* Add More Form */}
         {isActive && showAddMore && (
@@ -382,93 +426,6 @@ const VotePanel = ({
     );
   }
 
-  // VP locked to another proposal warning
-  if (vpLockedElsewhere) {
-    return (
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-3">Vote on Proposal</h3>
-        <div
-          className="p-4 rounded-lg mb-4"
-          style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' }}
-        >
-          <p className="font-medium mb-2">VP Locked to Another Proposal</p>
-          <p className="text-sm">
-            Your {formatVotePower(lockedVP)} VP is locked to proposal #{activeProposal}.
-            VP can only be on ONE proposal at a time. Free it after that proposal resolves.
-          </p>
-        </div>
-
-        {/* Still allow voting with received VP if user is a delegate */}
-        {totalAvailable.delegatedVP > 0 && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-              You can still vote with VP delegated to you:
-            </p>
-            <div className="mb-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-              <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--text-muted)' }}>Received VP:</span>
-                <span>{formatVotePower(totalAvailable.delegatedVP)} VP</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mb-3">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                min="0"
-                max={totalAvailable.delegatedVP}
-                step="0.01"
-                className="flex-1 px-3 py-2 rounded-lg"
-                style={{
-                  backgroundColor: 'var(--bg-tertiary)',
-                  border: `1px solid ${amountSplit.exceedsAvailable ? 'var(--error)' : 'var(--border-color)'}`,
-                }}
-              />
-              <button
-                onClick={() => setAmount(totalAvailable.delegatedVP.toFixed(2))}
-                className="px-3 py-2 rounded-lg text-sm"
-                style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}
-              >
-                Max
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handleVote(true)}
-                disabled={loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable}
-                className="py-3 px-4 rounded-lg font-semibold transition-all"
-                style={{
-                  backgroundColor: voteType === 'yay' ? 'var(--success)' : 'rgba(16, 185, 129, 0.1)',
-                  color: voteType === 'yay' ? 'white' : 'var(--success)',
-                  border: '2px solid var(--success)',
-                  opacity: loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable ? 0.5 : 1,
-                }}
-              >
-                {loading && voteType === 'yay' ? 'Voting...' : 'Vote Yay'}
-              </button>
-              <button
-                onClick={() => handleVote(false)}
-                disabled={loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable}
-                className="py-3 px-4 rounded-lg font-semibold transition-all"
-                style={{
-                  backgroundColor: voteType === 'nay' ? 'var(--error)' : 'rgba(239, 68, 68, 0.1)',
-                  color: voteType === 'nay' ? 'white' : 'var(--error)',
-                  border: '2px solid var(--error)',
-                  opacity: loading || !amount || parseFloat(amount) <= 0 || amountSplit.exceedsAvailable ? 0.5 : 1,
-                }}
-              >
-                {loading && voteType === 'nay' ? 'Voting...' : 'Vote Nay'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   if (!canVote && totalAvailable.delegatedVP === 0) {
     return (
       <div className="card">
@@ -498,12 +455,61 @@ const VotePanel = ({
   // Main voting interface
   return (
     <div className="card">
-      <h3 className="text-lg font-semibold mb-3">Vote on Proposal</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-semibold">Vote on Proposal</h3>
+        {/* Track Badge */}
+        <span
+          className="px-2 py-1 text-xs font-medium rounded"
+          style={{
+            backgroundColor: track === Track.Fast ? 'rgba(14, 165, 233, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+            color: TrackColors[track],
+          }}
+        >
+          {TrackLabels[track]}
+        </span>
+      </div>
+
+      {/* Slow Track VP Budget Info */}
+      {track === Track.Slow && (
+        <div
+          className="mb-4 p-3 rounded-lg text-sm"
+          style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}
+        >
+          <p className="font-medium mb-2" style={{ color: 'var(--warning)' }}>
+            VP Budget (Slow Track)
+          </p>
+          <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+            Your VP is a budget across all Slow Track proposals. Allocate wisely!
+          </p>
+          {slowTrackLoading ? (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading budget...</p>
+          ) : slowTrackError ? (
+            <p className="text-xs" style={{ color: 'var(--error)' }}>{slowTrackError}</p>
+          ) : (
+            <div className="text-xs space-y-1">
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--text-muted)' }}>Total VP:</span>
+                <span>{formatVotePower(parseFloat(slowTrackTotalVP))} VP</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--text-muted)' }}>Already allocated:</span>
+                <span>{formatVotePower(parseFloat(slowTrackAllocatedVP))} VP</span>
+              </div>
+              <div className="flex justify-between font-semibold pt-1 border-t" style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                <span>Available to allocate:</span>
+                <span style={{ color: 'var(--warning)' }}>
+                  {formatVotePower(parseFloat(slowTrackAvailableVP))} VP
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Available Power Summary */}
       <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
         <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
-          Available Voting Power
+          {track === Track.Fast ? 'Available Voting Power' : 'Your Voting Power'}
         </p>
         {totalAvailable.ownVP > 0 && (
           <div className="flex justify-between text-sm">
@@ -626,10 +632,19 @@ const VotePanel = ({
         </button>
       </div>
 
-      {/* Info Box */}
+      {/* Info Box - Track-specific */}
       <div className="mt-4 p-3 rounded-lg text-xs" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-        <strong>Note:</strong> Your VP will be locked to this proposal until it resolves.
-        VP can only be on ONE proposal at a time.
+        {track === Track.Fast ? (
+          <>
+            <strong>Fast Track:</strong> You can vote with your full VP on multiple proposals simultaneously.
+            Voting period: 3 days, 10% quorum required.
+          </>
+        ) : (
+          <>
+            <strong>Slow Track:</strong> Your VP is a budget - allocations persist across proposals until they resolve.
+            Voting period: 14 days, 25% quorum required.
+          </>
+        )}
       </div>
     </div>
   );

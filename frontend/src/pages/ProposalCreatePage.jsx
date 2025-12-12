@@ -8,7 +8,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
-import { CONTRACTS, GOVERNANCE_CONSTANTS } from '../constants/contracts';
+import { CONTRACTS, GOVERNANCE_CONSTANTS, Track, TrackLabels, TrackColors, TRACK_CONSTANTS } from '../constants/contracts';
 import { SKILLS } from '../constants/skills';
 import useProposals from '../hooks/useProposals';
 import useGovernance from '../hooks/useGovernance';
@@ -29,6 +29,7 @@ const ProposalCreatePage = () => {
     deadline: '',
     deliverables: '',
     skills: [],
+    track: Track.Slow, // Default to Slow Track
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -65,6 +66,15 @@ const ProposalCreatePage = () => {
     }));
   };
 
+  // Calculate track-specific limits
+  const fastTrackLimit = treasuryValue * (TRACK_CONSTANTS[Track.Fast].TREASURY_LIMIT_BPS / 10000); // 1% of treasury
+
+  // Handle track change
+  const handleTrackChange = (newTrack) => {
+    setFormData(prev => ({ ...prev, track: newTrack }));
+    setFormErrors(prev => ({ ...prev, track: '', value: '' }));
+  };
+
   // Validate form
   const validateForm = () => {
     const errors = {};
@@ -79,10 +89,13 @@ const ProposalCreatePage = () => {
       errors.description = 'Description is required';
     }
 
-    if (!formData.value || parseFloat(formData.value) <= 0) {
+    const proposalValue = parseFloat(formData.value);
+    if (!formData.value || proposalValue <= 0) {
       errors.value = 'Value must be greater than 0';
-    } else if (parseFloat(formData.value) > treasuryValue) {
+    } else if (proposalValue > treasuryValue) {
       errors.value = `Value exceeds treasury balance (${treasuryValue.toLocaleString()} ROSE)`;
+    } else if (formData.track === Track.Fast && proposalValue > fastTrackLimit) {
+      errors.value = `Fast Track limit: ${fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% of treasury)`;
     }
 
     if (!formData.deadline) {
@@ -187,6 +200,120 @@ const ProposalCreatePage = () => {
           <p className="text-xs max-w-xs" style={{ color: 'var(--text-muted)' }}>
             Proposal value cannot exceed treasury balance
           </p>
+        </div>
+      </div>
+
+      {/* Fast Track Limit Warning */}
+      {formData.track === Track.Fast && formData.value && parseFloat(formData.value) > fastTrackLimit && (
+        <div
+          className="card mb-6 flex items-start gap-3"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderColor: 'var(--warning)',
+          }}
+        >
+          <span className="text-xl">⚠️</span>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-1" style={{ color: 'var(--warning)' }}>
+              Amount Exceeds Fast Track Limit
+            </h3>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+              Your requested amount ({parseFloat(formData.value).toLocaleString()} ROSE) exceeds the Fast Track limit of {fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% of treasury).
+            </p>
+            <button
+              type="button"
+              onClick={() => handleTrackChange(Track.Slow)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{
+                backgroundColor: 'var(--warning)',
+                color: 'var(--bg-primary)',
+              }}
+            >
+              Switch to Slow Track
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Track Selection */}
+      <div className="card mb-6">
+        <label className="block font-medium mb-3">
+          Proposal Track <span style={{ color: 'var(--error)' }}>*</span>
+        </label>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {/* Fast Track */}
+          <button
+            type="button"
+            onClick={() => handleTrackChange(Track.Fast)}
+            className="p-4 rounded-lg text-left transition-all"
+            style={{
+              backgroundColor: formData.track === Track.Fast ? 'rgba(14, 165, 233, 0.15)' : 'var(--bg-tertiary)',
+              border: `2px solid ${formData.track === Track.Fast ? 'var(--accent)' : 'var(--border-color)'}`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span
+                className="font-semibold"
+                style={{ color: formData.track === Track.Fast ? 'var(--accent)' : 'var(--text-primary)' }}
+              >
+                Fast Track
+              </span>
+              <span
+                className="px-2 py-0.5 rounded text-xs"
+                style={{
+                  backgroundColor: 'rgba(14, 165, 233, 0.2)',
+                  color: 'var(--accent)',
+                }}
+              >
+                3 days
+              </span>
+            </div>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+              Quick decisions for smaller requests
+            </p>
+            <ul className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+              <li>Max: {fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% treasury)</li>
+              <li>10% quorum required</li>
+              <li>Vote with full VP on multiple proposals</li>
+            </ul>
+          </button>
+
+          {/* Slow Track */}
+          <button
+            type="button"
+            onClick={() => handleTrackChange(Track.Slow)}
+            className="p-4 rounded-lg text-left transition-all"
+            style={{
+              backgroundColor: formData.track === Track.Slow ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-tertiary)',
+              border: `2px solid ${formData.track === Track.Slow ? 'var(--warning)' : 'var(--border-color)'}`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span
+                className="font-semibold"
+                style={{ color: formData.track === Track.Slow ? 'var(--warning)' : 'var(--text-primary)' }}
+              >
+                Slow Track
+              </span>
+              <span
+                className="px-2 py-0.5 rounded text-xs"
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  color: 'var(--warning)',
+                }}
+              >
+                14 days
+              </span>
+            </div>
+            <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+              Thorough review for larger requests
+            </p>
+            <ul className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+              <li>No treasury limit</li>
+              <li>25% quorum required</li>
+              <li>VP is a budget across proposals</li>
+            </ul>
+          </button>
         </div>
       </div>
 
@@ -367,12 +494,25 @@ const ProposalCreatePage = () => {
           </button>
         </div>
 
-        {/* Info */}
+        {/* Info - Track-specific */}
         <div className="card text-sm" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-          <strong>How it works:</strong>
+          <strong>How {formData.track === Track.Fast ? 'Fast Track' : 'Slow Track'} works:</strong>
           <ul className="mt-2 list-disc list-inside space-y-1">
-            <li>Proposals have a 2-week voting period</li>
-            <li>Requires 33% quorum and 7/12 (58.33%) approval to pass</li>
+            {formData.track === Track.Fast ? (
+              <>
+                <li>3-day voting period with 1-day snapshot delay</li>
+                <li>Requires 10% quorum and 58.33% approval to pass</li>
+                <li>Limited to 1% of treasury ({fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE)</li>
+                <li>Voters can use full VP on multiple Fast Track proposals</li>
+              </>
+            ) : (
+              <>
+                <li>14-day voting period with immediate voting</li>
+                <li>Requires 25% quorum and 58.33% approval to pass</li>
+                <li>No treasury limit - suitable for larger requests</li>
+                <li>Voters' VP is a budget across all active Slow Track proposals</li>
+              </>
+            )}
             <li>Passed proposals create marketplace tasks funded by the treasury</li>
             <li>You will act as the "customer" for the resulting task</li>
             <li>Failed proposals result in a small reputation penalty</li>

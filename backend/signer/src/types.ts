@@ -664,3 +664,150 @@ export interface ParsePrResponse {
 export interface GitHubErrorResponse {
   error: string;
 }
+
+// ==========================================
+// DelegationV2 Types (Off-Chain EIP-712 Delegations)
+// ==========================================
+
+// Request to store a signed delegation
+export interface DelegationV2Request {
+  delegator: string;
+  delegate: string;
+  vpAmount: string;      // BigInt as string, 0 = full delegation
+  nonce: number;
+  expiry: number;        // Unix timestamp
+  signature: string;
+}
+
+// Generic success/error response
+export interface DelegationV2Response {
+  success: boolean;
+  message?: string;
+}
+
+// User's active delegations
+export interface UserDelegationsResponse {
+  delegator: string;
+  delegations: Array<{
+    delegate: string;
+    vpAmount: string;
+    nonce: number;
+    expiry: string;       // ISO timestamp
+  }>;
+  totalDelegated: string; // BigInt as string
+  hasFullDelegation: boolean;
+}
+
+// Delegations received by a delegate (V2 off-chain)
+export interface ReceivedDelegationsV2Response {
+  delegate: string;
+  delegations: Array<{
+    delegator: string;
+    vpAmount: string;
+    nonce: number;
+    expiry: string;
+  }>;
+  totalReceived: string;
+}
+
+// Request to revoke delegation(s) - requires signed authorization
+export interface RevokeDelegationRequest {
+  delegator: string;
+  delegate: string | null; // null = revoke all
+  timestamp: number;       // Unix timestamp for freshness
+  signature: string;       // Signature proving delegator ownership
+}
+
+// Revocation response
+export interface RevokeDelegationResponse {
+  success: boolean;
+  revokedCount: number;
+}
+
+// Next nonce for a delegator
+export interface NextNonceResponse {
+  delegator: string;
+  nextNonce: number;
+}
+
+// Delegation stats for monitoring
+export interface DelegationV2StatsResponse {
+  totalDelegations: number;
+  activeDelegations: number;
+  uniqueDelegators: number;
+  uniqueDelegates: number;
+}
+
+// EIP-712 config for frontend
+export interface DelegationEIP712ConfigResponse {
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+  };
+  types: {
+    Delegation: Array<{ name: string; type: string }>;
+  };
+}
+
+export interface DelegationV2ErrorResponse {
+  error: string;
+  details?: Record<string, string>;
+}
+
+// ==========================================
+// Governance VP Snapshot Types (Fast Track)
+// ==========================================
+
+// Merkle proof response for Fast Track voting
+export interface MerkleProofResponse {
+  address: string;
+  effectiveVP: string;      // VP after delegations applied
+  baseVP: string;           // VP before delegations
+  delegatedTo: string | null;
+  delegatedAmount: string;
+  proof: string[];
+}
+
+export interface MerkleProofErrorResponse {
+  error: string;
+}
+
+// ==========================================
+// Governance VP Available Types (Slow Track Aliases)
+// ==========================================
+
+// Available VP response for Slow Track voting
+export interface VPAvailableResponse {
+  user: string;
+  totalVP: string;
+  allocatedVP: string;
+  availableVP: string;
+  allocations: Array<{
+    proposalId: number;
+    vpAmount: string;
+    support: boolean;
+    deadline: number;
+  }>;
+}
+
+// Attestation request for Slow Track voting
+export interface VPAttestationRequest {
+  user: string;
+  proposalId: number;
+  support: boolean;
+  vpAmount: string;
+  totalVP: string;
+}
+
+// Attestation response for Slow Track voting
+export interface VPAttestationResponse {
+  user: string;
+  proposalId: number;
+  support: boolean;
+  vpAmount: string;
+  availableVP: string;
+  nonce: string;
+  expiry: number;
+  signature: string;
+}

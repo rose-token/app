@@ -1,18 +1,26 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
 
 /**
- * RoseGovernance V2 Tests - VP-Centric Model
+ * RoseGovernance Two-Track System Tests
  *
- * Key changes from V1:
- * - VP calculated at deposit time: sqrt(stakedRose) * (reputation/100)
- * - Multi-delegation: delegate(address, uint256 vpAmount), undelegate(address, uint256 vpAmount)
- * - VP locked to ONE proposal at a time
- * - vote() requires passport signature
- * - freeVP() to unlock after proposal resolves
+ * Two tracks:
+ * - Fast Track: 3 days, 10% quorum, merkle proof voting, abundant VP (full VP on multiple proposals)
+ * - Slow Track: 14 days, 25% quorum, attestation voting, scarce VP (budget across proposals)
+ *
+ * Test Categories:
+ * 1. Basic Staking
+ * 2. Proposal Creation (including track forcing)
+ * 3. Fast Track Voting (merkle proofs)
+ * 4. Slow Track Voting (attestations, nonces)
+ * 5. Quorum and Finalization
+ * 6. Delegate Opt-In
+ * 7. Execution and Rewards
+ * 8. Admin Functions
  */
-describe("RoseGovernance V2 - VP Centric Model", function () {
+describe("RoseGovernance - Two-Track System", function () {
   let roseToken;
   let vRose;
   let governance;
@@ -27,27 +35,45 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
   let user3;
   let proposer;
 
-  const VOTING_PERIOD = 14 * 24 * 60 * 60; // 2 weeks in seconds
+  // Track enum values
+  const Track = { Fast: 0, Slow: 1 };
 
-  // Helper to create passport signature for voting
-  async function createVoteSignature(signer, voter, proposalId, vpAmount, support, expiry) {
-    const messageHash = ethers.solidityPackedKeccak256(
-      ["string", "address", "uint256", "uint256", "bool", "uint256"],
-      ["vote", voter, proposalId, vpAmount, support, expiry]
-    );
-    return await signer.signMessage(ethers.getBytes(messageHash));
-  }
+  // ProposalStatus enum values
+  const ProposalStatus = {
+    Pending: 0,
+    Active: 1,
+    Passed: 2,
+    Failed: 3,
+    Executed: 4,
+    Cancelled: 5,
+  };
 
-  // Helper to create passport signature for proposal
-  async function createProposalSignature(signer, address, action, expiry) {
+  // Time constants
+  const SNAPSHOT_DELAY = 24 * 60 * 60; // 1 day
+  const FAST_DURATION = 3 * 24 * 60 * 60; // 3 days
+  const SLOW_DURATION = 14 * 24 * 60 * 60; // 14 days
+
+  // Quorum basis points
+  const FAST_QUORUM_BPS = 1000; // 10%
+  const SLOW_QUORUM_BPS = 2500; // 25%
+  const BASIS_POINTS = 10000;
+
+  // ============ Signature Helpers ============
+
+  /**
+   * Create passport signature for proposal creation
+   */
+  async function createProposalSignature(signer, address, expiry) {
     const messageHash = ethers.solidityPackedKeccak256(
       ["address", "string", "uint256"],
-      [address, action, expiry]
+      [address, "propose", expiry]
     );
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
-  // Helper to create reputation attestation signature
+  /**
+   * Create reputation attestation signature
+   */
   async function createReputationSignature(signer, user, reputation, expiry) {
     const messageHash = ethers.solidityPackedKeccak256(
       ["string", "address", "uint256", "uint256"],
@@ -56,68 +82,221 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
-  // Default reputation value (60% = 6000 basis points in contract, 60 for attestation)
-  const DEFAULT_REPUTATION = 60;
-
-  // Helper to get reputation attestation params
-  async function getRepAttestation(user, reputation = DEFAULT_REPUTATION) {
-    const currentBlock = await ethers.provider.getBlock("latest");
-    const expiry = currentBlock.timestamp + 3600;
-    const signature = await createReputationSignature(passportSigner, user.address, reputation, expiry);
-    return { reputation, expiry, signature };
-  }
-
-  // Helper to create delegation vote signature
-  // Phase 1: Updated signature includes nonce
-  async function createDelegatedVoteSignature(signer, delegate, proposalId, vpAmount, support, allocationsHash, nonce, expiry) {
+  /**
+   * Create signature for setting VP merkle root
+   */
+  async function createMerkleRootSignature(
+    signer,
+    proposalId,
+    merkleRoot,
+    totalVP,
+    expiry
+  ) {
     const messageHash = ethers.solidityPackedKeccak256(
-      ["string", "address", "uint256", "uint256", "bool", "bytes32", "uint256", "uint256"],
-      ["delegatedVote", delegate, proposalId, vpAmount, support, allocationsHash, nonce, expiry]
+      ["string", "uint256", "bytes32", "uint256", "uint256"],
+      ["setVPMerkleRoot", proposalId, merkleRoot, totalVP, expiry]
     );
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
-  // Helper to compute allocations hash
-  // Phase 1: Updated to match contract's abi.encode format for DelegatorAllocation struct
-  function computeAllocationsHash(proposalId, delegate, allocations) {
-    const abiCoder = new ethers.AbiCoder();
-    // Must match contract's: keccak256(abi.encode(proposalId, delegate, allocations))
-    // Where allocations is DelegatorAllocation[] = tuple(address delegator, uint256 powerUsed)[]
-    return ethers.keccak256(
-      abiCoder.encode(
-        ["uint256", "address", "tuple(address,uint256)[]"],
-        [proposalId, delegate, allocations.map(a => [a.delegator, a.powerUsed])]
-      )
+  /**
+   * Create Fast Track vote signature
+   */
+  async function createFastVoteSignature(
+    signer,
+    voter,
+    proposalId,
+    support,
+    vpAmount,
+    expiry
+  ) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "uint256", "bool", "uint256", "uint256"],
+      ["voteFast", voter, proposalId, support, vpAmount, expiry]
     );
+    return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
-  // Helper to set up an eligible proposer (10+ tasks, 90%+ reputation)
-  async function setupEligibleProposer(user) {
-    // Call through mockMarketplace which will call governance.updateUserStats
-    for (let i = 0; i < 10; i++) {
+  /**
+   * Create Slow Track vote signature (attestation)
+   */
+  async function createSlowVoteSignature(
+    signer,
+    voter,
+    proposalId,
+    support,
+    vpAmount,
+    availableVP,
+    nonce,
+    expiry
+  ) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      [
+        "string",
+        "address",
+        "uint256",
+        "bool",
+        "uint256",
+        "uint256",
+        "uint256",
+        "uint256",
+      ],
+      ["voteSlow", voter, proposalId, support, vpAmount, availableVP, nonce, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  /**
+   * Create voter rewards claim signature
+   */
+  async function createClaimSignature(signer, claimer, proposalIds, expiry) {
+    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256[]"],
+      [proposalIds]
+    );
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "address", "bytes", "uint256"],
+      ["claimVoterRewards", claimer, encoded, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  /**
+   * Create signature for finalizing Slow Track proposal with snapshot
+   */
+  async function createSlowFinalizeSignature(
+    signer,
+    proposalId,
+    merkleRoot,
+    totalVP,
+    expiry
+  ) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "uint256", "bytes32", "uint256", "uint256"],
+      ["finalizeSlowProposal", proposalId, merkleRoot, totalVP, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // ============ Reputation Helpers ============
+
+  /**
+   * Get reputation attestation params
+   */
+  async function getRepAttestation(user, rep = 60) {
+    const currentBlock = await ethers.provider.getBlock("latest");
+    const expiry = currentBlock.timestamp + 3600;
+    const signature = await createReputationSignature(
+      passportSigner,
+      user.address,
+      rep,
+      expiry
+    );
+    return { reputation: rep, expiry, signature };
+  }
+
+  /**
+   * Set up user with tasks to meet eligibility requirements
+   * @param user - User to set up
+   * @param taskCount - Number of tasks to complete (default: 10 for cold start)
+   * @param failCount - Number of failed tasks (default: 0 for 100% reputation)
+   */
+  async function setupEligibleUser(user, taskCount = 10, failCount = 0) {
+    // Complete successful tasks first
+    for (let i = 0; i < taskCount - failCount; i++) {
       await mockMarketplace.updateUserStats(
         user.address,
         ethers.parseEther("100"),
         false
       );
     }
-  }
-
-  // Helper to set up an eligible voter (70%+ reputation)
-  async function setupEligibleVoter(user) {
-    // Call through mockMarketplace which will call governance.updateUserStats
-    for (let i = 0; i < 10; i++) {
+    // Then add failed tasks
+    for (let i = 0; i < failCount; i++) {
       await mockMarketplace.updateUserStats(
         user.address,
         ethers.parseEther("100"),
-        false
+        true
       );
     }
   }
+
+  // Convenience aliases
+  const setupEligibleProposer = (user) => setupEligibleUser(user, 10, 0);
+  const setupEligibleVoter = (user) => setupEligibleUser(user, 10, 0);
+
+  // ============ Merkle Tree Helpers ============
+
+  /**
+   * Build merkle tree for VP snapshot
+   * OZ StandardMerkleTree uses double-hash (leaf = keccak256(keccak256(data)))
+   */
+  function buildVPMerkleTree(voters) {
+    // voters = [{ address, vpAmount }]
+    const values = voters.map((v) => [v.address, v.vpAmount.toString()]);
+    return StandardMerkleTree.of(values, ["address", "uint256"]);
+  }
+
+  /**
+   * Get merkle proof for a voter
+   */
+  function getMerkleProof(tree, voterAddress) {
+    for (const [i, v] of tree.entries()) {
+      if (v[0].toLowerCase() === voterAddress.toLowerCase()) {
+        return tree.getProof(i);
+      }
+    }
+    throw new Error("Voter not found in tree");
+  }
+
+  // ============ Proposal Helpers ============
+
+  let proposalNonce = 0;
+
+  /**
+   * Create a proposal
+   */
+  async function createProposal(
+    proposerAccount,
+    track = Track.Slow,
+    treasuryAmount = ethers.parseEther("100")
+  ) {
+    proposalNonce++;
+    const currentBlock = await ethers.provider.getBlock("latest");
+    const expiry = currentBlock.timestamp + 3600 + proposalNonce;
+    const signature = await createProposalSignature(
+      passportSigner,
+      proposerAccount.address,
+      expiry
+    );
+    const deadline = currentBlock.timestamp + 30 * 24 * 3600; // 30 days
+
+    const rep = await getRepAttestation(proposerAccount, 90);
+
+    await governance
+      .connect(proposerAccount)
+      .createProposal(
+        track,
+        "Test Proposal",
+        "ipfs://QmTest",
+        treasuryAmount,
+        deadline,
+        "Complete deliverables",
+        expiry,
+        signature,
+        rep.reputation,
+        rep.expiry,
+        rep.signature
+      );
+
+    return await governance.proposalCounter();
+  }
+
+  // ============ Setup ============
 
   beforeEach(async function () {
     const signers = await ethers.getSigners();
-    [owner, passportSigner, delegationSigner, user1, user2, user3, proposer] = signers;
+    [owner, passportSigner, delegationSigner, user1, user2, user3, proposer] =
+      signers;
 
     // Deploy RoseToken
     const RoseToken = await ethers.getContractFactory("RoseToken");
@@ -127,21 +306,19 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     const VROSE = await ethers.getContractFactory("vROSE");
     vRose = await VROSE.deploy();
 
-    // Deploy mock marketplace and treasury (for testing)
+    // Deploy mock marketplace and treasury
     const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
     mockMarketplace = await MockMarketplace.deploy();
 
     const MockTreasury = await ethers.getContractFactory("MockTreasury");
     mockTreasury = await MockTreasury.deploy();
 
-    // Deploy RoseReputation first (needed by Governance)
+    // Deploy RoseReputation
     const RoseReputation = await ethers.getContractFactory("RoseReputation");
-    // Constructor: (governance, marketplace, reputationSigner)
-    // We'll deploy with placeholder addresses and update them later
     reputation = await RoseReputation.deploy(
       owner.address, // temporary governance
       await mockMarketplace.getAddress(),
-      passportSigner.address // reputation signer
+      passportSigner.address
     );
 
     // Deploy Governance
@@ -164,874 +341,2031 @@ describe("RoseGovernance V2 - VP Centric Model", function () {
     await mockMarketplace.setReputation(await reputation.getAddress());
     await governance.setDelegationSigner(delegationSigner.address);
 
-    // Mint tokens to users for testing
+    // Authorize token minting
     await roseToken.connect(owner).setAuthorized(owner.address, true);
+    await roseToken
+      .connect(owner)
+      .setAuthorized(await governance.getAddress(), true);
+
+    // Mint tokens to users
     await roseToken.connect(owner).mint(user1.address, ethers.parseEther("10000"));
     await roseToken.connect(owner).mint(user2.address, ethers.parseEther("10000"));
     await roseToken.connect(owner).mint(user3.address, ethers.parseEther("10000"));
-    await roseToken.connect(owner).mint(proposer.address, ethers.parseEther("10000"));
+    await roseToken
+      .connect(owner)
+      .mint(proposer.address, ethers.parseEther("10000"));
+
+    // Mint to treasury for proposal value checks
+    await roseToken
+      .connect(owner)
+      .mint(await mockTreasury.getAddress(), ethers.parseEther("1000000"));
 
     // Approve governance for token transfers
-    await roseToken.connect(user1).approve(await governance.getAddress(), ethers.MaxUint256);
-    await roseToken.connect(user2).approve(await governance.getAddress(), ethers.MaxUint256);
-    await roseToken.connect(user3).approve(await governance.getAddress(), ethers.MaxUint256);
-    await roseToken.connect(proposer).approve(await governance.getAddress(), ethers.MaxUint256);
+    await roseToken
+      .connect(user1)
+      .approve(await governance.getAddress(), ethers.MaxUint256);
+    await roseToken
+      .connect(user2)
+      .approve(await governance.getAddress(), ethers.MaxUint256);
+    await roseToken
+      .connect(user3)
+      .approve(await governance.getAddress(), ethers.MaxUint256);
+    await roseToken
+      .connect(proposer)
+      .approve(await governance.getAddress(), ethers.MaxUint256);
   });
 
-  describe("VP Calculation at Deposit", function () {
-    it("Should calculate and store VP at deposit time", async function () {
+  // ============ Test Sections ============
+
+  describe("Basic Staking", function () {
+    it("Should deposit ROSE and mint vROSE 1:1", async function () {
       const depositAmount = ethers.parseEther("100");
 
-      // Default reputation is 60%
-      const rep = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature);
+      await governance.connect(user1).deposit(depositAmount);
 
       const stakedRose = await governance.stakedRose(user1.address);
-      const votingPower = await governance.votingPower(user1.address);
+      const vRoseBalance = await vRose.balanceOf(user1.address);
 
       expect(stakedRose).to.equal(depositAmount);
-
-      // VP = sqrt(stakedRose) * (reputation / 100)
-      // VP = sqrt(100e18) * (60 / 100) = 10e9 * 0.6 = 6e9
-      const expectedVP = BigInt(Math.floor(Math.sqrt(Number(depositAmount)) * 0.6));
-      expect(votingPower).to.be.closeTo(expectedVP, expectedVP / 100n); // Allow 1% tolerance
-    });
-
-    it("Should emit VotingPowerChanged event on deposit", async function () {
-      const depositAmount = ethers.parseEther("100");
-
-      const rep = await getRepAttestation(user1);
-      await expect(governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature))
-        .to.emit(governance, "VotingPowerChanged");
-    });
-
-    it("Should update totalVotingPower on deposit", async function () {
-      const depositAmount = ethers.parseEther("100");
-
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(depositAmount, rep1.reputation, rep1.expiry, rep1.signature);
-      const totalVP1 = await governance.totalVotingPower();
-
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(depositAmount, rep2.reputation, rep2.expiry, rep2.signature);
-      const totalVP2 = await governance.totalVotingPower();
-
-      expect(totalVP2).to.be.gt(totalVP1);
-    });
-
-    it("Should mint vROSE 1:1 on deposit", async function () {
-      const depositAmount = ethers.parseEther("100");
-
-      const rep = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(depositAmount, rep.reputation, rep.expiry, rep.signature);
-
-      const vRoseBalance = await vRose.balanceOf(user1.address);
       expect(vRoseBalance).to.equal(depositAmount);
     });
-  });
 
-  describe("VP-Based Withdrawal", function () {
-    beforeEach(async function () {
-      const rep = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature);
+    it("Should emit Deposited event on deposit", async function () {
+      const depositAmount = ethers.parseEther("100");
+
+      await expect(governance.connect(user1).deposit(depositAmount))
+        .to.emit(governance, "Deposited")
+        .withArgs(user1.address, depositAmount);
     });
 
-    it("Should allow withdrawal when VP is not locked", async function () {
+    it("Should update totalStakedRose on deposit", async function () {
+      const amount1 = ethers.parseEther("100");
+      const amount2 = ethers.parseEther("200");
+
+      await governance.connect(user1).deposit(amount1);
+      await governance.connect(user2).deposit(amount2);
+
+      const totalStaked = await governance.totalStakedRose();
+      expect(totalStaked).to.equal(amount1 + amount2);
+    });
+
+    it("Should withdraw ROSE and burn vROSE", async function () {
+      const depositAmount = ethers.parseEther("100");
       const withdrawAmount = ethers.parseEther("50");
 
-      // No approval needed - governance burns vROSE directly
-      const rep = await getRepAttestation(user1);
-      await expect(governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature))
+      await governance.connect(user1).deposit(depositAmount);
+      await governance.connect(user1).withdraw(withdrawAmount);
+
+      const stakedRose = await governance.stakedRose(user1.address);
+      const vRoseBalance = await vRose.balanceOf(user1.address);
+
+      expect(stakedRose).to.equal(depositAmount - withdrawAmount);
+      expect(vRoseBalance).to.equal(depositAmount - withdrawAmount);
+    });
+
+    it("Should emit Withdrawn event on withdrawal", async function () {
+      const depositAmount = ethers.parseEther("100");
+      const withdrawAmount = ethers.parseEther("50");
+
+      await governance.connect(user1).deposit(depositAmount);
+
+      await expect(governance.connect(user1).withdraw(withdrawAmount))
         .to.emit(governance, "Withdrawn")
         .withArgs(user1.address, withdrawAmount);
-
-      const remainingStaked = await governance.stakedRose(user1.address);
-      expect(remainingStaked).to.equal(ethers.parseEther("50"));
     });
 
-    it("Should update VP on withdrawal", async function () {
-      const withdrawAmount = ethers.parseEther("50");
+    it("Should revert withdrawal if insufficient stake", async function () {
+      const depositAmount = ethers.parseEther("100");
 
-      const vpBefore = await governance.votingPower(user1.address);
+      await governance.connect(user1).deposit(depositAmount);
 
-      const rep = await getRepAttestation(user1);
-      await governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature);
-
-      const vpAfter = await governance.votingPower(user1.address);
-      expect(vpAfter).to.be.lt(vpBefore);
+      await expect(
+        governance.connect(user1).withdraw(ethers.parseEther("200"))
+      ).to.be.revertedWithCustomError(governance, "InsufficientStake");
     });
 
-    it("Should emit VotingPowerChanged on withdrawal", async function () {
-      const withdrawAmount = ethers.parseEther("50");
-
-      const rep = await getRepAttestation(user1);
-      await expect(governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature))
-        .to.emit(governance, "VotingPowerChanged");
+    it("Should revert deposit of zero amount", async function () {
+      await expect(
+        governance.connect(user1).deposit(0)
+      ).to.be.revertedWithCustomError(governance, "ZeroAmount");
     });
   });
 
-  describe("Multi-Delegation", function () {
-    // VP calculation: sqrt(100e18) * (100/100) = 10e9 VP for 100 ROSE with 100% rep
-    // We'll use small amounts relative to this scale
-    const SMALL_VP = BigInt(1e9); // 1 VP (in raw units)
-    const MEDIUM_VP = BigInt(2e9); // 2 VP
-
+  describe("Proposal Creation", function () {
     beforeEach(async function () {
-      // Set up eligible delegate and voter
-      await setupEligibleProposer(user2); // User2 is eligible delegate
-      await setupEligibleVoter(user1);    // User1 can vote
-
-      // User1 deposits
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      // User2 deposits (to be delegate)
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
+      await setupEligibleProposer(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
     });
 
-    it("Should allow delegating VP to eligible delegate", async function () {
-      const rep = await getRepAttestation(user1, 70); // Voter needs 70%+ reputation
-      await expect(governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature))
-        .to.emit(governance, "DelegationChanged")
-        .withArgs(user1.address, user2.address, SMALL_VP, true);
+    it("Should create Fast Track proposal with Pending status", async function () {
+      const proposalId = await createProposal(proposer, Track.Fast);
+
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.track).to.equal(Track.Fast);
+      expect(proposal.status).to.equal(ProposalStatus.Pending);
     });
 
-    it("Should track delegation amounts correctly", async function () {
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
+    it("Should create Slow Track proposal with Active status", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
 
-      const delegatedVP = await governance.delegatedVP(user1.address, user2.address);
-      const totalDelegatedOut = await governance.totalDelegatedOut(user1.address);
-      const totalDelegatedIn = await governance.totalDelegatedIn(user2.address);
-
-      expect(delegatedVP).to.equal(SMALL_VP);
-      expect(totalDelegatedOut).to.equal(SMALL_VP);
-      expect(totalDelegatedIn).to.equal(SMALL_VP);
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.track).to.equal(Track.Slow);
+      expect(proposal.status).to.equal(ProposalStatus.Active);
     });
 
-    it("Should reduce available VP after delegation", async function () {
-      const vpBefore = await governance.getAvailableVP(user1.address);
+    it("Should set correct voting times for Fast Track", async function () {
+      const proposalId = await createProposal(proposer, Track.Fast);
+      const proposal = await governance.proposals(proposalId);
 
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
-
-      const vpAfter = await governance.getAvailableVP(user1.address);
-      expect(vpAfter).to.equal(vpBefore - SMALL_VP);
-    });
-
-    it("Should allow delegating to multiple delegates", async function () {
-      await setupEligibleProposer(user3); // User3 is also eligible
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature);
-      const rep2 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user3.address, MEDIUM_VP, rep2.reputation, rep2.expiry, rep2.signature);
-
-      const delegatedToUser2 = await governance.delegatedVP(user1.address, user2.address);
-      const delegatedToUser3 = await governance.delegatedVP(user1.address, user3.address);
-      const totalDelegatedOut = await governance.totalDelegatedOut(user1.address);
-
-      expect(delegatedToUser2).to.equal(SMALL_VP);
-      expect(delegatedToUser3).to.equal(MEDIUM_VP);
-      expect(totalDelegatedOut).to.equal(SMALL_VP + MEDIUM_VP);
-    });
-
-    it("Should allow partial undelegation", async function () {
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, MEDIUM_VP, rep.reputation, rep.expiry, rep.signature);
-      await governance.connect(user1).undelegate(user2.address, SMALL_VP);
-
-      const remaining = await governance.delegatedVP(user1.address, user2.address);
-      expect(remaining).to.equal(MEDIUM_VP - SMALL_VP);
-    });
-
-    it("Should revert if delegating to self", async function () {
-      const rep = await getRepAttestation(user1, 70);
-      await expect(
-        governance.connect(user1).delegate(user1.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature)
-      ).to.be.revertedWithCustomError(governance, "CannotDelegateToSelf");
-    });
-
-    it("Should revert if delegating to ineligible delegate", async function () {
-      // User3 is not eligible (cold start)
-      const rep = await getRepAttestation(user1, 70);
-      await expect(
-        governance.connect(user1).delegate(user3.address, SMALL_VP, rep.reputation, rep.expiry, rep.signature)
-      ).to.be.revertedWithCustomError(governance, "IneligibleToDelegate");
-    });
-
-    it("Should revert if insufficient available VP", async function () {
-      const vpAmount = await governance.votingPower(user1.address);
-
-      const rep = await getRepAttestation(user1, 70);
-      await expect(
-        governance.connect(user1).delegate(user2.address, vpAmount + 1n, rep.reputation, rep.expiry, rep.signature)
-      ).to.be.revertedWithCustomError(governance, "InsufficientAvailableVP");
-    });
-
-    it("Should revert if delegate tries to delegate out (delegation chain)", async function () {
-      // User1 delegates to User2 (User2 is now a delegate)
-      const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
-
-      // Set up User3 as eligible delegate
-      await setupEligibleProposer(user3);
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      // User2 (who is a delegate) tries to delegate to User3 - should fail
-      const rep2 = await getRepAttestation(user2, 70);
-      await expect(
-        governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature)
-      ).to.be.revertedWithCustomError(governance, "DelegationChainNotAllowed");
-    });
-
-    it("Should revert if delegating to someone who has delegated out", async function () {
-      // Set up User3 as eligible delegate
-      await setupEligibleProposer(user3);
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      // User2 delegates to User3 (User2 is now a delegator)
-      const rep2 = await getRepAttestation(user2, 70);
-      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
-
-      // User1 tries to delegate to User2 (who is a delegator) - should fail
-      const rep1 = await getRepAttestation(user1, 70);
-      await expect(
-        governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature)
-      ).to.be.revertedWithCustomError(governance, "DelegationChainNotAllowed");
-    });
-
-    it("Should allow delegation after undelegating all incoming", async function () {
-      // User1 delegates to User2
-      const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
-
-      // Set up User3 as eligible delegate
-      await setupEligibleProposer(user3);
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      // User1 undelegates from User2 (User2 is no longer a delegate)
-      await governance.connect(user1).undelegate(user2.address, SMALL_VP);
-
-      // User2 can now delegate to User3
-      const rep2 = await getRepAttestation(user2, 70);
-      await expect(governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature))
-        .to.emit(governance, "DelegationChanged")
-        .withArgs(user2.address, user3.address, SMALL_VP, true);
-    });
-
-    it("Should allow receiving delegation after undelegating all outgoing", async function () {
-      // Set up User3 as eligible delegate
-      await setupEligibleProposer(user3);
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      // User2 delegates to User3 (User2 is now a delegator)
-      const rep2 = await getRepAttestation(user2, 70);
-      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
-
-      // User2 undelegates from User3 (User2 is no longer a delegator)
-      await governance.connect(user2).undelegate(user3.address, SMALL_VP);
-
-      // User1 can now delegate to User2
-      const rep1 = await getRepAttestation(user1, 70);
-      await expect(governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature))
-        .to.emit(governance, "DelegationChanged")
-        .withArgs(user1.address, user2.address, SMALL_VP, true);
-    });
-
-    it("canReceiveDelegation should return false for delegators", async function () {
-      // User2 delegates to user3 after setup
-      await setupEligibleProposer(user3);
-      const rep3 = await getRepAttestation(user3);
-      await governance.connect(user3).deposit(ethers.parseEther("100"), rep3.reputation, rep3.expiry, rep3.signature);
-
-      const rep2 = await getRepAttestation(user2, 70);
-      await governance.connect(user2).delegate(user3.address, SMALL_VP, rep2.reputation, rep2.expiry, rep2.signature);
-
-      // User2 is now a delegator
-      expect(await governance.canReceiveDelegation(user2.address)).to.equal(false);
-      expect(await governance.canReceiveDelegation(user1.address)).to.equal(true); // User1 has not delegated
-    });
-
-    it("canDelegateOut should return false for delegates", async function () {
-      // User1 delegates to User2
-      const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, SMALL_VP, rep1.reputation, rep1.expiry, rep1.signature);
-
-      // User2 is now a delegate
-      expect(await governance.canDelegateOut(user2.address)).to.equal(false);
-      expect(await governance.canDelegateOut(user1.address)).to.equal(true); // User1 has not received delegation
-    });
-  });
-
-  describe("VP-Based Voting", function () {
-    let proposalId;
-    // VP amounts must be in raw units. For 100 ROSE with 100% rep, VP ≈ 10e9
-    const VP_AMOUNT = BigInt(1e9); // 1 VP
-    const VP_AMOUNT_SMALL = BigInt(5e8); // 0.5 VP
-    let proposalNonce = 0;
-
-    // Helper to create proposal (with unique expiry each time)
-    async function createProposal(proposerAccount) {
-      proposalNonce++;
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const expiry = currentBlock.timestamp + 3600 + proposalNonce; // Unique expiry
-      const signature = await createProposalSignature(passportSigner, proposerAccount.address, "propose", expiry);
-      const deadline = currentBlock.timestamp + 30 * 24 * 3600; // 30 days
-
-      // Need actual ROSE in treasury for proposal value check
-      await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
-
-      // Get reputation attestation
-      const rep = await getRepAttestation(proposerAccount, 90); // Proposer needs 90%+ rep
-
-      await governance.connect(proposerAccount).propose(
-        "Test Proposal",
-        "ipfs://QmTest",
-        ethers.parseEther("100"),
-        deadline,
-        "Complete deliverables",
-        expiry,
-        signature,
-        rep.reputation,
-        rep.expiry,
-        rep.signature
+      // Fast track: voting starts after snapshot delay
+      const expectedStart = (await ethers.provider.getBlock("latest")).timestamp;
+      expect(proposal.votingStartsAt).to.be.closeTo(
+        BigInt(expectedStart) + BigInt(SNAPSHOT_DELAY),
+        5n
       );
-    }
+    });
+
+    it("Should set correct voting times for Slow Track", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+      const proposal = await governance.proposals(proposalId);
+
+      // Slow track: voting starts immediately
+      const currentTime = (await ethers.provider.getBlock("latest")).timestamp;
+      expect(proposal.votingStartsAt).to.be.closeTo(BigInt(currentTime), 5n);
+    });
+
+    it("Should emit ProposalCreated event", async function () {
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createProposalSignature(
+        passportSigner,
+        proposer.address,
+        expiry
+      );
+      const rep = await getRepAttestation(proposer, 90);
+
+      await expect(
+        governance.connect(proposer).createProposal(
+          Track.Fast,
+          "Test",
+          "ipfs://test",
+          ethers.parseEther("100"),
+          currentBlock.timestamp + 30 * 24 * 3600,
+          "Deliverables",
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        )
+      )
+        .to.emit(governance, "ProposalCreated")
+        .withArgs(1, proposer.address, Track.Fast, ethers.parseEther("100"));
+    });
+
+    it("Should revert Fast Track if treasury amount exceeds 1% limit", async function () {
+      // Treasury has 1,000,000 ROSE, so 1% = 10,000 ROSE
+      const largeAmount = ethers.parseEther("20000"); // 2% of treasury
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createProposalSignature(
+        passportSigner,
+        proposer.address,
+        expiry
+      );
+      const rep = await getRepAttestation(proposer, 90);
+
+      await expect(
+        governance.connect(proposer).createProposal(
+          Track.Fast,
+          "Test",
+          "ipfs://test",
+          largeAmount,
+          currentBlock.timestamp + 30 * 24 * 3600,
+          "Deliverables",
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        )
+      ).to.be.revertedWithCustomError(governance, "FastTrackExceedsTreasuryLimit");
+    });
+
+    it("Should allow Slow Track with large treasury amount", async function () {
+      const largeAmount = ethers.parseEther("50000"); // 5% of treasury
+
+      const proposalId = await createProposal(proposer, Track.Slow, largeAmount);
+      const proposal = await governance.proposals(proposalId);
+
+      expect(proposal.treasuryAmount).to.equal(largeAmount);
+      expect(proposal.track).to.equal(Track.Slow);
+    });
+
+    it("Should revert if proposer has insufficient reputation", async function () {
+      // user1 has no tasks completed
+      await governance.connect(user1).deposit(ethers.parseEther("1000"));
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createProposalSignature(
+        passportSigner,
+        user1.address,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 60); // Below 90% threshold
+
+      await expect(
+        governance.connect(user1).createProposal(
+          Track.Slow,
+          "Test",
+          "ipfs://test",
+          ethers.parseEther("100"),
+          currentBlock.timestamp + 30 * 24 * 3600,
+          "Deliverables",
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        )
+      ).to.be.revertedWithCustomError(governance, "IneligibleToVote");
+    });
+
+    it("Should allow editing proposal", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+
+      await governance
+        .connect(proposer)
+        .editProposal(
+          proposalId,
+          "Updated Title",
+          "ipfs://updated",
+          ethers.parseEther("150"),
+          (await ethers.provider.getBlock("latest")).timestamp + 60 * 24 * 3600,
+          "Updated deliverables"
+        );
+
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.title).to.equal("Updated Title");
+      expect(proposal.treasuryAmount).to.equal(ethers.parseEther("150"));
+      expect(proposal.editCount).to.equal(1);
+    });
+
+    it("Should allow cancelling proposal", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+
+      await governance.connect(proposer).cancelProposal(proposalId);
+
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Cancelled);
+    });
+
+    it("Should revert edit if not proposer", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+
+      await expect(
+        governance
+          .connect(user1)
+          .editProposal(
+            proposalId,
+            "Hacked",
+            "ipfs://hacked",
+            ethers.parseEther("999999"),
+            0,
+            "Hacked"
+          )
+      ).to.be.revertedWithCustomError(governance, "OnlyProposerCanEdit");
+    });
+
+    it("Should revert after max 4 edits", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const deadline = currentBlock.timestamp + 60 * 24 * 3600;
+
+      // First 4 edits should succeed
+      for (let i = 1; i <= 4; i++) {
+        await governance
+          .connect(proposer)
+          .editProposal(
+            proposalId,
+            `Edit ${i}`,
+            `ipfs://edit${i}`,
+            ethers.parseEther("100"),
+            deadline,
+            "Deliverables"
+          );
+
+        const proposal = await governance.proposals(proposalId);
+        expect(proposal.editCount).to.equal(i);
+      }
+
+      // 5th edit should fail
+      await expect(
+        governance
+          .connect(proposer)
+          .editProposal(
+            proposalId,
+            "Edit 5",
+            "ipfs://edit5",
+            ethers.parseEther("100"),
+            deadline,
+            "Deliverables"
+          )
+      ).to.be.revertedWithCustomError(governance, "MaxEditCyclesReached");
+    });
+  });
+
+  describe("Fast Track Voting (Merkle Proofs)", function () {
+    let proposalId;
+    let merkleTree;
+    let voters;
 
     beforeEach(async function () {
-      // Set up eligible proposer and voter
+      // Setup eligible proposer and voters
       await setupEligibleProposer(proposer);
       await setupEligibleVoter(user1);
+      await setupEligibleVoter(user2);
 
-      // Deposit to get VP
-      const repProposer = await getRepAttestation(proposer);
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
+      // Deposit stakes
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
+      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      await governance.connect(user2).deposit(ethers.parseEther("200"));
 
-      // Create proposal
-      await createProposal(proposer);
-      proposalId = 1;
+      // Create Fast Track proposal
+      proposalId = await createProposal(proposer, Track.Fast);
+
+      // Build merkle tree with voters
+      // VP = sqrt(staked) * (rep / 100) in 9 decimals
+      // user1: sqrt(100e18) * 0.7 ≈ 7e9 VP
+      // user2: sqrt(200e18) * 0.7 ≈ 9.9e9 VP
+      voters = [
+        { address: user1.address, vpAmount: BigInt(7e9) },
+        { address: user2.address, vpAmount: BigInt("9899494936") }, // sqrt(200e18) * 0.7
+      ];
+      merkleTree = buildVPMerkleTree(voters);
+
+      // Calculate total VP
+      const totalVP = voters.reduce((sum, v) => sum + v.vpAmount, 0n);
+
+      // Advance time past snapshot delay
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      // Set merkle root (backend signature)
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        proposalId,
+        merkleTree.root,
+        totalVP,
+        expiry
+      );
+
+      await governance.setVPMerkleRoot(
+        proposalId,
+        merkleTree.root,
+        totalVP,
+        expiry,
+        signature
+      );
     });
 
-    it("Should allow voting with VP and signature", async function () {
-      const support = true;
-      const expiry = Math.floor(Date.now() / 1000) + 3600;
-      const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+    it("Should activate proposal after merkle root is set", async function () {
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Active);
+      expect(proposal.vpMerkleRoot).to.equal(merkleTree.root);
+    });
+
+    it("Should emit ProposalActivated event", async function () {
+      // Create another proposal to test event
+      const newProposalId = await createProposal(proposer, Track.Fast);
+
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      const totalVP = voters.reduce((sum, v) => sum + v.vpAmount, 0n);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        newProposalId,
+        merkleTree.root,
+        totalVP,
+        expiry
+      );
+
+      await expect(
+        governance.setVPMerkleRoot(
+          newProposalId,
+          merkleTree.root,
+          totalVP,
+          expiry,
+          signature
+        )
+      )
+        .to.emit(governance, "ProposalActivated")
+        .withArgs(newProposalId, merkleTree.root, totalVP);
+    });
+
+    it("Should allow voting with valid merkle proof", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry
+      );
       const rep = await getRepAttestation(user1, 70);
 
-      await expect(governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature))
-        .to.emit(governance, "VPAllocatedToProposal");
+      await expect(
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            voter.vpAmount,
+            proof,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      )
+        .to.emit(governance, "VoteCastFast")
+        .withArgs(proposalId, user1.address, true, voter.vpAmount);
     });
 
-    it("Should lock VP to proposal", async function () {
-      const support = true;
-      const expiry = Math.floor(Date.now() / 1000) + 3600;
-      const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+    it("Should record vote correctly", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry
+      );
       const rep = await getRepAttestation(user1, 70);
 
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature);
+      await governance
+        .connect(user1)
+        .voteFast(
+          proposalId,
+          true,
+          voter.vpAmount,
+          proof,
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
 
-      const allocatedProposal = await governance.allocatedToProposal(user1.address);
-      const lockedVP = await governance.proposalVPLocked(user1.address);
+      const vote = await governance.votes(proposalId, user1.address);
+      expect(vote.hasVoted).to.be.true;
+      expect(vote.support).to.be.true;
+      expect(vote.vpAmount).to.equal(voter.vpAmount);
 
-      expect(allocatedProposal).to.equal(proposalId);
-      expect(lockedVP).to.equal(VP_AMOUNT);
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.forVotes).to.equal(voter.vpAmount);
     });
 
-    it("Should reduce available VP after voting", async function () {
-      const support = true;
-      const expiry = Math.floor(Date.now() / 1000) + 3600;
-      const signature = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT, support, expiry);
+    it("Should reject invalid merkle proof", async function () {
+      const voter = voters[0];
+      const invalidProof = [ethers.keccak256(ethers.toUtf8Bytes("invalid"))];
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry
+      );
       const rep = await getRepAttestation(user1, 70);
 
-      const availableBefore = await governance.getAvailableVP(user1.address);
-
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT, support, expiry, signature, rep.reputation, rep.expiry, rep.signature);
-
-      const availableAfter = await governance.getAvailableVP(user1.address);
-      expect(availableAfter).to.equal(availableBefore - VP_AMOUNT);
+      await expect(
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            voter.vpAmount,
+            invalidProof,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "InvalidMerkleProof");
     });
 
-    it("Should allow increasing vote (same direction)", async function () {
-      const support = true;
+    it("Should reject proof with wrong VP amount", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+      const wrongVpAmount = voter.vpAmount + 1n; // Wrong amount
 
-      const expiry1 = Math.floor(Date.now() / 1000) + 3600;
-      const signature1 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, support, expiry1);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        wrongVpAmount,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            wrongVpAmount,
+            proof,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "InvalidMerkleProof");
+    });
+
+    it("Should prevent double voting on same proposal", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+
+      // First vote
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry1 = currentBlock.timestamp + 3600;
+      const signature1 = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry1
+      );
       const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry1, signature1, rep1.reputation, rep1.expiry, rep1.signature);
 
-      const expiry2 = Math.floor(Date.now() / 1000) + 3601;
-      const signature2 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, support, expiry2);
-      const rep2 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, support, expiry2, signature2, rep2.reputation, rep2.expiry, rep2.signature);
+      await governance
+        .connect(user1)
+        .voteFast(
+          proposalId,
+          true,
+          voter.vpAmount,
+          proof,
+          expiry1,
+          signature1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
 
-      const lockedVP = await governance.proposalVPLocked(user1.address);
-      expect(lockedVP).to.equal(VP_AMOUNT_SMALL + VP_AMOUNT_SMALL);
-    });
-
-    it("Should revert if changing vote direction", async function () {
-      const expiry1 = Math.floor(Date.now() / 1000) + 3600;
-      const signature1 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, true, expiry1);
-      const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, true, expiry1, signature1, rep1.reputation, rep1.expiry, rep1.signature);
-
-      const expiry2 = Math.floor(Date.now() / 1000) + 3601;
-      const signature2 = await createVoteSignature(passportSigner, user1.address, proposalId, VP_AMOUNT_SMALL, false, expiry2);
+      // Second vote attempt
+      const expiry2 = expiry1 + 1;
+      const signature2 = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry2
+      );
       const rep2 = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(proposalId, VP_AMOUNT_SMALL, false, expiry2, signature2, rep2.reputation, rep2.expiry, rep2.signature)
-      ).to.be.revertedWithCustomError(governance, "CannotChangeVoteDirection");
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            voter.vpAmount,
+            proof,
+            expiry2,
+            signature2,
+            rep2.reputation,
+            rep2.expiry,
+            rep2.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "AlreadyVoted");
     });
 
-    it("Should revert if VP locked to different proposal", async function () {
-      // Create second proposal
-      await createProposal(proposer);
+    it("Should allow voting on multiple Fast Track proposals (abundant VP)", async function () {
+      // Create second Fast Track proposal
+      const proposalId2 = await createProposal(proposer, Track.Fast);
+
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      // Set merkle root for second proposal
+      const totalVP = voters.reduce((sum, v) => sum + v.vpAmount, 0n);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        proposalId2,
+        merkleTree.root,
+        totalVP,
+        expiry
+      );
+      await governance.setVPMerkleRoot(
+        proposalId2,
+        merkleTree.root,
+        totalVP,
+        expiry,
+        signature
+      );
+
+      const voter = voters[0];
 
       // Vote on first proposal
-      const voteExpiry = Math.floor(Date.now() / 1000) + 3600;
-      const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
+      const proof1 = getMerkleProof(merkleTree, voter.address);
+      const expiry1 = (await ethers.provider.getBlock("latest")).timestamp + 3600;
+      const sig1 = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry1
+      );
       const rep1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, rep1.reputation, rep1.expiry, rep1.signature);
 
-      // Try to vote on second proposal (should fail)
-      const voteSig2 = await createVoteSignature(passportSigner, user1.address, 2, VP_AMOUNT, true, voteExpiry + 1);
+      await governance
+        .connect(user1)
+        .voteFast(
+          proposalId,
+          true,
+          voter.vpAmount,
+          proof1,
+          expiry1,
+          sig1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
+
+      // Vote on second proposal with FULL VP (abundant VP - can use same VP)
+      const proof2 = getMerkleProof(merkleTree, voter.address);
+      const expiry2 = expiry1 + 1;
+      const sig2 = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId2,
+        true,
+        voter.vpAmount,
+        expiry2
+      );
       const rep2 = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(2, VP_AMOUNT, true, voteExpiry + 1, voteSig2, rep2.reputation, rep2.expiry, rep2.signature)
-      ).to.be.revertedWithCustomError(governance, "VPLockedToAnotherProposal");
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId2,
+            true,
+            voter.vpAmount,
+            proof2,
+            expiry2,
+            sig2,
+            rep2.reputation,
+            rep2.expiry,
+            rep2.signature
+          )
+      ).to.emit(governance, "VoteCastFast");
+
+      // Verify both votes recorded with full VP
+      const vote1 = await governance.votes(proposalId, user1.address);
+      const vote2 = await governance.votes(proposalId2, user1.address);
+      expect(vote1.vpAmount).to.equal(voter.vpAmount);
+      expect(vote2.vpAmount).to.equal(voter.vpAmount);
+
+      // Verify proposal forVotes totals are updated correctly
+      const proposal1 = await governance.proposals(proposalId);
+      const proposal2 = await governance.proposals(proposalId2);
+      expect(proposal1.forVotes).to.equal(voter.vpAmount);
+      expect(proposal2.forVotes).to.equal(voter.vpAmount);
     });
 
-    it("Should allow proposer to vote on other proposals", async function () {
-      // Create second proposal from user1
-      await setupEligibleProposer(user1);
-      await createProposal(user1);
+    it("Should reject expired signature", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
 
-      // User1 can vote on first proposal (not their own)
-      const voteExpiry = Math.floor(Date.now() / 1000) + 3600;
-      const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiredExpiry = currentBlock.timestamp - 1; // Already expired
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiredExpiry
+      );
       const rep = await getRepAttestation(user1, 70);
 
       await expect(
-        governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, rep.reputation, rep.expiry, rep.signature)
-      ).to.emit(governance, "VPAllocatedToProposal");
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            voter.vpAmount,
+            proof,
+            expiredExpiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "SignatureExpired");
+    });
+
+    it("Should reject voting on own proposal", async function () {
+      // Add proposer to merkle tree
+      const proposerVP = BigInt(10e9);
+      const proposerVoters = [
+        ...voters,
+        { address: proposer.address, vpAmount: proposerVP },
+      ];
+      const proposerTree = buildVPMerkleTree(proposerVoters);
+      const proof = getMerkleProof(proposerTree, proposer.address);
+
+      // Create new proposal with proposer merkle tree
+      const newProposalId = await createProposal(proposer, Track.Fast);
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      const totalVP = proposerVoters.reduce((sum, v) => sum + v.vpAmount, 0n);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const rootSig = await createMerkleRootSignature(
+        delegationSigner,
+        newProposalId,
+        proposerTree.root,
+        totalVP,
+        expiry
+      );
+      await governance.setVPMerkleRoot(
+        newProposalId,
+        proposerTree.root,
+        totalVP,
+        expiry,
+        rootSig
+      );
+
+      // Try to vote on own proposal
+      const voteSig = await createFastVoteSignature(
+        passportSigner,
+        proposer.address,
+        newProposalId,
+        true,
+        proposerVP,
+        expiry + 1
+      );
+      const rep = await getRepAttestation(proposer, 90);
+
+      await expect(
+        governance
+          .connect(proposer)
+          .voteFast(
+            newProposalId,
+            true,
+            proposerVP,
+            proof,
+            expiry + 1,
+            voteSig,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "CannotVoteOnOwnProposal");
+    });
+
+    it("Should reject voting if insufficient reputation", async function () {
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        proposalId,
+        true,
+        voter.vpAmount,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 50); // Below 70% threshold
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteFast(
+            proposalId,
+            true,
+            voter.vpAmount,
+            proof,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "IneligibleToVote");
     });
   });
 
-  describe("freeVP After Proposal Resolution", function () {
+  describe("Slow Track Voting (Attestations)", function () {
     let proposalId;
-    let proposalNonce = 0;
-
-    // Helper to create proposal (with unique expiry each time)
-    async function createProposal(proposerAccount) {
-      proposalNonce++;
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const expiry = currentBlock.timestamp + 3600 + proposalNonce;
-      const signature = await createProposalSignature(passportSigner, proposerAccount.address, "propose", expiry);
-      const deadline = currentBlock.timestamp + 30 * 24 * 3600;
-
-      // Need actual ROSE in treasury for proposal value check
-      await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
-
-      // Get reputation attestation
-      const rep = await getRepAttestation(proposerAccount, 90);
-
-      await governance.connect(proposerAccount).propose(
-        "Test Proposal",
-        "ipfs://QmTest",
-        ethers.parseEther("100"),
-        deadline,
-        "Complete deliverables",
-        expiry,
-        signature,
-        rep.reputation,
-        rep.expiry,
-        rep.signature
-      );
-    }
+    let proposalId2;
+    const user1VP = BigInt(7e9); // Available VP for user1
+    const user2VP = BigInt(10e9); // Available VP for user2
 
     beforeEach(async function () {
       await setupEligibleProposer(proposer);
       await setupEligibleVoter(user1);
       await setupEligibleVoter(user2);
 
-      const repProposer = await getRepAttestation(proposer);
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("500"), rep2.reputation, rep2.expiry, rep2.signature); // More stake to help meet quorum
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
+      await governance.connect(user1).deposit(ethers.parseEther("100"));
+      await governance.connect(user2).deposit(ethers.parseEther("200"));
 
-      // Create proposal
-      await createProposal(proposer);
-      proposalId = 1;
+      // Create Slow Track proposals
+      proposalId = await createProposal(proposer, Track.Slow);
+      proposalId2 = await createProposal(proposer, Track.Slow);
 
-      // Vote on proposal with enough VP to meet quorum (33% of total)
-      // User1 votes with their full VP
-      const user1VP = await governance.votingPower(user1.address);
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const voteExpiry = currentBlock.timestamp + 3600;
-      const voteSig = await createVoteSignature(passportSigner, user1.address, proposalId, user1VP, true, voteExpiry);
-      const repVote1 = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(proposalId, user1VP, true, voteExpiry, voteSig, repVote1.reputation, repVote1.expiry, repVote1.signature);
-
-      // User2 also votes to ensure quorum
-      const user2VP = await governance.votingPower(user2.address);
-      const currentBlock2 = await ethers.provider.getBlock("latest");
-      const voteExpiry2 = currentBlock2.timestamp + 3600;
-      const voteSig2 = await createVoteSignature(passportSigner, user2.address, proposalId, user2VP, true, voteExpiry2);
-      const repVote2 = await getRepAttestation(user2, 70);
-      await governance.connect(user2).vote(proposalId, user2VP, true, voteExpiry2, voteSig2, repVote2.reputation, repVote2.expiry, repVote2.signature);
+      // Set total VP for slow track (backend would do this)
+      // For testing, we use the totalStakedRose as totalVP at finalization
     });
 
-    it("Should revert freeVP if proposal still active", async function () {
+    it("Should allow voting with valid attestation", async function () {
+      const nonce = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const signature = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP,
+        user1VP, // availableVP
+        nonce,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
       await expect(
-        governance.connect(user1).freeVP(proposalId)
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId,
+            true,
+            user1VP,
+            user1VP,
+            nonce,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      )
+        .to.emit(governance, "VoteCastSlow")
+        .withArgs(proposalId, user1.address, true, user1VP, nonce);
+    });
+
+    it("Should increment nonce after voting", async function () {
+      const nonceBefore = await governance.allocationNonce(user1.address);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP,
+        user1VP,
+        nonceBefore,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId,
+          true,
+          user1VP,
+          user1VP,
+          nonceBefore,
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      const nonceAfter = await governance.allocationNonce(user1.address);
+      expect(nonceAfter).to.equal(nonceBefore + 1n);
+    });
+
+    it("Should reject stale nonce", async function () {
+      // First vote to increment nonce
+      const nonce0 = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const sig1 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP / 2n,
+        user1VP,
+        nonce0,
+        expiry
+      );
+      const rep1 = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId,
+          true,
+          user1VP / 2n,
+          user1VP,
+          nonce0,
+          expiry,
+          sig1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
+
+      // Try to use the same (now stale) nonce
+      const sig2 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId2,
+        true,
+        user1VP / 2n,
+        user1VP / 2n, // Reduced available VP
+        nonce0, // STALE nonce
+        expiry + 1
+      );
+      const rep2 = await getRepAttestation(user1, 70);
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId2,
+            true,
+            user1VP / 2n,
+            user1VP / 2n,
+            nonce0,
+            expiry + 1,
+            sig2,
+            rep2.reputation,
+            rep2.expiry,
+            rep2.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "StaleNonce");
+    });
+
+    it("Should reject expired attestation", async function () {
+      const nonce = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiredExpiry = currentBlock.timestamp - 1; // Already expired
+
+      const signature = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP,
+        user1VP,
+        nonce,
+        expiredExpiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId,
+            true,
+            user1VP,
+            user1VP,
+            nonce,
+            expiredExpiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "SignatureExpired");
+    });
+
+    it("Should reject if voting more than available VP", async function () {
+      const nonce = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const signature = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP + 1n, // More than available
+        user1VP,
+        nonce,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId,
+            true,
+            user1VP + 1n,
+            user1VP,
+            nonce,
+            expiry,
+            signature,
+            rep.reputation,
+            rep.expiry,
+            rep.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "InsufficientAvailableVP");
+    });
+
+    it("Should allow vote updates (change VP amount)", async function () {
+      // First vote
+      const nonce1 = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const sig1 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP / 2n,
+        user1VP,
+        nonce1,
+        expiry
+      );
+      const rep1 = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId,
+          true,
+          user1VP / 2n,
+          user1VP,
+          nonce1,
+          expiry,
+          sig1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
+
+      // Update vote with different amount
+      const nonce2 = await governance.allocationNonce(user1.address);
+      const sig2 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP, // Increased amount
+        user1VP,
+        nonce2,
+        expiry + 1
+      );
+      const rep2 = await getRepAttestation(user1, 70);
+
+      await expect(
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId,
+            true,
+            user1VP,
+            user1VP,
+            nonce2,
+            expiry + 1,
+            sig2,
+            rep2.reputation,
+            rep2.expiry,
+            rep2.signature
+          )
+      )
+        .to.emit(governance, "VoteUpdated")
+        .withArgs(proposalId, user1.address, user1VP / 2n, user1VP);
+    });
+
+    it("Should track VP budget across slow track proposals (scarce VP)", async function () {
+      // Vote on first proposal with half VP
+      const nonce1 = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const sig1 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP / 2n,
+        user1VP, // Full VP available at start
+        nonce1,
+        expiry
+      );
+      const rep1 = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId,
+          true,
+          user1VP / 2n,
+          user1VP,
+          nonce1,
+          expiry,
+          sig1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
+
+      // Vote on second proposal - backend would attest reduced available VP
+      const nonce2 = await governance.allocationNonce(user1.address);
+      const remainingVP = user1VP / 2n; // Half VP remaining after first vote
+
+      const sig2 = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId2,
+        true,
+        remainingVP,
+        remainingVP, // Backend attests only remaining VP
+        nonce2,
+        expiry + 1
+      );
+      const rep2 = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId2,
+          true,
+          remainingVP,
+          remainingVP,
+          nonce2,
+          expiry + 1,
+          sig2,
+          rep2.reputation,
+          rep2.expiry,
+          rep2.signature
+        );
+
+      // Verify votes on both proposals
+      const vote1 = await governance.votes(proposalId, user1.address);
+      const vote2 = await governance.votes(proposalId2, user1.address);
+      expect(vote1.vpAmount).to.equal(user1VP / 2n);
+      expect(vote2.vpAmount).to.equal(remainingVP);
+    });
+
+    it("Should reject reused signature", async function () {
+      const nonce = await governance.allocationNonce(user1.address);
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      const signature = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        proposalId,
+        true,
+        user1VP,
+        user1VP,
+        nonce,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      // First use
+      await governance
+        .connect(user1)
+        .voteSlow(
+          proposalId,
+          true,
+          user1VP,
+          user1VP,
+          nonce,
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      // Try to reuse same signature (would need same nonce which is now stale)
+      // This is actually caught by StaleNonce, but signature replay protection also exists
+      const rep2 = await getRepAttestation(user1, 70);
+      await expect(
+        governance
+          .connect(user1)
+          .voteSlow(
+            proposalId,
+            true,
+            user1VP,
+            user1VP,
+            nonce,
+            expiry,
+            signature,
+            rep2.reputation,
+            rep2.expiry,
+            rep2.signature
+          )
+      ).to.be.revertedWithCustomError(governance, "StaleNonce");
+    });
+  });
+
+  describe("Quorum and Finalization", function () {
+    let fastProposalId;
+    let slowProposalId;
+    let merkleTree;
+    let voters;
+
+    beforeEach(async function () {
+      await setupEligibleProposer(proposer);
+      await setupEligibleVoter(user1);
+      await setupEligibleVoter(user2);
+
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
+      await governance.connect(user1).deposit(ethers.parseEther("1000"));
+      await governance.connect(user2).deposit(ethers.parseEther("1000"));
+
+      // Create proposals
+      fastProposalId = await createProposal(proposer, Track.Fast);
+      slowProposalId = await createProposal(proposer, Track.Slow);
+
+      // Set up merkle tree for fast track
+      voters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+        { address: user2.address, vpAmount: BigInt(100e9) },
+      ];
+      merkleTree = buildVPMerkleTree(voters);
+      const totalVP = BigInt(200e9);
+
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        fastProposalId,
+        merkleTree.root,
+        totalVP,
+        expiry
+      );
+      await governance.setVPMerkleRoot(
+        fastProposalId,
+        merkleTree.root,
+        totalVP,
+        expiry,
+        signature
+      );
+    });
+
+    it("Should calculate Fast Track quorum at 10%", async function () {
+      const [current, required] = await governance.getQuorumProgress(fastProposalId);
+      const totalVP = await governance.proposalTotalVP(fastProposalId);
+
+      // 10% of 200e9 = 20e9
+      expect(required).to.equal((totalVP * BigInt(FAST_QUORUM_BPS)) / BigInt(BASIS_POINTS));
+      expect(current).to.equal(0n);
+    });
+
+    it("Should pass proposal when quorum met and >58.33% for votes", async function () {
+      // Vote to meet quorum (10% of 200e9 = 20e9)
+      // Vote with full VP for votes
+      const voter = voters[0];
+      const proof = getMerkleProof(merkleTree, voter.address);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createFastVoteSignature(
+        passportSigner,
+        voter.address,
+        fastProposalId,
+        true,
+        voter.vpAmount,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteFast(
+          fastProposalId,
+          true,
+          voter.vpAmount,
+          proof,
+          expiry,
+          signature,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      // Advance time past voting period
+      await time.increase(FAST_DURATION + 1);
+
+      // Finalize
+      await governance.finalizeProposal(fastProposalId);
+
+      const proposal = await governance.proposals(fastProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Passed);
+    });
+
+    it("Should fail proposal when quorum met but <58.33% for votes", async function () {
+      // Both users vote - user1 for, user2 against (50/50 split)
+      const voter1 = voters[0];
+      const proof1 = getMerkleProof(merkleTree, voter1.address);
+      let currentBlock = await ethers.provider.getBlock("latest");
+      let expiry = currentBlock.timestamp + 3600;
+
+      const sig1 = await createFastVoteSignature(
+        passportSigner,
+        voter1.address,
+        fastProposalId,
+        true,
+        voter1.vpAmount,
+        expiry
+      );
+      const rep1 = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteFast(
+          fastProposalId,
+          true,
+          voter1.vpAmount,
+          proof1,
+          expiry,
+          sig1,
+          rep1.reputation,
+          rep1.expiry,
+          rep1.signature
+        );
+
+      const voter2 = voters[1];
+      const proof2 = getMerkleProof(merkleTree, voter2.address);
+      const sig2 = await createFastVoteSignature(
+        passportSigner,
+        voter2.address,
+        fastProposalId,
+        false, // Against
+        voter2.vpAmount,
+        expiry + 1
+      );
+      const rep2 = await getRepAttestation(user2, 70);
+
+      await governance
+        .connect(user2)
+        .voteFast(
+          fastProposalId,
+          false,
+          voter2.vpAmount,
+          proof2,
+          expiry + 1,
+          sig2,
+          rep2.reputation,
+          rep2.expiry,
+          rep2.signature
+        );
+
+      await time.increase(FAST_DURATION + 1);
+      await governance.finalizeProposal(fastProposalId);
+
+      const proposal = await governance.proposals(fastProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Failed);
+    });
+
+    it("Should extend voting if quorum not met", async function () {
+      // Don't vote - quorum won't be met
+      await time.increase(FAST_DURATION + 1);
+
+      const proposalBefore = await governance.proposals(fastProposalId);
+      const endsBefore = proposalBefore.votingEndsAt;
+
+      await governance.finalizeProposal(fastProposalId);
+
+      const proposalAfter = await governance.proposals(fastProposalId);
+      expect(proposalAfter.status).to.equal(ProposalStatus.Active); // Still active
+      expect(proposalAfter.votingEndsAt).to.be.gt(endsBefore); // Extended
+
+      const extensions = await governance.proposalExtensions(fastProposalId);
+      expect(extensions).to.equal(1);
+    });
+
+    it("Should fail after max quorum extensions (3)", async function () {
+      // 3 extensions without meeting quorum
+      for (let i = 0; i < 3; i++) {
+        await time.increase(FAST_DURATION + 1);
+        await governance.finalizeProposal(fastProposalId);
+      }
+
+      const extensions = await governance.proposalExtensions(fastProposalId);
+      expect(extensions).to.equal(3);
+
+      // 4th attempt should fail the proposal
+      await time.increase(FAST_DURATION + 1);
+      await governance.finalizeProposal(fastProposalId);
+
+      const proposal = await governance.proposals(fastProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Failed);
+    });
+
+    it("Should record failed proposal on reputation", async function () {
+      const statsBefore = await reputation.userStats(proposer.address);
+      const failedBefore = statsBefore.failedProposals;
+
+      // Fail the proposal
+      for (let i = 0; i < 4; i++) {
+        await time.increase(FAST_DURATION + 1);
+        await governance.finalizeProposal(fastProposalId);
+      }
+
+      const statsAfter = await reputation.userStats(proposer.address);
+      expect(statsAfter.failedProposals).to.equal(failedBefore + 1n);
+    });
+
+    it("Should revert finalize before voting ends", async function () {
+      await expect(
+        governance.finalizeProposal(fastProposalId)
       ).to.be.revertedWithCustomError(governance, "ProposalNotEnded");
     });
 
-    it("Should allow freeVP after proposal passes", async function () {
-      // Fast forward past voting period
-      await time.increase(VOTING_PERIOD + 1);
+    it("Slow Track should reject finalizeProposal() and require finalizeSlowProposal()", async function () {
+      await time.increase(SLOW_DURATION + 1);
 
-      // Finalize proposal
-      await governance.finalizeProposal(proposalId);
-
-      // Now user can free VP
-      await expect(governance.connect(user1).freeVP(proposalId))
-        .to.emit(governance, "VPFreedFromProposal");
-
-      const allocatedProposal = await governance.allocatedToProposal(user1.address);
-      const lockedVP = await governance.proposalVPLocked(user1.address);
-
-      expect(allocatedProposal).to.equal(0);
-      expect(lockedVP).to.equal(0);
-    });
-
-    it("Should restore available VP after freeVP", async function () {
-      const availableBefore = await governance.getAvailableVP(user1.address);
-
-      // Fast forward and finalize
-      await time.increase(VOTING_PERIOD + 1);
-      await governance.finalizeProposal(proposalId);
-
-      await governance.connect(user1).freeVP(proposalId);
-
-      const availableAfter = await governance.getAvailableVP(user1.address);
-      expect(availableAfter).to.be.gt(availableBefore);
-    });
-  });
-
-  describe("Withdrawal with Locked VP", function () {
-    const VP_AMOUNT = BigInt(1e9); // 1 VP
-    let proposalNonce = 0;
-
-    // Helper to create proposal (with unique expiry each time)
-    async function createProposal(proposerAccount) {
-      proposalNonce++;
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const expiry = currentBlock.timestamp + 3600 + proposalNonce;
-      const signature = await createProposalSignature(passportSigner, proposerAccount.address, "propose", expiry);
-      const deadline = currentBlock.timestamp + 30 * 24 * 3600;
-
-      // Need actual ROSE in treasury for proposal value check
-      await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
-
-      // Get reputation attestation
-      const rep = await getRepAttestation(proposerAccount, 90);
-
-      await governance.connect(proposerAccount).propose(
-        "Test Proposal",
-        "ipfs://QmTest",
-        ethers.parseEther("100"),
-        deadline,
-        "Complete deliverables",
-        expiry,
-        signature,
-        rep.reputation,
-        rep.expiry,
-        rep.signature
-      );
-    }
-
-    beforeEach(async function () {
-      await setupEligibleProposer(proposer);
-      await setupEligibleVoter(user1);
-      await setupEligibleProposer(user2);
-
-      const repProposer = await getRepAttestation(proposer);
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
-    });
-
-    it("Should revert withdrawal if VP is delegated", async function () {
-      // Delegate most of the VP
-      const userVP = await governance.votingPower(user1.address);
-      const repDel = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, userVP - 1n, repDel.reputation, repDel.expiry, repDel.signature);
-
-      // Try to withdraw all - should fail since VP is locked in delegation
-      const rep = await getRepAttestation(user1);
+      // Regular finalizeProposal should revert for Slow Track
       await expect(
-        governance.connect(user1).withdraw(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature)
-      ).to.be.revertedWithCustomError(governance, "VPLocked");
+        governance.finalizeProposal(slowProposalId)
+      ).to.be.revertedWithCustomError(governance, "ProposalNotActive");
     });
 
-    it("Should revert withdrawal if VP is on proposal", async function () {
-      // Create proposal and vote
-      await createProposal(proposer);
+    it("Slow Track should finalize with merkle snapshot via finalizeSlowProposal()", async function () {
+      await time.increase(SLOW_DURATION + 1);
 
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const voteExpiry = currentBlock.timestamp + 3600;
-      const voteSig = await createVoteSignature(passportSigner, user1.address, 1, VP_AMOUNT, true, voteExpiry);
-      const repVote = await getRepAttestation(user1, 70);
-      await governance.connect(user1).vote(1, VP_AMOUNT, true, voteExpiry, voteSig, repVote.reputation, repVote.expiry, repVote.signature);
+      // Build merkle tree for finalization snapshot
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+        { address: user2.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(200e9);
 
-      // Try to withdraw all - should fail since VP is locked in proposal
-      const rep = await getRepAttestation(user1);
-      await expect(
-        governance.connect(user1).withdraw(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature)
-      ).to.be.revertedWithCustomError(governance, "VPLocked");
-    });
-
-    it("Should allow partial withdrawal when VP is available", async function () {
-      // Don't delegate or vote - all VP is available
-      const withdrawAmount = ethers.parseEther("10"); // Small amount
-
-      // Should succeed since no VP is locked
-      const rep = await getRepAttestation(user1);
-      await expect(
-        governance.connect(user1).withdraw(withdrawAmount, rep.reputation, rep.expiry, rep.signature)
-      ).to.emit(governance, "Withdrawn");
-
-      const remaining = await governance.stakedRose(user1.address);
-      expect(remaining).to.equal(ethers.parseEther("90"));
-    });
-  });
-
-  describe("Delegated Voting with Signature", function () {
-    let proposalId;
-    const VP_AMOUNT = BigInt(1e9); // 1 VP
-    let proposalNonce = 0;
-
-    // Helper to create proposal (with unique expiry each time)
-    async function createProposal(proposerAccount) {
-      proposalNonce++;
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const expiry = currentBlock.timestamp + 3600 + proposalNonce;
-      const signature = await createProposalSignature(passportSigner, proposerAccount.address, "propose", expiry);
-      const deadline = currentBlock.timestamp + 30 * 24 * 3600;
-
-      // Need actual ROSE in treasury for proposal value check
-      await roseToken.connect(owner).mint(await mockTreasury.getAddress(), ethers.parseEther("10000"));
-
-      // Get reputation attestation
-      const rep = await getRepAttestation(proposerAccount, 90);
-
-      await governance.connect(proposerAccount).propose(
-        "Test Proposal",
-        "ipfs://QmTest",
-        ethers.parseEther("100"),
-        deadline,
-        "Complete deliverables",
-        expiry,
-        signature,
-        rep.reputation,
-        rep.expiry,
-        rep.signature
-      );
-    }
-
-    beforeEach(async function () {
-      await setupEligibleProposer(proposer);
-      await setupEligibleProposer(user2); // Delegate
-      await setupEligibleVoter(user1);
-
-      const repProposer = await getRepAttestation(proposer);
-      await governance.connect(proposer).deposit(ethers.parseEther("1000"), repProposer.reputation, repProposer.expiry, repProposer.signature);
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
-
-      // User1 delegates to user2
-      const repDel = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, repDel.reputation, repDel.expiry, repDel.signature);
-
-      // Create proposal
-      await createProposal(proposer);
-      proposalId = 1;
-    });
-
-    it("Should allow delegate to cast vote with received VP", async function () {
-      const support = true;
       const currentBlock = await ethers.provider.getBlock("latest");
       const expiry = currentBlock.timestamp + 3600;
-
-      // Phase 1: Get current nonce for delegate
-      const nonce = await governance.delegationNonce(user2.address);
-
-      const allocations = [{ delegator: user1.address, powerUsed: VP_AMOUNT }];
-      const allocationsHash = computeAllocationsHash(proposalId, user2.address, allocations);
-
-      // Phase 1: Include nonce in signature
-      const signature = await createDelegatedVoteSignature(
+      const signature = await createSlowFinalizeSignature(
         delegationSigner,
-        user2.address,
-        proposalId,
-        VP_AMOUNT,
-        support,
-        allocationsHash,
-        nonce,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
         expiry
       );
 
-      // Phase 1: Pass allocations and nonce to castDelegatedVote
-      await expect(
-        governance.connect(user2).castDelegatedVote(
-          proposalId,
-          VP_AMOUNT,
-          support,
-          allocationsHash,
-          allocations.map(a => [a.delegator, a.powerUsed]),
-          nonce,
-          expiry,
-          signature
-        )
-      ).to.emit(governance, "VPAllocatedToProposal");
-    });
-
-    it("Should update proposal votes with delegated VP", async function () {
-      const support = true;
-      const currentBlock = await ethers.provider.getBlock("latest");
-      const expiry = currentBlock.timestamp + 3600;
-
-      // Phase 1: Get current nonce for delegate
-      const nonce = await governance.delegationNonce(user2.address);
-
-      const allocations = [{ delegator: user1.address, powerUsed: VP_AMOUNT }];
-      const allocationsHash = computeAllocationsHash(proposalId, user2.address, allocations);
-
-      // Phase 1: Include nonce in signature
-      const signature = await createDelegatedVoteSignature(
-        delegationSigner,
-        user2.address,
-        proposalId,
-        VP_AMOUNT,
-        support,
-        allocationsHash,
-        nonce,
-        expiry
-      );
-
-      const proposalBefore = await governance.proposals(proposalId);
-      const yayBefore = proposalBefore.yayVotes;
-
-      // Phase 1: Pass allocations and nonce to castDelegatedVote
-      await governance.connect(user2).castDelegatedVote(
-        proposalId,
-        VP_AMOUNT,
-        support,
-        allocationsHash,
-        allocations.map(a => [a.delegator, a.powerUsed]),
-        nonce,
+      // Finalize with snapshot
+      await governance.finalizeSlowProposal(
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
         expiry,
         signature
       );
 
-      const proposalAfter = await governance.proposals(proposalId);
-      expect(proposalAfter.yayVotes).to.equal(yayBefore + VP_AMOUNT);
+      // Check merkle root and totalVP were set
+      const proposal = await governance.proposals(slowProposalId);
+      expect(proposal.vpMerkleRoot).to.equal(snapshotTree.root);
+
+      const totalVP = await governance.proposalTotalVP(slowProposalId);
+      expect(totalVP).to.equal(snapshotTotalVP);
+    });
+
+    it("Slow Track should use 25% quorum from submitted totalVP", async function () {
+      // First, cast some votes on slow track to meet quorum
+      const nonce = await governance.allocationNonce(user1.address);
+      const user1VP = BigInt(60e9); // 60 VP
+
+      let currentBlock = await ethers.provider.getBlock("latest");
+      let expiry = currentBlock.timestamp + 3600;
+
+      const voteSig = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        slowProposalId,
+        true,
+        user1VP,
+        user1VP,
+        nonce,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          slowProposalId,
+          true,
+          user1VP,
+          user1VP,
+          nonce,
+          expiry,
+          voteSig,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      await time.increase(SLOW_DURATION + 1);
+
+      // Build merkle tree where totalVP = 200e9, so 25% quorum = 50e9
+      // user1 voted 60e9, which exceeds 50e9 quorum
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+        { address: user2.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(200e9);
+
+      currentBlock = await ethers.provider.getBlock("latest");
+      expiry = currentBlock.timestamp + 3600;
+      const finalizeSig = await createSlowFinalizeSignature(
+        delegationSigner,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await governance.finalizeSlowProposal(
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry,
+        finalizeSig
+      );
+
+      // Should pass (60 votes > 50 quorum, 100% for)
+      const proposal = await governance.proposals(slowProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Passed);
+    });
+
+    it("Should reject finalizeSlowProposal with invalid signature", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      // Sign with wrong signer
+      const badSignature = await createSlowFinalizeSignature(
+        user1, // Wrong signer
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          slowProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiry,
+          badSignature
+        )
+      ).to.be.revertedWithCustomError(governance, "InvalidSignature");
+    });
+
+    it("Should reject finalizeSlowProposal with expired signature", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      // Expired timestamp
+      const expiredTimestamp = 1;
+      const signature = await createSlowFinalizeSignature(
+        delegationSigner,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiredTimestamp
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          slowProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiredTimestamp,
+          signature
+        )
+      ).to.be.revertedWithCustomError(governance, "SignatureExpired");
+    });
+
+    it("Should reject finalizeSlowProposal for Fast Track proposals", async function () {
+      await time.increase(FAST_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createSlowFinalizeSignature(
+        delegationSigner,
+        fastProposalId, // Fast Track proposal
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          fastProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiry,
+          signature
+        )
+      ).to.be.revertedWithCustomError(governance, "ProposalNotActive");
     });
   });
 
-  describe("Total VP Tracking", function () {
-    it("Should track total VP correctly across deposits", async function () {
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const total1 = await governance.totalVotingPower();
-
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
-      const total2 = await governance.totalVotingPower();
-
-      expect(total2).to.be.gt(total1);
+  describe("Delegate Opt-In", function () {
+    beforeEach(async function () {
+      await governance.connect(user1).deposit(ethers.parseEther("100"));
     });
 
-    it("Should reduce total VP on withdrawal", async function () {
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const totalBefore = await governance.totalVotingPower();
+    it("Should allow opting in as delegate", async function () {
+      await governance.connect(user1).setDelegateOptIn(true);
 
-      const rep2 = await getRepAttestation(user1);
-      await governance.connect(user1).withdraw(ethers.parseEther("50"), rep2.reputation, rep2.expiry, rep2.signature);
-
-      const totalAfter = await governance.totalVotingPower();
-      expect(totalAfter).to.be.lt(totalBefore);
+      const isOptedIn = await governance.isDelegateOptedIn(user1.address);
+      expect(isOptedIn).to.be.true;
     });
 
-    it("Should emit TotalVPUpdated on VP changes", async function () {
-      const rep = await getRepAttestation(user1);
-      await expect(governance.connect(user1).deposit(ethers.parseEther("100"), rep.reputation, rep.expiry, rep.signature))
-        .to.emit(governance, "TotalVPUpdated");
+    it("Should emit DelegateOptInChanged event", async function () {
+      await expect(governance.connect(user1).setDelegateOptIn(true))
+        .to.emit(governance, "DelegateOptInChanged")
+        .withArgs(user1.address, true);
+    });
+
+    it("Should allow opting out as delegate", async function () {
+      await governance.connect(user1).setDelegateOptIn(true);
+      await governance.connect(user1).setDelegateOptIn(false);
+
+      const isOptedIn = await governance.isDelegateOptedIn(user1.address);
+      expect(isOptedIn).to.be.false;
+    });
+
+    it("canReceiveDelegation should return true when opted in and has stake", async function () {
+      await governance.connect(user1).setDelegateOptIn(true);
+
+      const canReceive = await governance.canReceiveDelegation(user1.address);
+      expect(canReceive).to.be.true;
+    });
+
+    it("canReceiveDelegation should return false when not opted in", async function () {
+      const canReceive = await governance.canReceiveDelegation(user1.address);
+      expect(canReceive).to.be.false;
+    });
+
+    it("canReceiveDelegation should return false when no stake", async function () {
+      await governance.connect(user2).setDelegateOptIn(true);
+
+      const canReceive = await governance.canReceiveDelegation(user2.address);
+      expect(canReceive).to.be.false;
+    });
+  });
+
+  describe("Execution and Rewards", function () {
+    let proposalId;
+
+    beforeEach(async function () {
+      await setupEligibleProposer(proposer);
+      await setupEligibleVoter(user1);
+
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
+      await governance.connect(user1).deposit(ethers.parseEther("1000"));
+
+      // Create and activate fast track proposal
+      proposalId = await createProposal(proposer, Track.Fast);
+
+      const voters = [{ address: user1.address, vpAmount: BigInt(100e9) }];
+      const merkleTree = buildVPMerkleTree(voters);
+      const totalVP = BigInt(100e9);
+
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        proposalId,
+        merkleTree.root,
+        totalVP,
+        expiry
+      );
+      await governance.setVPMerkleRoot(
+        proposalId,
+        merkleTree.root,
+        totalVP,
+        expiry,
+        signature
+      );
+
+      // Vote for the proposal
+      const proof = getMerkleProof(merkleTree, user1.address);
+      const voteSig = await createFastVoteSignature(
+        passportSigner,
+        user1.address,
+        proposalId,
+        true,
+        BigInt(100e9),
+        expiry + 1
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteFast(
+          proposalId,
+          true,
+          BigInt(100e9),
+          proof,
+          expiry + 1,
+          voteSig,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      // Finalize to pass
+      await time.increase(FAST_DURATION + 1);
+      await governance.finalizeProposal(proposalId);
+    });
+
+    it("Should execute passed proposal and create marketplace task", async function () {
+      await expect(governance.executeProposal(proposalId))
+        .to.emit(governance, "ProposalExecuted");
+
+      const proposal = await governance.proposals(proposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Executed);
+      expect(proposal.taskId).to.be.gt(0);
+    });
+
+    it("Should revert execute if proposal not passed", async function () {
+      // Create another proposal that hasn't passed
+      const newProposalId = await createProposal(proposer, Track.Slow);
+
+      await expect(
+        governance.executeProposal(newProposalId)
+      ).to.be.revertedWithCustomError(governance, "ProposalNotPassed");
+    });
+
+    it("Should distribute rewards on task completion", async function () {
+      await governance.executeProposal(proposalId);
+      const proposal = await governance.proposals(proposalId);
+
+      // Complete task through marketplace
+      await expect(mockMarketplace.completeTask(proposal.taskId))
+        .to.emit(governance, "RewardsDistributed");
+
+      // Check reward pool was created
+      const rewardPool = await governance.voterRewardPool(proposalId);
+      expect(rewardPool).to.be.gt(0);
+    });
+
+    it("Should not distribute rewards for failed proposals", async function () {
+      // Create a new proposal that will fail
+      const failedProposalId = await createProposal(proposer, Track.Fast);
+
+      // Set up merkle tree for the new proposal
+      const failedVoters = [{ address: user1.address, vpAmount: BigInt(100e9) }];
+      const failedTree = buildVPMerkleTree(failedVoters);
+      const failedTotalVP = BigInt(100e9);
+
+      await time.increase(SNAPSHOT_DELAY + 1);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createMerkleRootSignature(
+        delegationSigner,
+        failedProposalId,
+        failedTree.root,
+        failedTotalVP,
+        expiry
+      );
+      await governance.setVPMerkleRoot(
+        failedProposalId,
+        failedTree.root,
+        failedTotalVP,
+        expiry,
+        signature
+      );
+
+      // Vote against the proposal
+      const proof = getMerkleProof(failedTree, user1.address);
+      const voteSig = await createFastVoteSignature(
+        passportSigner,
+        user1.address,
+        failedProposalId,
+        false, // Vote against
+        BigInt(100e9),
+        expiry + 1
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteFast(
+          failedProposalId,
+          false, // Against
+          BigInt(100e9),
+          proof,
+          expiry + 1,
+          voteSig,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
+
+      // Finalize - should fail because 100% against
+      await time.increase(FAST_DURATION + 1);
+      await governance.finalizeProposal(failedProposalId);
+
+      const proposal = await governance.proposals(failedProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Failed);
+
+      // Failed proposals cannot be executed, therefore no rewards can ever be distributed
+      // (rewards are only distributed via onTaskComplete which requires execution)
+      await expect(
+        governance.executeProposal(failedProposalId)
+      ).to.be.revertedWithCustomError(governance, "ProposalNotPassed");
+
+      // Verify no task was created (taskId remains 0)
+      expect(proposal.taskId).to.equal(0);
+    });
+  });
+
+  describe("Admin Functions", function () {
+    it("Should allow owner to set snapshot delay", async function () {
+      const newDelay = 2 * 24 * 60 * 60; // 2 days
+
+      await expect(governance.connect(owner).setSnapshotDelay(newDelay))
+        .to.emit(governance, "ConfigUpdated")
+        .withArgs("snapshotDelay", newDelay);
+
+      expect(await governance.snapshotDelay()).to.equal(newDelay);
+    });
+
+    it("Should allow owner to set fast duration", async function () {
+      const newDuration = 5 * 24 * 60 * 60; // 5 days
+
+      await governance.connect(owner).setFastDuration(newDuration);
+
+      expect(await governance.fastDuration()).to.equal(newDuration);
+    });
+
+    it("Should allow owner to set slow duration", async function () {
+      const newDuration = 21 * 24 * 60 * 60; // 21 days
+
+      await governance.connect(owner).setSlowDuration(newDuration);
+
+      expect(await governance.slowDuration()).to.equal(newDuration);
+    });
+
+    it("Should allow owner to set fast quorum", async function () {
+      const newQuorum = 1500; // 15%
+
+      await governance.connect(owner).setFastQuorumBps(newQuorum);
+
+      expect(await governance.fastQuorumBps()).to.equal(newQuorum);
+    });
+
+    it("Should allow owner to set slow quorum", async function () {
+      const newQuorum = 3000; // 30%
+
+      await governance.connect(owner).setSlowQuorumBps(newQuorum);
+
+      expect(await governance.slowQuorumBps()).to.equal(newQuorum);
+    });
+
+    it("Should allow owner to set fast track limit", async function () {
+      const newLimit = 200; // 2%
+
+      await governance.connect(owner).setFastTrackLimitBps(newLimit);
+
+      expect(await governance.fastTrackLimitBps()).to.equal(newLimit);
+    });
+
+    it("Should revert admin calls from non-owner", async function () {
+      await expect(
+        governance.connect(user1).setSnapshotDelay(1000)
+      ).to.be.revertedWithCustomError(governance, "NotOwner");
+    });
+
+    it("Should allow owner to transfer ownership", async function () {
+      await governance.connect(owner).transferOwnership(user1.address);
+
+      // New owner should be able to call admin functions
+      await expect(
+        governance.connect(user1).setSnapshotDelay(1000)
+      ).to.not.be.reverted;
+
+      // Old owner should not
+      await expect(
+        governance.connect(owner).setSnapshotDelay(2000)
+      ).to.be.revertedWithCustomError(governance, "NotOwner");
     });
   });
 
   describe("View Functions", function () {
-    const VP_AMOUNT = BigInt(1e9); // 1 VP
-
     beforeEach(async function () {
-      await setupEligibleProposer(user2);
-      await setupEligibleVoter(user1);
-
-      const rep1 = await getRepAttestation(user1);
-      await governance.connect(user1).deposit(ethers.parseEther("100"), rep1.reputation, rep1.expiry, rep1.signature);
-      const rep2 = await getRepAttestation(user2);
-      await governance.connect(user2).deposit(ethers.parseEther("100"), rep2.reputation, rep2.expiry, rep2.signature);
+      await setupEligibleProposer(proposer);
+      await governance.connect(proposer).deposit(ethers.parseEther("1000"));
     });
 
-    it("Should return correct available VP", async function () {
-      const vpBefore = await governance.getAvailableVP(user1.address);
-      expect(vpBefore).to.be.gt(0);
+    it("getVotePower should calculate VP correctly", async function () {
+      // VP = sqrt(amount) * (rep / 100)
+      const amount = ethers.parseEther("100"); // 100e18
+      const rep = 80;
 
-      // Delegate some
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, rep.reputation, rep.expiry, rep.signature);
+      const vp = await governance.getVotePower(amount, rep);
 
-      const vpAfter = await governance.getAvailableVP(user1.address);
-      expect(vpAfter).to.be.lt(vpBefore);
+      // sqrt(100e18) ≈ 10e9, * 0.8 = 8e9
+      const expected = BigInt(8e9);
+      expect(vp).to.be.closeTo(expected, expected / 10n); // Allow 10% tolerance
     });
 
-    it("Should return user delegations", async function () {
-      const rep = await getRepAttestation(user1, 70);
-      await governance.connect(user1).delegate(user2.address, VP_AMOUNT, rep.reputation, rep.expiry, rep.signature);
+    it("getQuorumProgress should return current and required", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
 
-      const [delegates, amounts] = await governance.getUserDelegations(user1.address);
-      expect(delegates.length).to.equal(1);
-      expect(delegates[0]).to.equal(user2.address);
-      expect(amounts[0]).to.equal(VP_AMOUNT);
+      const [current, required] = await governance.getQuorumProgress(proposalId);
+
+      expect(current).to.equal(0n);
+      // Slow track requires 25% quorum
+      // Since totalVP is 0 initially for slow track, required will be 0
+      // After finalization, it uses totalStakedRose
     });
-  });
-});
 
-// Mock contracts for testing
-describe("Mock Contracts", function () {
-  it("MockMarketplace and MockTreasury are deployed as needed by tests above", async function () {
-    // This just ensures the contract factories exist
-    const MockMarketplace = await ethers.getContractFactory("MockMarketplace");
-    const MockTreasury = await ethers.getContractFactory("MockTreasury");
-    expect(MockMarketplace).to.not.be.undefined;
-    expect(MockTreasury).to.not.be.undefined;
+    it("getVoteResult should return for and against percentages", async function () {
+      const proposalId = await createProposal(proposer, Track.Slow);
+
+      const [forPercent, againstPercent] = await governance.getVoteResult(proposalId);
+
+      // No votes yet
+      expect(forPercent).to.equal(0n);
+      expect(againstPercent).to.equal(0n);
+    });
   });
 });
