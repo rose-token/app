@@ -1,9 +1,12 @@
 /**
  * DelegateCard - Preview card for eligible delegates
- * Shows reputation, vote accuracy, total received VP, and delegation action
+ * Shows reputation, vote accuracy, own VP, and delegation action
  *
- * VP-centric model: Users delegate VP directly (not ROSE)
- * Multi-delegation: Can delegate to multiple delegates simultaneously
+ * Off-chain EIP-712 Delegation Model:
+ * - Users sign EIP-712 typed data to delegate VP
+ * - Delegations stored in backend, reflected in VP snapshots
+ * - Multi-delegation: Can delegate to multiple delegates simultaneously
+ * - Revocation requires signed authorization
  */
 
 import React, { useState } from 'react';
@@ -18,15 +21,14 @@ import { useVoteAccuracy } from '../../hooks/useVoteAccuracy';
 const DelegateCard = React.memo(({
   address,
   onDelegate,
-  onUndelegate,
+  onRevoke,
   loading = false,
   currentDelegatedVP = '0',  // VP currently delegated to this delegate
   availableVP = '0',          // User's available VP for delegation
 }) => {
   const [delegateAmount, setDelegateAmount] = useState('');
-  const [undelegateAmount, setUndelegateAmount] = useState('');
   const [showDelegateForm, setShowDelegateForm] = useState(false);
-  const [showUndelegateForm, setShowUndelegateForm] = useState(false);
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
 
   // Fetch delegate info
   const { data: delegateData } = useReadContracts({
@@ -38,24 +40,18 @@ const DelegateCard = React.memo(({
         functionName: 'getReputation',
         args: [address],
       },
-      // Delegation data stays on Governance
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'totalDelegatedIn',
-        args: [address],
-      },
+      // Voting power from Governance
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'votingPower',
         args: [address],
       },
-      // Eligibility from RoseReputation contract
+      // Combined eligibility: reputation + opt-in + stake
       {
-        address: CONTRACTS.REPUTATION,
-        abi: RoseReputationABI,
-        functionName: 'canDelegate',
+        address: CONTRACTS.GOVERNANCE,
+        abi: RoseGovernanceABI,
+        functionName: 'canReceiveDelegation',
         args: [address],
       },
     ],
@@ -72,22 +68,16 @@ const DelegateCard = React.memo(({
     ? Number(delegateData[0].result)
     : 60;
 
-  const totalDelegatedInRaw = delegateData?.[1]?.status === 'success'
+  const votingPowerRaw = delegateData?.[1]?.status === 'success'
     ? delegateData[1].result
     : 0n;
 
-  const votingPowerRaw = delegateData?.[2]?.status === 'success'
+  const canReceiveDelegation = delegateData?.[2]?.status === 'success'
     ? delegateData[2].result
-    : 0n;
-
-  const canReceiveDelegation = delegateData?.[3]?.status === 'success'
-    ? delegateData[3].result
     : false;
 
   // Convert from raw to human-readable VP (VP has 9 decimals from sqrt)
   const ownVotingPower = Number(votingPowerRaw) / 1e9;
-  const receivedVP = Number(totalDelegatedInRaw) / 1e9;
-  const totalVP = ownVotingPower + receivedVP;
 
   // Current delegation from user to this delegate
   const currentDelegation = parseFloat(currentDelegatedVP || '0');
@@ -114,23 +104,17 @@ const DelegateCard = React.memo(({
     }
   };
 
-  const handleUndelegate = async () => {
-    if (!undelegateAmount || parseFloat(undelegateAmount) <= 0) return;
+  const handleRevoke = async () => {
     try {
-      await onUndelegate(address, undelegateAmount);
-      setUndelegateAmount('');
-      setShowUndelegateForm(false);
+      await onRevoke(address);
+      setShowRevokeConfirm(false);
     } catch (err) {
-      console.error('Undelegation failed:', err);
+      console.error('Revocation failed:', err);
     }
   };
 
   const handleMaxDelegate = () => {
     setDelegateAmount(availableForDelegation.toFixed(2));
-  };
-
-  const handleMaxUndelegate = () => {
-    setUndelegateAmount(currentDelegation.toFixed(2));
   };
 
   return (
@@ -160,22 +144,10 @@ const DelegateCard = React.memo(({
           </p>
         </div>
         <div className="text-center p-2 rounded" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total VP</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Own VP</p>
           <p className="font-semibold text-sm">
-            {formatVotePower(totalVP)} VP
+            {formatVotePower(ownVotingPower)} VP
           </p>
-        </div>
-      </div>
-
-      {/* VP Breakdown */}
-      <div className="mb-4 p-2 rounded text-xs" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-        <div className="flex justify-between mb-1">
-          <span style={{ color: 'var(--text-muted)' }}>Own VP:</span>
-          <span>{formatVotePower(ownVotingPower)} VP</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: 'var(--text-muted)' }}>Received VP:</span>
-          <span className="text-green-500">{formatVotePower(receivedVP)} VP</span>
         </div>
       </div>
 
@@ -193,7 +165,7 @@ const DelegateCard = React.memo(({
       )}
 
       {/* Action Buttons */}
-      {canReceiveDelegation && !showDelegateForm && !showUndelegateForm && (
+      {canReceiveDelegation && !showDelegateForm && !showRevokeConfirm && (
         <div className="flex gap-2">
           {/* Delegate Button */}
           {availableForDelegation > 0 && (
@@ -205,13 +177,13 @@ const DelegateCard = React.memo(({
             </button>
           )}
 
-          {/* Undelegate Button */}
+          {/* Revoke Button */}
           {hasExistingDelegation && (
             <button
-              onClick={() => setShowUndelegateForm(true)}
+              onClick={() => setShowRevokeConfirm(true)}
               className="btn-secondary flex-1 text-sm"
             >
-              Remove VP
+              Revoke
             </button>
           )}
         </div>
@@ -272,54 +244,27 @@ const DelegateCard = React.memo(({
         </div>
       )}
 
-      {/* Undelegate Form */}
-      {showUndelegateForm && (
+      {/* Revoke Confirmation */}
+      {showRevokeConfirm && (
         <div className="space-y-3">
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Currently delegated: {formatVotePower(currentDelegation)} VP
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Revoke delegation of {formatVotePower(currentDelegation)} VP to this delegate?
           </p>
           <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="number"
-                value={undelegateAmount}
-                onChange={(e) => setUndelegateAmount(e.target.value)}
-                placeholder="VP amount"
-                min="0"
-                max={currentDelegation}
-                step="0.01"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{
-                  backgroundColor: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-color)',
-                }}
-              />
-              <span
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                VP
-              </span>
-            </div>
             <button
-              onClick={handleMaxUndelegate}
-              className="px-2 py-2 rounded-lg text-xs"
-              style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}
+              onClick={handleRevoke}
+              disabled={loading}
+              className="flex-1 text-sm py-2 rounded-lg"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: 'var(--error)',
+                opacity: loading ? 0.5 : 1,
+              }}
             >
-              Max
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleUndelegate}
-              disabled={loading || !undelegateAmount || parseFloat(undelegateAmount) <= 0 || parseFloat(undelegateAmount) > currentDelegation}
-              className="btn-secondary flex-1 text-sm py-2"
-              style={{ opacity: loading || !undelegateAmount || parseFloat(undelegateAmount) <= 0 ? 0.5 : 1 }}
-            >
-              {loading ? 'Removing...' : 'Remove VP'}
+              {loading ? 'Revoking...' : 'Confirm Revoke'}
             </button>
             <button
-              onClick={() => { setShowUndelegateForm(false); setUndelegateAmount(''); }}
+              onClick={() => setShowRevokeConfirm(false)}
               className="btn-secondary flex-1 text-sm py-2"
             >
               Cancel
@@ -334,7 +279,7 @@ const DelegateCard = React.memo(({
           className="p-2 rounded-lg text-sm text-center"
           style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}
         >
-          Not eligible (90%+ rep + 10 tasks required)
+          Not eligible (90%+ rep, 10+ tasks, stake, and opt-in required)
         </div>
       )}
     </div>

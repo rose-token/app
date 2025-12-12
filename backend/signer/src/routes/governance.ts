@@ -77,6 +77,12 @@ router.get('/vp/available/:address', async (req: Request, res: Response) => {
       totalVP: result.totalVP.toString(),
       allocatedVP: result.allocatedVP.toString(),
       availableVP: result.availableVP.toString(),
+      allocations: result.allocations.map(alloc => ({
+        proposalId: alloc.proposalId,
+        vpAmount: alloc.vpAmount.toString(),
+        support: alloc.support,
+        deadline: alloc.deadline,
+      })),
     } as VPAvailableResponse);
   } catch (error) {
     console.error('Error fetching available VP:', error);

@@ -783,6 +783,12 @@ export interface VPAvailableResponse {
   totalVP: string;
   allocatedVP: string;
   availableVP: string;
+  allocations: Array<{
+    proposalId: number;
+    vpAmount: string;
+    support: boolean;
+    deadline: number;
+  }>;
 }
 
 // Attestation request for Slow Track voting

@@ -197,6 +197,12 @@ router.get('/available/:address', async (req: Request, res: Response) => {
       totalVP: result.totalVP.toString(),
       allocatedVP: result.allocatedVP.toString(),
       availableVP: result.availableVP.toString(),
+      allocations: result.allocations.map(alloc => ({
+        proposalId: alloc.proposalId,
+        vpAmount: alloc.vpAmount.toString(),
+        support: alloc.support,
+        deadline: alloc.deadline,
+      })),
     });
   } catch (error) {
     console.error('[SlowTrack] Error fetching available VP:', error);

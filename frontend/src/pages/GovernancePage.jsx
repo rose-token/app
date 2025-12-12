@@ -14,6 +14,7 @@ import ProposalFilters from '../components/governance/ProposalFilters';
 import StakingPanel from '../components/governance/StakingPanel';
 import ClaimRewardsPanel from '../components/governance/ClaimRewardsPanel';
 import ReputationBadge from '../components/governance/ReputationBadge';
+import VPAllocationDashboard from '../components/governance/VPAllocationDashboard';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import { usePassport } from '../hooks/usePassport';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
@@ -241,6 +242,9 @@ const GovernancePage = () => {
                 </Link>
               </div>
             </div>
+
+            {/* VP Allocation Dashboard (Slow Track) */}
+            <VPAllocationDashboard />
 
             {/* Staking Panel */}
             <StakingPanel />

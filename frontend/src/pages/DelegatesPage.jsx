@@ -16,6 +16,7 @@ import RoseReputationABI from '../contracts/RoseReputationABI.json';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
 import DelegateCard from '../components/governance/DelegateCard';
+import DelegateOptIn from '../components/governance/DelegateOptIn';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 
@@ -31,8 +32,8 @@ const DelegatesPage = () => {
     error,
     setError,
     delegateTo,
-    undelegateFrom,
-    undelegateAll,
+    revokeDelegation,
+    revokeAllDelegations,
     refetch: refetchDelegations,
   } = useDelegation();
 
@@ -96,19 +97,20 @@ const DelegatesPage = () => {
           addr => addr && addr.toLowerCase() !== account?.toLowerCase()
         );
 
-        // Check canDelegate for each address (on Reputation contract, not Governance)
-        const canDelegateResults = await publicClient.multicall({
+        // Check canReceiveDelegation for each address (on Governance contract)
+        // This combines reputation check + opt-in check + stake check
+        const canReceiveResults = await publicClient.multicall({
           contracts: filtered.map(addr => ({
-            address: CONTRACTS.REPUTATION,
-            abi: RoseReputationABI,
-            functionName: 'canDelegate',
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'canReceiveDelegation',
             args: [addr],
           })),
         });
 
-        // Keep only addresses that can receive delegation
+        // Keep only addresses that can receive delegation (reputation + opt-in + stake)
         const eligibleDelegates = filtered.filter((addr, index) => {
-          return canDelegateResults[index].result === true;
+          return canReceiveResults[index].result === true;
         });
 
         setPotentialDelegates(eligibleDelegates);
@@ -144,7 +146,7 @@ const DelegatesPage = () => {
     const delegation = (delegations || []).find(
       d => d.delegate?.toLowerCase() === delegateAddr.toLowerCase()
     );
-    return delegation ? formatUnits(BigInt(delegation.vpAmount), 9) : '0';
+    return delegation ? formatUnits(BigInt(delegation.vpAmount || '0'), 9) : '0';
   };
 
   const handleDelegate = async (address, vpAmount) => {
@@ -156,21 +158,21 @@ const DelegatesPage = () => {
     }
   };
 
-  const handleUndelegate = async (address, vpAmount) => {
+  const handleRevoke = async (delegateAddress) => {
     try {
-      await undelegateFrom(address, vpAmount);
+      await revokeDelegation(delegateAddress);
       await refetchDelegations();
     } catch (err) {
-      console.error('Undelegation failed:', err);
+      console.error('Revocation failed:', err);
     }
   };
 
-  const handleUndelegateAll = async () => {
+  const handleRevokeAll = async () => {
     try {
-      await undelegateAll();
+      await revokeAllDelegations();
       await refetchDelegations();
     } catch (err) {
-      console.error('Undelegate all failed:', err);
+      console.error('Revoke all failed:', err);
     }
   };
 
@@ -222,22 +224,22 @@ const DelegatesPage = () => {
                 <h3 className="font-semibold">Your Active Delegations</h3>
                 {delegations.length > 1 && (
                   <button
-                    onClick={handleUndelegateAll}
-                    disabled={delegationLoading?.undelegateAll}
+                    onClick={handleRevokeAll}
+                    disabled={delegationLoading?.revokeAll}
                     className="text-sm px-3 py-1 rounded"
                     style={{
                       backgroundColor: 'rgba(239, 68, 68, 0.1)',
                       color: 'var(--error)',
                     }}
                   >
-                    {delegationLoading?.undelegateAll ? 'Removing...' : 'Remove All'}
+                    {delegationLoading?.revokeAll ? 'Revoking...' : 'Revoke All'}
                   </button>
                 )}
               </div>
 
               <div className="space-y-3">
-                {(delegations || []).filter(d => d && d.delegate).map(({ delegate, vpAmount }) => {
-                  const vpHuman = formatUnits(BigInt(vpAmount), 9);
+                {(delegations || []).filter(d => d && d.delegate && d.vpAmount).map(({ delegate, vpAmount }) => {
+                  const vpHuman = formatUnits(BigInt(vpAmount || '0'), 9);
                   return (
                     <div
                       key={delegate}
@@ -253,15 +255,15 @@ const DelegatesPage = () => {
                         </p>
                       </div>
                       <button
-                        onClick={() => handleUndelegate(delegate, vpHuman)}
-                        disabled={delegationLoading?.undelegate}
+                        onClick={() => handleRevoke(delegate)}
+                        disabled={delegationLoading?.[`revoke-${delegate}`]}
                         className="text-xs px-2 py-1 rounded"
                         style={{
                           backgroundColor: 'rgba(239, 68, 68, 0.1)',
                           color: 'var(--error)',
                         }}
                       >
-                        Remove
+                        {delegationLoading?.[`revoke-${delegate}`] ? 'Revoking...' : 'Revoke'}
                       </button>
                     </div>
                   );
@@ -319,7 +321,8 @@ const DelegatesPage = () => {
             ) : potentialDelegates.length === 0 ? (
               <div className="card text-center py-8">
                 <p style={{ color: 'var(--text-muted)' }}>
-                  No eligible delegates found. Users need 90%+ reputation and 10+ completed tasks.
+                  No eligible delegates found. Delegates need 90%+ reputation, 10+ completed tasks,
+                  stake, and to opt-in.
                 </p>
               </div>
             ) : (
@@ -329,8 +332,8 @@ const DelegatesPage = () => {
                     key={address}
                     address={address}
                     onDelegate={handleDelegate}
-                    onUndelegate={handleUndelegate}
-                    loading={delegationLoading?.delegate || delegationLoading?.undelegate}
+                    onRevoke={handleRevoke}
+                    loading={delegationLoading?.delegate || delegationLoading?.[`revoke-${address}`]}
                     currentDelegatedVP={getDelegationToDelegate(address)}
                     availableVP={availableForDelegation.toString()}
                   />
@@ -400,12 +403,15 @@ const DelegatesPage = () => {
             )}
           </div>
 
+          {/* Delegate Opt-In */}
+          <DelegateOptIn />
+
           {/* Your Delegators */}
           {receivedDelegations.length > 0 && (
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Your Delegators</h3>
               <div className="space-y-2">
-                {(receivedDelegations || []).filter(d => d && d.delegator).map(({ delegator, vpAmount }) => (
+                {(receivedDelegations || []).filter(d => d && d.delegator && d.vpAmount).map(({ delegator, vpAmount }) => (
                   <div
                     key={delegator}
                     className="p-2 rounded-lg flex justify-between items-center text-sm"
@@ -415,7 +421,7 @@ const DelegatesPage = () => {
                       {delegator?.slice(0, 6)}...{delegator?.slice(-4)}
                     </span>
                     <span className="text-green-500">
-                      {formatVotePower(parseFloat(formatUnits(BigInt(vpAmount), 9)))} VP
+                      {formatVotePower(parseFloat(formatUnits(BigInt(vpAmount || '0'), 9)))} VP
                     </span>
                   </div>
                 ))}
@@ -425,14 +431,14 @@ const DelegatesPage = () => {
 
           {/* Info Box */}
           <div className="card text-sm" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-            <strong>How Delegation Works:</strong>
+            <strong>How Off-Chain Delegation Works:</strong>
             <ul className="mt-2 list-disc list-inside space-y-1">
-              <li>Delegate VP to trusted community members</li>
+              <li>Delegate VP via signed messages (no gas fees)</li>
               <li>Can delegate to multiple delegates</li>
-              <li>Delegates vote on proposals using received VP</li>
+              <li>Delegations reflected in VP snapshots for proposals</li>
               <li>Rewards go to delegators (you), not delegates</li>
-              <li>Can add or remove VP anytime</li>
-              <li>90%+ rep + 10 tasks to receive delegation</li>
+              <li>Delegations expire after 30 days (can re-delegate)</li>
+              <li>Delegates must opt-in to receive delegations</li>
             </ul>
           </div>
         </div>
