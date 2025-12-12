@@ -9,7 +9,8 @@ export async function getPassportScore(address: string): Promise<number> {
     console.log(`Using whitelisted score for ${address}: ${whitelistedScore}`);
     return whitelistedScore;
   }
-
+  return 0;
+  
   const url = `${config.gitcoin.baseUrl}/v2/stamps/${config.gitcoin.scorerId}/score/${address}`;
 
   const response = await fetch(url, {

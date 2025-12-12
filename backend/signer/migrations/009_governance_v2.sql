@@ -96,10 +96,10 @@ CREATE TABLE IF NOT EXISTS vp_allocations (
 CREATE INDEX IF NOT EXISTS idx_vp_allocations_user
     ON vp_allocations(LOWER(user_address));
 
--- Index for finding active allocations by user (deadline not passed)
+-- Index for finding allocations by user with deadline (active allocations filtered at query time)
+-- Note: Cannot use WHERE deadline > NOW() because NOW() is not IMMUTABLE
 CREATE INDEX IF NOT EXISTS idx_vp_allocations_user_active
-    ON vp_allocations(LOWER(user_address), deadline DESC)
-    WHERE deadline > NOW();
+    ON vp_allocations(LOWER(user_address), deadline DESC);
 
 -- Index for finding all allocations for a proposal (for analytics)
 CREATE INDEX IF NOT EXISTS idx_vp_allocations_proposal
