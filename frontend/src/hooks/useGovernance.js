@@ -286,18 +286,6 @@ export const useGovernance = () => {
   }, [governanceData, vpData, totalSystemVP]);
 
   /**
-   * Fetch signed reputation attestation from backend
-   * @returns {Promise<{reputation: number, expiry: number, signature: string}>}
-   */
-  const fetchReputationAttestation = useCallback(async () => {
-    const response = await fetch(`${API_URL}/api/governance/reputation-signed/${account}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch reputation attestation');
-    }
-    return response.json();
-  }, [account]);
-
-  /**
    * Deposit ROSE into governance and receive vROSE
    * VP is calculated at deposit time: sqrt(totalStaked) * (reputation/100)
    * @param {string} amount - Amount in ROSE (human readable)
@@ -337,11 +325,6 @@ export const useGovernance = () => {
         throw new Error('Insufficient ROSE balance');
       }
 
-      // Fetch reputation attestation from backend
-      console.log('Fetching reputation attestation...');
-      const repAttestation = await fetchReputationAttestation();
-      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
-
       // Check current allowance
       const currentAllowance = await publicClient.readContract({
         address: CONTRACTS.TOKEN,
@@ -377,7 +360,7 @@ export const useGovernance = () => {
         await new Promise(r => setTimeout(r, 1000));
       }
 
-      // Step 2: Deposit with reputation attestation
+      // Step 2: Deposit ROSE into governance
       setDepositStep('depositing');
       console.log('Depositing ROSE into governance...');
 
@@ -385,12 +368,7 @@ export const useGovernance = () => {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'deposit',
-        args: [
-          amountWei,
-          BigInt(repAttestation.reputation),
-          BigInt(repAttestation.expiry),
-          repAttestation.signature,
-        ],
+        args: [amountWei],
         ...GAS_SETTINGS,
       });
       console.log('Deposit tx hash:', depositHash);
@@ -421,7 +399,7 @@ export const useGovernance = () => {
       setLoading(prev => ({ ...prev, deposit: false }));
       setTimeout(() => setDepositStep(null), 2000);
     }
-  }, [isConnected, writeContractAsync, publicClient, refetchGovernance, fetchVPData, fetchTotalVP, account, fetchReputationAttestation]);
+  }, [isConnected, writeContractAsync, publicClient, refetchGovernance, fetchVPData, fetchTotalVP, account]);
 
   /**
    * Withdraw ROSE from governance (burns vROSE)
@@ -449,11 +427,6 @@ export const useGovernance = () => {
         throw new Error('Insufficient vROSE balance (may be locked in marketplace tasks)');
       }
 
-      // Fetch reputation attestation from backend
-      console.log('Fetching reputation attestation...');
-      const repAttestation = await fetchReputationAttestation();
-      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
-
       // The contract will check if VP is available for withdrawal
       // VP locked in delegation or proposals cannot be withdrawn
 
@@ -474,18 +447,13 @@ export const useGovernance = () => {
 
       await new Promise(r => setTimeout(r, 1000));
 
-      // Step 2: Withdraw with reputation attestation
+      // Step 2: Withdraw ROSE from governance
       console.log('Withdrawing from governance...');
       const withdrawHash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
         functionName: 'withdraw',
-        args: [
-          amountWei,
-          BigInt(repAttestation.reputation),
-          BigInt(repAttestation.expiry),
-          repAttestation.signature,
-        ],
+        args: [amountWei],
         ...GAS_SETTINGS,
       });
 
@@ -513,7 +481,7 @@ export const useGovernance = () => {
       withdrawInProgress.current = false;
       setLoading(prev => ({ ...prev, withdraw: false }));
     }
-  }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance, fetchVPData, fetchTotalVP, fetchReputationAttestation]);
+  }, [isConnected, parsed, writeContractAsync, publicClient, refetchGovernance, fetchVPData, fetchTotalVP]);
 
   /**
    * Refresh all governance data

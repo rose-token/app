@@ -219,6 +219,7 @@ const RedeemCard = ({
         setAmount('');
         setRedemptionMode(null);
         setAvailabilityInfo(null);
+        setIsSubmitting(false);
         if (onSuccess) onSuccess();
       } else {
         // Step 3b: Queued redemption with passport signature
