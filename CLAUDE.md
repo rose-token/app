@@ -182,7 +182,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 | Service | Purpose |
 |---------|---------|
-| governance.ts | VP calculation, reputation attestation |
+| governance.ts | VP queries (from `stakers`/`delegations` tables), reputation attestation |
 | delegation.ts | Allocations, delegated votes, claims, vote reductions |
 | delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
 | delegateScoring.ts | Win/loss tracking, eligibility gating |

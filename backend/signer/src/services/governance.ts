@@ -1,20 +1,13 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
+import { query } from '../db/pool';
 
-// Governance contract ABI (VP and delegation functions - reputation moved to RoseReputation)
+// Governance contract ABI - only functions that actually exist in the contract
+// NOTE: VP tracking functions (votingPower, totalVotingPower, delegation, etc.) don't exist
+// on-chain. VP is computed off-chain and stored in the 'stakers' and 'delegations' DB tables.
 const GOVERNANCE_ABI = [
   'function stakedRose(address user) external view returns (uint256)',
-  'function votingPower(address user) external view returns (uint256)',
   'function totalStakedRose() external view returns (uint256)',
-  'function totalVotingPower() external view returns (uint256)',
-  'function delegatedVP(address delegator, address delegate) external view returns (uint256)',
-  'function totalDelegatedOut(address user) external view returns (uint256)',
-  'function totalDelegatedIn(address delegate) external view returns (uint256)',
-  'function allocatedToProposal(address user) external view returns (uint256)',
-  'function proposalVPLocked(address user) external view returns (uint256)',
-  'function getAvailableVP(address user) external view returns (uint256)',
-  'function getUserDelegations(address user) external view returns (address[] delegates, uint256[] amounts)',
-  'function delegators(address delegate) external view returns (address[])',
   'function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256)',
 ];
 
@@ -101,30 +94,43 @@ function getReputationContract(): ethers.Contract | null {
 }
 
 /**
- * Get user's VP breakdown from contract
+ * Get user's VP breakdown from database tables
+ * (VP is computed off-chain, not stored in contract)
  */
 export async function getUserVP(address: string): Promise<VPData> {
-  const governance = getGovernanceContract();
-  if (!governance) {
-    return {
-      stakedRose: '0',
-      votingPower: '0',
-      availableVP: '0',
-      delegatedOut: '0',
-      proposalVPLocked: '0',
-      activeProposal: 0,
-    };
-  }
-
   try {
-    const [stakedRose, votingPower, delegatedOut, proposalVPLocked, activeProposal] =
-      await Promise.all([
-        governance.stakedRose(address),
-        governance.votingPower(address),
-        governance.totalDelegatedOut(address),
-        governance.proposalVPLocked(address),
-        governance.allocatedToProposal(address),
-      ]);
+    const normalizedAddress = address.toLowerCase();
+
+    // Get staker data from stakers table
+    const stakerResult = await query(
+      'SELECT staked_rose, voting_power FROM stakers WHERE address = $1',
+      [normalizedAddress]
+    );
+
+    // Get total VP delegated out by this user
+    const delegatedOutResult = await query(
+      `SELECT COALESCE(SUM(vp_amount), 0) as total
+       FROM delegations
+       WHERE delegator = $1
+         AND revoked_at IS NULL
+         AND expiry > NOW()`,
+      [normalizedAddress]
+    );
+
+    // Get VP locked in active proposals (from vp_allocations table)
+    const allocationsResult = await query(
+      `SELECT COALESCE(SUM(vp_amount), 0) as total, COUNT(*) as count
+       FROM vp_allocations
+       WHERE user_address = $1
+         AND deadline > NOW()`,
+      [normalizedAddress]
+    );
+
+    const stakedRose = stakerResult.rows.length > 0 ? BigInt(stakerResult.rows[0].staked_rose) : 0n;
+    const votingPower = stakerResult.rows.length > 0 ? BigInt(stakerResult.rows[0].voting_power) : 0n;
+    const delegatedOut = BigInt(delegatedOutResult.rows[0].total);
+    const proposalVPLocked = BigInt(allocationsResult.rows[0].total);
+    const activeProposal = parseInt(allocationsResult.rows[0].count);
 
     const availableVP = votingPower - delegatedOut - proposalVPLocked;
 
@@ -134,7 +140,7 @@ export async function getUserVP(address: string): Promise<VPData> {
       availableVP: (availableVP > 0n ? availableVP : 0n).toString(),
       delegatedOut: delegatedOut.toString(),
       proposalVPLocked: proposalVPLocked.toString(),
-      activeProposal: Number(activeProposal),
+      activeProposal,
     };
   } catch (error) {
     console.error('Error fetching user VP:', error);
@@ -143,17 +149,15 @@ export async function getUserVP(address: string): Promise<VPData> {
 }
 
 /**
- * Get total system VP
+ * Get total system VP from stakers database table
+ * (VP is computed off-chain, not stored in contract)
  */
 export async function getTotalSystemVP(): Promise<string> {
-  const governance = getGovernanceContract();
-  if (!governance) {
-    return '0';
-  }
-
   try {
-    const totalVP = await governance.totalVotingPower();
-    return totalVP.toString();
+    const result = await query(
+      'SELECT COALESCE(SUM(voting_power), 0) as total FROM stakers WHERE staked_rose > 0'
+    );
+    return result.rows[0].total;
   } catch (error) {
     console.error('Error fetching total VP:', error);
     throw error;
@@ -161,19 +165,24 @@ export async function getTotalSystemVP(): Promise<string> {
 }
 
 /**
- * Get user's delegations (multi-delegation)
+ * Get user's delegations from database table
+ * (Delegations are stored off-chain)
  */
 export async function getUserDelegations(address: string): Promise<DelegationInfo[]> {
-  const governance = getGovernanceContract();
-  if (!governance) {
-    return [];
-  }
-
   try {
-    const [delegates, amounts] = await governance.getUserDelegations(address);
-    return delegates.map((d: string, i: number) => ({
-      delegate: d,
-      vpAmount: amounts[i].toString(),
+    const result = await query(
+      `SELECT delegate, vp_amount
+       FROM delegations
+       WHERE delegator = $1
+         AND revoked_at IS NULL
+         AND expiry > NOW()
+       ORDER BY created_at DESC`,
+      [address.toLowerCase()]
+    );
+
+    return result.rows.map((row) => ({
+      delegate: row.delegate,
+      vpAmount: row.vp_amount,
     }));
   } catch (error) {
     console.error('Error fetching user delegations:', error);
@@ -182,31 +191,26 @@ export async function getUserDelegations(address: string): Promise<DelegationInf
 }
 
 /**
- * Get VP delegated TO a delegate (received delegations)
+ * Get VP delegated TO a delegate from database table
+ * (Delegations are stored off-chain)
  */
 export async function getReceivedDelegations(delegateAddr: string): Promise<ReceivedDelegationInfo[]> {
-  const governance = getGovernanceContract();
-  if (!governance) {
-    return [];
-  }
-
   try {
-    // Get list of delegators for this delegate
-    const delegatorList: string[] = await governance.delegators(delegateAddr);
+    const result = await query(
+      `SELECT delegator, vp_amount
+       FROM delegations
+       WHERE delegate = $1
+         AND revoked_at IS NULL
+         AND expiry > NOW()
+         AND vp_amount > 0
+       ORDER BY vp_amount DESC`,
+      [delegateAddr.toLowerCase()]
+    );
 
-    // Get VP amounts for each delegator
-    const delegations: ReceivedDelegationInfo[] = [];
-    for (const delegator of delegatorList) {
-      const vpAmount = await governance.delegatedVP(delegator, delegateAddr);
-      if (vpAmount > 0n) {
-        delegations.push({
-          delegator,
-          vpAmount: vpAmount.toString(),
-        });
-      }
-    }
-
-    return delegations;
+    return result.rows.map((row) => ({
+      delegator: row.delegator,
+      vpAmount: row.vp_amount,
+    }));
   } catch (error) {
     console.error('Error fetching received delegations:', error);
     throw error;
@@ -214,17 +218,20 @@ export async function getReceivedDelegations(delegateAddr: string): Promise<Rece
 }
 
 /**
- * Get total received VP for a delegate
+ * Get total received VP for a delegate from database table
+ * (Delegations are stored off-chain)
  */
 export async function getTotalReceivedVP(delegateAddr: string): Promise<string> {
-  const governance = getGovernanceContract();
-  if (!governance) {
-    return '0';
-  }
-
   try {
-    const totalReceived = await governance.totalDelegatedIn(delegateAddr);
-    return totalReceived.toString();
+    const result = await query(
+      `SELECT COALESCE(SUM(vp_amount), 0) as total
+       FROM delegations
+       WHERE delegate = $1
+         AND revoked_at IS NULL
+         AND expiry > NOW()`,
+      [delegateAddr.toLowerCase()]
+    );
+    return result.rows[0].total;
   } catch (error) {
     console.error('Error fetching total received VP:', error);
     throw error;
