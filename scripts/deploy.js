@@ -210,14 +210,24 @@ async function main() {
     // Note: ROSE liquidity for LiFi will be added after treasury deposit
   }
 
+  // Get passport signer address from env or use deployer for testing
+  let passportSignerAddress = process.env.PASSPORT_SIGNER_ADDRESS;
+  if (!passportSignerAddress) {
+    // For testnet/local, use deployer address as signer (testing only)
+    passportSignerAddress = deployer.address;
+    console.log("No PASSPORT_SIGNER_ADDRESS set, using deployer for testing");
+  }
+  console.log("Passport signer:", passportSignerAddress);
+
   // ============ Step 2: Deploy RoseTreasury ============
   console.log("\n--- Step 2: Deploying RoseTreasury ---");
   const RoseTreasury = await hre.ethers.getContractFactory("RoseTreasury");
-  // New constructor: (roseToken, usdc, lifiDiamond) - assets added via addAsset()
+  // Constructor: (roseToken, usdc, lifiDiamond, passportSigner) - assets added via addAsset()
   const roseTreasury = await RoseTreasury.deploy(
     roseTokenAddress,
     addresses.usdc,
-    addresses.lifiDiamond
+    addresses.lifiDiamond,
+    passportSignerAddress
   );
   await roseTreasury.waitForDeployment();
   const treasuryAddress = await roseTreasury.getAddress();
@@ -295,16 +305,6 @@ async function main() {
 
   // ============ Step 3: Deploy RoseMarketplace ============
   console.log("\n--- Step 3: Deploying RoseMarketplace ---");
-
-  // Get passport signer address from env or use deployer for testing
-  let passportSignerAddress = process.env.PASSPORT_SIGNER_ADDRESS;
-  if (!passportSignerAddress) {
-    // For testnet/local, use deployer address as signer (testing only)
-    passportSignerAddress = deployer.address;
-    console.log("No PASSPORT_SIGNER_ADDRESS set, using deployer for testing");
-  }
-  console.log("Passport signer:", passportSignerAddress);
-
   const RoseMarketplace = await hre.ethers.getContractFactory("RoseMarketplace");
   // Updated: RoseMarketplace now takes (roseToken, daoTreasury, passportSigner)
   const roseMarketplace = await RoseMarketplace.deploy(roseTokenAddress, treasuryAddress, passportSignerAddress);
