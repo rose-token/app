@@ -91,12 +91,15 @@ Web3 marketplace with task-value-based token distribution.
 3. Backend submits merkle root via `setVPMerkleRoot()`
 4. Proposal activates, voting begins
 5. Users vote with merkle proof of their VP
+6. Voting ends → Backend auto-calls `finalizeProposal()` → Pass/Fail
 
 **Slow Track Flow:**
 1. Proposal created (status: Active, voting starts immediately)
 2. Users request attestation of available VP from backend
 3. Backend tracks allocations across proposals
 4. Users vote with backend-signed attestation
+5. Voting ends → Backend computes VP snapshot at deadline
+6. Backend calls `finalizeSlowProposal(merkleRoot, totalVP, sig)` → Pass/Fail
 
 **Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
 
@@ -186,7 +189,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | vpRefresh.ts | Auto-refresh VP on reputation changes |
 | stakerIndexer.ts | Watch `Deposited`/`Withdrawn`, maintain staker cache |
 | vpSnapshot.ts | Compute VP snapshots, build merkle trees, generate proofs |
-| snapshotWatcher.ts | Watch `ProposalCreated`, schedule/submit VP snapshots |
+| snapshotWatcher.ts | Watch `ProposalCreated`, schedule/submit VP snapshots; Auto-finalize proposals at deadline |
 | lifi.ts | Swap quotes, diversification, testnet mock |
 | treasury.ts | Rebalance orchestration, vault status |
 | depositWatcher.ts | Watch `Deposited`, diversify |
@@ -208,7 +211,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegate Scoring | Every 1h | Score proposals, free VP |
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
-| Snapshot Watcher | Event-driven | ProposalCreated (Fast) → compute VP snapshot → submit merkle root |
+| Snapshot Watcher | Event-driven + 60s poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline |
 | Staker Validation | Weekly Sun 03:00 UTC | Verify staker cache matches on-chain |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |

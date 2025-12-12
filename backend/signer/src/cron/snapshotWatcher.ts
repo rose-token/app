@@ -1,13 +1,16 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
-import { computeVPSnapshot, storeVPSnapshot, signMerkleRoot } from '../services/vpSnapshot';
+import { computeVPSnapshot, storeVPSnapshot, signMerkleRoot, signSlowTrackFinalization } from '../services/vpSnapshot';
 
 // Governance contract ABI
 const GOVERNANCE_ABI = [
   'event ProposalCreated(uint256 indexed proposalId, address indexed proposer, uint8 track, uint256 treasuryAmount)',
   'function proposals(uint256 proposalId) external view returns (tuple(address proposer, uint8 track, uint256 snapshotBlock, bytes32 vpMerkleRoot, uint256 votingStartsAt, uint256 votingEndsAt, uint256 forVotes, uint256 againstVotes, uint256 treasuryAmount, uint8 status, string title, string descriptionHash, uint256 deadline, string deliverables, uint256 editCount, uint256 taskId))',
   'function setVPMerkleRoot(uint256 proposalId, bytes32 merkleRoot, uint256 totalVP, uint256 expiry, bytes calldata signature) external',
+  'function finalizeProposal(uint256 proposalId) external',
+  'function finalizeSlowProposal(uint256 proposalId, bytes32 merkleRoot, uint256 totalVP, uint256 expiry, bytes calldata signature) external',
   'function snapshotDelay() external view returns (uint256)',
+  'function proposalCounter() external view returns (uint256)',
 ];
 
 // Track enum from contract
@@ -53,6 +56,8 @@ export interface SnapshotWatcherStats {
   snapshotsComputed: number;
   snapshotsSubmitted: number;
   pendingSnapshots: number;
+  fastFinalized: number;
+  slowFinalized: number;
   lastError: string | null;
   lastEventBlock: number;
 }
@@ -69,12 +74,18 @@ const stats: SnapshotWatcherStats = {
   snapshotsComputed: 0,
   snapshotsSubmitted: 0,
   pendingSnapshots: 0,
+  fastFinalized: 0,
+  slowFinalized: 0,
   lastError: null,
   lastEventBlock: 0,
 };
 
 // Pending snapshot timers
 const pendingTimers: Map<number, NodeJS.Timeout> = new Map();
+
+// Finalization check interval
+let finalizationInterval: NodeJS.Timeout | null = null;
+const FINALIZATION_CHECK_INTERVAL = 60000; // Check every minute
 
 function getProvider(): ethers.JsonRpcProvider {
   if (!provider) {
@@ -326,6 +337,9 @@ export async function startSnapshotWatcher(): Promise<void> {
     // Catch up on pending proposals
     await catchUpPendingProposals();
 
+    // Start the finalization watcher
+    startFinalizationWatcher();
+
     console.log(`[SnapshotWatcher] Startup complete. Pending snapshots: ${pendingTimers.size}`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -342,6 +356,9 @@ export function stopSnapshotWatcher(): void {
   if (governanceContract) {
     governanceContract.removeAllListeners('ProposalCreated');
   }
+
+  // Stop finalization watcher
+  stopFinalizationWatcher();
 
   // Clear all pending timers
   for (const timer of pendingTimers.values()) {
@@ -383,4 +400,195 @@ export async function triggerSnapshot(proposalId: number): Promise<void> {
   }
 
   await processSnapshot(proposalId);
+}
+
+// ============================================================
+// Proposal Finalization (Phase 14)
+// ============================================================
+
+interface ProposalToFinalize {
+  id: number;
+  track: Track;
+  votingEndsAt: number;
+}
+
+/**
+ * Get all Active proposals that have passed their voting deadline
+ */
+async function getProposalsPastDeadline(): Promise<ProposalToFinalize[]> {
+  const governance = getGovernanceContract();
+  const now = Math.floor(Date.now() / 1000);
+  const proposals: ProposalToFinalize[] = [];
+
+  // Get proposal count
+  const proposalCount = await governance.proposalCounter();
+
+  // Check each proposal
+  for (let i = 1; i <= Number(proposalCount); i++) {
+    try {
+      const proposal: ProposalData = await governance.proposals(i);
+
+      // Only Active proposals that have ended
+      if (proposal.status === ProposalStatus.Active && Number(proposal.votingEndsAt) < now) {
+        proposals.push({
+          id: i,
+          track: proposal.track as Track,
+          votingEndsAt: Number(proposal.votingEndsAt),
+        });
+      }
+    } catch (error) {
+      console.error(`[SnapshotWatcher] Error checking proposal ${i}:`, error);
+    }
+  }
+
+  return proposals;
+}
+
+/**
+ * Submit Fast Track finalization
+ * Fast Track uses permissionless finalizeProposal()
+ */
+async function submitFastTrackFinalization(proposalId: number): Promise<void> {
+  console.log(`[SnapshotWatcher] Finalizing Fast Track proposal ${proposalId}`);
+
+  try {
+    const governance = getGovernanceContract(true); // With signer
+
+    const tx = await governance.finalizeProposal(proposalId);
+    console.log(`[SnapshotWatcher] Fast finalization tx submitted: ${tx.hash}`);
+
+    await tx.wait();
+    console.log(`[SnapshotWatcher] Fast Track proposal ${proposalId} finalized`);
+
+    stats.fastFinalized++;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    stats.lastError = errorMsg;
+    console.error(`[SnapshotWatcher] Error finalizing Fast Track proposal ${proposalId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Submit Slow Track finalization
+ * Slow Track requires VP snapshot at deadline + signature
+ */
+async function submitSlowTrackFinalization(proposalId: number): Promise<void> {
+  console.log(`[SnapshotWatcher] Finalizing Slow Track proposal ${proposalId}`);
+
+  try {
+    // Get current block for snapshot
+    const currentBlock = await getProvider().getBlockNumber();
+
+    // Compute VP snapshot at deadline
+    const snapshot = await computeVPSnapshot(proposalId, currentBlock);
+
+    // Store in database for future proof generation
+    await storeVPSnapshot(snapshot);
+
+    // Sign the finalization
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+    const signature = await signSlowTrackFinalization(
+      proposalId,
+      snapshot.merkleRoot,
+      snapshot.totalVP,
+      expiry
+    );
+
+    // Submit to chain
+    const governance = getGovernanceContract(true); // With signer
+
+    const tx = await governance.finalizeSlowProposal(
+      proposalId,
+      snapshot.merkleRoot,
+      snapshot.totalVP,
+      expiry,
+      signature
+    );
+
+    console.log(`[SnapshotWatcher] Slow finalization tx submitted: ${tx.hash}`);
+    await tx.wait();
+    console.log(`[SnapshotWatcher] Slow Track proposal ${proposalId} finalized`);
+
+    stats.slowFinalized++;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    stats.lastError = errorMsg;
+    console.error(`[SnapshotWatcher] Error finalizing Slow Track proposal ${proposalId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Watch for proposals past deadline and auto-finalize
+ */
+async function watchProposalDeadlines(): Promise<void> {
+  console.log('[SnapshotWatcher] Checking for proposals to finalize...');
+
+  try {
+    const proposalsToFinalize = await getProposalsPastDeadline();
+
+    if (proposalsToFinalize.length === 0) {
+      console.log('[SnapshotWatcher] No proposals need finalization');
+      return;
+    }
+
+    console.log(`[SnapshotWatcher] Found ${proposalsToFinalize.length} proposals to finalize`);
+
+    for (const proposal of proposalsToFinalize) {
+      // Check if execution is enabled
+      if (config.snapshotWatcher?.executeOnChain === false) {
+        console.log(`[SnapshotWatcher] DRY RUN - Would finalize ${proposal.track === Track.Fast ? 'Fast' : 'Slow'} Track proposal ${proposal.id}`);
+        continue;
+      }
+
+      try {
+        if (proposal.track === Track.Fast) {
+          await submitFastTrackFinalization(proposal.id);
+        } else {
+          await submitSlowTrackFinalization(proposal.id);
+        }
+      } catch (error) {
+        // Log error but continue with other proposals
+        console.error(`[SnapshotWatcher] Failed to finalize proposal ${proposal.id}:`, error);
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    stats.lastError = errorMsg;
+    console.error('[SnapshotWatcher] Error in watchProposalDeadlines:', error);
+  }
+}
+
+/**
+ * Start the finalization watcher loop
+ */
+function startFinalizationWatcher(): void {
+  if (finalizationInterval) {
+    clearInterval(finalizationInterval);
+  }
+
+  console.log('[SnapshotWatcher] Starting finalization watcher (checking every 60s)');
+
+  // Run immediately on startup
+  watchProposalDeadlines().catch((err) => {
+    console.error('[SnapshotWatcher] Error in initial finalization check:', err);
+  });
+
+  // Then run periodically
+  finalizationInterval = setInterval(() => {
+    watchProposalDeadlines().catch((err) => {
+      console.error('[SnapshotWatcher] Error in periodic finalization check:', err);
+    });
+  }, FINALIZATION_CHECK_INTERVAL);
+}
+
+/**
+ * Stop the finalization watcher
+ */
+function stopFinalizationWatcher(): void {
+  if (finalizationInterval) {
+    clearInterval(finalizationInterval);
+    finalizationInterval = null;
+  }
 }

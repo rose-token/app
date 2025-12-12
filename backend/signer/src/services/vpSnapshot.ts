@@ -416,3 +416,65 @@ export async function getSignedMerkleRoot(proposalId: number): Promise<SignedMer
     signature,
   };
 }
+
+/**
+ * Sign data for Slow Track finalization
+ * Message format: keccak256(abi.encodePacked("finalizeSlowProposal", proposalId, merkleRoot, totalVP, expiry))
+ */
+export async function signSlowTrackFinalization(
+  proposalId: number,
+  merkleRoot: string,
+  totalVP: bigint,
+  expiry: number
+): Promise<string> {
+  const wallet = new ethers.Wallet(config.signer.privateKey);
+
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'uint256', 'bytes32', 'uint256', 'uint256'],
+    ['finalizeSlowProposal', proposalId, merkleRoot, totalVP, expiry]
+  );
+
+  const signature = await wallet.signMessage(ethers.getBytes(messageHash));
+  return signature;
+}
+
+/**
+ * Signed data for Slow Track finalization
+ */
+export interface SignedSlowFinalizeData {
+  proposalId: number;
+  merkleRoot: string;
+  totalVP: string;
+  expiry: number;
+  signature: string;
+}
+
+/**
+ * Get signed finalization data for Slow Track proposal
+ */
+export async function getSignedSlowFinalization(
+  proposalId: number,
+  snapshotBlock: number
+): Promise<SignedSlowFinalizeData> {
+  // Compute fresh snapshot at deadline
+  const snapshot = await computeVPSnapshot(proposalId, snapshotBlock);
+
+  // Store for future reference (proof generation)
+  await storeVPSnapshot(snapshot);
+
+  const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+  const signature = await signSlowTrackFinalization(
+    proposalId,
+    snapshot.merkleRoot,
+    snapshot.totalVP,
+    expiry
+  );
+
+  return {
+    proposalId,
+    merkleRoot: snapshot.merkleRoot,
+    totalVP: snapshot.totalVP.toString(),
+    expiry,
+    signature,
+  };
+}
