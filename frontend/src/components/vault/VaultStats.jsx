@@ -1,7 +1,7 @@
 import React from 'react';
 import { Skeleton } from '../ui/skeleton';
 
-const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false, subtext = null }) => (
+const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false, subtext = null, tooltip = null }) => (
   <div
     className="rounded-xl p-5 transition-all duration-300"
     style={{
@@ -11,7 +11,8 @@ const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight
   >
     <p
       className="text-[0.6875rem] font-semibold uppercase tracking-wide mb-2"
-      style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}
+      style={{ color: 'var(--text-muted)', letterSpacing: '0.08em', cursor: tooltip ? 'help' : 'default' }}
+      title={tooltip}
     >
       {label}
     </p>
@@ -74,6 +75,7 @@ const VaultStats = ({
           prefix="$"
           isLoading={isLoading}
           highlight={true}
+          tooltip="Calculated from Chainlink oracle prices. Updates hourly. May lag market conditions."
         />
 
         <StatCard

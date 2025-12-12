@@ -81,7 +81,7 @@ const TransactionHistory = ({ treasuryAddress }) => {
       }));
 
       const redeemTxs = redeemLogs.map((log) => ({
-        type: 'Redeem',
+        type: 'Exchange',
         roseAmount: Number(formatUnits(log.args.roseBurned, 18)),
         usdcAmount: Number(formatUnits(log.args.usdcOut, 6)),
         txHash: log.transactionHash,
@@ -110,7 +110,7 @@ const TransactionHistory = ({ treasuryAddress }) => {
           }
 
           return {
-            type: 'Redeem',
+            type: 'Exchange',
             roseAmount: requestData.roseAmount,
             usdcAmount: Number(formatUnits(log.args.usdcAmount, 6)),
             txHash: log.transactionHash,

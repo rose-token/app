@@ -150,13 +150,15 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Pause System:** Treasury contract inherits OpenZeppelin Pausable. When paused, deposits, redemptions, rebalancing, and swaps are disabled. Admin can pause/unpause via System Status card (two-step confirmation). Vault page shows warning banner when paused. DepositCard/RedeemCard disable operations when paused.
 
+**Vault Copy:** User-facing terminology differs from contract functions: "Exchange ROSE" (UI) maps to `redeem()`/`requestRedemption()` (contract). Vault page displays beta banner, NAV tooltip on price, and uses neutral language (no "guaranteed", "backed", "always"). Header: "Diversified On-chain Assets, Transparent Holdings".
+
 **Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25
 
 **Site-Wide Gate:** `ProtectedRoutes` component gates entire app with Passport score >= 20 check. Flow: Connect wallet → Verify passport → Access site. `/help` route bypasses gate. Whitelisted addresses bypass automatically via `usePassport`. Strict blocking (no graceful degradation) for sybil protection.
 
 **UI Components:** Reusable components in `frontend/src/components/ui/`. Use `<Spinner />` for all loading states (default h-4 w-4, customize via className prop).
 
-**Transaction History:** `TransactionHistory.jsx` fetches deposit/redemption events directly from blockchain (7-day lookback). Shows `Deposited` (deposits), `Redeemed` (instant redemptions), and `RedemptionFulfilled` joined with `RedemptionRequested` (queued redemptions). Real-time updates via event watchers.
+**Transaction History:** `TransactionHistory.jsx` fetches deposit/redemption events directly from blockchain (7-day lookback). Shows `Deposit` and `Exchange` labels in UI (mapping to `Deposited`/`Redeemed`/`RedemptionFulfilled` events). Real-time updates via event watchers.
 
 ## Backend API (`backend/signer/`)
 

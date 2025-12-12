@@ -51,8 +51,20 @@ const VaultPage = () => {
           Treasury <span className="gradient-text">Vault</span>
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
-          Asset-Backed Stability, Transparent On-chain Reserves
+          Diversified On-chain Assets, Transparent Holdings
         </p>
+      </div>
+
+      {/* Beta Banner */}
+      <div
+        className="mb-6 p-3 rounded-lg text-sm text-center"
+        style={{
+          background: 'rgba(96, 165, 250, 0.1)',
+          border: '1px solid rgba(96, 165, 250, 0.2)',
+          color: 'var(--info)'
+        }}
+      >
+        Beta access only. Deposits and exchanges limited to approved participants.
       </div>
 
       {/* Pause Warning Banner */}
@@ -75,7 +87,7 @@ const VaultPage = () => {
               Treasury Operations Paused
             </h3>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Deposits and redemptions are temporarily disabled. Please check back later.
+              Deposits and exchanges temporarily unavailable.
             </p>
           </div>
         </div>
@@ -155,9 +167,9 @@ const VaultPage = () => {
         </h3>
         <div className="space-y-4">
           {[
-            { num: '1', title: 'Deposit', desc: 'Send USDC to the vault and receive ROSE tokens at the current NAV. The vault automatically diversifies into BTC, Gold, and stablecoins.' },
-            { num: '2', title: 'Redeem', desc: 'Burn ROSE tokens to withdraw USDC at the current exchange rate. The ROSE price reflects total treasury value.' },
-            { num: '3', title: 'Asset Backing', desc: 'Each ROSE token is backed by real-world assets: 40% Bitcoin, 40% Gold (PAXG), 20% USDC. As asset prices change, so does your position.' }
+            { num: '1', title: 'Deposit', desc: 'Send USDC to the vault and receive ROSE tokens at the estimated NAV. The vault automatically diversifies into BTC, Gold, and stablecoins.' },
+            { num: '2', title: 'Exchange', desc: 'Exchange ROSE for USDC at the estimated NAV. May be processed instantly or queued based on liquidity.' },
+            { num: '3', title: 'Treasury Holdings', desc: 'The treasury holds diversified assets: BTC, Gold (XAUt), and USDC. ROSE value reflects current holdings, which fluctuate with market prices.' }
           ].map((item) => (
             <div key={item.num} className="flex gap-3.5">
               <div

@@ -323,7 +323,7 @@ const RedeemCard = ({
       }}
     >
       <h3 className="font-display text-xl font-medium mb-1" style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-        Redeem ROSE
+        Exchange ROSE
       </h3>
       <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
         Receive USDC
@@ -340,7 +340,7 @@ const RedeemCard = ({
           }}
         >
           <span>!</span>
-          <span>Redemptions temporarily disabled</span>
+          <span>Exchanges temporarily disabled</span>
         </div>
       )}
 
@@ -415,12 +415,11 @@ const RedeemCard = ({
             <div className="flex items-center gap-2 mb-2">
               <Spinner className="h-4 w-4" />
               <p className="text-sm font-medium" style={{ color: 'var(--warning)' }}>
-                Processing Redemption
+                Processing Exchange
               </p>
             </div>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Request #{pendingRequestId} queued. Backend is liquidating assets to fulfill your redemption.
-              This may take a few minutes.
+              Request #{pendingRequestId} queued. The protocol is sourcing liquidity. This may take a few minutes.
             </p>
             {availabilityInfo?.shortfall && (
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
@@ -446,15 +445,15 @@ const RedeemCard = ({
           {isPolling ? (
             <span className="flex items-center justify-center">
               <Spinner className="h-4 w-4 mr-2" />
-              Awaiting Fulfillment...
+              Processing...
             </span>
           ) : isSubmitting ? (
             <span className="flex items-center justify-center">
               <Spinner className="h-4 w-4 mr-2" />
-              Redeeming...
+              Exchanging...
             </span>
           ) : (
-            'Redeem ROSE'
+            'Exchange ROSE'
           )}
         </button>
       </div>
