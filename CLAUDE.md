@@ -186,7 +186,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | delegation.ts | Allocations, delegated votes, claims, vote reductions |
 | delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
 | delegateScoring.ts | Win/loss tracking, eligibility gating |
-| vpRefresh.ts | Auto-refresh VP on reputation changes |
+| vpRefresh.ts | Auto-refresh VP in database on reputation changes (VP stored off-chain in `stakers` table) |
 | stakerIndexer.ts | Watch `Deposited`/`Withdrawn`, maintain staker cache |
 | vpSnapshot.ts | Compute VP snapshots, build merkle trees, generate proofs |
 | snapshotWatcher.ts | Watch `ProposalCreated`, schedule/submit VP snapshots; Auto-finalize proposals at deadline |

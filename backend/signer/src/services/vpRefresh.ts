@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
+import { query } from '../db/pool';
 import {
   getReputationNew,
   calculateVotePower,
-  signVPRefreshAttestation,
 } from './governance';
 
 // Marketplace ABI for reputation events
@@ -13,11 +13,10 @@ const MARKETPLACE_ABI = [
   'event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee)',
 ];
 
-// Governance ABI for VP refresh (reputation functions moved to RoseReputation)
+// Governance ABI - only stakedRose exists on-chain
+// NOTE: VP is computed off-chain and stored in the 'stakers' database table
 const GOVERNANCE_ABI = [
-  'function refreshVP(address user, uint256 newRep, uint256 expiry, bytes signature) external',
   'function stakedRose(address user) external view returns (uint256)',
-  'function votingPower(address user) external view returns (uint256)',
 ];
 
 // Types
@@ -61,7 +60,6 @@ export interface VPRefreshStats {
 let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let governanceContract: ethers.Contract | null = null;
-let wallet: ethers.Wallet | null = null;
 
 const pendingUsers: Map<string, { block: number; tx: string; addedAt: number }> = new Map();
 let debounceTimer: NodeJS.Timeout | null = null;
@@ -114,13 +112,6 @@ function getGovernanceContract(): ethers.Contract {
   return governanceContract;
 }
 
-function getWallet(): ethers.Wallet {
-  if (!wallet) {
-    wallet = new ethers.Wallet(config.signer.privateKey, getProvider());
-  }
-  return wallet;
-}
-
 /**
  * Check if a user needs VP refresh based on VP difference only.
  *
@@ -139,12 +130,17 @@ async function checkUserForRefresh(
 ): Promise<VPRefreshCandidate | null> {
   try {
     const governance = getGovernanceContract();
+    const normalizedAddress = userAddress.toLowerCase();
 
-    // Get current on-chain values (skip getReputation - it uses different formula)
-    const [stakedRose, currentVP] = await Promise.all([
+    // Get stakedRose from contract and current VP from database
+    // (VP is computed off-chain and stored in 'stakers' table)
+    const [stakedRose, stakerResult] = await Promise.all([
       governance.stakedRose(userAddress),
-      governance.votingPower(userAddress),
+      query('SELECT voting_power FROM stakers WHERE address = $1', [normalizedAddress]),
     ]);
+    const currentVP = stakerResult.rows.length > 0
+      ? BigInt(stakerResult.rows[0].voting_power)
+      : 0n;
 
     // Skip users with no stake
     if (stakedRose === 0n) {
@@ -212,7 +208,8 @@ function sqrt(x: bigint): bigint {
 }
 
 /**
- * Execute VP refresh for a user
+ * Execute VP refresh for a user by updating the database
+ * (VP is stored off-chain in the 'stakers' table)
  */
 async function executeRefresh(candidate: VPRefreshCandidate): Promise<VPRefreshResult> {
   const result: VPRefreshResult = {
@@ -225,12 +222,6 @@ async function executeRefresh(candidate: VPRefreshCandidate): Promise<VPRefreshR
   };
 
   try {
-    // Get signed attestation
-    const attestation = await signVPRefreshAttestation(
-      candidate.address,
-      candidate.newRep
-    );
-
     if (!config.vpRefresh.executeOnChain) {
       // Dry run - log only
       console.log(
@@ -243,32 +234,27 @@ async function executeRefresh(candidate: VPRefreshCandidate): Promise<VPRefreshR
       return result;
     }
 
-    // Execute on-chain refresh
-    const governance = new ethers.Contract(
-      config.contracts.governance,
-      GOVERNANCE_ABI,
-      getWallet()
-    );
+    const normalizedAddress = candidate.address.toLowerCase();
 
     console.log(
-      `[VPRefresh] Executing refresh for ${candidate.address}: ` +
-      `Rep ${candidate.currentRep} → ${candidate.newRep}`
+      `[VPRefresh] Updating VP for ${candidate.address}: ` +
+      `VP ${candidate.currentVP} → ${candidate.expectedVP}`
     );
 
-    const tx = await governance.refreshVP(
-      candidate.address,
-      attestation.reputation,
-      attestation.expiry,
-      attestation.signature
+    // Update VP in database (upsert pattern)
+    await query(
+      `INSERT INTO stakers (address, staked_rose, voting_power, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (address)
+       DO UPDATE SET voting_power = $3, updated_at = NOW()`,
+      [normalizedAddress, candidate.stakedRose.toString(), candidate.expectedVP.toString()]
     );
 
-    const receipt = await tx.wait();
     result.success = true;
-    result.txHash = receipt.hash;
     stats.refreshesExecuted++;
 
     console.log(
-      `[VPRefresh] Refresh complete for ${candidate.address}: tx=${receipt.hash}`
+      `[VPRefresh] VP updated for ${candidate.address}: ${candidate.expectedVP}`
     );
 
     return result;
