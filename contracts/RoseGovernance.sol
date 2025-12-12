@@ -437,16 +437,72 @@ contract RoseGovernance is IRoseGovernance, ReentrancyGuard {
         emit ProposalCancelled(proposalId);
     }
 
+    /**
+     * @dev Finalize a Fast Track proposal (anyone can call after voting ends)
+     * @param proposalId Proposal to finalize
+     */
     function finalizeProposal(uint256 proposalId) external {
         Proposal storage p = _proposals[proposalId];
         if (p.status != ProposalStatus.Active) revert ProposalNotActive();
+        if (p.track == Track.Slow) revert ProposalNotActive(); // Slow Track must use finalizeSlowProposal
         if (block.timestamp <= p.votingEndsAt) revert ProposalNotEnded();
 
-        // For slow track without merkle root, set totalVP at finalization
-        if (p.track == Track.Slow && proposalTotalVP[proposalId] == 0) {
-            // Backend should have set this, but as fallback use total staked
-            proposalTotalVP[proposalId] = totalStakedRose;
-        }
+        _finalize(proposalId);
+    }
+
+    /**
+     * @dev Finalize a Slow Track proposal with VP snapshot (backend only)
+     * Backend computes VP snapshot at deadline and submits merkle root + totalVP
+     * @param proposalId Proposal to finalize
+     * @param merkleRoot Merkle root of VP snapshot at deadline
+     * @param totalVP Total VP in the snapshot
+     * @param expiry Signature expiration timestamp
+     * @param signature Backend signature authorizing finalization
+     */
+    function finalizeSlowProposal(
+        uint256 proposalId,
+        bytes32 merkleRoot,
+        uint256 totalVP,
+        uint256 expiry,
+        bytes calldata signature
+    ) external {
+        if (delegationSigner == address(0)) revert ZeroAddressSigner();
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        Proposal storage p = _proposals[proposalId];
+        if (p.status != ProposalStatus.Active) revert ProposalNotActive();
+        if (p.track != Track.Slow) revert ProposalNotActive(); // Must be Slow Track
+        if (block.timestamp <= p.votingEndsAt) revert ProposalNotEnded();
+
+        // Verify backend signature
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "finalizeSlowProposal",
+            proposalId,
+            merkleRoot,
+            totalVP,
+            expiry
+        ));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != delegationSigner) revert InvalidSignature();
+
+        // Set snapshot data
+        p.vpMerkleRoot = merkleRoot;
+        p.snapshotBlock = block.number;
+        proposalTotalVP[proposalId] = totalVP;
+
+        _finalize(proposalId);
+    }
+
+    /**
+     * @dev Internal finalization logic shared by Fast and Slow tracks
+     */
+    function _finalize(uint256 proposalId) internal {
+        Proposal storage p = _proposals[proposalId];
 
         // Check quorum
         uint256 totalVotes = p.forVotes + p.againstVotes;

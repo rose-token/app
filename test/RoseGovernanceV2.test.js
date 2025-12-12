@@ -161,6 +161,23 @@ describe("RoseGovernance - Two-Track System", function () {
     return await signer.signMessage(ethers.getBytes(messageHash));
   }
 
+  /**
+   * Create signature for finalizing Slow Track proposal with snapshot
+   */
+  async function createSlowFinalizeSignature(
+    signer,
+    proposalId,
+    merkleRoot,
+    totalVP,
+    expiry
+  ) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["string", "uint256", "bytes32", "uint256", "uint256"],
+      ["finalizeSlowProposal", proposalId, merkleRoot, totalVP, expiry]
+    );
+    return await signer.signMessage(ethers.getBytes(messageHash));
+  }
+
   // ============ Reputation Helpers ============
 
   /**
@@ -1815,16 +1832,212 @@ describe("RoseGovernance - Two-Track System", function () {
       ).to.be.revertedWithCustomError(governance, "ProposalNotEnded");
     });
 
-    it("Slow Track should have 25% quorum requirement", async function () {
-      // Set totalVP for slow track by creating votes or at finalization
-      // The contract uses totalStakedRose as fallback for slow track
+    it("Slow Track should reject finalizeProposal() and require finalizeSlowProposal()", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      // Regular finalizeProposal should revert for Slow Track
+      await expect(
+        governance.finalizeProposal(slowProposalId)
+      ).to.be.revertedWithCustomError(governance, "ProposalNotActive");
+    });
+
+    it("Slow Track should finalize with merkle snapshot via finalizeSlowProposal()", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      // Build merkle tree for finalization snapshot
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+        { address: user2.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(200e9);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createSlowFinalizeSignature(
+        delegationSigner,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      // Finalize with snapshot
+      await governance.finalizeSlowProposal(
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry,
+        signature
+      );
+
+      // Check merkle root and totalVP were set
+      const proposal = await governance.proposals(slowProposalId);
+      expect(proposal.vpMerkleRoot).to.equal(snapshotTree.root);
+
+      const totalVP = await governance.proposalTotalVP(slowProposalId);
+      expect(totalVP).to.equal(snapshotTotalVP);
+    });
+
+    it("Slow Track should use 25% quorum from submitted totalVP", async function () {
+      // First, cast some votes on slow track to meet quorum
+      const nonce = await governance.allocationNonce(user1.address);
+      const user1VP = BigInt(60e9); // 60 VP
+
+      let currentBlock = await ethers.provider.getBlock("latest");
+      let expiry = currentBlock.timestamp + 3600;
+
+      const voteSig = await createSlowVoteSignature(
+        delegationSigner,
+        user1.address,
+        slowProposalId,
+        true,
+        user1VP,
+        user1VP,
+        nonce,
+        expiry
+      );
+      const rep = await getRepAttestation(user1, 70);
+
+      await governance
+        .connect(user1)
+        .voteSlow(
+          slowProposalId,
+          true,
+          user1VP,
+          user1VP,
+          nonce,
+          expiry,
+          voteSig,
+          rep.reputation,
+          rep.expiry,
+          rep.signature
+        );
 
       await time.increase(SLOW_DURATION + 1);
-      await governance.finalizeProposal(slowProposalId);
 
-      // After finalization, totalVP is set from totalStakedRose
-      const totalVP = await governance.proposalTotalVP(slowProposalId);
-      expect(totalVP).to.be.gt(0);
+      // Build merkle tree where totalVP = 200e9, so 25% quorum = 50e9
+      // user1 voted 60e9, which exceeds 50e9 quorum
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+        { address: user2.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(200e9);
+
+      currentBlock = await ethers.provider.getBlock("latest");
+      expiry = currentBlock.timestamp + 3600;
+      const finalizeSig = await createSlowFinalizeSignature(
+        delegationSigner,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await governance.finalizeSlowProposal(
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry,
+        finalizeSig
+      );
+
+      // Should pass (60 votes > 50 quorum, 100% for)
+      const proposal = await governance.proposals(slowProposalId);
+      expect(proposal.status).to.equal(ProposalStatus.Passed);
+    });
+
+    it("Should reject finalizeSlowProposal with invalid signature", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+
+      // Sign with wrong signer
+      const badSignature = await createSlowFinalizeSignature(
+        user1, // Wrong signer
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          slowProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiry,
+          badSignature
+        )
+      ).to.be.revertedWithCustomError(governance, "InvalidSignature");
+    });
+
+    it("Should reject finalizeSlowProposal with expired signature", async function () {
+      await time.increase(SLOW_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      // Expired timestamp
+      const expiredTimestamp = 1;
+      const signature = await createSlowFinalizeSignature(
+        delegationSigner,
+        slowProposalId,
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiredTimestamp
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          slowProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiredTimestamp,
+          signature
+        )
+      ).to.be.revertedWithCustomError(governance, "SignatureExpired");
+    });
+
+    it("Should reject finalizeSlowProposal for Fast Track proposals", async function () {
+      await time.increase(FAST_DURATION + 1);
+
+      const snapshotVoters = [
+        { address: user1.address, vpAmount: BigInt(100e9) },
+      ];
+      const snapshotTree = buildVPMerkleTree(snapshotVoters);
+      const snapshotTotalVP = BigInt(100e9);
+
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expiry = currentBlock.timestamp + 3600;
+      const signature = await createSlowFinalizeSignature(
+        delegationSigner,
+        fastProposalId, // Fast Track proposal
+        snapshotTree.root,
+        snapshotTotalVP,
+        expiry
+      );
+
+      await expect(
+        governance.finalizeSlowProposal(
+          fastProposalId,
+          snapshotTree.root,
+          snapshotTotalVP,
+          expiry,
+          signature
+        )
+      ).to.be.revertedWithCustomError(governance, "ProposalNotActive");
     });
   });
 

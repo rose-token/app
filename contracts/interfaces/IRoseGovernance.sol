@@ -234,6 +234,14 @@ interface IRoseGovernance {
 
     function finalizeProposal(uint256 proposalId) external;
 
+    function finalizeSlowProposal(
+        uint256 proposalId,
+        bytes32 merkleRoot,
+        uint256 totalVP,
+        uint256 expiry,
+        bytes calldata signature
+    ) external;
+
     function executeProposal(uint256 proposalId) external;
 
     // ============ Voting Functions ============
