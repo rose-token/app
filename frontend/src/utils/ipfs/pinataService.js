@@ -204,9 +204,10 @@ export const uploadFileToIPFS = async (file) => {
  * @param {string} detailedDescription - Markdown or plain text description
  * @param {string} title - Task title (for metadata)
  * @param {boolean} githubIntegration - Whether GitHub integration is enabled for this task
+ * @param {string[]} skills - Array of skill IDs required for this task
  * @returns {Promise<string>} IPFS hash
  */
-export const uploadTaskDescription = async (detailedDescription, title, githubIntegration = true) => {
+export const uploadTaskDescription = async (detailedDescription, title, githubIntegration = true, skills = []) => {
   if (!detailedDescription || detailedDescription.trim().length === 0) {
     throw new Error('Detailed description is required');
   }
@@ -216,6 +217,7 @@ export const uploadTaskDescription = async (detailedDescription, title, githubIn
       title: title,
       description: detailedDescription,
       githubIntegration: githubIntegration,
+      skills: skills,
       uploadedAt: new Date().toISOString(),
       version: '1.0'
     };

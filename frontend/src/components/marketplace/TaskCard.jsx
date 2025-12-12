@@ -13,6 +13,7 @@ import { useAuction } from '../../hooks/useAuction';
 import { useDispute } from '../../hooks/useDispute';
 import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrlWithBackend } from '../../constants/github';
 import Spinner from '../ui/Spinner';
+import { SkillBadgeList } from '../profile/SkillBadge';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -21,6 +22,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
+
+  // Derive skills from detailedContent to avoid duplicate state
+  const skills = detailedContent?.skills || [];
 
   // PR URL modal state
   const [showPrUrlModal, setShowPrUrlModal] = useState(false);
@@ -82,6 +86,30 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     fetchBidInfo();
   }, [fetchBidInfo]);
 
+  // Auto-fetch IPFS content on mount for skills display
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchContent = async () => {
+      if (!task.detailedDescription || task.detailedDescription.length === 0) return;
+
+      try {
+        const content = await fetchTaskDescription(task.detailedDescription);
+        if (isMounted) {
+          setDetailedContent(content);
+        }
+      } catch (error) {
+        console.error('Error loading task content:', error);
+      }
+    };
+
+    fetchContent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [task.detailedDescription]);
+
   // Handle bid submission callback
   const handleBidSubmitted = useCallback(() => {
     fetchBidInfo();
@@ -91,6 +119,12 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const loadDetailedDescription = async () => {
     if (!task.detailedDescription || task.detailedDescription.length === 0) {
       setDetailsError('No detailed description available');
+      return;
+    }
+
+    // Use cached content if available (from auto-fetch)
+    if (detailedContent) {
+      setShowDetails(true);
       return;
     }
 
@@ -248,6 +282,14 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           </span>
         </div>
       </div>
+
+      {/* Required Skills */}
+      {skills.length > 0 && (
+        <div className="mb-5">
+          <p style={labelStyle} className="mb-2">Required Skills</p>
+          <SkillBadgeList skills={skills} size="sm" />
+        </div>
+      )}
 
       {/* Detailed Description Section */}
       <div className="mb-5">

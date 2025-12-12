@@ -7,7 +7,7 @@
  * - Columns: Task (title+ID), Reward, Customer, Stakeholder, Status, Action
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { formatUnits } from 'viem';
@@ -16,6 +16,8 @@ import { Button } from '../ui/button';
 import ProfileBadge from '../profile/ProfileBadge';
 import Spinner from '../ui/Spinner';
 import { TaskStatus, getStatusText } from '../../utils/taskStatus';
+import { useTaskSkills } from '../../hooks/useTaskSkills';
+import { useProfile } from '../../hooks/useProfile';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -146,6 +148,21 @@ const TaskTable = ({
   const navigate = useNavigate();
   const { address: account } = useAccount();
   const [showFilters, setShowFilters] = useState(false);
+
+  // Get user profile skills
+  const { profile } = useProfile();
+  const userSkills = profile?.skills || [];
+
+  // Get task skills and matching logic
+  const { hasSkillMatch } = useTaskSkills(tasks);
+
+  // Apply skills match filter locally (since skill data comes from IPFS, not blockchain)
+  const displayedTasks = useMemo(() => {
+    if (!filters?.skillsMatch || userSkills.length === 0) {
+      return tasks;
+    }
+    return tasks.filter(task => hasSkillMatch(task.id, userSkills));
+  }, [tasks, filters?.skillsMatch, userSkills, hasSkillMatch]);
 
   // Handle action button click
   const handleAction = (e, task, action) => {
@@ -283,6 +300,25 @@ const TaskTable = ({
             />
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>My Tasks</span>
           </label>
+
+          {/* Skills Match toggle */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={filters?.skillsMatch || false}
+              onChange={(e) => setFilters?.({ ...filters, skillsMatch: e.target.checked })}
+              className="w-4 h-4 rounded"
+              style={{ accentColor: 'var(--rose-pink)' }}
+              disabled={userSkills.length === 0}
+            />
+            <span
+              className="text-sm"
+              style={{ color: userSkills.length === 0 ? 'var(--text-muted)' : 'var(--text-secondary)' }}
+              title={userSkills.length === 0 ? 'Add skills to your profile to use this filter' : ''}
+            >
+              Skills Match
+            </span>
+          </label>
         </div>
       )}
 
@@ -337,7 +373,7 @@ const TaskTable = ({
                   </td>
                 </tr>
               ))
-            ) : tasks.length === 0 ? (
+            ) : displayedTasks.length === 0 ? (
               // Empty state
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center">
@@ -349,7 +385,7 @@ const TaskTable = ({
               </tr>
             ) : (
               // Task rows
-              tasks.map(task => {
+              displayedTasks.map(task => {
                 const action = getQuickAction(task, account);
                 const hasStakeholder = task.stakeholder && task.stakeholder !== ZERO_ADDRESS;
                 const loading = action ? isActionLoading(task, action.action) : false;
@@ -365,8 +401,22 @@ const TaskTable = ({
                   >
                     {/* Task title + ID */}
                     <td className="px-6 py-5">
-                      <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {task.description || 'Untitled Task'}
+                      <div className="flex items-center gap-2">
+                        {/* Star indicator for skill match */}
+                        {hasSkillMatch(task.id, userSkills) && userSkills.length > 0 && (
+                          <svg
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: 'var(--rose-gold)' }}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            title="You have matching skills for this task"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        )}
+                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {task.description || 'Untitled Task'}
+                        </div>
                       </div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                         #{task.id} {task.isAuction && '• Auction'}

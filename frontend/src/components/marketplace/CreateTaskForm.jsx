@@ -11,6 +11,7 @@ import { useAuction } from '../../hooks/useAuction';
 import { GAS_SETTINGS } from '../../constants/gas';
 import { GITHUB_INTEGRATION } from '../../constants/github';
 import Spinner from '../ui/Spinner';
+import SkillSelect from '../profile/SkillSelect';
 
 const CreateTaskForm = ({ onTaskCreated }) => {
   const [title, setTitle] = useState('');
@@ -18,6 +19,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [deposit, setDeposit] = useState('');
   const [isAuction, setIsAuction] = useState(true);
   const [useGithubIntegration, setUseGithubIntegration] = useState(GITHUB_INTEGRATION.DEFAULT_ENABLED);
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,9 +67,9 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setError('');
       setIsSubmitting(true);
 
-      // Step 1: Upload detailed description to IPFS (with GitHub integration flag)
+      // Step 1: Upload detailed description to IPFS (with GitHub integration flag and skills)
       console.log('📤 Uploading detailed description to IPFS...');
-      const hash = await uploadTaskDescription(detailedDescription, title, useGithubIntegration);
+      const hash = await uploadTaskDescription(detailedDescription, title, useGithubIntegration, selectedSkills);
       console.log('✅ Uploaded to IPFS:', hash);
 
       const tokenAmount = parseEther(deposit);
@@ -182,6 +184,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       setDeposit('');
       setIsAuction(false);
       setUseGithubIntegration(GITHUB_INTEGRATION.DEFAULT_ENABLED);
+      setSelectedSkills([]);
       setIsSubmitting(false);
 
       if (onTaskCreated) {
@@ -418,6 +421,22 @@ const CreateTaskForm = ({ onTaskCreated }) => {
             </label>
           </div>
         )}
+
+        {/* Skills Selection (Optional) */}
+        <div className="mb-5">
+          <label style={labelStyle}>
+            Required Skills (Optional)
+          </label>
+          <SkillSelect
+            selected={selectedSkills}
+            onChange={setSelectedSkills}
+            max={10}
+            disabled={isSubmitting}
+          />
+          <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            Select skills needed for this task. Workers with matching skills will see a star indicator.
+          </p>
+        </div>
 
         <div className="mb-6">
           <label htmlFor="deposit" style={labelStyle}>
