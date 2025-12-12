@@ -85,7 +85,7 @@ const pendingTimers: Map<number, NodeJS.Timeout> = new Map();
 
 // Finalization check interval
 let finalizationInterval: NodeJS.Timeout | null = null;
-const FINALIZATION_CHECK_INTERVAL = 60000; // Check every minute
+const FINALIZATION_CHECK_INTERVAL = 900000; // Check every 15 minute
 
 function getProvider(): ethers.JsonRpcProvider {
   if (!provider) {

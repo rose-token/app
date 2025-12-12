@@ -64,7 +64,7 @@ const VaultPage = () => {
           color: 'var(--info)'
         }}
       >
-        Beta access only. Deposits and exchanges limited to approved participants.
+        Beta software. Unaudited. Deposit only what you can afford to lose. Treasury assets may fluctuate in value. Subject to available liquidity.
       </div>
 
       {/* Pause Warning Banner */}
