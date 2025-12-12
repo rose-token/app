@@ -203,6 +203,38 @@ const ProposalCreatePage = () => {
         </div>
       </div>
 
+      {/* Fast Track Limit Warning */}
+      {formData.track === Track.Fast && formData.value && parseFloat(formData.value) > fastTrackLimit && (
+        <div
+          className="card mb-6 flex items-start gap-3"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderColor: 'var(--warning)',
+          }}
+        >
+          <span className="text-xl">⚠️</span>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-1" style={{ color: 'var(--warning)' }}>
+              Amount Exceeds Fast Track Limit
+            </h3>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+              Your requested amount ({parseFloat(formData.value).toLocaleString()} ROSE) exceeds the Fast Track limit of {fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% of treasury).
+            </p>
+            <button
+              type="button"
+              onClick={() => handleTrackChange(Track.Slow)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{
+                backgroundColor: 'var(--warning)',
+                color: 'var(--bg-primary)',
+              }}
+            >
+              Switch to Slow Track
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Track Selection */}
       <div className="card mb-6">
         <label className="block font-medium mb-3">
