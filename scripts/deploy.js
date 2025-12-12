@@ -427,10 +427,19 @@ async function main() {
     await (await mockUsdcForDeposit.approve(treasuryAddress, hre.ethers.parseUnits("1000000", 6))).wait();
     console.log("Treasury approved to spend USDC ✓");
 
-    // Deposit 1M USDC into treasury -> receive 1M ROSE (at $1 initial NAV)
+    // Generate passport signature for deposit (deployer signs as passport signer)
+    const depositAmount = hre.ethers.parseUnits("1000000", 6);
+    const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    const messageHash = hre.ethers.solidityPackedKeccak256(
+      ["address", "string", "uint256"],
+      [deployer.address, "deposit", expiry]
+    );
+    const signature = await deployer.signMessage(hre.ethers.getBytes(messageHash));
+
+    // Deposit 1M USDC into treasury -> receive ROSE
     console.log("Depositing 1M USDC into treasury...");
-    await (await roseTreasury.deposit(hre.ethers.parseUnits("1000000", 6))).wait();
-    console.log("Deposited 1M USDC, received 1M ROSE ✓");
+    await (await roseTreasury.deposit(depositAmount, expiry, signature)).wait();
+    console.log("Deposited 1M USDC, received ROSE ✓");
 
     // Distribute ROSE: 500k to MockLiFi, 250k to treasury, 250k stays with deployer
     console.log("Distributing ROSE tokens...");
