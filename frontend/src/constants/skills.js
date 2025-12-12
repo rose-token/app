@@ -18,7 +18,14 @@ export const SKILLS = [
   { id: 'security', label: 'Security Auditing', category: 'blockchain' },
   { id: 'testing', label: 'Testing/QA', category: 'quality' },
   { id: 'documentation', label: 'Documentation', category: 'quality' },
+  { id: 'proofreading', label: 'Proofreading', category: 'quality' },
   { id: 'data', label: 'Data Engineering', category: 'backend' },
+  { id: 'social-media', label: 'Social Media', category: 'content' },
+  { id: 'blog-writing', label: 'Blog Writing', category: 'content' },
+  { id: 'research-report', label: 'Research Report', category: 'content' },
+  { id: 'tutorial-guide', label: 'Tutorial/Guide', category: 'content' },
+  { id: 'technical-spec', label: 'Technical Spec', category: 'content' },
+  { id: 'video-script', label: 'Video Script', category: 'content' },
 ];
 
 export const SKILL_CATEGORIES = {
@@ -28,6 +35,7 @@ export const SKILL_CATEGORIES = {
   design: { label: 'Design', color: 'var(--warning)' },
   infrastructure: { label: 'Infrastructure', color: 'var(--rose-gold)' },
   quality: { label: 'Quality', color: 'var(--text-secondary)' },
+  content: { label: 'Content', color: '#a855f7' },
 };
 
 export const MAX_SKILLS = 10;

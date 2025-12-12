@@ -14,7 +14,14 @@ export const ALLOWED_SKILLS = [
   'security',
   'testing',
   'documentation',
+  'proofreading',
   'data',
+  'social-media',
+  'blog-writing',
+  'research-report',
+  'tutorial-guide',
+  'technical-spec',
+  'video-script',
 ] as const;
 
 export type SkillId = (typeof ALLOWED_SKILLS)[number];
