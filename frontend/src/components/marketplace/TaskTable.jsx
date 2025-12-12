@@ -295,7 +295,7 @@ const TaskTable = ({
                 Task
               </th>
               <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                Reward
+                Deposit
               </th>
               <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Customer
@@ -391,7 +391,7 @@ const TaskTable = ({
                         <ProfileBadge address={task.stakeholder} size="sm" showAddress={false} />
                       ) : (
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          Waiting for Stakeholder (10% deposit)
+                          Not Assigned
                         </span>
                       )}
                     </td>

@@ -466,7 +466,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         <button
           type="submit"
           disabled={isSubmitting || !isConnected}
-          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300"
+          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center"
           style={{
             background: isSubmitting || !isConnected
               ? 'var(--bg-secondary)'
