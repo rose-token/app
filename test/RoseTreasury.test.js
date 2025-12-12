@@ -14,6 +14,7 @@ describe("RoseTreasury with LiFi Integration", function () {
   let user;
   let user2;
   let rebalancer;
+  let passportSigner;
 
   // Asset keys as bytes32
   const BTC_KEY = ethers.encodeBytes32String("BTC");
@@ -22,7 +23,7 @@ describe("RoseTreasury with LiFi Integration", function () {
   const ROSE_KEY = ethers.encodeBytes32String("ROSE");
 
   beforeEach(async function () {
-    [owner, user, user2, rebalancer] = await ethers.getSigners();
+    [owner, user, user2, rebalancer, passportSigner] = await ethers.getSigners();
 
     // 1. Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
@@ -70,12 +71,13 @@ describe("RoseTreasury with LiFi Integration", function () {
     await usdc.mint(await mockLiFi.getAddress(), ethers.parseUnits("10000000", 6));
     // Note: Don't mint ROSE to MockLiFi as it would make circulatingSupply > 0 with 0 hard assets
 
-    // 8. Deploy RoseTreasury with MockLiFiDiamond
+    // 8. Deploy RoseTreasury with MockLiFiDiamond and passportSigner
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await mockLiFi.getAddress()
+      await mockLiFi.getAddress(),
+      passportSigner.address
     );
 
     // 9. Authorize Treasury on RoseToken
@@ -122,11 +124,29 @@ describe("RoseTreasury with LiFi Integration", function () {
     );
   });
 
-  // Helper to perform deposit
+  // Helper to get future expiry timestamp
+  async function getFutureExpiry() {
+    const block = await ethers.provider.getBlock("latest");
+    return block.timestamp + 3600; // 1 hour from now
+  }
+
+  // Helper to generate passport signature
+  async function generatePassportSignature(userAddress, action, expiry) {
+    const messageHash = ethers.solidityPackedKeccak256(
+      ["address", "string", "uint256"],
+      [userAddress, action, expiry]
+    );
+    return await passportSigner.signMessage(ethers.getBytes(messageHash));
+  }
+
+  // Helper to perform deposit with passport signature
   async function deposit(signer, usdcAmount) {
     await usdc.mint(signer.address, usdcAmount);
     await usdc.connect(signer).approve(await roseTreasury.getAddress(), usdcAmount);
-    await roseTreasury.connect(signer).deposit(usdcAmount);
+
+    const expiry = await getFutureExpiry();
+    const signature = await generatePassportSignature(signer.address, "deposit", expiry);
+    await roseTreasury.connect(signer).deposit(usdcAmount, expiry, signature);
   }
 
   // Helper to generate LiFi swap calldata
@@ -159,7 +179,10 @@ describe("RoseTreasury with LiFi Integration", function () {
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
 
-      await expect(roseTreasury.connect(user).deposit(depositAmount))
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "deposit", expiry);
+
+      await expect(roseTreasury.connect(user).deposit(depositAmount, expiry, signature))
         .to.emit(roseTreasury, "Deposited")
         .withArgs(user.address, depositAmount, ethers.parseUnits("1000", 18));
     });
@@ -347,7 +370,9 @@ describe("RoseTreasury with LiFi Integration", function () {
       const depositAmount = ethers.parseUnits("10000", 6);
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
-      await roseTreasury.connect(user).deposit(depositAmount);
+      const depositExpiry = await getFutureExpiry();
+      const depositSig = await generatePassportSignature(user.address, "deposit", depositExpiry);
+      await roseTreasury.connect(user).deposit(depositAmount, depositExpiry, depositSig);
 
       const roseBalance = await roseToken.balanceOf(user.address);
 
@@ -355,8 +380,11 @@ describe("RoseTreasury with LiFi Integration", function () {
       const redeemAmount = roseBalance / 2n;
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), redeemAmount);
 
+      const redeemExpiry = await getFutureExpiry();
+      const redeemSig = await generatePassportSignature(user.address, "redeem", redeemExpiry);
+
       await expect(
-        roseTreasury.connect(user).redeem(redeemAmount)
+        roseTreasury.connect(user).redeem(redeemAmount, redeemExpiry, redeemSig)
       ).to.not.be.reverted;
 
       const usdcReceived = await usdc.balanceOf(user.address);
@@ -390,8 +418,11 @@ describe("RoseTreasury with LiFi Integration", function () {
       const roseBalance = await roseToken.balanceOf(user.address);
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
 
+      const redeemExpiry = await getFutureExpiry();
+      const redeemSig = await generatePassportSignature(user.address, "redeem", redeemExpiry);
+
       await expect(
-        roseTreasury.connect(user).redeem(roseBalance)
+        roseTreasury.connect(user).redeem(roseBalance, redeemExpiry, redeemSig)
       ).to.be.revertedWithCustomError(roseTreasury, "InsufficientLiquidity");
     });
   });
@@ -451,7 +482,9 @@ describe("RoseTreasury with LiFi Integration", function () {
       const depositAmount = ethers.parseUnits("10000", 6);
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
-      await roseTreasury.connect(user).deposit(depositAmount);
+      const depositExpiry = await getFutureExpiry();
+      const depositSig = await generatePassportSignature(user.address, "deposit", depositExpiry);
+      await roseTreasury.connect(user).deposit(depositAmount, depositExpiry, depositSig);
 
       // User got ~10000 ROSE minted. To balance ROSE at 20% of total:
       const roseForTreasury = ethers.parseUnits("2000", 18);
@@ -539,8 +572,11 @@ describe("RoseTreasury with LiFi Integration", function () {
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
 
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "deposit", expiry);
+
       await expect(
-        roseTreasury.connect(user).deposit(depositAmount)
+        roseTreasury.connect(user).deposit(depositAmount, expiry, signature)
       ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
     });
 
@@ -553,8 +589,11 @@ describe("RoseTreasury with LiFi Integration", function () {
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
       await roseTreasury.connect(owner).pause();
 
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "redeem", expiry);
+
       await expect(
-        roseTreasury.connect(user).redeem(roseBalance)
+        roseTreasury.connect(user).redeem(roseBalance, expiry, signature)
       ).to.be.revertedWithCustomError(roseTreasury, "EnforcedPause");
     });
 
@@ -586,17 +625,23 @@ describe("RoseTreasury with LiFi Integration", function () {
       // First deposit
       await usdc.mint(user.address, depositAmount * 2n);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount * 2n);
-      await roseTreasury.connect(user).deposit(depositAmount);
+      const expiry1 = await getFutureExpiry();
+      const signature1 = await generatePassportSignature(user.address, "deposit", expiry1);
+      await roseTreasury.connect(user).deposit(depositAmount, expiry1, signature1);
 
       // Second deposit immediately should work (no more 24hr cooldown)
-      await expect(roseTreasury.connect(user).deposit(depositAmount)).to.not.be.reverted;
+      const expiry2 = await getFutureExpiry();
+      const signature2 = await generatePassportSignature(user.address, "deposit", expiry2);
+      await expect(roseTreasury.connect(user).deposit(depositAmount, expiry2, signature2)).to.not.be.reverted;
     });
 
     it("Should track lastDepositBlock correctly", async function () {
       const depositAmount = ethers.parseUnits("1000", 6);
       await usdc.mint(user.address, depositAmount);
       await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
-      await roseTreasury.connect(user).deposit(depositAmount);
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "deposit", expiry);
+      await roseTreasury.connect(user).deposit(depositAmount, expiry, signature);
 
       const depositBlock = await ethers.provider.getBlockNumber();
       const lastBlock = await roseTreasury.lastDepositBlock(user.address);
@@ -611,7 +656,10 @@ describe("RoseTreasury with LiFi Integration", function () {
       const roseBalance = await roseToken.balanceOf(user.address);
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
 
-      await expect(roseTreasury.connect(user).redeem(roseBalance)).to.not.be.reverted;
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "redeem", expiry);
+
+      await expect(roseTreasury.connect(user).redeem(roseBalance, expiry, signature)).to.not.be.reverted;
     });
 
     it("Should report canRedeemAfterDeposit correctly", async function () {
@@ -642,7 +690,10 @@ describe("RoseTreasury with LiFi Integration", function () {
       const roseBalance = await roseToken.balanceOf(user.address);
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
 
-      await expect(roseTreasury.connect(user).requestRedemption(roseBalance)).to.not.be.reverted;
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "redeem", expiry);
+
+      await expect(roseTreasury.connect(user).requestRedemption(roseBalance, expiry, signature)).to.not.be.reverted;
     });
 
     it("Should allow back-to-back redemptions without cooldown", async function () {
@@ -656,10 +707,103 @@ describe("RoseTreasury with LiFi Integration", function () {
       await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
 
       // First redemption
-      await roseTreasury.connect(user).redeem(halfBalance);
+      const expiry1 = await getFutureExpiry();
+      const signature1 = await generatePassportSignature(user.address, "redeem", expiry1);
+      await roseTreasury.connect(user).redeem(halfBalance, expiry1, signature1);
 
       // Second redemption immediately should work (no more 24hr cooldown between redemptions)
-      await expect(roseTreasury.connect(user).redeem(halfBalance)).to.not.be.reverted;
+      const expiry2 = await getFutureExpiry();
+      const signature2 = await generatePassportSignature(user.address, "redeem", expiry2);
+      await expect(roseTreasury.connect(user).redeem(halfBalance, expiry2, signature2)).to.not.be.reverted;
+    });
+  });
+
+  describe("Passport Verification", function () {
+    it("Should reject deposit with invalid signature", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      const expiry = await getFutureExpiry();
+      // Sign with wrong signer (user instead of passportSigner)
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["address", "string", "uint256"],
+        [user.address, "deposit", expiry]
+      );
+      const invalidSignature = await user.signMessage(ethers.getBytes(messageHash));
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount, expiry, invalidSignature)
+      ).to.be.revertedWithCustomError(roseTreasury, "InvalidSignature");
+    });
+
+    it("Should reject deposit with expired signature", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount);
+
+      // Use expired timestamp (1 second ago)
+      const block = await ethers.provider.getBlock("latest");
+      const expiredExpiry = block.timestamp - 1;
+      const signature = await generatePassportSignature(user.address, "deposit", expiredExpiry);
+
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount, expiredExpiry, signature)
+      ).to.be.revertedWithCustomError(roseTreasury, "SignatureExpired");
+    });
+
+    it("Should reject replay attack (same signature twice)", async function () {
+      const depositAmount = ethers.parseUnits("1000", 6);
+      await usdc.mint(user.address, depositAmount * 2n);
+      await usdc.connect(user).approve(await roseTreasury.getAddress(), depositAmount * 2n);
+
+      const expiry = await getFutureExpiry();
+      const signature = await generatePassportSignature(user.address, "deposit", expiry);
+
+      // First deposit should succeed
+      await roseTreasury.connect(user).deposit(depositAmount, expiry, signature);
+
+      // Second deposit with same signature should fail
+      await expect(
+        roseTreasury.connect(user).deposit(depositAmount, expiry, signature)
+      ).to.be.revertedWithCustomError(roseTreasury, "SignatureAlreadyUsed");
+    });
+
+    it("Should reject redeem with invalid signature", async function () {
+      await deposit(user, ethers.parseUnits("1000", 6));
+
+      const roseBalance = await roseToken.balanceOf(user.address);
+      await roseToken.connect(user).approve(await roseTreasury.getAddress(), roseBalance);
+
+      const expiry = await getFutureExpiry();
+      // Sign with wrong signer
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["address", "string", "uint256"],
+        [user.address, "redeem", expiry]
+      );
+      const invalidSignature = await user.signMessage(ethers.getBytes(messageHash));
+
+      await expect(
+        roseTreasury.connect(user).redeem(roseBalance, expiry, invalidSignature)
+      ).to.be.revertedWithCustomError(roseTreasury, "InvalidSignature");
+    });
+
+    it("Should allow owner to update passport signer", async function () {
+      const newSigner = user2.address;
+      await roseTreasury.connect(owner).setPassportSigner(newSigner);
+      expect(await roseTreasury.passportSigner()).to.equal(newSigner);
+    });
+
+    it("Should reject zero address for passport signer", async function () {
+      await expect(
+        roseTreasury.connect(owner).setPassportSigner(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(roseTreasury, "ZeroAddressSigner");
+    });
+
+    it("Should reject setPassportSigner from non-owner", async function () {
+      await expect(
+        roseTreasury.connect(user).setPassportSigner(user2.address)
+      ).to.be.revertedWithCustomError(roseTreasury, "OwnableUnauthorizedAccount");
     });
   });
 

@@ -7,7 +7,7 @@ const PassportVerifyContext = createContext();
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 // Valid actions that can be signed
-const VALID_ACTIONS = ['createTask', 'stake', 'claim', 'propose'];
+const VALID_ACTIONS = ['createTask', 'stake', 'claim', 'propose', 'deposit', 'redeem'];
 
 /**
  * Request a signature from the backend passport signer

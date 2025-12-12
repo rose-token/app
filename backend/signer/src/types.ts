@@ -1,4 +1,4 @@
-export type Action = 'createTask' | 'stake' | 'claim' | 'propose';
+export type Action = 'createTask' | 'stake' | 'claim' | 'propose' | 'deposit' | 'redeem';
 
 export interface PassportScore {
   address: string;
@@ -37,6 +37,8 @@ export interface ScoreResponse {
     stake: number;
     claim: number;
     propose: number;
+    deposit: number;
+    redeem: number;
   };
 }
 
@@ -49,6 +51,8 @@ export interface ThresholdsResponse {
   stake: number;
   claim: number;
   propose: number;
+  deposit: number;
+  redeem: number;
 }
 
 // Profile types

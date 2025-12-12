@@ -15,6 +15,11 @@
         "internalType": "address",
         "name": "_lifiDiamond",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_passportSigner",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
@@ -38,6 +43,33 @@
   {
     "inputs": [],
     "name": "CannotDeactivateRequired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ECDSAInvalidSignature",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureLength",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ECDSAInvalidSignatureS",
     "type": "error"
   },
   {
@@ -73,6 +105,11 @@
   {
     "inputs": [],
     "name": "InvalidPrice",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidSignature",
     "type": "error"
   },
   {
@@ -155,6 +192,16 @@
   },
   {
     "inputs": [],
+    "name": "SignatureAlreadyUsed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SignatureExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "SlippageExceeded",
     "type": "error"
   },
@@ -171,6 +218,11 @@
   {
     "inputs": [],
     "name": "ZeroAddress",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroAddressSigner",
     "type": "error"
   },
   {
@@ -876,6 +928,16 @@
         "internalType": "uint256",
         "name": "usdcAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
       }
     ],
     "name": "deposit",
@@ -1307,6 +1369,19 @@
   },
   {
     "inputs": [],
+    "name": "passportSigner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "pause",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1364,6 +1439,16 @@
         "internalType": "uint256",
         "name": "roseAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
       }
     ],
     "name": "redeem",
@@ -1423,6 +1508,16 @@
         "internalType": "uint256",
         "name": "roseAmount",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
       }
     ],
     "name": "requestRedemption",
@@ -1497,6 +1592,19 @@
       }
     ],
     "name": "setMaxSlippage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_passportSigner",
+        "type": "address"
+      }
+    ],
+    "name": "setPassportSigner",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1658,6 +1766,25 @@
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "usedSignatures",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

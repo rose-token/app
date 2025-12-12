@@ -34,7 +34,9 @@ describe("Task Detailed Description", function () {
   async function getRoseTokens(user, usdcAmount) {
     await usdc.mint(user.address, usdcAmount);
     await usdc.connect(user).approve(await roseTreasury.getAddress(), usdcAmount);
-    await roseTreasury.connect(user).deposit(usdcAmount);
+    const expiry = await getFutureExpiry();
+    const signature = await generatePassportSignature(user.address, "deposit", expiry);
+    await roseTreasury.connect(user).deposit(usdcAmount, expiry, signature);
   }
 
   // Helper function to generate passport signature
@@ -112,12 +114,13 @@ describe("Task Detailed Description", function () {
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
-    // 7. Deploy RoseTreasury (new constructor: roseToken, usdc, swapRouter)
+    // 7. Deploy RoseTreasury (new constructor: roseToken, usdc, swapRouter, passportSigner)
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await swapRouter.getAddress()
+      await swapRouter.getAddress(),
+      passportSigner.address
     );
 
     // 7.5 Register assets via addAsset()

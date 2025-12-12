@@ -6,6 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 /**
@@ -34,6 +36,8 @@ import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.so
  */
 contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
 
     // ============ Asset Configuration ============
     struct Asset {
@@ -75,6 +79,10 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     address public marketplace;
     address public governance;
     mapping(address => uint256) public lastDepositBlock;
+
+    // ============ Passport Verification ============
+    address public passportSigner;
+    mapping(bytes32 => bool) public usedSignatures;
 
     // ============ Redemption Queue ============
     struct RedemptionRequest {
@@ -130,6 +138,10 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     error UserHasPendingRedemption();
     error RequestNotFound();
     error RequestAlreadyFulfilled();
+    error InvalidSignature();
+    error SignatureExpired();
+    error SignatureAlreadyUsed();
+    error ZeroAddressSigner();
 
     // ============ Modifiers ============
     modifier onlyRebalancer() {
@@ -137,18 +149,41 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         _;
     }
 
+    /**
+     * @dev Modifier to verify Gitcoin Passport signature from backend
+     * @param action The action being performed (deposit, redeem)
+     * @param expiry The expiry timestamp of the signature
+     * @param signature The signature from the passport signer backend
+     */
+    modifier requiresPassport(string memory action, uint256 expiry, bytes memory signature) {
+        if (block.timestamp > expiry) revert SignatureExpired();
+
+        bytes32 messageHash = keccak256(abi.encodePacked(msg.sender, action, expiry));
+        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
+
+        if (usedSignatures[ethSignedHash]) revert SignatureAlreadyUsed();
+        usedSignatures[ethSignedHash] = true;
+
+        address recovered = ethSignedHash.recover(signature);
+        if (recovered != passportSigner) revert InvalidSignature();
+        _;
+    }
+
     constructor(
         address _roseToken,
         address _usdc,
-        address _lifiDiamond
+        address _lifiDiamond,
+        address _passportSigner
     ) Ownable(msg.sender) {
         if (_roseToken == address(0) || _usdc == address(0) || _lifiDiamond == address(0)) {
             revert ZeroAddress();
         }
+        if (_passportSigner == address(0)) revert ZeroAddressSigner();
 
         roseToken = IERC20(_roseToken);
         usdc = IERC20(_usdc);
         lifiDiamond = _lifiDiamond;
+        passportSigner = _passportSigner;
 
         // Approve LiFi Diamond for base tokens
         IERC20(_usdc).approve(_lifiDiamond, type(uint256).max);
@@ -308,8 +343,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     /**
      * @dev Deposit USDC, receive ROSE at current NAV
      * Note: Backend watches Deposited events and diversifies via LiFi
+     * @param usdcAmount Amount of USDC to deposit
+     * @param expiry Expiry timestamp of the passport signature
+     * @param signature Passport signature from backend
      */
-    function deposit(uint256 usdcAmount) external nonReentrant whenNotPaused {
+    function deposit(
+        uint256 usdcAmount,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant whenNotPaused requiresPassport("deposit", expiry, signature) {
         if (usdcAmount == 0) revert ZeroAmount();
         if (usdc.balanceOf(msg.sender) < usdcAmount) revert InsufficientBalance();
 
@@ -328,8 +370,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      * @dev Redeem ROSE for USDC at current NAV
      * Same-block restriction: cannot redeem in the same block as a deposit
      * Note: Requires sufficient USDC buffer. Backend maintains buffer via rebalancing.
+     * @param roseAmount Amount of ROSE to redeem
+     * @param expiry Expiry timestamp of the passport signature
+     * @param signature Passport signature from backend
      */
-    function redeem(uint256 roseAmount) external nonReentrant whenNotPaused {
+    function redeem(
+        uint256 roseAmount,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant whenNotPaused requiresPassport("redeem", expiry, signature) {
         if (block.number <= lastDepositBlock[msg.sender]) revert SameBlockRestriction();
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
@@ -354,9 +403,15 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
      * If USDC buffer is sufficient, fulfills instantly
      * Same-block restriction: cannot request in the same block as a deposit
      * @param roseAmount Amount of ROSE to redeem
+     * @param expiry Expiry timestamp of the passport signature
+     * @param signature Passport signature from backend
      * @return requestId Unique ID for tracking the request
      */
-    function requestRedemption(uint256 roseAmount) external nonReentrant whenNotPaused returns (uint256 requestId) {
+    function requestRedemption(
+        uint256 roseAmount,
+        uint256 expiry,
+        bytes calldata signature
+    ) external nonReentrant whenNotPaused requiresPassport("redeem", expiry, signature) returns (uint256 requestId) {
         if (roseAmount == 0) revert ZeroAmount();
         if (roseToken.balanceOf(msg.sender) < roseAmount) revert InsufficientBalance();
         if (userPendingRedemptionId[msg.sender] != 0) revert UserHasPendingRedemption();
@@ -743,6 +798,14 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
         if (_rebalancer == address(0)) revert ZeroAddress();
         rebalancer = _rebalancer;
         emit RebalancerUpdated(_rebalancer);
+    }
+
+    /**
+     * @dev Set passport signer address (backend signer for Gitcoin Passport verification)
+     */
+    function setPassportSigner(address _passportSigner) external onlyOwner {
+        if (_passportSigner == address(0)) revert ZeroAddressSigner();
+        passportSigner = _passportSigner;
     }
 
     /**

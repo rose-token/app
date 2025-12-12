@@ -8,6 +8,8 @@ export const PASSPORT_THRESHOLDS = {
   STAKE: 20,
   CLAIM_TASK: 20,
   PROPOSE: 25,
+  DEPOSIT: 20,
+  REDEEM: 20,
 };
 
 export const PASSPORT_CONFIG = {

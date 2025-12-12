@@ -4,6 +4,7 @@ import { parseUnits, formatUnits } from 'viem';
 import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
 import Spinner from '../ui/Spinner';
+import { usePassportVerify } from '../../hooks/usePassportVerify';
 
 // Standard ERC20 ABI for approve
 const ERC20_ABI = [
@@ -33,6 +34,7 @@ const DepositCard = ({
   const { chain, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { getSignature } = usePassportVerify();
 
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,6 +98,10 @@ const DepositCard = ({
     setError('');
 
     try {
+      // Step 0: Get passport signature
+      console.log('🔐 Verifying passport...');
+      const { expiry, signature } = await getSignature('deposit');
+
       // Step 1: Approve if needed
       if (needsApproval) {
         console.log('⛽ Approving USDC transfer...');
@@ -116,13 +122,13 @@ const DepositCard = ({
         });
         await new Promise(r => setTimeout(r, 1000))
       }
-      // Step 2: Deposit
+      // Step 2: Deposit with passport signature
       console.log('⛽ Depositing USDC...');
       const depositHash = await writeContractAsync({
         address: treasuryAddress,
         abi: RoseTreasuryABI,
         functionName: 'deposit',
-        args: [amountInWei],
+        args: [amountInWei, BigInt(expiry), signature],
         ...GAS_SETTINGS,
       });
 
@@ -140,10 +146,16 @@ const DepositCard = ({
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error('❌ Deposit error:', err);
-      if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+      if (err.message.includes('Passport score too low')) {
+        setError('Your Gitcoin Passport score is too low. Please verify your passport.');
+      } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
       } else if (err.message.includes('InsufficientBalance')) {
         setError('Insufficient USDC balance');
+      } else if (err.message.includes('SignatureExpired')) {
+        setError('Signature expired. Please try again.');
+      } else if (err.message.includes('InvalidSignature')) {
+        setError('Invalid passport signature. Please try again.');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Deposit failed');

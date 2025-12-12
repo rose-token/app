@@ -39,7 +39,9 @@ describe("RoseMarketplace", function () {
   async function getRoseTokens(user, usdcAmount) {
     await usdc.mint(user.address, usdcAmount);
     await usdc.connect(user).approve(await roseTreasury.getAddress(), usdcAmount);
-    await roseTreasury.connect(user).deposit(usdcAmount);
+    const expiry = await getFutureExpiry();
+    const signature = await generatePassportSignature(user.address, "deposit", expiry);
+    await roseTreasury.connect(user).deposit(usdcAmount, expiry, signature);
   }
 
   // Helper function to generate passport signature
@@ -127,12 +129,13 @@ describe("RoseMarketplace", function () {
     await reth.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
     await paxg.mint(await swapRouter.getAddress(), ethers.parseUnits("100000", 18));
 
-    // 8. Deploy RoseTreasury (new constructor: roseToken, usdc, swapRouter)
+    // 8. Deploy RoseTreasury (new constructor: roseToken, usdc, swapRouter, passportSigner)
     const RoseTreasury = await ethers.getContractFactory("RoseTreasury");
     roseTreasury = await RoseTreasury.deploy(
       await roseToken.getAddress(),
       await usdc.getAddress(),
-      await swapRouter.getAddress()
+      await swapRouter.getAddress(),
+      passportSigner.address
     );
 
     // 8.5 Register assets via addAsset()
@@ -981,7 +984,9 @@ describe("RoseMarketplace", function () {
       const depositAmount = ethers.parseUnits("1000", 6); // 1000 USDC
       await usdc.mint(secondStakeholder.address, depositAmount);
       await usdc.connect(secondStakeholder).approve(await roseTreasury.getAddress(), depositAmount);
-      await roseTreasury.connect(secondStakeholder).deposit(depositAmount);
+      const treasuryDepositExpiry = await getFutureExpiry();
+      const treasuryDepositSig = await generatePassportSignature(secondStakeholder.address, "deposit", treasuryDepositExpiry);
+      await roseTreasury.connect(secondStakeholder).deposit(depositAmount, treasuryDepositExpiry, treasuryDepositSig);
 
       // Deposit ROSE to governance to get vROSE
       const vRoseAmount = ethers.parseEther("1");

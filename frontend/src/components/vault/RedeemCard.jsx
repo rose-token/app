@@ -5,6 +5,7 @@ import RoseTreasuryABI from '../../contracts/RoseTreasuryABI.json';
 import RoseTokenABI from '../../contracts/RoseTokenABI.json';
 import { GAS_SETTINGS } from '../../constants/gas';
 import Spinner from '../ui/Spinner';
+import { usePassportVerify } from '../../hooks/usePassportVerify';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
@@ -23,6 +24,7 @@ const RedeemCard = ({
   const { chain } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { getSignature } = usePassportVerify();
 
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -164,6 +166,10 @@ const RedeemCard = ({
     setError('');
 
     try {
+      // Step 0: Get passport signature (works for both redeem and requestRedemption)
+      console.log('🔐 Verifying passport...');
+      const { expiry, signature } = await getSignature('redeem');
+
       // Step 1: Check availability
       console.log('🔍 Checking redemption availability...');
       const availability = await checkRedeemAvailability(amountInWei);
@@ -191,13 +197,13 @@ const RedeemCard = ({
       }
 
       if (canInstant) {
-        // Step 3a: Instant redemption (existing flow)
+        // Step 3a: Instant redemption with passport signature
         console.log('⛽ Redeeming ROSE (instant)...');
         const redeemHash = await writeContractAsync({
           address: treasuryAddress,
           abi: RoseTreasuryABI,
           functionName: 'redeem',
-          args: [amountInWei],
+          args: [amountInWei, BigInt(expiry), signature],
           ...GAS_SETTINGS,
         });
 
@@ -215,7 +221,7 @@ const RedeemCard = ({
         setAvailabilityInfo(null);
         if (onSuccess) onSuccess();
       } else {
-        // Step 3b: Queued redemption (new hybrid flow)
+        // Step 3b: Queued redemption with passport signature
         console.log('⛽ Requesting queued redemption...');
         console.log(`📊 Shortfall: ${availability?.shortfall} USDC`);
 
@@ -223,7 +229,7 @@ const RedeemCard = ({
           address: treasuryAddress,
           abi: RoseTreasuryABI,
           functionName: 'requestRedemption',
-          args: [amountInWei],
+          args: [amountInWei, BigInt(expiry), signature],
           ...GAS_SETTINGS,
         });
 
@@ -270,7 +276,9 @@ const RedeemCard = ({
       setIsPolling(false);
       setPendingRequestId(null);
 
-      if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
+      if (err.message.includes('Passport score too low')) {
+        setError('Your Gitcoin Passport score is too low. Please verify your passport.');
+      } else if (err.message.includes('User rejected') || err.message.includes('user rejected')) {
         setError('Transaction rejected. Please approve the transaction to continue.');
       } else if (err.message.includes('InsufficientBalance')) {
         setError('Insufficient ROSE balance');
@@ -279,6 +287,10 @@ const RedeemCard = ({
         // Could auto-retry with requestRedemption here
       } else if (err.message.includes('UserHasPendingRedemption')) {
         setError('You already have a pending redemption. Please wait for it to be fulfilled.');
+      } else if (err.message.includes('SignatureExpired')) {
+        setError('Signature expired. Please try again.');
+      } else if (err.message.includes('InvalidSignature')) {
+        setError('Invalid passport signature. Please try again.');
       } else if (err.message.includes('execution reverted')) {
         const reason = err.message.split('execution reverted:')[1]?.split('"')[0]?.trim();
         setError(reason || 'Redemption failed');

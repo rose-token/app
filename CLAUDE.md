@@ -25,14 +25,14 @@ Web3 marketplace with task-value-based token distribution.
 |----------|---------|
 | RoseToken | ERC20 authorized mint/burn |
 | RoseMarketplace | Task lifecycle, escrow, payments, passport verification |
-| RoseTreasury | RWA-backed (BTC/Gold/USDC via Chainlink+LiFi), configurable asset registry, redemption queue |
+| RoseTreasury | RWA-backed (BTC/Gold/USDC via Chainlink+LiFi), configurable asset registry, redemption queue, passport verification |
 | RoseGovernance | Proposals, quadratic voting, delegation, rewards |
 | RoseReputation | Monthly buckets, 3yr decay, eligibility checks |
 | vROSE | Soulbound governance receipt |
 
 **Deploy order:** Token → vROSE → Treasury → Marketplace → Reputation → Governance
 
-**Post-deploy:** `setAuthorized`, `setGovernance`, `setMarketplace`, `setVRoseToken`, `setReputation`, `setRebalancer`, `setDelegationSigner`, `addAsset(BTC,GOLD,STABLE,ROSE)`
+**Post-deploy:** `setAuthorized`, `setGovernance`, `setMarketplace`, `setVRoseToken`, `setReputation`, `setRebalancer`, `setDelegationSigner`, `setPassportSigner` (Treasury), `addAsset(BTC,GOLD,STABLE,ROSE)`
 
 ## Constants
 
@@ -50,8 +50,8 @@ Web3 marketplace with task-value-based token distribution.
 **Formula:** `ROSE Price = HardAssetsUSD / CirculatingSupply` (BTC+Gold+USDC, excludes treasury ROSE)
 
 **Flows:**
-- **Deposit:** USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
-- **Redeem:** Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
+- **Deposit:** Passport signature required (action: "deposit") → USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
+- **Redeem:** Passport signature required (action: "redeem") → Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
 - **Rebalance:** No drift threshold or cooldown. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only. Backend `/api/treasury/rebalance/run` requires signed message authentication.
 
 **Same-Block Protection:** Users cannot redeem in the same block as a deposit (prevents flash loan attacks). No time-based cooldowns - deposits and redemptions are otherwise unrestricted. Contract tracks `lastDepositBlock[user]` and checks `block.number > lastDepositBlock[user]` before allowing redemption. View function: `canRedeemAfterDeposit(address)`.
@@ -152,7 +152,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Vault Copy:** User-facing terminology differs from contract functions: "Exchange ROSE" (UI) maps to `redeem()`/`requestRedemption()` (contract). Vault page displays beta banner, NAV tooltip on price, and uses neutral language (no "guaranteed", "backed", "always"). Header: "Diversified On-chain Assets, Transparent Holdings".
 
-**Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25
+**Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25, DEPOSIT=20, REDEEM=20
 
 **Site-Wide Gate:** `ProtectedRoutes` component gates entire app with Passport score >= 20 check. Flow: Connect wallet → Verify passport → Access site. `/help` route bypasses gate. Whitelisted addresses bypass automatically via `usePassport`. Strict blocking (no graceful degradation) for sybil protection.
 

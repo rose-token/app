@@ -21,6 +21,8 @@ export const config = {
     propose: parseInt(process.env.THRESHOLD_PROPOSE || '25'),
     vote: parseInt(process.env.THRESHOLD_VOTE || '25'),
     delegate: parseInt(process.env.THRESHOLD_DELEGATE || '25'),
+    deposit: parseInt(process.env.THRESHOLD_DEPOSIT || '20'),
+    redeem: parseInt(process.env.THRESHOLD_REDEEM || '20'),
   },
 
   signatureTtl: parseInt(process.env.SIGNATURE_TTL || '3600'),
