@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { computeVPSnapshot, storeVPSnapshot, signMerkleRoot, signSlowTrackFinalization } from '../services/vpSnapshot';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Governance contract ABI
 const GOVERNANCE_ABI = [
@@ -65,6 +66,8 @@ export interface SnapshotWatcherStats {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 let wallet: ethers.Wallet | null = null;
 
 const stats: SnapshotWatcherStats = {
@@ -303,6 +306,30 @@ async function catchUpPendingProposals(): Promise<void> {
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('ProposalCreated');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.governance!,
+    GOVERNANCE_ABI,
+    getWsProvider()
+  );
+
+  // Listen for new proposals
+  wsContract.on('ProposalCreated', (proposalId, proposer, track, treasuryAmount, event) => {
+    handleProposalCreated(proposalId, proposer, track, treasuryAmount, event);
+  });
+
+  console.log('[SnapshotWatcher] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the snapshot watcher
  */
 export async function startSnapshotWatcher(): Promise<void> {
@@ -322,12 +349,15 @@ export async function startSnapshotWatcher(): Promise<void> {
   console.log(`[SnapshotWatcher] Execute on-chain: ${config.snapshotWatcher?.executeOnChain !== false}`);
 
   try {
-    const governance = getGovernanceContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for new proposals
-    governance.on('ProposalCreated', (proposalId, proposer, track, treasuryAmount, event) => {
-      handleProposalCreated(proposalId, proposer, track, treasuryAmount, event);
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[SnapshotWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
@@ -353,8 +383,15 @@ export async function startSnapshotWatcher(): Promise<void> {
  * Stop the snapshot watcher
  */
 export function stopSnapshotWatcher(): void {
-  if (governanceContract) {
-    governanceContract.removeAllListeners('ProposalCreated');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('ProposalCreated');
+    wsContract = null;
   }
 
   // Stop finalization watcher

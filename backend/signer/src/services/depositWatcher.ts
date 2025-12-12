@@ -7,6 +7,7 @@ import {
   getAssetTokenAddress,
   getTargetAllocations,
 } from './lifi';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Treasury ABI for deposit events and functions
 const TREASURY_ABI = [
@@ -43,6 +44,8 @@ export interface DepositWatcherStats {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let treasuryContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 let isProcessing = false;
 
 const stats: DepositWatcherStats = {
@@ -303,6 +306,30 @@ function handleDepositedEvent(
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('Deposited');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.treasury!,
+    TREASURY_ABI,
+    getWsProvider()
+  );
+
+  // Listen for Deposited events
+  wsContract.on('Deposited', (user, usdcAmount, roseMinted, event) => {
+    handleDepositedEvent(user, usdcAmount, roseMinted, event);
+  });
+
+  console.log('[DepositWatcher] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the deposit watcher
  */
 export async function startDepositWatcher(): Promise<void> {
@@ -325,22 +352,26 @@ export async function startDepositWatcher(): Promise<void> {
   );
 
   try {
-    const treasury = getTreasuryContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for Deposited events
-    treasury.on('Deposited', (user, usdcAmount, roseMinted, event) => {
-      handleDepositedEvent(user, usdcAmount, roseMinted, event);
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[DepositWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
 
     console.log('[DepositWatcher] Listening for Deposited events...');
 
-    // Catch up on recent events if configured
+    // Catch up on recent events if configured (use HTTP provider for queryFilter)
     const lookbackBlocks = config.depositWatcher?.startupBlockLookback ?? 0;
     if (lookbackBlocks > 0) {
       console.log(`[DepositWatcher] Catching up on last ${lookbackBlocks} blocks...`);
+      const treasury = getTreasuryContract(); // HTTP provider for queryFilter
       const currentBlock = await getProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
 
@@ -378,8 +409,15 @@ export async function startDepositWatcher(): Promise<void> {
  * Stop the deposit watcher
  */
 export function stopDepositWatcher(): void {
-  if (treasuryContract) {
-    treasuryContract.removeAllListeners('Deposited');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('Deposited');
+    wsContract = null;
   }
   if (debounceTimer) {
     clearTimeout(debounceTimer);

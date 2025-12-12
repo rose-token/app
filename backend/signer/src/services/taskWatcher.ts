@@ -10,6 +10,7 @@ import { ethers } from 'ethers';
 import axios from 'axios';
 import { config } from '../config';
 import { approveAndMergePR, isGitHubConfigured, parsePrUrl } from './github';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Marketplace ABI - includes all 18 fields in Task struct
 const MARKETPLACE_ABI = [
@@ -73,6 +74,8 @@ interface IpfsMetadata {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 let isProcessing = false;
 
 const stats: TaskWatcherStats = {
@@ -256,6 +259,33 @@ async function handleTaskReadyForPayment(
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('TaskReadyForPayment');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.marketplace!,
+    MARKETPLACE_ABI,
+    getWsProvider()
+  );
+
+  // Listen for TaskReadyForPayment events
+  wsContract.on('TaskReadyForPayment', (taskId, worker, amount, event) => {
+    handleTaskReadyForPayment(taskId, worker, amount, event).catch((err) => {
+      console.error('[TaskWatcher] Error in event handler:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  console.log('[TaskWatcher] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the task watcher.
  * Listens for TaskReadyForPayment events from the Marketplace contract.
  */
@@ -281,25 +311,26 @@ export async function startTaskWatcher(): Promise<void> {
   console.log(`[TaskWatcher] GitHub configured: ${isGitHubConfigured()}`);
 
   try {
-    const marketplace = getMarketplaceContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for TaskReadyForPayment events
-    marketplace.on('TaskReadyForPayment', (taskId, worker, amount, event) => {
-      handleTaskReadyForPayment(taskId, worker, amount, event).catch((err) => {
-        console.error('[TaskWatcher] Error in event handler:', err);
-        stats.lastError = err instanceof Error ? err.message : String(err);
-      });
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[TaskWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
 
     console.log('[TaskWatcher] Listening for TaskReadyForPayment events...');
 
-    // Catch up on recent events if configured
+    // Catch up on recent events if configured (use HTTP provider for queryFilter)
     const lookbackBlocks = config.github?.startupBlockLookback ?? 0;
     if (lookbackBlocks > 0) {
       console.log(`[TaskWatcher] Catching up on last ${lookbackBlocks} blocks...`);
+      const marketplace = getMarketplaceContract(); // HTTP provider for queryFilter
       const currentBlock = await getProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
 
@@ -332,8 +363,15 @@ export async function startTaskWatcher(): Promise<void> {
  * Stop the task watcher.
  */
 export function stopTaskWatcher(): void {
-  if (marketplaceContract) {
-    marketplaceContract.removeAllListeners('TaskReadyForPayment');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('TaskReadyForPayment');
+    wsContract = null;
   }
   stats.isRunning = false;
   console.log('[TaskWatcher] Stopped');

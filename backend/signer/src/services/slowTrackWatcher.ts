@@ -14,6 +14,7 @@ import {
   cleanupProposalAllocations,
   getProposalDeadline,
 } from './allocations';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Governance contract ABI - events and views needed for watcher
 const GOVERNANCE_ABI = [
@@ -46,6 +47,8 @@ export interface SlowTrackWatcherStats {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 
 const stats: SlowTrackWatcherStats = {
   isRunning: false,
@@ -221,6 +224,44 @@ async function catchUpRecentEvents(): Promise<void> {
 }
 
 // ============================================================
+// Event Listener Setup
+// ============================================================
+
+/**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('VoteCastSlow');
+    wsContract.removeAllListeners('ProposalFinalized');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.governance!,
+    GOVERNANCE_ABI,
+    getWsProvider()
+  );
+
+  // Listen for new votes (VoteCastSlow covers both new votes and updates)
+  wsContract.on('VoteCastSlow', (proposalId, voter, support, vpAmount, nonce, event) => {
+    handleVoteCastSlow(proposalId, voter, support, vpAmount, nonce, event).catch((err) => {
+      console.error('[SlowTrackWatcher] Error in VoteCastSlow handler:', err);
+    });
+  });
+
+  // Listen for proposal finalization (cleanup)
+  wsContract.on('ProposalFinalized', (proposalId, status, event) => {
+    handleProposalFinalized(proposalId, status, event).catch((err) => {
+      console.error('[SlowTrackWatcher] Error in ProposalFinalized handler:', err);
+    });
+  });
+
+  console.log('[SlowTrackWatcher] Event listeners setup on WebSocket provider');
+}
+
+// ============================================================
 // Watcher Lifecycle
 // ============================================================
 
@@ -244,29 +285,22 @@ export async function startSlowTrackWatcher(): Promise<void> {
   console.log(`[SlowTrackWatcher] Governance: ${config.contracts.governance}`);
 
   try {
-    const governance = getGovernanceContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for new votes (VoteCastSlow covers both new votes and updates)
-    // Note: VoteUpdated event is also emitted on updates but VoteCastSlow has all data we need
-    governance.on('VoteCastSlow', (proposalId, voter, support, vpAmount, nonce, event) => {
-      handleVoteCastSlow(proposalId, voter, support, vpAmount, nonce, event).catch((err) => {
-        console.error('[SlowTrackWatcher] Error in VoteCastSlow handler:', err);
-      });
-    });
-
-    // Listen for proposal finalization (cleanup)
-    governance.on('ProposalFinalized', (proposalId, status, event) => {
-      handleProposalFinalized(proposalId, status, event).catch((err) => {
-        console.error('[SlowTrackWatcher] Error in ProposalFinalized handler:', err);
-      });
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[SlowTrackWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
 
     console.log('[SlowTrackWatcher] Listening for Slow Track events...');
 
-    // Catch up on recent events
+    // Catch up on recent events (uses HTTP provider for queryFilter)
     await catchUpRecentEvents();
 
     console.log('[SlowTrackWatcher] Startup complete');
@@ -282,11 +316,17 @@ export async function startSlowTrackWatcher(): Promise<void> {
  * Stop the Slow Track watcher.
  */
 export function stopSlowTrackWatcher(): void {
-  if (governanceContract) {
-    governanceContract.removeAllListeners('VoteCastSlow');
-    governanceContract.removeAllListeners('ProposalFinalized');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
   }
-
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('VoteCastSlow');
+    wsContract.removeAllListeners('ProposalFinalized');
+    wsContract = null;
+  }
   stats.isRunning = false;
   console.log('[SlowTrackWatcher] Stopped');
 }

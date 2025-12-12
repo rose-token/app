@@ -5,6 +5,7 @@ import {
   getReputationNew,
   calculateVotePower,
 } from './governance';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Marketplace ABI for reputation events
 const MARKETPLACE_ABI = [
@@ -60,6 +61,8 @@ export interface VPRefreshStats {
 let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let governanceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 
 const pendingUsers: Map<string, { block: number; tx: string; addedAt: number }> = new Map();
 let debounceTimer: NodeJS.Timeout | null = null;
@@ -400,6 +403,32 @@ function handleStakeholderFeeEarned(
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('ReputationChanged');
+    wsContract.removeAllListeners('PaymentReleased');
+    wsContract.removeAllListeners('StakeholderFeeEarned');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.marketplace!,
+    MARKETPLACE_ABI,
+    getWsProvider()
+  );
+
+  // Set up event listeners
+  wsContract.on('ReputationChanged', handleReputationChanged);
+  wsContract.on('PaymentReleased', handlePaymentReleased);
+  wsContract.on('StakeholderFeeEarned', handleStakeholderFeeEarned);
+
+  console.log('[VPRefresh] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start watching for reputation changes
  */
 export async function startVPRefreshWatcher(): Promise<void> {
@@ -422,19 +451,23 @@ export async function startVPRefreshWatcher(): Promise<void> {
   console.log(`[VPRefresh] Config: executeOnChain=${config.vpRefresh.executeOnChain}, ` +
     `minVpDiff=${config.vpRefresh.minVpDifference}`);
 
+  // Setup event listeners using WebSocket provider
+  setupEventListeners();
+
+  // Register reconnect handler to re-setup listeners on WebSocket reconnection
+  reconnectHandler = () => {
+    console.log('[VPRefresh] Reconnecting event listeners...');
+    setupEventListeners();
+  };
+  onReconnect(reconnectHandler);
+
   stats.isRunning = true;
   stats.startedAt = new Date();
 
-  const marketplace = getMarketplaceContract();
-
-  // Set up event listeners
-  marketplace.on('ReputationChanged', handleReputationChanged);
-  marketplace.on('PaymentReleased', handlePaymentReleased);
-  marketplace.on('StakeholderFeeEarned', handleStakeholderFeeEarned);
-
-  // Process recent events on startup (catch-up)
+  // Process recent events on startup (catch-up) - uses HTTP provider for queryFilter
   if (config.vpRefresh.startupBlockLookback > 0) {
     try {
+      const marketplace = getMarketplaceContract(); // HTTP provider for queryFilter
       const currentBlock = await getProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - config.vpRefresh.startupBlockLookback);
 
@@ -475,8 +508,18 @@ export function stopVPRefreshWatcher(): void {
     debounceTimer = null;
   }
 
-  if (marketplaceContract) {
-    marketplaceContract.removeAllListeners();
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('ReputationChanged');
+    wsContract.removeAllListeners('PaymentReleased');
+    wsContract.removeAllListeners('StakeholderFeeEarned');
+    wsContract = null;
   }
 
   stats.isRunning = false;

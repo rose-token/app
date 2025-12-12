@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { getAssetBreakdowns } from './treasury';
 import { getSwapQuote, executeDiversificationSwap, getAssetTokenAddress } from './lifi';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Treasury ABI for redemption events and functions
 const TREASURY_ABI = [
@@ -53,6 +54,8 @@ const ROSE_KEY = ethers.encodeBytes32String('ROSE');
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let treasuryContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 let wallet: ethers.Wallet | null = null;
 let isProcessing = false;
 
@@ -152,6 +155,54 @@ function handleRedemptionRequestedEvent(
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('RedemptionRequested');
+    wsContract.removeAllListeners('RedemptionFulfilled');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.treasury!,
+    TREASURY_ABI,
+    getWsProvider()
+  );
+
+  // Listen for RedemptionRequested events
+  wsContract.on('RedemptionRequested', (requestId, user, roseAmount, usdcOwed, event) => {
+    handleRedemptionRequestedEvent(requestId, user, roseAmount, usdcOwed, event);
+  });
+
+  // Also listen for RedemptionFulfilled to track completed redemptions
+  wsContract.on('RedemptionFulfilled', (requestId, user, usdcAmount, event) => {
+    console.log(
+      `[RedemptionWatcher] Redemption fulfilled: ID=${requestId}, ` +
+        `${ethers.formatUnits(usdcAmount, 6)} USDC to ${user}`
+    );
+
+    // Remove from pending if we were tracking it
+    if (pendingRedemptions.has(requestId)) {
+      pendingRedemptions.delete(requestId);
+      stats.redemptionsFulfilled++;
+
+      // Update total USDC owed
+      let totalOwed = 0n;
+      for (const [, req] of pendingRedemptions) {
+        totalOwed += req.usdcOwed;
+      }
+      stats.totalUsdcOwed = ethers.formatUnits(totalOwed, 6);
+    }
+
+    stats.lastEventBlock = event.blockNumber;
+  });
+
+  console.log('[RedemptionWatcher] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the redemption watcher
  */
 export async function startRedemptionWatcher(): Promise<void> {
@@ -174,45 +225,26 @@ export async function startRedemptionWatcher(): Promise<void> {
   );
 
   try {
-    const treasury = getTreasuryContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for RedemptionRequested events
-    treasury.on('RedemptionRequested', (requestId, user, roseAmount, usdcOwed, event) => {
-      handleRedemptionRequestedEvent(requestId, user, roseAmount, usdcOwed, event);
-    });
-
-    // Also listen for RedemptionFulfilled to track completed redemptions
-    treasury.on('RedemptionFulfilled', (requestId, user, usdcAmount, event) => {
-      console.log(
-        `[RedemptionWatcher] Redemption fulfilled: ID=${requestId}, ` +
-          `${ethers.formatUnits(usdcAmount, 6)} USDC to ${user}`
-      );
-
-      // Remove from pending if we were tracking it
-      if (pendingRedemptions.has(requestId)) {
-        pendingRedemptions.delete(requestId);
-        stats.redemptionsFulfilled++;
-
-        // Update total USDC owed
-        let totalOwed = 0n;
-        for (const [, req] of pendingRedemptions) {
-          totalOwed += req.usdcOwed;
-        }
-        stats.totalUsdcOwed = ethers.formatUnits(totalOwed, 6);
-      }
-
-      stats.lastEventBlock = event.blockNumber;
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[RedemptionWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
 
     console.log('[RedemptionWatcher] Listening for RedemptionRequested events...');
 
-    // Catch up on recent events if configured
+    // Catch up on recent events if configured (use HTTP provider for queryFilter)
     const lookbackBlocks = config.redemptionWatcher?.startupBlockLookback ?? 0;
     if (lookbackBlocks > 0) {
       console.log(`[RedemptionWatcher] Catching up on last ${lookbackBlocks} blocks...`);
+      const treasury = getTreasuryContract(); // HTTP provider for queryFilter
       const currentBlock = await getProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
 
@@ -268,9 +300,16 @@ export async function startRedemptionWatcher(): Promise<void> {
  * Stop the redemption watcher
  */
 export function stopRedemptionWatcher(): void {
-  if (treasuryContract) {
-    treasuryContract.removeAllListeners('RedemptionRequested');
-    treasuryContract.removeAllListeners('RedemptionFulfilled');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('RedemptionRequested');
+    wsContract.removeAllListeners('RedemptionFulfilled');
+    wsContract = null;
   }
   if (debounceTimer) {
     clearTimeout(debounceTimer);

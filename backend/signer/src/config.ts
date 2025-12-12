@@ -60,6 +60,8 @@ export const config = {
   // Blockchain RPC for reading contract data
   rpc: {
     url: process.env.RPC_URL || process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
+    // WebSocket URL for event listening (default: Alchemy Arbitrum Sepolia)
+    wsUrl: process.env.RPC_WS_URL || 'wss://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn',
   },
 
   // Contract addresses

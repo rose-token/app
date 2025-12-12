@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
 import { getReputationNew } from './governance';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Governance contract ABI (staking events)
 const GOVERNANCE_ABI = [
@@ -34,6 +35,8 @@ export interface StakerIndexerStats {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 
 const stats: StakerIndexerStats = {
   isRunning: false,
@@ -227,6 +230,53 @@ async function catchUpEvents(fromBlock: number): Promise<void> {
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('Deposited');
+    wsContract.removeAllListeners('Withdrawn');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.governance!,
+    GOVERNANCE_ABI,
+    getWsProvider()
+  );
+
+  // Listen for new events
+  wsContract.on('Deposited', async (user: string, amount: bigint, event: ethers.EventLog) => {
+    try {
+      let blockNumber = event.blockNumber;
+      if (blockNumber === null || blockNumber === undefined) {
+        console.warn(`[StakerIndexer] Block number not available for Deposited event, fetching current block`);
+        blockNumber = await getProvider().getBlockNumber();
+      }
+      await handleDeposit(user, amount, blockNumber);
+    } catch (err) {
+      console.error('[StakerIndexer] Error in deposit handler:', err);
+    }
+  });
+
+  wsContract.on('Withdrawn', async (user: string, amount: bigint, event: ethers.EventLog) => {
+    try {
+      let blockNumber = event.blockNumber;
+      if (blockNumber === null || blockNumber === undefined) {
+        console.warn(`[StakerIndexer] Block number not available for Withdrawn event, fetching current block`);
+        blockNumber = await getProvider().getBlockNumber();
+      }
+      await handleWithdrawal(user, amount, blockNumber);
+    } catch (err) {
+      console.error('[StakerIndexer] Error in withdrawal handler:', err);
+    }
+  });
+
+  console.log('[StakerIndexer] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the staker indexer
  */
 export async function startStakerIndexer(): Promise<void> {
@@ -245,40 +295,21 @@ export async function startStakerIndexer(): Promise<void> {
   console.log(`[StakerIndexer] Governance: ${config.contracts.governance}`);
 
   try {
-    const governance = getGovernanceContract();
-
     // Get current stats from database
     const countResult = await query('SELECT COUNT(*) as total FROM stakers');
     const activeResult = await query('SELECT COUNT(*) as active FROM stakers WHERE staked_rose > 0');
     stats.totalStakers = parseInt(countResult.rows[0].total);
     stats.activeStakers = parseInt(activeResult.rows[0].active);
 
-    // Listen for new events
-    governance.on('Deposited', async (user: string, amount: bigint, event: ethers.EventLog) => {
-      try {
-        let blockNumber = event.blockNumber;
-        if (blockNumber === null || blockNumber === undefined) {
-          console.warn(`[StakerIndexer] Block number not available for Deposited event, fetching current block`);
-          blockNumber = await getProvider().getBlockNumber();
-        }
-        await handleDeposit(user, amount, blockNumber);
-      } catch (err) {
-        console.error('[StakerIndexer] Error in deposit handler:', err);
-      }
-    });
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    governance.on('Withdrawn', async (user: string, amount: bigint, event: ethers.EventLog) => {
-      try {
-        let blockNumber = event.blockNumber;
-        if (blockNumber === null || blockNumber === undefined) {
-          console.warn(`[StakerIndexer] Block number not available for Withdrawn event, fetching current block`);
-          blockNumber = await getProvider().getBlockNumber();
-        }
-        await handleWithdrawal(user, amount, blockNumber);
-      } catch (err) {
-        console.error('[StakerIndexer] Error in withdrawal handler:', err);
-      }
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[StakerIndexer] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
@@ -306,9 +337,16 @@ export async function startStakerIndexer(): Promise<void> {
  * Stop the staker indexer
  */
 export function stopStakerIndexer(): void {
-  if (governanceContract) {
-    governanceContract.removeAllListeners('Deposited');
-    governanceContract.removeAllListeners('Withdrawn');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('Deposited');
+    wsContract.removeAllListeners('Withdrawn');
+    wsContract = null;
   }
   stats.isRunning = false;
   console.log('[StakerIndexer] Stopped');

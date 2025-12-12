@@ -9,6 +9,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { recordDispute, recordResolution } from './dispute';
 import { ResolutionType } from '../types';
+import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
 // Marketplace ABI - dispute events only
 const MARKETPLACE_ABI = [
@@ -29,6 +30,8 @@ export interface DisputeWatcherStats {
 // State
 let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
+let wsContract: ethers.Contract | null = null;
+let reconnectHandler: (() => void) | null = null;
 
 const stats: DisputeWatcherStats = {
   isRunning: false,
@@ -149,6 +152,42 @@ async function handleDisputeResolved(
 }
 
 /**
+ * Setup event listeners using WebSocket provider
+ */
+function setupEventListeners(): void {
+  // Clean up previous listeners if any
+  if (wsContract) {
+    wsContract.removeAllListeners('TaskDisputed');
+    wsContract.removeAllListeners('DisputeResolved');
+  }
+
+  // Create new contract instance with WebSocket provider for event listening
+  wsContract = new ethers.Contract(
+    config.contracts.marketplace!,
+    MARKETPLACE_ABI,
+    getWsProvider()
+  );
+
+  // Listen for TaskDisputed events
+  wsContract.on('TaskDisputed', (taskId, initiator, reasonHash, timestamp, event) => {
+    handleTaskDisputed(taskId, initiator, reasonHash, timestamp, event).catch((err) => {
+      console.error('[DisputeWatcher] Error in TaskDisputed handler:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  // Listen for DisputeResolved events
+  wsContract.on('DisputeResolved', (taskId, resolution, workerPct, workerAmount, customerRefund, event) => {
+    handleDisputeResolved(taskId, resolution, workerPct, workerAmount, customerRefund, event).catch((err) => {
+      console.error('[DisputeWatcher] Error in DisputeResolved handler:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  console.log('[DisputeWatcher] Event listeners setup on WebSocket provider');
+}
+
+/**
  * Start the dispute watcher.
  * Listens for TaskDisputed and DisputeResolved events from the Marketplace contract.
  */
@@ -173,33 +212,26 @@ export async function startDisputeWatcher(): Promise<void> {
   console.log(`[DisputeWatcher] Marketplace: ${config.contracts.marketplace}`);
 
   try {
-    const marketplace = getMarketplaceContract();
+    // Setup event listeners using WebSocket provider
+    setupEventListeners();
 
-    // Listen for TaskDisputed events
-    marketplace.on('TaskDisputed', (taskId, initiator, reasonHash, timestamp, event) => {
-      handleTaskDisputed(taskId, initiator, reasonHash, timestamp, event).catch((err) => {
-        console.error('[DisputeWatcher] Error in TaskDisputed handler:', err);
-        stats.lastError = err instanceof Error ? err.message : String(err);
-      });
-    });
-
-    // Listen for DisputeResolved events
-    marketplace.on('DisputeResolved', (taskId, resolution, workerPct, workerAmount, customerRefund, event) => {
-      handleDisputeResolved(taskId, resolution, workerPct, workerAmount, customerRefund, event).catch((err) => {
-        console.error('[DisputeWatcher] Error in DisputeResolved handler:', err);
-        stats.lastError = err instanceof Error ? err.message : String(err);
-      });
-    });
+    // Register reconnect handler to re-setup listeners on WebSocket reconnection
+    reconnectHandler = () => {
+      console.log('[DisputeWatcher] Reconnecting event listeners...');
+      setupEventListeners();
+    };
+    onReconnect(reconnectHandler);
 
     stats.isRunning = true;
     stats.startedAt = new Date();
 
     console.log('[DisputeWatcher] Listening for TaskDisputed and DisputeResolved events...');
 
-    // Catch up on recent events if configured
+    // Catch up on recent events if configured (use HTTP provider for queryFilter)
     const lookbackBlocks = config.disputeWatcher?.startupBlockLookback ?? 10000;
     if (lookbackBlocks > 0) {
       console.log(`[DisputeWatcher] Catching up on last ${lookbackBlocks} blocks...`);
+      const marketplace = getMarketplaceContract(); // HTTP provider for queryFilter
       const currentBlock = await getProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
 
@@ -259,9 +291,16 @@ export async function startDisputeWatcher(): Promise<void> {
  * Stop the dispute watcher.
  */
 export function stopDisputeWatcher(): void {
-  if (marketplaceContract) {
-    marketplaceContract.removeAllListeners('TaskDisputed');
-    marketplaceContract.removeAllListeners('DisputeResolved');
+  // Remove reconnect callback
+  if (reconnectHandler) {
+    removeReconnectCallback(reconnectHandler);
+    reconnectHandler = null;
+  }
+  // Clean up WebSocket contract listeners
+  if (wsContract) {
+    wsContract.removeAllListeners('TaskDisputed');
+    wsContract.removeAllListeners('DisputeResolved');
+    wsContract = null;
   }
   stats.isRunning = false;
   console.log('[DisputeWatcher] Stopped');
