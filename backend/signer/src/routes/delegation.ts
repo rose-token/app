@@ -431,7 +431,9 @@ router.post('/undelegate-signature', async (req: Request, res: Response) => {
 /**
  * POST /api/delegation/confirm-undelegate
  * Phase 2: Called by frontend after successful undelegateWithVoteReduction tx
- * Clears DB allocations for the affected proposals
+ *
+ * NOTE: delegation_allocations table was removed in Governance V2 migration.
+ * No DB cleanup needed - allocations tracked on-chain only.
  */
 router.post('/confirm-undelegate', async (req: Request, res: Response) => {
   try {
@@ -459,9 +461,9 @@ router.post('/confirm-undelegate', async (req: Request, res: Response) => {
       return res.json({ success: true, cleared: 0 });
     }
 
-    // Import and call clearDelegatorAllocations
-    const { clearDelegatorAllocations } = await import('../services/reconciliation');
-    await clearDelegatorAllocations(delegator, delegate, validProposalIds);
+    // delegation_allocations table was removed in Governance V2 migration
+    // No DB cleanup needed - allocations tracked on-chain only
+    console.log(`[Delegation] confirm-undelegate is no-op (Governance V2) - ${validProposalIds.length} proposals`);
 
     return res.json({ success: true, cleared: validProposalIds.length });
   } catch (error) {

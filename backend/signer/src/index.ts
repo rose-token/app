@@ -10,7 +10,6 @@ import delegationRoutes from './routes/delegation';
 import governanceRoutes from './routes/governance';
 import treasuryRoutes from './routes/treasury';
 import redemptionRoutes from './routes/redemption';
-import reconciliationRoutes from './routes/reconciliation';
 import delegateScoringRoutes from './routes/delegateScoring';
 import vpRefreshRoutes from './routes/vpRefresh';
 import auctionRoutes from './routes/auction';
@@ -24,7 +23,6 @@ import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
 import { startRebalanceCron } from './cron/rebalance';
 import { startNavHistoryCron } from './cron/nav-history';
-import { startReconciliationCron } from './cron/reconciliation';
 import { startDelegateScoringCron } from './cron/delegateScoring';
 import { startBackupCron } from './cron/backup';
 import { startVPRefreshWatcher } from './services/vpRefresh';
@@ -69,7 +67,6 @@ app.use('/api/delegation', delegationRoutes);
 app.use('/api/governance', governanceRoutes);
 app.use('/api/treasury', treasuryRoutes);
 app.use('/api/treasury', redemptionRoutes);
-app.use('/api/reconciliation', reconciliationRoutes);
 app.use('/api/delegate-scoring', delegateScoringRoutes);
 app.use('/api/vp-refresh', vpRefreshRoutes);
 app.use('/api/auction', auctionRoutes);
@@ -121,7 +118,6 @@ async function start() {
   // Start scheduled tasks
   startRebalanceCron();
   startNavHistoryCron();
-  startReconciliationCron();
   startDelegateScoringCron();
   startBackupCron();
 

@@ -168,7 +168,6 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Governance | `/api/governance/vp/:addr`, `/vp/available/:addr` (Slow Track alias), `/vp/attestation` (POST, Slow Track alias), `/proposals/:id/proof/:addr` (Fast Track merkle proof), `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
 | Delegation | `/api/delegation/vote-signature`, `/confirm-vote`, `/claim-signature`, `/claimable/:user`, `/undelegate-signature`, `/global-power/:delegate`, `/confirm-undelegate` |
 | Delegation V2 | `/api/delegation/v2/store` (POST), `/v2/user/:addr`, `/v2/received/:delegate`, `/v2/revoke` (POST, signed), `/v2/nonce/:addr`, `/v2/opt-in/:addr`, `/v2/stats`, `/v2/eip712-config/:chainId` (Off-chain EIP-712 delegations) |
-| Reconciliation | `/api/reconciliation/status`, `/last`, `/run`, `/proposal/:id`, `/sync`, `/stats` |
 | Delegate Scoring | `/api/delegate-scoring/score/:delegate`, `/eligibility/:delegate`, `/leaderboard`, `/stats`, `/run` |
 | VP Refresh | `/api/vp-refresh/stats`, `/pending`, `/config`, `/check/:addr`, `/process` |
 | Treasury | `/api/treasury/history`, `/rebalances`, `/stats`, `/vault-status`, `/rebalance/status`, `/rebalance/run`, `/rebalance/trigger`, `/redeem-check`, `/redemption/:id`, `/user-pending/:addr`, `/pending-redemptions`, `/redemption-watcher/*` |
@@ -186,7 +185,6 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | governance.ts | VP calculation, reputation attestation |
 | delegation.ts | Allocations, delegated votes, claims, vote reductions |
 | delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
-| reconciliation.ts | DB↔chain sync, discrepancy auto-fix |
 | delegateScoring.ts | Win/loss tracking, eligibility gating |
 | vpRefresh.ts | Auto-refresh VP on reputation changes |
 | stakerIndexer.ts | Watch `Deposited`/`Withdrawn`, maintain staker cache |
@@ -209,7 +207,6 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 |-----|----------|---------|
 | NAV Snapshot | Daily 00:00 UTC | Prices/allocations |
 | Rebalance | 1st of month | Multi-swap via LiFi |
-| Reconciliation | Every 6h | DB↔chain sync |
 | Delegate Scoring | Every 1h | Score proposals, free VP |
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
@@ -243,7 +240,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Frontend | `VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS`, `VITE_PINATA_JWT`, `VITE_PINATA_GATEWAY`, `VITE_PASSPORT_SIGNER_URL` |
 | Backend | `PORT`, `ALLOWED_ORIGINS`, `SIGNER_PRIVATE_KEY`, `VITE_GITCOIN_API_KEY/SCORER_ID`, `THRESHOLD_*`, `*_ADDRESS`, `RPC_URL`, `DATABASE_URL`, `DB_POOL_*`, `PINATA_GATEWAY` |
 | Watchers | `*_WATCHER_ENABLED`, `*_WATCHER_DEBOUNCE_MS`, `*_WATCHER_EXECUTE`, `*_WATCHER_SLIPPAGE_BPS`, `*_WATCHER_STARTUP_LOOKBACK` |
-| Delegation | `RECONCILIATION_CRON_SCHEDULE`, `RECONCILIATION_ON_STARTUP`, `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
+| Delegation | `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
 | VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
 | Dispute Watcher | `DISPUTE_WATCHER_ENABLED` (default: true), `DISPUTE_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
 | Staker Indexer | `STAKER_INDEXER_ENABLED` (true), `STAKER_INDEXER_STARTUP_LOOKBACK` (10000), `STAKER_VALIDATION_CRON` (weekly Sun 03:00 UTC) |

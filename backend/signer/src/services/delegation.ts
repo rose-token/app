@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType, VoteReduction } from '../types';
-import { query, getPool } from '../db/pool';
 
 // Updated ABI for new VP-centric RoseGovernance
 const GOVERNANCE_ABI = [
@@ -93,62 +92,37 @@ export async function getGlobalAvailableDelegatedPower(delegate: string): Promis
 /**
  * Get per-delegator power used for a proposal from database cache
  * Returns 0 if no record found (first vote on this proposal)
+ *
+ * NOTE: delegation_allocations table was removed in Governance V2 migration.
+ * Per-delegator tracking is now handled via on-chain events only.
  */
 async function getDelegatorPowerUsedFromDB(
-  proposalId: number,
-  delegate: string,
-  delegator: string
+  _proposalId: number,
+  _delegate: string,
+  _delegator: string
 ): Promise<bigint> {
-  try {
-    const result = await query(
-      `SELECT power_used FROM delegation_allocations
-       WHERE proposal_id = $1 AND LOWER(delegate) = LOWER($2) AND LOWER(delegator) = LOWER($3)`,
-      [proposalId, delegate, delegator]
-    );
-    return result.rows[0]?.power_used ? BigInt(result.rows[0].power_used) : 0n;
-  } catch (err) {
-    // DB not available - return 0 (treats as first vote)
-    console.warn('getDelegatorPowerUsedFromDB error:', err);
-    return 0n;
-  }
+  // delegation_allocations table was removed in Governance V2 migration
+  // Per-delegator tracking is now handled via on-chain events only
+  return 0n;
 }
 
 /**
  * Store per-delegator allocations in database after signing a vote
  * Used for incremental votes and reward claims
+ *
+ * NOTE: delegation_allocations table was removed in Governance V2 migration.
+ * Allocations are now tracked via on-chain events only.
  */
 export async function storeAllocations(
   proposalId: number,
-  delegate: string,
+  _delegate: string,
   allocations: DelegationAllocation[],
-  support: boolean,
-  allocationsHash: string
+  _support: boolean,
+  _allocationsHash: string
 ): Promise<void> {
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (const alloc of allocations) {
-      await client.query(
-        `INSERT INTO delegation_allocations
-         (proposal_id, delegate, delegator, power_used, support, allocations_hash)
-         VALUES ($1, LOWER($2), LOWER($3), $4, $5, $6)
-         ON CONFLICT (proposal_id, delegate, delegator)
-         DO UPDATE SET
-           power_used = delegation_allocations.power_used + EXCLUDED.power_used,
-           allocations_hash = EXCLUDED.allocations_hash`,
-        [proposalId, delegate, alloc.delegator, alloc.powerUsed, support, allocationsHash]
-      );
-    }
-    await client.query('COMMIT');
-    console.log(`Stored ${allocations.length} allocations for proposal ${proposalId}`);
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('storeAllocations error:', e);
-    // Non-fatal - vote can still succeed without cache
-  } finally {
-    client.release();
-  }
+  // delegation_allocations table was removed in Governance V2 migration
+  // Allocations are now tracked via on-chain events only
+  console.log(`[Delegation] storeAllocations is no-op (Governance V2) - ${allocations.length} allocations for proposal ${proposalId}`);
 }
 
 /**
