@@ -16,8 +16,8 @@ export const CONTRACTS = {
 
 // Governance constants (match contract values)
 export const GOVERNANCE_CONSTANTS = {
-  VOTING_PERIOD: 14 * 24 * 60 * 60, // 2 weeks in seconds
-  QUORUM_THRESHOLD: 3300, // 33% in basis points
+  VOTING_PERIOD: 14 * 24 * 60 * 60, // 2 weeks in seconds (Slow Track)
+  QUORUM_THRESHOLD: 3300, // 33% in basis points (legacy - see TRACK_CONSTANTS)
   PASS_THRESHOLD: 5833, // 7/12 = 58.33% in basis points
   MAX_EDIT_CYCLES: 4,
   COLD_START_TASKS: 10,
@@ -30,19 +30,54 @@ export const GOVERNANCE_CONSTANTS = {
   NAY_VOTER_REWARD: 200, // 2%
   PROPOSER_REWARD: 100, // 1%
   DAO_MINT_PERCENT: 200, // 2%
+  SNAPSHOT_DELAY: 1 * 24 * 60 * 60, // 1 day for Fast Track snapshot
+};
+
+// Two-Track governance system (matches contract)
+export const Track = {
+  Fast: 0,
+  Slow: 1,
+};
+
+export const TrackLabels = {
+  [Track.Fast]: 'Fast Track',
+  [Track.Slow]: 'Slow Track',
+};
+
+export const TrackColors = {
+  [Track.Fast]: 'var(--accent)',
+  [Track.Slow]: 'var(--warning)',
+};
+
+// Track-specific constants
+export const TRACK_CONSTANTS = {
+  [Track.Fast]: {
+    VOTING_PERIOD: 3 * 24 * 60 * 60, // 3 days
+    QUORUM_BPS: 1000, // 10%
+    TREASURY_LIMIT_BPS: 100, // 1% of treasury max
+    SNAPSHOT_DELAY: 1 * 24 * 60 * 60, // 1 day
+  },
+  [Track.Slow]: {
+    VOTING_PERIOD: 14 * 24 * 60 * 60, // 14 days
+    QUORUM_BPS: 2500, // 25%
+    TREASURY_LIMIT_BPS: 10000, // 100% (no limit)
+    SNAPSHOT_DELAY: 0, // immediate voting
+  },
 };
 
 // Proposal status enum (matches contract)
 export const ProposalStatus = {
-  Active: 0,
-  Passed: 1,
-  Failed: 2,
-  Executed: 3,
-  Cancelled: 4,
+  Pending: 0,    // Fast Track only - waiting for merkle root
+  Active: 1,     // Voting open
+  Passed: 2,
+  Failed: 3,
+  Executed: 4,
+  Cancelled: 5,
 };
 
 // Status labels for display
 export const ProposalStatusLabels = {
+  [ProposalStatus.Pending]: 'Pending',
   [ProposalStatus.Active]: 'Active',
   [ProposalStatus.Passed]: 'Passed',
   [ProposalStatus.Failed]: 'Failed',
@@ -52,6 +87,7 @@ export const ProposalStatusLabels = {
 
 // Status colors for UI
 export const ProposalStatusColors = {
+  [ProposalStatus.Pending]: 'var(--warning)',
   [ProposalStatus.Active]: 'var(--accent)',
   [ProposalStatus.Passed]: 'var(--success)',
   [ProposalStatus.Failed]: 'var(--error)',

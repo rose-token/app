@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ProposalStatus, ProposalStatusLabels, ProposalStatusColors, formatVotePower } from '../../constants/contracts';
+import { ProposalStatus, ProposalStatusLabels, ProposalStatusColors, Track, TrackLabels, TrackColors, formatVotePower } from '../../constants/contracts';
 import ProfileBadge from '../profile/ProfileBadge';
 import QuorumBar from './QuorumBar';
 
@@ -16,6 +16,7 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
     proposer,
     value,
     status,
+    track = Track.Slow, // Default to Slow if not set
     yayPercent,
     nayPercent,
     yayVotes,
@@ -70,15 +71,28 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
         </div>
 
         <div className="flex flex-col items-end gap-1">
-          <span
-            className="px-2 py-0.5 rounded text-xs font-medium"
-            style={{
-              backgroundColor: `${ProposalStatusColors[status]}20`,
-              color: ProposalStatusColors[status],
-            }}
-          >
-            {ProposalStatusLabels[status]}
-          </span>
+          <div className="flex items-center gap-1">
+            {/* Track Badge */}
+            <span
+              className="px-2 py-0.5 rounded text-xs font-medium"
+              style={{
+                backgroundColor: track === Track.Fast ? 'rgba(14, 165, 233, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                color: TrackColors[track],
+              }}
+            >
+              {TrackLabels[track]}
+            </span>
+            {/* Status Badge */}
+            <span
+              className="px-2 py-0.5 rounded text-xs font-medium"
+              style={{
+                backgroundColor: `${ProposalStatusColors[status]}20`,
+                color: ProposalStatusColors[status],
+              }}
+            >
+              {ProposalStatusLabels[status]}
+            </span>
+          </div>
           {isActive && (
             <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
               {formatTimeRemaining(timeRemaining)} left
