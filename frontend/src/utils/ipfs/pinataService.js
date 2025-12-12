@@ -33,6 +33,18 @@ const jsonToBlob = (data) => new Blob([JSON.stringify(data)], { type: 'applicati
 export const getGatewayUrl = (cid) => `${PINATA_GATEWAY}/ipfs/${cid}`;
 
 /**
+ * Get authorization headers for Pinata gateway requests
+ * @returns {Object} Headers object with Authorization
+ */
+const getAuthHeaders = () => {
+  const jwt = import.meta.env.VITE_PINATA_JWT;
+  if (!jwt) {
+    throw new Error('Pinata JWT not configured');
+  }
+  return { 'Authorization': `Bearer ${jwt}` };
+};
+
+/**
  * Upload content to Pinata V3 API (private by default)
  * @param {Blob|File} file - File or Blob to upload
  * @param {string} name - Filename for the upload
@@ -93,7 +105,9 @@ export const fetchCommentFromIPFS = async (cid) => {
 
     const fetchWithRetry = async (retries) => {
       try {
-        const response = await axios.get(getGatewayUrl(cid));
+        const response = await axios.get(getGatewayUrl(cid), {
+          headers: getAuthHeaders()
+        });
         ipfsCache.set(cid, response.data);
 
         return response.data.isEncrypted ? response.data : response.data.content;
@@ -152,7 +166,9 @@ export const fetchProposalFromIPFS = async (cid) => {
 
     const fetchWithRetry = async (retries) => {
       try {
-        const response = await axios.get(getGatewayUrl(cid));
+        const response = await axios.get(getGatewayUrl(cid), {
+          headers: getAuthHeaders()
+        });
         ipfsCache.set(cid, response.data);
 
         return response.data;
@@ -254,7 +270,9 @@ export const fetchTaskDescription = async (ipfsHash) => {
 
   const fetchWithRetry = async (retries) => {
     try {
-      const response = await axios.get(getGatewayUrl(ipfsHash));
+      const response = await axios.get(getGatewayUrl(ipfsHash), {
+        headers: getAuthHeaders()
+      });
 
       if (!response.data) {
         throw new Error('No data returned from IPFS');
@@ -336,7 +354,9 @@ export const fetchDisputeReason = async (ipfsHash) => {
 
   const fetchWithRetry = async (retries) => {
     try {
-      const response = await axios.get(getGatewayUrl(ipfsHash));
+      const response = await axios.get(getGatewayUrl(ipfsHash), {
+        headers: getAuthHeaders()
+      });
 
       if (!response.data) {
         throw new Error('No data returned from IPFS');
