@@ -1,5 +1,5 @@
 # CLAUDE.md
-
+  
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Claude Makes plans, critique the plan itself, not the fact it hasnt implemented the plan yet
 
 ## Table of Contents
