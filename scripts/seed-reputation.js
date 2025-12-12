@@ -82,26 +82,10 @@ async function main() {
     return deployer.signMessage(hre.ethers.getBytes(messageHash));
   }
 
-  async function signReputation(address, reputation, expiry) {
-    const messageHash = hre.ethers.solidityPackedKeccak256(
-      ["string", "address", "uint256", "uint256"],
-      ["reputation", address, reputation, expiry]
-    );
-    return deployer.signMessage(hre.ethers.getBytes(messageHash));
-  }
-
   // 9. Stakeholder: Deposit ROSE to governance to get vROSE
   console.log("\n--- Stakeholder: Getting vROSE ---");
-  const DEFAULT_REPUTATION = 60; // Cold start reputation for new users
-  const repExpiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-  const repSig = await signReputation(stakeholder.address, DEFAULT_REPUTATION, repExpiry);
   await (await roseToken.connect(stakeholder).approve(governance.target, stakeholderRoseNeeded)).wait();
-  await (await governance.connect(stakeholder).deposit(
-    stakeholderRoseNeeded,
-    DEFAULT_REPUTATION,
-    repExpiry,
-    repSig
-  )).wait();
+  await (await governance.connect(stakeholder).deposit(stakeholderRoseNeeded)).wait();
   const vRoseBalance = await vRoseToken.balanceOf(stakeholder.address);
   console.log(`  Deposited ROSE, received ${hre.ethers.formatUnits(vRoseBalance, 18)} vROSE ✓`);
 
