@@ -516,6 +516,7 @@ import {
   getEIP712Config,
   verifyDelegateOptIn,
   verifyRevocationSignature,
+  getEligibleDelegates,
 } from '../services/delegationV2';
 import {
   DelegationV2Request,
@@ -799,6 +800,25 @@ router.get('/v2/eip712-config/:chainId', async (req: Request, res: Response) => 
   } catch (error) {
     console.error('[DelegationV2] Get EIP712 config error:', error);
     return res.status(500).json({ error: 'Failed to fetch EIP712 config' } as DelegationV2ErrorResponse);
+  }
+});
+
+/**
+ * GET /api/delegation/v2/delegates
+ * Get list of eligible delegates (users who can receive delegations)
+ * These are users who have: opted in + stake + meet reputation requirements
+ */
+router.get('/v2/delegates', async (_req: Request, res: Response) => {
+  try {
+    const delegates = await getEligibleDelegates();
+
+    return res.json({
+      delegates,
+      total: delegates.length,
+    });
+  } catch (error) {
+    console.error('[DelegationV2] Get eligible delegates error:', error);
+    return res.status(500).json({ error: 'Failed to fetch eligible delegates' } as DelegationV2ErrorResponse);
   }
 });
 

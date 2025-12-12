@@ -8,11 +8,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAccount, usePublicClient } from 'wagmi';
-import { parseAbiItem, formatUnits } from 'viem';
-import { CONTRACTS, formatVotePower } from '../constants/contracts';
-import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
-import RoseReputationABI from '../contracts/RoseReputationABI.json';
+import { useAccount } from 'wagmi';
+import { formatUnits } from 'viem';
+import { formatVotePower } from '../constants/contracts';
 import useDelegation from '../hooks/useDelegation';
 import useGovernance from '../hooks/useGovernance';
 import DelegateCard from '../components/governance/DelegateCard';
@@ -22,7 +20,6 @@ import WalletNotConnected from '../components/wallet/WalletNotConnected';
 
 const DelegatesPage = () => {
   const { address: account, isConnected } = useAccount();
-  const publicClient = usePublicClient();
 
   const {
     delegations,            // Array of {delegate, vpAmount}
@@ -62,84 +59,36 @@ const DelegatesPage = () => {
   // Available VP for delegation
   const availableForDelegation = parseFloat(availableVP || '0');
 
-  // Fetch potential delegates from on-chain events
+  // Fetch potential delegates from backend API
   useEffect(() => {
     const fetchDelegates = async () => {
-      if (!CONTRACTS.GOVERNANCE || !publicClient) return;
-
       setIsLoadingDelegates(true);
       try {
-        // Get addresses that have VP (from VotingPowerChanged events)
-        const vpEvents = await publicClient.getLogs({
-          address: CONTRACTS.GOVERNANCE,
-          event: parseAbiItem('event VotingPowerChanged(address indexed user, uint256 stakedRose, uint256 votingPower, uint256 reputation)'),
-          fromBlock: 'earliest',
-          toBlock: 'latest',
-        });
+        const signerUrl = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
+        const response = await fetch(`${signerUrl}/api/delegation/v2/delegates`);
 
-        // Get unique addresses with VP > 0
-        const addressMap = new Map();
-        vpEvents.forEach(e => {
-          const addr = e.args.user;
-          const vp = e.args.votingPower;
-          // Only include if VP > 0 (not withdrawn)
-          if (vp && vp > 0n) {
-            addressMap.set(addr.toLowerCase(), addr);
-          } else {
-            addressMap.delete(addr.toLowerCase());
-          }
-        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch delegates: ${response.status}`);
+        }
 
-        const addresses = [...addressMap.values()];
+        const data = await response.json();
 
-        // Filter out current user
-        const filtered = addresses.filter(
-          addr => addr && addr.toLowerCase() !== account?.toLowerCase()
-        );
-
-        // Check canReceiveDelegation for each address (on Governance contract)
-        // This combines reputation check + opt-in check + stake check
-        const canReceiveResults = await publicClient.multicall({
-          contracts: filtered.map(addr => ({
-            address: CONTRACTS.GOVERNANCE,
-            abi: RoseGovernanceABI,
-            functionName: 'canReceiveDelegation',
-            args: [addr],
-          })),
-        });
-
-        // Keep only addresses that can receive delegation (reputation + opt-in + stake)
-        const eligibleDelegates = filtered.filter((addr, index) => {
-          return canReceiveResults[index].result === true;
-        });
+        // Filter out current user from the list
+        const eligibleDelegates = (data.delegates || [])
+          .map(d => d.address)
+          .filter(addr => addr && addr.toLowerCase() !== account?.toLowerCase());
 
         setPotentialDelegates(eligibleDelegates);
       } catch (err) {
         console.error('Error fetching potential delegates:', err);
-        // Fallback: try to get from Deposited events if VotingPowerChanged doesn't exist yet
-        try {
-          const depositEvents = await publicClient.getLogs({
-            address: CONTRACTS.GOVERNANCE,
-            event: parseAbiItem('event Deposited(address indexed user, uint256 amount)'),
-            fromBlock: 'earliest',
-            toBlock: 'latest',
-          });
-
-          const addresses = [...new Set(depositEvents.map(e => e.args.user))];
-          const filtered = addresses.filter(
-            addr => addr && addr.toLowerCase() !== account?.toLowerCase()
-          );
-          setPotentialDelegates(filtered);
-        } catch (fallbackErr) {
-          console.error('Fallback also failed:', fallbackErr);
-        }
+        setPotentialDelegates([]);
       } finally {
         setIsLoadingDelegates(false);
       }
     };
 
     fetchDelegates();
-  }, [CONTRACTS.GOVERNANCE, publicClient, account]);
+  }, [account]);
 
   // Get user's delegation to a specific delegate (converts raw to human-readable)
   const getDelegationToDelegate = (delegateAddr) => {

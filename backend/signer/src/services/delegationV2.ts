@@ -15,6 +15,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getActiveStakers } from './stakerIndexer';
 
 // ============================================================
 // EIP-712 Types
@@ -494,6 +495,53 @@ export async function getDelegationStats(): Promise<{
     uniqueDelegators: parseInt(delegatorsResult.rows[0].count),
     uniqueDelegates: parseInt(delegatesResult.rows[0].count),
   };
+}
+
+// ============================================================
+// Eligible Delegates Query
+// ============================================================
+
+export interface EligibleDelegate {
+  address: string;
+  stakedRose: string;
+  votingPower: string;
+}
+
+/**
+ * Get all eligible delegates (users who can receive delegations).
+ * Queries stakers table and filters by canReceiveDelegation() on-chain.
+ * This combines opt-in status + stake requirement.
+ */
+export async function getEligibleDelegates(): Promise<EligibleDelegate[]> {
+  // Get all active stakers from the indexed database
+  const stakers = await getActiveStakers();
+
+  if (stakers.length === 0) {
+    return [];
+  }
+
+  const governance = getGovernanceContract();
+  const eligibleDelegates: EligibleDelegate[] = [];
+
+  // Check canReceiveDelegation for each staker
+  // This function returns true if: isDelegateOptedIn[user] && stakedRose[user] > 0
+  for (const staker of stakers) {
+    try {
+      const canReceive = await governance.canReceiveDelegation(staker.address);
+      if (canReceive) {
+        eligibleDelegates.push({
+          address: staker.address,
+          stakedRose: staker.stakedRose.toString(),
+          votingPower: staker.votingPower.toString(),
+        });
+      }
+    } catch (error) {
+      // Log but don't fail - skip this staker
+      console.warn(`[DelegationV2] Error checking canReceiveDelegation for ${staker.address}:`, error);
+    }
+  }
+
+  return eligibleDelegates;
 }
 
 // ============================================================
