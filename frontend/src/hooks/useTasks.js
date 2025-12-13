@@ -260,7 +260,7 @@ export const useTasks = ({ taskId = null } = {}) => {
       const errorMessage = err.message.includes('execution reverted')
         ? err.message.split('execution reverted:')[1]?.split('"')[0].trim() || 'Failed to claim task'
         : err.message.includes('User rejected') || err.message.includes('user rejected')
-        ? 'Transaction rejected. Please approve the transaction in MetaMask to continue.'
+        ? 'Transaction rejected. Please approve the transaction in your wallet to continue.'
         : 'Failed to claim task';
       setError(errorMessage);
     }

@@ -37,7 +37,7 @@ function parseTransactionError(err) {
     return 'Nonce conflict - please refresh the page and wait 30 seconds before trying again';
   }
   if (msg.includes('replacement transaction underpriced')) {
-    return 'Pending transaction conflict - wait for previous transaction to complete or speed up/cancel in MetaMask';
+    return 'Pending transaction conflict - wait for previous transaction to complete or speed up/cancel in your wallet';
   }
   if (msg.includes('32603') || msg.includes('Internal JSON-RPC')) {
     if (cause.includes('insufficient funds')) {
@@ -58,13 +58,13 @@ function parseTransactionError(err) {
     return msg;
   }
   if (msg.includes('timeout') || msg.includes('Timeout')) {
-    return 'Request timed out - network may be slow. Please check your transaction history in MetaMask.';
+    return 'Request timed out - network may be slow. Please check your transaction history in your wallet.';
   }
   if (msg.includes('VPLocked') || msg.includes('VP locked')) {
     return 'VP is locked in delegation or proposals. Free VP first.';
   }
 
-  return 'Transaction failed - please try again. Check MetaMask for transaction status.';
+  return 'Transaction failed - please try again. Check your wallet for transaction status.';
 }
 
 /**

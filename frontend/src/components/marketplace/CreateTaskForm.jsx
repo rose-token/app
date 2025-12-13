@@ -76,7 +76,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
 
       // Step 2: Approve token transfer
       console.log('⛽ Approving token transfer...');
-      console.log('💡 Please confirm the approval transaction in MetaMask');
+      console.log('💡 Please confirm the approval transaction in your wallet');
 
       const approveHash = await writeContractAsync({
         address: tokenAddress,
@@ -102,7 +102,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       // Step 4: Create task (fixed-price or auction)
       if (isAuction) {
         console.log('⛽ Creating auction task...');
-        console.log('💡 Please confirm the create auction task transaction in MetaMask');
+        console.log('💡 Please confirm the create auction task transaction in your wallet');
 
         const createTaskHash = await writeContractAsync({
           address: marketplaceAddress,
@@ -191,7 +191,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         return;
       } else {
         console.log('⛽ Creating task...');
-        console.log('💡 Please confirm the create task transaction in MetaMask');
+        console.log('💡 Please confirm the create task transaction in your wallet');
 
         const createTaskHash = await writeContractAsync({
           address: marketplaceAddress,
@@ -273,7 +273,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       if (err.message && err.message.includes('Pinata')) {
         setError('Failed to upload task description to IPFS. Please check your Pinata configuration.');
       } else if (err.message && (err.message.includes('User rejected') || err.message.includes('user rejected'))) {
-        setError('Transaction rejected. Please approve the transaction in MetaMask to continue.');
+        setError('Transaction rejected. Please approve the transaction in your wallet to continue.');
       } else if (err.message && err.message.includes('insufficient funds')) {
         setError('Insufficient funds for transaction. Please check your ETH and ROSE token balances.');
       } else if (err.message && err.message.includes('ERC20: insufficient allowance')) {

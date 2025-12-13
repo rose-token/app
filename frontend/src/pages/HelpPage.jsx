@@ -283,9 +283,9 @@ const HelpPage = () => {
             <ol className="list-decimal pl-5 space-y-4">
               <li>
                 <p><strong>Connect Your Wallet</strong></p>
-                <p>Click the "Connect Wallet" button in the top-right corner and follow the prompts to connect your MetaMask wallet.</p>
+                <p>Click the "Connect Wallet" button in the top-right corner and follow the prompts to connect your wallet.</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Ensure you're on Optimism Sepolia. If you're not, the network selector will allow you to switch.
+                  Ensure you're on Arbitrum. If you're not, the network selector will allow you to switch.
                 </p>
               </li>
               <li>
@@ -304,7 +304,7 @@ const HelpPage = () => {
               </li>
               <li>
                 <p><strong>Submit and Confirm</strong></p>
-                <p>Click "Submit" and confirm the transaction in MetaMask. Your ETH will be deposited into the marketplace contract.</p>
+                <p>Click "Submit" and confirm the transaction in your wallet. Your ETH will be deposited into the marketplace contract.</p>
               </li>
               <li>
                 <p><strong>Monitor and Respond</strong></p>
@@ -318,7 +318,7 @@ const HelpPage = () => {
             <ol className="list-decimal pl-5 space-y-4">
               <li>
                 <p><strong>Connect Your Wallet</strong></p>
-                <p>Click the "Connect Wallet" button and connect your MetaMask wallet.</p>
+                <p>Click the "Connect Wallet" button and connect your wallet.</p>
               </li>
               <li>
                 <p><strong>Browse Available Tasks</strong></p>
@@ -353,7 +353,7 @@ const HelpPage = () => {
             <ol className="list-decimal pl-5 space-y-4">
               <li>
                 <p><strong>Connect Your Wallet</strong></p>
-                <p>Connect your MetaMask wallet to the platform.</p>
+                <p>Connect your wallet to the platform.</p>
               </li>
               <li>
                 <p><strong>Access the Validation Queue</strong></p>
@@ -370,7 +370,7 @@ const HelpPage = () => {
               </li>
               <li>
                 <p><strong>Confirm Transaction</strong></p>
-                <p>Confirm your decision through MetaMask.</p>
+                <p>Confirm your decision through your wallet.</p>
                 <p>If you approve the work, you'll receive 5% of the ROSE tokens deposited for this task.</p>
               </li>
             </ol>
@@ -475,7 +475,7 @@ const HelpPage = () => {
             },
             {
               q: "Is Rose Token available on mainnet?",
-              a: "Currently, Rose Token operates on Optimism Sepolia testnet. Mainnet deployment is planned for the future once thorough testing and auditing are complete."
+              a: "Currently, Rose Token operates on Arbitrum. Mainnet deployment is planned for the future once thorough testing and auditing are complete."
             },
             {
               q: "What fees are associated with using the platform?",
@@ -496,12 +496,12 @@ const HelpPage = () => {
             <h3 className="text-xl font-semibold mb-3">Wallet Connection Issues</h3>
             <div className="space-y-4">
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
-                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: MetaMask not connecting</h4>
+                <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Wallet not connecting</h4>
                 <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Try these steps:</p>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
-                  <li>Ensure MetaMask is installed and unlocked</li>
+                  <li>Ensure your wallet is installed and unlocked</li>
                   <li>Refresh the page and try connecting again</li>
-                  <li>Check if you're on the correct network (Optimism Sepolia)</li>
+                  <li>Check if you're on the correct network (Arbitrum)</li>
                   <li>Clear browser cache and cookies</li>
                   <li>Try using a different browser</li>
                 </ol>
@@ -509,11 +509,11 @@ const HelpPage = () => {
 
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
                 <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Wrong network showing</h4>
-                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform operates on Optimism Sepolia. To switch networks:</p>
+                <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Our platform operates on Arbitrum. To switch networks:</p>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
-                  <li>Click the network dropdown in MetaMask</li>
-                  <li>Select "Optimism Sepolia"</li>
-                  <li>If not visible, go to MetaMask Settings {'->'} Networks {'->'} Add Network</li>
+                  <li>Click the network dropdown in your wallet</li>
+                  <li>Select "Arbitrum"</li>
+                  <li>If not visible, go to your wallet Settings {'->'} Networks {'->'} Add Network</li>
                   <li>RPC URL: https://sepolia.optimism.io, Chain ID: 11155420</li>
                 </ol>
               </div>
@@ -526,8 +526,8 @@ const HelpPage = () => {
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)' }}>
                 <h4 className="font-bold" style={{ color: 'var(--text-primary)' }}>Problem: Transaction pending for too long</h4>
                 <ol className="list-decimal pl-5 mt-2" style={{ color: 'var(--text-secondary)' }}>
-                  <li>Check Optimism Sepolia gas prices and ensure you've set an appropriate gas fee</li>
-                  <li>In MetaMask, you can speed up the transaction by clicking on the pending transaction and selecting "Speed Up"</li>
+                  <li>Check Arbitrum gas prices and ensure you've set an appropriate gas fee</li>
+                  <li>In your wallet, you can speed up the transaction by clicking on the pending transaction and selecting "Speed Up"</li>
                   <li>Alternatively, you can cancel the transaction and try again</li>
                 </ol>
               </div>
@@ -617,12 +617,8 @@ const HelpPage = () => {
               definition: "The economic system whereby value is distributed primarily to workers (95%) rather than capital owners."
             },
             {
-              term: "MetaMask",
-              definition: "The primary wallet interface used to interact with the Rose Token platform."
-            },
-            {
-              term: "Optimism Sepolia",
-              definition: "The Optimism L2 testnet where the Rose Token platform is currently deployed."
+              term: "Arbitrum Sepolia",
+              definition: "The Arbitrum L2 where the Rose Token platform is currently deployed."
             }
           ].map((item, index) => (
             <div key={index} className="border-b pb-4">
