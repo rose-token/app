@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
+import { getWsProvider } from '../utils/wsProvider';
 
 // LiFi API endpoint
 const LIFI_API_BASE = 'https://li.quest/v1';
@@ -48,7 +49,7 @@ async function calculateMockSwapOutput(
   amountIn: bigint,
   treasuryAddress: string
 ): Promise<bigint> {
-  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const provider = getWsProvider();
 
   // Get lifiDiamond address from Treasury contract (it's immutable)
   const treasuryAbi = ['function lifiDiamond() view returns (address)'];
@@ -357,7 +358,7 @@ export async function executeDiversificationSwap(
     throw new Error('TREASURY_ADDRESS not configured');
   }
 
-  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const provider = getWsProvider();
   const wallet = new ethers.Wallet(config.signer.privateKey, provider);
 
   const treasuryAbi = [
@@ -401,7 +402,7 @@ export async function getAssetTokenAddress(assetKey: string): Promise<string> {
     throw new Error('TREASURY_ADDRESS not configured');
   }
 
-  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const provider = getWsProvider();
   const treasuryAbi = ['function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)'];
 
   const treasury = new ethers.Contract(
@@ -424,7 +425,7 @@ export async function getTargetAllocations(): Promise<Map<string, number>> {
     throw new Error('TREASURY_ADDRESS not configured');
   }
 
-  const provider = new ethers.JsonRpcProvider(config.rpc.url);
+  const provider = getWsProvider();
   const treasuryAbi = [
     'function getAllAssets() external view returns (bytes32[] memory keys, tuple(address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)[] memory assetList)',
   ];

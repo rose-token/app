@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Governance ABI for delegate scoring
 const GOVERNANCE_ABI = [
@@ -24,14 +25,10 @@ enum ProposalStatus {
   Cancelled = 4,
 }
 
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getGovernanceContract(): ethers.Contract {

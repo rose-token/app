@@ -7,6 +7,7 @@ import {
   getAssetTokenAddress,
   executeDiversificationSwap,
 } from './lifi';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Extended Treasury ABI for Phase 4 rebalance
 const TREASURY_ABI = [
@@ -65,8 +66,8 @@ export interface RebalanceResult {
 /**
  * Get provider and treasury contract
  */
-function getProvider(): ethers.JsonRpcProvider {
-  return new ethers.JsonRpcProvider(config.rpc.url);
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getWallet(): ethers.Wallet {

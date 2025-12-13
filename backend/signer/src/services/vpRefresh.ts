@@ -58,7 +58,6 @@ export interface VPRefreshStats {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let governanceContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
@@ -80,11 +79,8 @@ const stats: VPRefreshStats = {
   pendingUsers: [],
 };
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getMarketplaceContract(): ethers.Contract {

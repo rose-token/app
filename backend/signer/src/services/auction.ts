@@ -9,6 +9,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Marketplace ABI - minimal interface for reading task data
 // Must match all 15 fields in Task struct (RoseMarketplace.sol:76-92)
@@ -43,14 +44,10 @@ enum TaskStatus {
   Closed = 6,
 }
 
-let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getMarketplaceContract(): ethers.Contract {

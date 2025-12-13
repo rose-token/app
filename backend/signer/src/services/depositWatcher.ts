@@ -42,7 +42,6 @@ export interface DepositWatcherStats {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let treasuryContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
 let reconnectHandler: (() => void) | null = null;
@@ -68,11 +67,8 @@ const pendingDeposits: Map<
 let debounceTimer: NodeJS.Timeout | null = null;
 const DEBOUNCE_MS = config.depositWatcher?.debounceMs ?? 30000; // 30 seconds default
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getTreasuryContract(): ethers.Contract {

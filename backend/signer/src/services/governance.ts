@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Governance contract ABI - only functions that actually exist in the contract
 // NOTE: VP tracking functions (votingPower, totalVotingPower, delegation, etc.) don't exist
@@ -74,15 +75,13 @@ const COLD_START_TASKS = 10;
 const DEFAULT_REPUTATION = 60;
 const FAILED_PROPOSAL_PENALTY = 5; // points per failed proposal
 
-// Create provider and contract instances
-const provider = new ethers.JsonRpcProvider(config.rpc.url);
-
+// Contract getter functions using shared WebSocket provider
 function getGovernanceContract(): ethers.Contract | null {
   if (!config.contracts.governance) {
     console.warn('Governance contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.governance, GOVERNANCE_ABI, provider);
+  return new ethers.Contract(config.contracts.governance, GOVERNANCE_ABI, getWsProvider());
 }
 
 function getReputationContract(): ethers.Contract | null {
@@ -90,7 +89,7 @@ function getReputationContract(): ethers.Contract | null {
     console.warn('Reputation contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.reputation, REPUTATION_ABI, provider);
+  return new ethers.Contract(config.contracts.reputation, REPUTATION_ABI, getWsProvider());
 }
 
 /**

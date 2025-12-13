@@ -33,7 +33,6 @@ export interface StakerIndexerStats {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
 let reconnectHandler: (() => void) | null = null;
@@ -49,11 +48,8 @@ const stats: StakerIndexerStats = {
   lastError: null,
 };
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getGovernanceContract(): ethers.Contract {

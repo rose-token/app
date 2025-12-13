@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType, VoteReduction } from '../types';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Updated ABI for new VP-centric RoseGovernance
 const GOVERNANCE_ABI = [
@@ -42,14 +43,10 @@ const GOVERNANCE_ABI = [
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
 
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getGovernanceContract(): ethers.Contract {

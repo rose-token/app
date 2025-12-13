@@ -52,7 +52,6 @@ const STABLE_KEY = ethers.encodeBytes32String('STABLE');
 const ROSE_KEY = ethers.encodeBytes32String('ROSE');
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let treasuryContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
 let reconnectHandler: (() => void) | null = null;
@@ -76,11 +75,8 @@ const pendingRedemptions: Map<bigint, RedemptionRequest> = new Map();
 let debounceTimer: NodeJS.Timeout | null = null;
 const DEBOUNCE_MS = config.redemptionWatcher?.debounceMs ?? 15000; // 15 seconds default (faster than deposits)
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getTreasuryContract(): ethers.Contract {

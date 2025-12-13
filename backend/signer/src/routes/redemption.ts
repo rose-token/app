@@ -6,6 +6,7 @@ import {
   forceProcessPending,
   getPendingRedemptions,
 } from '../services/redemptionWatcher';
+import { getWsProvider } from '../utils/wsProvider';
 
 const router = Router();
 
@@ -18,8 +19,8 @@ const TREASURY_ABI = [
   'function calculateUsdcForRedemption(uint256 roseAmount) external view returns (uint256)',
 ];
 
-function getProvider(): ethers.JsonRpcProvider {
-  return new ethers.JsonRpcProvider(config.rpc.url);
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getTreasuryContract(): ethers.Contract {

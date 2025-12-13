@@ -9,6 +9,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Governance contract ABI - minimal for allocation queries
 const GOVERNANCE_ABI = [
@@ -61,15 +62,11 @@ export interface AttestationResult {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 let wallet: ethers.Wallet | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getWallet(): ethers.Wallet {

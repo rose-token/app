@@ -16,6 +16,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
 import { getActiveStakers } from './stakerIndexer';
+import { getWsProvider } from '../utils/wsProvider';
 
 // ============================================================
 // EIP-712 Types
@@ -97,14 +98,10 @@ const GOVERNANCE_ABI = [
   'function isDelegateOptedIn(address delegate) external view returns (bool)',
 ];
 
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getGovernanceContract(): ethers.Contract {

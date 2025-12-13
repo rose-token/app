@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getWsProvider } from '../utils/wsProvider';
 
 // Treasury contract ABI (read functions for NAV tracking)
 // Updated to match dynamic asset registry contract
@@ -115,14 +116,16 @@ export interface NavStats {
 }
 
 // Provider and contract instances
-const provider = new ethers.JsonRpcProvider(config.rpc.url);
+function getProvider(): ethers.Provider {
+  return getWsProvider();
+}
 
 function getTreasuryContract(): ethers.Contract | null {
   if (!config.contracts.treasury) {
     console.warn('[NAV] Treasury contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.treasury, TREASURY_ABI, provider);
+  return new ethers.Contract(config.contracts.treasury, TREASURY_ABI, getProvider());
 }
 
 // Asset keys as bytes32
@@ -159,7 +162,7 @@ export async function fetchNavSnapshot(): Promise<NavSnapshot> {
     treasury.getAssetBreakdown(ROSE_KEY),
     treasury.getAssetPrice(BTC_KEY),
     treasury.getAssetPrice(GOLD_KEY),
-    provider.getBlockNumber(),
+    getProvider().getBlockNumber(),
   ]);
 
   // getAssetBreakdown returns: (token, balance, valueUSD, targetBps, actualBps, active)

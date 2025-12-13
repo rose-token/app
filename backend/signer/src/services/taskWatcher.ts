@@ -72,7 +72,6 @@ interface IpfsMetadata {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
 let reconnectHandler: (() => void) | null = null;
@@ -89,11 +88,8 @@ const stats: TaskWatcherStats = {
   lastEventBlock: 0,
 };
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getMarketplaceContract(): ethers.Contract {

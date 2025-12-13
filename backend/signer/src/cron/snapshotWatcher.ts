@@ -64,7 +64,6 @@ export interface SnapshotWatcherStats {
 }
 
 // State
-let provider: ethers.JsonRpcProvider | null = null;
 let governanceContract: ethers.Contract | null = null;
 let wsContract: ethers.Contract | null = null;
 let reconnectHandler: (() => void) | null = null;
@@ -90,11 +89,8 @@ const pendingTimers: Map<number, NodeJS.Timeout> = new Map();
 let finalizationInterval: NodeJS.Timeout | null = null;
 const FINALIZATION_CHECK_INTERVAL = 900000; // Check every 15 minute
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
+function getProvider(): ethers.Provider {
+  return getWsProvider();
 }
 
 function getWallet(): ethers.Wallet {

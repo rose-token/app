@@ -7,6 +7,7 @@ import {
   addToWhitelist,
   removeFromWhitelist,
 } from '../services/whitelist';
+import { getWsProvider } from '../utils/wsProvider';
 
 const router = Router();
 
@@ -19,9 +20,7 @@ const router = Router();
  */
 async function verifyOwner(callerAddress: string): Promise<boolean> {
   try {
-    const provider = new ethers.JsonRpcProvider(
-      config.rpc.url || process.env.ARBITRUM_SEPOLIA_RPC_URL
-    );
+    const provider = getWsProvider();
 
     const treasuryAddress = config.contracts?.treasury || process.env.TREASURY_ADDRESS;
     if (!treasuryAddress) {

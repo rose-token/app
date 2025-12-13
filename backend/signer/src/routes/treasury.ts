@@ -8,6 +8,7 @@ import {
   executeRebalance,
 } from '../services/treasury';
 import { config } from '../config';
+import { getWsProvider } from '../utils/wsProvider';
 
 const router = Router();
 
@@ -108,9 +109,7 @@ router.post('/rebalance/trigger', async (req: Request, res: Response) => {
     }
 
     // Verify caller is contract owner
-    const provider = new ethers.JsonRpcProvider(
-      config.rpc.url || process.env.ARBITRUM_SEPOLIA_RPC_URL
-    );
+    const provider = getWsProvider();
 
     const treasuryAddress = config.contracts?.treasury || process.env.TREASURY_ADDRESS;
     if (!treasuryAddress) {
