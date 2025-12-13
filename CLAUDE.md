@@ -230,7 +230,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
 | Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
-| Analytics Watcher | Event-driven | TaskCreated/VoteCast/Deposited → sync to analytics tables |
+| Analytics Watcher | Event-driven | TaskCreated/AuctionTaskCreated/VoteCast/Deposited → sync to analytics tables |
 | Analytics Daily Rollup | Daily 00:00 UTC | Aggregate daily metrics |
 | Analytics Treasury Snapshot | Hourly | Snapshot NAV and allocations |
 | Analytics VP Refresh | Every 15 min | Sync voting power to analytics_users |

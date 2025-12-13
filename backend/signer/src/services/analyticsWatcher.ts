@@ -5,7 +5,7 @@
  * Populates analytics tables for the admin dashboard.
  *
  * Events watched:
- * - Marketplace: TaskCreated, StakeholderStaked, TaskClaimed, TaskCompleted,
+ * - Marketplace: TaskCreated, AuctionTaskCreated, StakeholderStaked, TaskClaimed, TaskCompleted,
  *                TaskReadyForPayment, TaskDisputed, TaskCancelled
  * - Governance: ProposalCreated, VoteCastFast, VoteCastSlow, ProposalFinalized,
  *               Deposited, Withdrawn
@@ -23,6 +23,7 @@ import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/ws
 
 const MARKETPLACE_ABI = [
   'event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit)',
+  'event AuctionTaskCreated(uint256 taskId, address indexed customer, uint256 maxBudget)',
   'event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit)',
   'event TaskClaimed(uint256 taskId, address indexed worker)',
   'event TaskCompleted(uint256 taskId, string prUrl)',
@@ -728,6 +729,13 @@ function setupMarketplaceListeners(): void {
     });
   });
 
+  wsMarketplace.on('AuctionTaskCreated', (taskId, customer, maxBudget, event) => {
+    handleTaskCreated(taskId, customer, maxBudget, event).catch(err => {
+      console.error('[AnalyticsWatcher] AuctionTaskCreated handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
   wsMarketplace.on('StakeholderStaked', (taskId, stakeholder, deposit, event) => {
     handleStakeholderStaked(taskId, stakeholder, deposit, event).catch(err => {
       console.error('[AnalyticsWatcher] StakeholderStaked handler error:', err);
@@ -883,6 +891,14 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
       if ('args' in event && event.args) {
         const [taskId, customer, deposit] = event.args as unknown as [bigint, string, bigint];
         await handleTaskCreated(taskId, customer, deposit, event as ethers.EventLog);
+      }
+    }
+
+    const auctionTaskCreatedEvents = await marketplace.queryFilter('AuctionTaskCreated', start, end);
+    for (const event of auctionTaskCreatedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId, customer, maxBudget] = event.args as unknown as [bigint, string, bigint];
+        await handleTaskCreated(taskId, customer, maxBudget, event as ethers.EventLog);
       }
     }
 
