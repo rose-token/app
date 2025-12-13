@@ -843,7 +843,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskCreatedEvents = await marketplace.queryFilter('TaskCreated', start, end);
     for (const event of taskCreatedEvents) {
       if ('args' in event && event.args) {
-        const [taskId, customer, deposit] = event.args as [bigint, string, bigint];
+        const [taskId, customer, deposit] = event.args as unknown as [bigint, string, bigint];
         await handleTaskCreated(taskId, customer, deposit, event as ethers.EventLog);
       }
     }
@@ -851,7 +851,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const stakeholderStakedEvents = await marketplace.queryFilter('StakeholderStaked', start, end);
     for (const event of stakeholderStakedEvents) {
       if ('args' in event && event.args) {
-        const [taskId, stakeholder, deposit] = event.args as [bigint, string, bigint];
+        const [taskId, stakeholder, deposit] = event.args as unknown as [bigint, string, bigint];
         await handleStakeholderStaked(taskId, stakeholder, deposit, event as ethers.EventLog);
       }
     }
@@ -859,7 +859,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskClaimedEvents = await marketplace.queryFilter('TaskClaimed', start, end);
     for (const event of taskClaimedEvents) {
       if ('args' in event && event.args) {
-        const [taskId, worker] = event.args as [bigint, string];
+        const [taskId, worker] = event.args as unknown as [bigint, string];
         await handleTaskClaimed(taskId, worker, event as ethers.EventLog);
       }
     }
@@ -867,7 +867,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskCompletedEvents = await marketplace.queryFilter('TaskCompleted', start, end);
     for (const event of taskCompletedEvents) {
       if ('args' in event && event.args) {
-        const [taskId, prUrl] = event.args as [bigint, string];
+        const [taskId, prUrl] = event.args as unknown as [bigint, string];
         await handleTaskCompleted(taskId, prUrl, event as ethers.EventLog);
       }
     }
@@ -875,7 +875,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskReadyEvents = await marketplace.queryFilter('TaskReadyForPayment', start, end);
     for (const event of taskReadyEvents) {
       if ('args' in event && event.args) {
-        const [taskId, worker, amount] = event.args as [bigint, string, bigint];
+        const [taskId, worker, amount] = event.args as unknown as [bigint, string, bigint];
         await handleTaskReadyForPayment(taskId, worker, amount, event as ethers.EventLog);
       }
     }
@@ -883,7 +883,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskDisputedEvents = await marketplace.queryFilter('TaskDisputed', start, end);
     for (const event of taskDisputedEvents) {
       if ('args' in event && event.args) {
-        const [taskId, initiator, reasonHash, timestamp] = event.args as [bigint, string, string, bigint];
+        const [taskId, initiator, reasonHash, timestamp] = event.args as unknown as [bigint, string, string, bigint];
         await handleTaskDisputed(taskId, initiator, reasonHash, timestamp, event as ethers.EventLog);
       }
     }
@@ -891,7 +891,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const taskCancelledEvents = await marketplace.queryFilter('TaskCancelled', start, end);
     for (const event of taskCancelledEvents) {
       if ('args' in event && event.args) {
-        const [taskId, cancelledBy, customerRefund, stakeholderRefund] = event.args as [bigint, string, bigint, bigint];
+        const [taskId, cancelledBy, customerRefund, stakeholderRefund] = event.args as unknown as [bigint, string, bigint, bigint];
         await handleTaskCancelled(taskId, cancelledBy, customerRefund, stakeholderRefund, event as ethers.EventLog);
       }
     }
@@ -901,7 +901,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const proposalCreatedEvents = await governance.queryFilter('ProposalCreated', start, end);
     for (const event of proposalCreatedEvents) {
       if ('args' in event && event.args) {
-        const [proposalId, proposer, track, treasuryAmount] = event.args as [bigint, string, number, bigint];
+        const [proposalId, proposer, track, treasuryAmount] = event.args as unknown as [bigint, string, number, bigint];
         await handleProposalCreated(proposalId, proposer, track, treasuryAmount, event as ethers.EventLog);
       }
     }
@@ -909,7 +909,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const voteCastFastEvents = await governance.queryFilter('VoteCastFast', start, end);
     for (const event of voteCastFastEvents) {
       if ('args' in event && event.args) {
-        const [proposalId, voter, support, vpAmount] = event.args as [bigint, string, boolean, bigint];
+        const [proposalId, voter, support, vpAmount] = event.args as unknown as [bigint, string, boolean, bigint];
         await handleVoteCast(proposalId, voter, support, vpAmount, event as ethers.EventLog);
       }
     }
@@ -917,7 +917,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const voteCastSlowEvents = await governance.queryFilter('VoteCastSlow', start, end);
     for (const event of voteCastSlowEvents) {
       if ('args' in event && event.args) {
-        const [proposalId, voter, support, vpAmount] = event.args as [bigint, string, boolean, bigint];
+        const [proposalId, voter, support, vpAmount] = event.args as unknown as [bigint, string, boolean, bigint];
         await handleVoteCast(proposalId, voter, support, vpAmount, event as ethers.EventLog);
       }
     }
@@ -925,7 +925,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const proposalFinalizedEvents = await governance.queryFilter('ProposalFinalized', start, end);
     for (const event of proposalFinalizedEvents) {
       if ('args' in event && event.args) {
-        const [proposalId, status] = event.args as [bigint, number];
+        const [proposalId, status] = event.args as unknown as [bigint, number];
         await handleProposalFinalized(proposalId, status, event as ethers.EventLog);
       }
     }
@@ -933,7 +933,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const govDepositedEvents = await governance.queryFilter('Deposited', start, end);
     for (const event of govDepositedEvents) {
       if ('args' in event && event.args) {
-        const [user, amount] = event.args as [string, bigint];
+        const [user, amount] = event.args as unknown as [string, bigint];
         await handleGovernanceDeposited(user, amount, event as ethers.EventLog);
       }
     }
@@ -941,7 +941,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const govWithdrawnEvents = await governance.queryFilter('Withdrawn', start, end);
     for (const event of govWithdrawnEvents) {
       if ('args' in event && event.args) {
-        const [user, amount] = event.args as [string, bigint];
+        const [user, amount] = event.args as unknown as [string, bigint];
         await handleGovernanceWithdrawn(user, amount, event as ethers.EventLog);
       }
     }
@@ -951,7 +951,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const treasuryDepositedEvents = await treasury.queryFilter('Deposited', start, end);
     for (const event of treasuryDepositedEvents) {
       if ('args' in event && event.args) {
-        const [user, usdcIn, roseMinted] = event.args as [string, bigint, bigint];
+        const [user, usdcIn, roseMinted] = event.args as unknown as [string, bigint, bigint];
         await handleTreasuryDeposited(user, usdcIn, roseMinted, event as ethers.EventLog);
       }
     }
@@ -959,7 +959,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     const treasuryRedeemedEvents = await treasury.queryFilter('Redeemed', start, end);
     for (const event of treasuryRedeemedEvents) {
       if ('args' in event && event.args) {
-        const [user, roseBurned, usdcOut] = event.args as [string, bigint, bigint];
+        const [user, roseBurned, usdcOut] = event.args as unknown as [string, bigint, bigint];
         await handleTreasuryRedeemed(user, roseBurned, usdcOut, event as ethers.EventLog);
       }
     }

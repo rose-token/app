@@ -174,10 +174,10 @@ async function executeTreasurySnapshot(): Promise<void> {
 
     // Calculate allocation basis points
     const totalHardAssets = parseFloat(snapshot.breakdown.totalHardAssets);
-    const btcUsd = parseFloat(snapshot.breakdown.btcUsd);
-    const goldUsd = parseFloat(snapshot.breakdown.goldUsd);
-    const usdcUsd = parseFloat(snapshot.breakdown.usdcUsd);
-    const roseUsd = parseFloat(snapshot.breakdown.roseUsd);
+    const btcUsd = parseFloat(snapshot.breakdown.btcValueUsd);
+    const goldUsd = parseFloat(snapshot.breakdown.goldValueUsd);
+    const usdcUsd = parseFloat(snapshot.breakdown.usdcValueUsd);
+    const roseUsd = parseFloat(snapshot.breakdown.roseValueUsd);
     const totalAssets = btcUsd + goldUsd + usdcUsd + roseUsd;
 
     const btcBps = totalAssets > 0 ? Math.round((btcUsd / totalAssets) * 10000) : 0;
@@ -209,7 +209,7 @@ async function executeTreasurySnapshot(): Promise<void> {
       today,
       snapshot.breakdown.rosePriceUsd,
       snapshot.breakdown.totalHardAssets,
-      snapshot.breakdown.circulatingSupply,
+      snapshot.breakdown.circulatingRose,
       btcBps, goldBps, usdcBps, roseBps,
       snapshot.blockNumber,
     ]);
