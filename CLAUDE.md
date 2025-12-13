@@ -142,7 +142,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
 
-**Key Hooks:** useTasks (task fetching + all task actions), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs)
+**Key Hooks:** useTasks (task fetching + all task actions), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers)
 
 **Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
 
@@ -257,7 +257,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 ## Pinata IPFS (Private Files)
 
-**API:** Pinata V3 (`https://uploads.pinata.cloud/v3/files`) with JWT auth. All uploads are **private** by default.
+**Frontend SDK:** Uses official `pinata` package (npm). Singleton pattern with lazy initialization. All uploads are **private** by default.
+
+**Backend API:** Pinata V3 (`https://uploads.pinata.cloud/v3/files`) with JWT auth.
 
 **Groups:** Content is organized into Pinata groups for management:
 | Group | ID | Content |
@@ -269,12 +271,11 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud` (dedicated gateway for private file access)
 
-**Private File Downloads:** All uploads are private by default. Downloads from the gateway require `Authorization: Bearer <JWT>` header. Without auth, returns 403 "The owner of this gateway does not have this content".
+**Private File Downloads:** All uploads are private by default. SDK handles auth automatically. Without auth, returns 403 "The owner of this gateway does not have this content".
 
 **Environment:**
 - Frontend: `VITE_PINATA_JWT` (required), `VITE_PINATA_GATEWAY` (optional, has default)
 - Backend: `PINATA_GATEWAY` (optional, has default)
-- Legacy: `VITE_PINATA_API_KEY`, `VITE_PINATA_SECRET_API_KEY` (deprecated, kept for backward compat)
 
 ## Database Backup (Pinata Hot Swaps)
 
