@@ -33,6 +33,7 @@ import { startDepositWatcher } from './services/depositWatcher';
 import { startRedemptionWatcher } from './services/redemptionWatcher';
 import { startTaskWatcher } from './services/taskWatcher';
 import { startDisputeWatcher } from './services/disputeWatcher';
+import { startDelegateOptInWatcher } from './services/delegateOptInWatcher';
 import { startStakerIndexer } from './services/stakerIndexer';
 import { startSlowTrackWatcher } from './services/slowTrackWatcher';
 import { startSnapshotWatcher } from './cron/snapshotWatcher';
@@ -150,6 +151,11 @@ async function start() {
   // Start dispute watcher to sync disputes to database for admin panel
   startDisputeWatcher().catch((err) => {
     console.error('[DisputeWatcher] Failed to start:', err);
+  });
+
+  // Start delegate opt-in watcher to fix delegates not showing in list after opt-in
+  startDelegateOptInWatcher().catch((err) => {
+    console.error('[DelegateOptInWatcher] Failed to start:', err);
   });
 
   // Start staker indexer for VP snapshot support
