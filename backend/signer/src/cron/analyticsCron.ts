@@ -270,9 +270,10 @@ async function executeVPRefresh(): Promise<void> {
 // ============================================================
 
 // Status enum from contract (matches RoseMarketplace.TaskStatus)
+// Contract: enum TaskStatus { Open, StakeholderRequired, InProgress, Completed, Closed, ApprovedPendingPayment, Disputed }
 const CONTRACT_STATUS_MAP: Record<number, string> = {
-  0: 'Created',   // StakeholderRequired
-  1: 'Staked',    // Open
+  0: 'Staked',    // Open
+  1: 'Created',   // StakeholderRequired
   2: 'Claimed',   // InProgress
   3: 'Completed', // Completed
   4: 'Closed',    // Closed
