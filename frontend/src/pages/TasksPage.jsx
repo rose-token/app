@@ -10,7 +10,8 @@
  * Uses useTasks for action handlers (claim, stake, etc.)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
 import TaskTable from '../components/marketplace/TaskTable';
@@ -21,9 +22,13 @@ import { useTasks } from '../hooks/useTasks';
 
 const TasksPage = () => {
   const { isConnected } = useAccount();
+  const location = useLocation();
 
   // Pagination state
   const [page, setPage] = useState(1);
+
+  // Optimistic task state (for newly created tasks)
+  const [optimisticTask, setOptimisticTask] = useState(null);
 
   // Filter state (shared between API and action handlers)
   const [filters, setFilters] = useState({
@@ -61,6 +66,36 @@ const TasksPage = () => {
 
   // Combined error from both hooks
   const error = apiError || actionError;
+
+  // Handle optimistic task from navigation state
+  useEffect(() => {
+    if (location.state?.newTask) {
+      const newTask = location.state.newTask;
+      // Only set if task has valid ID
+      if (newTask.id !== null) {
+        setOptimisticTask(newTask);
+      }
+      // Clear navigation state to prevent re-adding on refresh
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
+
+  // Clear optimistic task when it appears in API results
+  useEffect(() => {
+    if (optimisticTask && tasks.some((t) => t.id === optimisticTask.id)) {
+      setOptimisticTask(null);
+    }
+  }, [tasks, optimisticTask]);
+
+  // Merge optimistic task with API tasks (prepend if on page 1)
+  const displayTasks = useMemo(() => {
+    if (optimisticTask && page === 1 && filters.status === 'all' && !filters.myTasks) {
+      // Avoid duplicates
+      const filtered = tasks.filter((t) => t.id !== optimisticTask.id);
+      return [optimisticTask, ...filtered];
+    }
+    return tasks;
+  }, [tasks, optimisticTask, page, filters]);
 
   // Handle page change
   const handlePageChange = useCallback((newPage) => {
@@ -148,7 +183,7 @@ const TasksPage = () => {
           {/* Task Table */}
           <div className="mb-6">
             <TaskTable
-              tasks={tasks}
+              tasks={displayTasks}
               isLoading={isLoadingAPI}
               loadingStates={loadingStates}
               filters={filters}

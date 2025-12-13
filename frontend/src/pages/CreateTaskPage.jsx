@@ -15,9 +15,9 @@ const CreateTaskPage = () => {
   const { isConnected } = useAccount();
 
   // Callback when task is created successfully
-  const handleTaskCreated = () => {
-    // Navigate back to tasks list
-    navigate('/');
+  const handleTaskCreated = (taskData) => {
+    // Navigate back to tasks list with optimistic task data
+    navigate('/', { state: { newTask: taskData } });
   };
 
   if (!isConnected) {

@@ -23,7 +23,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { isConnected } = useAccount();
+  const { address: account, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { getSignature } = usePassportVerify();
   const { registerAuction } = useAuction();
@@ -153,7 +153,42 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           console.warn('⚠️ Could not extract taskId from transaction logs');
         }
 
+        // Build optimistic task for immediate UI display (auction)
+        const optimisticTask = {
+          id: taskId !== null ? Number(taskId) : null,
+          customer: account,
+          worker: null,
+          stakeholder: null,
+          deposit: tokenAmount.toString(),
+          stakeholderDeposit: '0',
+          description: title,
+          detailedDescription: hash,
+          prUrl: '',
+          status: 0, // StakeholderRequired
+          customerApproval: false,
+          stakeholderApproval: false,
+          source: 0, // Customer
+          proposalId: '0',
+          isAuction: true,
+          winningBid: '0',
+          isOptimistic: true,
+        };
+
         console.log('🎉 Auction task created successfully!');
+
+        // Reset form and notify parent with optimistic task
+        setTitle('');
+        setDetailedDescription('');
+        setDeposit('');
+        setIsAuction(false);
+        setUseGithubIntegration(GITHUB_INTEGRATION.DEFAULT_ENABLED);
+        setSelectedSkills([]);
+        setIsSubmitting(false);
+
+        if (onTaskCreated) {
+          onTaskCreated(optimisticTask);
+        }
+        return;
       } else {
         console.log('⛽ Creating task...');
         console.log('💡 Please confirm the create task transaction in MetaMask');
@@ -170,25 +205,65 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         console.log('⏳ Waiting for transaction confirmation...');
 
         // Wait for transaction to be confirmed
-        await publicClient.waitForTransactionReceipt({
+        const receipt = await publicClient.waitForTransactionReceipt({
           hash: createTaskHash,
           confirmations: 1
         });
 
+        // Parse TaskCreated event to get taskId
+        let taskId = null;
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: RoseMarketplaceABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'TaskCreated') {
+              taskId = decoded.args.taskId;
+              break;
+            }
+          } catch {
+            // Not the event we're looking for
+          }
+        }
+
+        // Build optimistic task for immediate UI display
+        const optimisticTask = {
+          id: taskId !== null ? Number(taskId) : null,
+          customer: account,
+          worker: null,
+          stakeholder: null,
+          deposit: tokenAmount.toString(),
+          stakeholderDeposit: '0',
+          description: title,
+          detailedDescription: hash,
+          prUrl: '',
+          status: 0, // StakeholderRequired
+          customerApproval: false,
+          stakeholderApproval: false,
+          source: 0, // Customer
+          proposalId: '0',
+          isAuction: false,
+          winningBid: '0',
+          isOptimistic: true,
+        };
+
         console.log('🎉 Task created successfully and confirmed on blockchain!');
-      }
 
-      // Reset form
-      setTitle('');
-      setDetailedDescription('');
-      setDeposit('');
-      setIsAuction(false);
-      setUseGithubIntegration(GITHUB_INTEGRATION.DEFAULT_ENABLED);
-      setSelectedSkills([]);
-      setIsSubmitting(false);
+        // Reset form and notify parent with optimistic task
+        setTitle('');
+        setDetailedDescription('');
+        setDeposit('');
+        setIsAuction(false);
+        setUseGithubIntegration(GITHUB_INTEGRATION.DEFAULT_ENABLED);
+        setSelectedSkills([]);
+        setIsSubmitting(false);
 
-      if (onTaskCreated) {
-        onTaskCreated();
+        if (onTaskCreated) {
+          onTaskCreated(optimisticTask);
+        }
+        return;
       }
     } catch (err) {
       console.error('❌ Error creating task:', err);
