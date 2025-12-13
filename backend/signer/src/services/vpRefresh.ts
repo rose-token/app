@@ -229,12 +229,13 @@ async function executeRefresh(candidate: VPRefreshCandidate): Promise<VPRefreshR
     );
 
     // Update VP in database (upsert pattern)
+    // Include all required columns for INSERT (in case stakerIndexer missed this user)
     await query(
-      `INSERT INTO stakers (address, staked_rose, voting_power, updated_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO stakers (address, staked_rose, voting_power, reputation, first_deposit_block, last_updated_block)
+       VALUES ($1, $2, $3, $4, $5, $5)
        ON CONFLICT (address)
-       DO UPDATE SET voting_power = $3, updated_at = NOW()`,
-      [normalizedAddress, candidate.stakedRose.toString(), candidate.expectedVP.toString()]
+       DO UPDATE SET voting_power = $3, staked_rose = $2, reputation = $4, last_updated_block = $5, updated_at = NOW()`,
+      [normalizedAddress, candidate.stakedRose.toString(), candidate.expectedVP.toString(), candidate.newRep, candidate.eventBlock]
     );
 
     result.success = true;
