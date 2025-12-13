@@ -3,7 +3,7 @@
  *
  * Route: /
  * Displays:
- * - Token Distribution Chart
+ * - User Historical Stats (marketplace activity metrics)
  * - Task Table with filtering and actions
  *
  * Uses useTasksAPI for paginated data fetching (scales to 1000+ tasks)
@@ -13,7 +13,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAccount } from 'wagmi';
-import TokenDistributionChart from '../components/marketplace/TokenDistributionChart';
+import UserHistoricalStats from '../components/marketplace/UserHistoricalStats';
 import TaskTable from '../components/marketplace/TaskTable';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
@@ -170,8 +170,8 @@ const TasksPage = () => {
         <WalletNotConnected />
       ) : (
         <>
-          {/* Token Distribution Chart */}
-          <TokenDistributionChart />
+          {/* User Historical Stats */}
+          <UserHistoricalStats />
 
           {/* Error display */}
           {error && (
