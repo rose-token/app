@@ -86,44 +86,44 @@ const UserHistoricalStats = () => {
         // Stats grid with staggered animation
         <Stagger delay={60} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <StatCard
-            icon={<Briefcase className="h-4 w-4" />}
+            icon={<Briefcase className="h-5 w-5" />}
             label="Completed"
             value={reputation?.tasksAsWorker || 0}
             color="var(--success)"
           />
           <StatCard
-            icon={<Shield className="h-4 w-4" />}
+            icon={<Shield className="h-5 w-5" />}
             label="Validated"
             value={reputation?.tasksAsStakeholder || 0}
             color="var(--info)"
           />
           <StatCard
-            icon={<Users className="h-4 w-4" />}
+            icon={<Users className="h-5 w-5" />}
             label="Created"
             value={reputation?.tasksAsCustomer || 0}
             color="var(--warning)"
           />
           <StatCard
-            icon={<Clock className="h-4 w-4" />}
+            icon={<Clock className="h-5 w-5" />}
             label="In Progress"
             value={inProgress}
             color="var(--rose-gold)"
           />
           <StatCard
-            icon={<AlertTriangle className="h-4 w-4" />}
+            icon={<AlertTriangle className="h-5 w-5" />}
             label="Disputed"
             value={reputation?.disputesInitiated || 0}
             color="var(--error)"
           />
           <StatCard
-            icon={<Coins className="h-4 w-4" />}
+            icon={<Coins className="h-5 w-5" />}
             label="Earned"
             value={formatEarned(reputation?.totalEarned || '0')}
             suffix="ROSE"
             color="var(--rose-pink)"
           />
           <StatCard
-            icon={<Star className="h-4 w-4" />}
+            icon={<Star className="h-5 w-5" />}
             label="Rep Score"
             value={reputation?.reputationScore || 0}
             suffix="%"
@@ -152,8 +152,8 @@ const StatCard = ({ icon, label, value, suffix, color }) => (
     >
       {icon}
       <span
-        className="text-[0.6875rem] font-semibold uppercase tracking-wide"
-        style={{ letterSpacing: '0.08em' }}
+        className="text-xs font-semibold uppercase tracking-wide"
+        style={{ letterSpacing: '0.06em' }}
       >
         {label}
       </span>
