@@ -3,7 +3,7 @@ import React from 'react';
 export function Card({ className, ...props }) {
   return (
     <div
-      className={`rounded-[20px] backdrop-blur-[20px] transition-all duration-300 hover:border-[rgba(212,175,140,0.35)] ${className || ''}`}
+      className={`rounded-[20px] backdrop-blur-[20px] transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)] ${className || ''}`}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',

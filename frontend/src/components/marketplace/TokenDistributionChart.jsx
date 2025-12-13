@@ -9,7 +9,7 @@ const TokenDistributionChart = () => {
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)]"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',

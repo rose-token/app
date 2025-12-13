@@ -122,14 +122,14 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
         <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
           <div className="h-full flex">
             <div
-              className="h-full transition-all duration-300"
+              className="h-full transition-colors duration-300"
               style={{
                 width: `${yayPercent}%`,
                 backgroundColor: 'var(--success)',
               }}
             />
             <div
-              className="h-full transition-all duration-300"
+              className="h-full transition-colors duration-300"
               style={{
                 width: `${nayPercent}%`,
                 backgroundColor: 'var(--error)',

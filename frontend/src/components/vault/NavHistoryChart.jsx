@@ -179,7 +179,7 @@ const NavHistoryChart = () => {
   if (isLoading) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -201,7 +201,7 @@ const NavHistoryChart = () => {
   if (error) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -230,7 +230,7 @@ const NavHistoryChart = () => {
   if (!chartData || chartData.length === 0) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',

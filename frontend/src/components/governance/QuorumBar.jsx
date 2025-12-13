@@ -37,7 +37,7 @@ const QuorumBar = ({ proposalId, totalAllocated, compact = false }) => {
           style={{ backgroundColor: 'var(--bg-tertiary)' }}
         >
           <div
-            className="h-full transition-all duration-300"
+            className="h-full transition-colors duration-300"
             style={{
               width: `${progress}%`,
               backgroundColor: quorumMet ? 'var(--success)' : 'var(--accent)',

@@ -328,7 +328,7 @@ const RedeemCard = ({
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)]"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
@@ -446,7 +446,7 @@ const RedeemCard = ({
         <button
           onClick={handleRedeem}
           disabled={!canRedeem || isPolling}
-          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300"
+          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-colors duration-300"
           style={{
             background: (canRedeem && !isPolling) ? 'transparent' : 'var(--bg-secondary)',
             border: (canRedeem && !isPolling) ? '1px solid rgba(212, 165, 165, 0.3)' : 'none',

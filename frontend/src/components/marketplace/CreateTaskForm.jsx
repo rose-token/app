@@ -314,7 +314,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
   if (!isConnected) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -337,7 +337,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
       action="create tasks"
     >
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-8 transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)]"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -560,7 +560,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
         <button
           type="submit"
           disabled={isSubmitting || !isConnected}
-          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center"
+          className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm transition-colors duration-300 flex items-center justify-center"
           style={{
             background: isSubmitting || !isConnected
               ? 'var(--bg-secondary)'

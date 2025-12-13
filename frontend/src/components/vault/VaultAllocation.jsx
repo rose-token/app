@@ -123,7 +123,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
   if (isLoading) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -149,7 +149,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
   if (!breakdown || breakdown.total === 0) {
     return (
       <div
-        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
@@ -169,7 +169,7 @@ const VaultAllocation = ({ breakdown, isLoading }) => {
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)]"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',

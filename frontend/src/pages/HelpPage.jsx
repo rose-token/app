@@ -702,7 +702,7 @@ const HelpPage = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50"
+                className="py-2 px-4 rounded-xl font-semibold transition-colors duration-300 hover:-translate-y-0.5 disabled:opacity-50"
                 style={{
                   background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
                   color: 'var(--bg-primary)',
@@ -822,7 +822,7 @@ const HelpPage = () => {
                 <button
                   type="submit"
                   disabled={isLookingUp}
-                  className="py-2 px-4 rounded-xl font-semibold transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50"
+                  className="py-2 px-4 rounded-xl font-semibold transition-colors duration-300 hover:-translate-y-0.5 disabled:opacity-50"
                   style={{
                     background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
                     color: 'var(--bg-primary)',

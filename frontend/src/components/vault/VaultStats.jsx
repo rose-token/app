@@ -4,7 +4,7 @@ import Stagger from '../ui/Stagger';
 
 const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false, subtext = null, tooltip = null }) => (
   <div
-    className="rounded-xl p-5 transition-all duration-300"
+    className="rounded-xl p-5 transition-colors duration-300"
     style={{
       background: highlight ? 'var(--rose-pink-muted)' : 'rgba(255, 255, 255, 0.03)',
       border: `1px solid ${highlight ? 'rgba(212, 165, 165, 0.3)' : 'var(--border-subtle)'}`
@@ -58,7 +58,7 @@ const VaultStats = ({
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300 hover:border-[rgba(212,175,140,0.35)]"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-colors duration-300 hover:border-[rgba(212,175,140,0.35)]"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
