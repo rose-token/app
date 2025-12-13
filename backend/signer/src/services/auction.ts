@@ -10,32 +10,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Marketplace ABI - minimal interface for reading task data
-// Must match all 19 fields in Task struct (RoseMarketplace.sol)
-const MARKETPLACE_ABI = [
-  `function tasks(uint256) external view returns (
-    address customer,
-    address worker,
-    address stakeholder,
-    uint256 deposit,
-    uint256 stakeholderDeposit,
-    string title,
-    string detailedDescriptionHash,
-    string prUrl,
-    uint8 status,
-    bool customerApproval,
-    bool stakeholderApproval,
-    uint8 source,
-    uint256 proposalId,
-    bool isAuction,
-    uint256 winningBid,
-    address disputeInitiator,
-    uint256 disputedAt,
-    string disputeReasonHash,
-    bool githubIntegration
-  )`,
-];
+import { RoseMarketplaceABI } from '../utils/contracts';
 
 // Task status enum (matches contract)
 enum TaskStatus {
@@ -61,7 +36,7 @@ function getMarketplaceContract(): ethers.Contract {
     }
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace,
-      MARKETPLACE_ABI,
+      RoseMarketplaceABI,
       getProvider()
     );
   }

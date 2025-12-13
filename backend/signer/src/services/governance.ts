@@ -1,31 +1,10 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
-import { getWsProvider } from '../utils/wsProvider';
-
-// Governance contract ABI - only functions that actually exist in the contract
-// NOTE: VP tracking functions (votingPower, totalVotingPower, delegation, etc.) don't exist
-// on-chain. VP is computed off-chain and stored in the 'stakers' and 'delegations' DB tables.
-const GOVERNANCE_ABI = [
-  'function stakedRose(address user) external view returns (uint256)',
-  'function totalStakedRose() external view returns (uint256)',
-  'function getVotePower(uint256 amount, uint256 reputation) external pure returns (uint256)',
-];
-
-// Reputation contract ABI (split from RoseGovernance)
-const REPUTATION_ABI = [
-  'function getReputation(address user) external view returns (uint256)',
-  'function getReputationSimple(address user) external view returns (uint256)',
-  'function userStats(address user) external view returns (uint256 tasksCompleted, uint256 totalTaskValue, uint256 disputes, uint256 failedProposals, uint256 lastTaskTimestamp)',
-  'function canPropose(address user) external view returns (bool)',
-  'function canVote(address user) external view returns (bool)',
-  'function canDelegate(address user) external view returns (bool)',
-  // Bucket storage for reputation formula
-  'function monthlySuccessValue(address user, uint256 bucket) external view returns (uint256)',
-  'function monthlyDisputeValue(address user, uint256 bucket) external view returns (uint256)',
-  'function BUCKET_DURATION() external view returns (uint256)',
-  'function DECAY_BUCKETS() external view returns (uint256)',
-];
+import {
+  getGovernanceContract as getGovernanceContractHelper,
+  getReputationContract as getReputationContractHelper,
+} from '../utils/contracts';
 
 // Types for governance data
 export interface VPData {
@@ -75,13 +54,13 @@ const COLD_START_TASKS = 10;
 const DEFAULT_REPUTATION = 60;
 const FAILED_PROPOSAL_PENALTY = 5; // points per failed proposal
 
-// Contract getter functions using shared WebSocket provider
+// Contract getter functions using centralized helpers
 function getGovernanceContract(): ethers.Contract | null {
   if (!config.contracts.governance) {
     console.warn('Governance contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.governance, GOVERNANCE_ABI, getWsProvider());
+  return getGovernanceContractHelper();
 }
 
 function getReputationContract(): ethers.Contract | null {
@@ -89,7 +68,7 @@ function getReputationContract(): ethers.Contract | null {
     console.warn('Reputation contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.reputation, REPUTATION_ABI, getWsProvider());
+  return getReputationContractHelper();
 }
 
 /**

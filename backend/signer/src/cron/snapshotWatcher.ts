@@ -2,17 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { computeVPSnapshot, storeVPSnapshot, signMerkleRoot, signSlowTrackFinalization } from '../services/vpSnapshot';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Governance contract ABI
-const GOVERNANCE_ABI = [
-  'event ProposalCreated(uint256 indexed proposalId, address indexed proposer, uint8 track, uint256 treasuryAmount)',
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, uint8 track, uint256 snapshotBlock, bytes32 vpMerkleRoot, uint256 votingStartsAt, uint256 votingEndsAt, uint256 forVotes, uint256 againstVotes, uint256 treasuryAmount, uint8 status, string title, string descriptionHash, uint256 deadline, string deliverables, uint256 editCount, uint256 taskId))',
-  'function setVPMerkleRoot(uint256 proposalId, bytes32 merkleRoot, uint256 totalVP, uint256 expiry, bytes calldata signature) external',
-  'function finalizeProposal(uint256 proposalId) external',
-  'function finalizeSlowProposal(uint256 proposalId, bytes32 merkleRoot, uint256 totalVP, uint256 expiry, bytes calldata signature) external',
-  'function snapshotDelay() external view returns (uint256)',
-  'function proposalCounter() external view returns (uint256)',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 // Track enum from contract
 enum Track {
@@ -107,7 +97,7 @@ function getGovernanceContract(withSigner = false): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       withSigner ? getWallet() : getProvider()
     );
   }
@@ -313,7 +303,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.governance!,
-    GOVERNANCE_ABI,
+    RoseGovernanceABI,
     getWsProvider()
   );
 

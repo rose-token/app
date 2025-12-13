@@ -10,12 +10,7 @@ import { config } from '../config';
 import { recordDispute, recordResolution } from './dispute';
 import { ResolutionType } from '../types';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Marketplace ABI - dispute events only
-const MARKETPLACE_ABI = [
-  'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
-  'event DisputeResolved(uint256 indexed taskId, uint8 resolution, uint256 workerPct, uint256 workerAmount, uint256 customerRefund)',
-];
+import { RoseMarketplaceABI } from '../utils/contracts';
 
 // Types
 export interface DisputeWatcherStats {
@@ -52,7 +47,7 @@ function getMarketplaceContract(): ethers.Contract {
     }
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace,
-      MARKETPLACE_ABI,
+      RoseMarketplaceABI,
       getProvider()
     );
   }
@@ -160,7 +155,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.marketplace!,
-    MARKETPLACE_ABI,
+    RoseMarketplaceABI,
     getWsProvider()
   );
 

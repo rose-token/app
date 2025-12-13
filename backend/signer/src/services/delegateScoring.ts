@@ -2,14 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Governance ABI for delegate scoring
-const GOVERNANCE_ABI = [
-  'function proposalCounter() external view returns (uint256)',
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, string title, string descriptionHash, uint256 value, uint256 deadline, string deliverables, uint256 createdAt, uint256 votingEndsAt, uint256 yayVotes, uint256 nayVotes, uint8 status, uint256 editCount, uint256 taskId))',
-  'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
-  'event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower)',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 // Fallback deployment block for governance contract
 // Used when querying historical proposals without stored block info
@@ -38,7 +31,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }
@@ -477,12 +470,8 @@ export async function getScoringStats(): Promise<{
 
 // ============ Phase 2: VP Freeing Functions ============
 
-// Extended ABI for VP freeing
-const GOVERNANCE_ABI_WRITE = [
-  ...GOVERNANCE_ABI,
-  'function freeDelegatedVPFor(uint256 proposalId, address delegate, uint256 expiry, bytes signature) external',
-  'function delegatedVoteAllocated(uint256 proposalId, address delegate) external view returns (uint256)',
-];
+// Extended ABI for VP freeing (RoseGovernanceABI already contains all methods)
+const GOVERNANCE_ABI_WRITE = RoseGovernanceABI;
 
 /**
  * Free pending VP for all delegates on a finalized proposal

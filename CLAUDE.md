@@ -346,6 +346,27 @@ Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5.0, 1 run + viaIR optimizer. Net
 
 **WebSocket Events:** All 8 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. HTTP provider is kept for `queryFilter` operations (startup catch-up). Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
 
+## Backend ABI Workflow
+
+**ABI Source:** Both frontend and backend use the same ABIs extracted from Hardhat artifacts via `scripts/update-abi.js`.
+
+**Generation:** Run `npm run update-abi` from root (compiles contracts first, then extracts ABIs to both directories):
+- Frontend: `frontend/src/contracts/*ABI.json`
+- Backend: `backend/signer/src/abis/*ABI.json`
+
+**Backend Usage:** Import from centralized helper `backend/signer/src/utils/contracts.ts`:
+```typescript
+import { RoseMarketplaceABI, RoseGovernanceABI, RoseTreasuryABI } from '../utils/contracts';
+// or use factory functions
+import { getMarketplaceContract, getGovernanceContract } from '../utils/contracts';
+```
+
+**CI/CD:** The `deploy-signer.yml` workflow runs `npm run update-abi` before Docker build, ensuring ABIs are generated fresh from compiled contracts.
+
+**Local Development:** After contract changes, run `npm run update-abi` to regenerate ABIs for both frontend and backend.
+
+**Git Strategy:** Backend ABIs (`backend/signer/src/abis/*.json`) are in `.gitignore` - generated in CI only.
+
 ## Git Workflow
 
 ```bash

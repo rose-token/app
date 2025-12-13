@@ -2,44 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType, VoteReduction } from '../types';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Updated ABI for new VP-centric RoseGovernance
-const GOVERNANCE_ABI = [
-  // Multi-delegation VP tracking
-  'function delegators(address delegate) external view returns (address[])',
-  'function delegatedVP(address delegator, address delegate) external view returns (uint256)',
-  'function totalDelegatedIn(address delegate) external view returns (uint256)',
-  'function totalDelegatedOut(address delegator) external view returns (uint256)',
-  'function votingPower(address user) external view returns (uint256)',
-
-  // Phase 1: Delegation nonce
-  'function delegationNonce(address delegate) external view returns (uint256)',
-  'function delegatedUsedTotal(address delegate) external view returns (uint256)',
-  'function delegatorVoteContribution(uint256 proposalId, address delegate, address delegator) external view returns (uint256)',
-  'function getGlobalAvailableDelegatedPower(address delegate) external view returns (uint256)',
-
-  // Delegated vote tracking
-  'function getDelegatedVote(uint256 proposalId, address delegate) external view returns (tuple(bool hasVoted, bool support, uint256 totalPowerUsed))',
-  'function allocationHashes(uint256 proposalId, address delegate) external view returns (bytes32)',
-
-  // Direct vote tracking
-  'function votes(uint256 proposalId, address voter) external view returns (tuple(bool hasVoted, bool support, uint256 votePower))',
-
-  // Proposal data
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, string title, string descriptionHash, uint256 value, uint256 deadline, string deliverables, uint256 createdAt, uint256 votingEndsAt, uint256 yayVotes, uint256 nayVotes, uint8 status, uint256 editCount, uint256 taskId))',
-  'function proposalCounter() external view returns (uint256)',
-
-  // Reward tracking
-  'function voterRewardPool(uint256 proposalId) external view returns (uint256)',
-  'function voterRewardTotalVotes(uint256 proposalId) external view returns (uint256)',
-  'function voterRewardOutcome(uint256 proposalId) external view returns (bool)',
-  'function directVoterRewardClaimed(uint256 proposalId, address voter) external view returns (bool)',
-  'function delegatorRewardClaimed(uint256 proposalId, address delegate, address delegator) external view returns (bool)',
-
-  // Events for tracking delegation history
-  'event DelegationChanged(address indexed delegator, address indexed delegate, uint256 vpAmount, bool isDelegating)',
-  'event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower)',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
 
@@ -56,7 +19,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }

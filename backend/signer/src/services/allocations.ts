@@ -10,12 +10,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Governance contract ABI - minimal for allocation queries
-const GOVERNANCE_ABI = [
-  'function allocationNonce(address user) external view returns (uint256)',
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, uint8 track, uint256 snapshotBlock, bytes32 vpMerkleRoot, uint256 votingStartsAt, uint256 votingEndsAt, uint256 forVotes, uint256 againstVotes, uint256 treasuryAmount, uint8 status, string title, string descriptionHash, uint256 deadline, string deliverables, uint256 editCount, uint256 taskId))',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 // Contract enums
 enum Track {
@@ -83,7 +78,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }

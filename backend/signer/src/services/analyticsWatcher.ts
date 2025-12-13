@@ -16,38 +16,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// ============================================================
-// Contract ABIs (events only)
-// ============================================================
-
-const MARKETPLACE_ABI = [
-  'event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit)',
-  'event AuctionTaskCreated(uint256 taskId, address indexed customer, uint256 maxBudget)',
-  'event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 stakeholderDeposit)',
-  'event TaskClaimed(uint256 taskId, address indexed worker)',
-  'event TaskCompleted(uint256 taskId, string prUrl)',
-  'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
-  'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
-  'event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund)',
-  'event TaskClosed(uint256 taskId)',
-  // Read function for full task data (19 fields)
-  'function tasks(uint256) view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, string title, string detailedDescriptionHash, string prUrl, uint8 status, bool customerApproval, bool stakeholderApproval, uint8 source, uint256 proposalId, bool isAuction, uint256 winningBid, address disputeInitiator, uint256 disputedAt, string disputeReasonHash, bool githubIntegration)',
-];
-
-const GOVERNANCE_ABI = [
-  'event ProposalCreated(uint256 indexed proposalId, address indexed proposer, uint8 track, uint256 treasuryAmount)',
-  'event VoteCastFast(uint256 indexed proposalId, address indexed voter, bool support, uint256 vpAmount)',
-  'event VoteCastSlow(uint256 indexed proposalId, address indexed voter, bool support, uint256 vpAmount, uint256 nonce)',
-  'event ProposalFinalized(uint256 indexed proposalId, uint8 status)',
-  'event Deposited(address indexed user, uint256 amount)',
-  'event Withdrawn(address indexed user, uint256 amount)',
-];
-
-const TREASURY_ABI = [
-  'event Deposited(address indexed user, uint256 usdcIn, uint256 roseMinted)',
-  'event Redeemed(address indexed user, uint256 roseBurned, uint256 usdcOut)',
-];
+import { RoseMarketplaceABI, RoseGovernanceABI, RoseTreasuryABI } from '../utils/contracts';
 
 // ============================================================
 // Types
@@ -117,7 +86,7 @@ function getMarketplaceContract(): ethers.Contract {
   if (!marketplaceContract) {
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace!,
-      MARKETPLACE_ABI,
+      RoseMarketplaceABI,
       getProvider()
     );
   }
@@ -128,7 +97,7 @@ function getGovernanceContract(): ethers.Contract {
   if (!governanceContract) {
     governanceContract = new ethers.Contract(
       config.contracts.governance!,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }
@@ -139,7 +108,7 @@ function getTreasuryContract(): ethers.Contract {
   if (!treasuryContract) {
     treasuryContract = new ethers.Contract(
       config.contracts.treasury!,
-      TREASURY_ABI,
+      RoseTreasuryABI,
       getProvider()
     );
   }
@@ -753,7 +722,7 @@ function setupMarketplaceListeners(): void {
 
   wsMarketplace = new ethers.Contract(
     config.contracts.marketplace!,
-    MARKETPLACE_ABI,
+    RoseMarketplaceABI,
     getWsProvider()
   );
 
@@ -835,7 +804,7 @@ function setupGovernanceListeners(): void {
 
   wsGovernance = new ethers.Contract(
     config.contracts.governance!,
-    GOVERNANCE_ABI,
+    RoseGovernanceABI,
     getWsProvider()
   );
 
@@ -892,7 +861,7 @@ function setupTreasuryListeners(): void {
 
   wsTreasury = new ethers.Contract(
     config.contracts.treasury!,
-    TREASURY_ABI,
+    RoseTreasuryABI,
     getWsProvider()
   );
 

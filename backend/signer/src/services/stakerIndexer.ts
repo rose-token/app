@@ -3,13 +3,7 @@ import { config } from '../config';
 import { query } from '../db/pool';
 import { getReputationNew } from './governance';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Governance contract ABI (staking events)
-const GOVERNANCE_ABI = [
-  'event Deposited(address indexed user, uint256 amount)',
-  'event Withdrawn(address indexed user, uint256 amount)',
-  'function stakedRose(address user) external view returns (uint256)',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 // Types
 export interface StakerData {
@@ -59,7 +53,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }
@@ -238,7 +232,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.governance!,
-    GOVERNANCE_ABI,
+    RoseGovernanceABI,
     getWsProvider()
   );
 

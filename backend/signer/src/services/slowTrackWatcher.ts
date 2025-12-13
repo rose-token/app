@@ -15,18 +15,7 @@ import {
   getProposalDeadline,
 } from './allocations';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Governance contract ABI - events and views needed for watcher
-const GOVERNANCE_ABI = [
-  // Events
-  // Note: We only listen to VoteCastSlow (has full data including support)
-  // VoteUpdated is also emitted on updates but VoteCastSlow is sufficient
-  'event VoteCastSlow(uint256 indexed proposalId, address indexed voter, bool support, uint256 vpAmount, uint256 nonce)',
-  'event ProposalFinalized(uint256 indexed proposalId, uint8 status)',
-
-  // Views
-  'function proposals(uint256 proposalId) external view returns (tuple(address proposer, uint8 track, uint256 snapshotBlock, bytes32 vpMerkleRoot, uint256 votingStartsAt, uint256 votingEndsAt, uint256 forVotes, uint256 againstVotes, uint256 treasuryAmount, uint8 status, string title, string descriptionHash, uint256 deadline, string deliverables, uint256 editCount, uint256 taskId))',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 // Track enum from contract
 enum Track {
@@ -69,7 +58,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }
@@ -236,7 +225,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.governance!,
-    GOVERNANCE_ABI,
+    RoseGovernanceABI,
     getWsProvider()
   );
 

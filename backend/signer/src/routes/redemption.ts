@@ -7,17 +7,9 @@ import {
   getPendingRedemptions,
 } from '../services/redemptionWatcher';
 import { getWsProvider } from '../utils/wsProvider';
+import { RoseTreasuryABI } from '../utils/contracts';
 
 const router = Router();
-
-// Treasury ABI for redemption view functions
-const TREASURY_ABI = [
-  'function canRedeemInstantly(uint256 roseAmount) external view returns (bool ready, uint256 usdcAvailable, uint256 usdcNeeded)',
-  'function getRedemptionRequest(uint256 requestId) external view returns (address user, uint256 roseAmount, uint256 usdcOwed, uint256 requestedAt, bool fulfilled)',
-  'function getUserPendingRedemption(address user) external view returns (uint256)',
-  'function totalPendingUsdcOwed() external view returns (uint256)',
-  'function calculateUsdcForRedemption(uint256 roseAmount) external view returns (uint256)',
-];
 
 function getProvider(): ethers.Provider {
   return getWsProvider();
@@ -27,7 +19,7 @@ function getTreasuryContract(): ethers.Contract {
   if (!config.contracts.treasury) {
     throw new Error('TREASURY_ADDRESS not configured');
   }
-  return new ethers.Contract(config.contracts.treasury, TREASURY_ABI, getProvider());
+  return new ethers.Contract(config.contracts.treasury, RoseTreasuryABI, getProvider());
 }
 
 /**

@@ -2,17 +2,7 @@ import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Treasury contract ABI (read functions for NAV tracking)
-// Updated to match dynamic asset registry contract
-const TREASURY_ABI = [
-  // Vault breakdown - core metrics
-  'function getVaultBreakdown() external view returns (uint256 totalHardAssets, uint256 currentRosePrice, uint256 circulatingRose, bool rebalanceNeeded)',
-  // Per-asset breakdown
-  'function getAssetBreakdown(bytes32 key) external view returns (address token, uint256 balance, uint256 valueUSD, uint256 targetBps, uint256 actualBps, bool active)',
-  // Asset price (Chainlink oracle)
-  'function getAssetPrice(bytes32 key) external view returns (uint256)',
-];
+import { getTreasuryContract as getTreasuryContractHelper } from '../utils/contracts';
 
 // Types
 export interface VaultBreakdown {
@@ -125,7 +115,7 @@ function getTreasuryContract(): ethers.Contract | null {
     console.warn('[NAV] Treasury contract address not configured');
     return null;
   }
-  return new ethers.Contract(config.contracts.treasury, TREASURY_ABI, getProvider());
+  return getTreasuryContractHelper();
 }
 
 // Asset keys as bytes32

@@ -8,19 +8,7 @@ import {
   executeDiversificationSwap,
 } from './lifi';
 import { getWsProvider } from '../utils/wsProvider';
-
-// Extended Treasury ABI for Phase 4 rebalance
-const TREASURY_ABI = [
-  'function forceRebalance() external',
-  'function getVaultBreakdown() external view returns (uint256 totalHardAssets, uint256 currentRosePrice, uint256 circulatingRose, bool rebalanceNeeded)',
-  'function needsRebalance() public view returns (bool)',
-  'function getAllAssets() external view returns (bytes32[] memory keys, tuple(address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)[] memory assetList)',
-  'function getAssetBreakdown(bytes32 key) external view returns (address token, uint256 balance, uint256 valueUSD, uint256 targetBps, uint256 actualBps, bool active)',
-  'function lastRebalanceTime() external view returns (uint256)',
-  'function timeUntilRebalance() external view returns (uint256)',
-  'function executeSwap(bytes32 fromAsset, bytes32 toAsset, uint256 amountIn, uint256 minAmountOut, bytes calldata lifiData) external',
-  'event Rebalanced(uint256 totalHardAssets)',
-];
+import { getTreasuryContract as getTreasuryContractHelper } from '../utils/contracts';
 
 // ROSE key constant (same as contract)
 const ROSE_KEY = ethers.encodeBytes32String('ROSE');
@@ -75,14 +63,7 @@ function getWallet(): ethers.Wallet {
 }
 
 function getTreasuryContract(signerOrProvider?: ethers.Signer | ethers.Provider): ethers.Contract {
-  if (!config.contracts.treasury) {
-    throw new Error('TREASURY_ADDRESS not configured');
-  }
-  return new ethers.Contract(
-    config.contracts.treasury,
-    TREASURY_ABI,
-    signerOrProvider || getProvider()
-  );
+  return getTreasuryContractHelper(signerOrProvider);
 }
 
 /**

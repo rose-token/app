@@ -3,18 +3,7 @@ import { config } from '../config';
 import { getAssetBreakdowns } from './treasury';
 import { getSwapQuote, executeDiversificationSwap, getAssetTokenAddress } from './lifi';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Treasury ABI for redemption events and functions
-const TREASURY_ABI = [
-  'event RedemptionRequested(uint256 indexed requestId, address indexed user, uint256 roseAmount, uint256 usdcOwed)',
-  'event RedemptionFulfilled(uint256 indexed requestId, address indexed user, uint256 usdcAmount)',
-  'function redemptionRequests(uint256 requestId) external view returns (address user, uint256 roseAmount, uint256 usdcOwed, uint256 requestedAt, bool fulfilled)',
-  'function getRedemptionRequest(uint256 requestId) external view returns (address user, uint256 roseAmount, uint256 usdcOwed, uint256 requestedAt, bool fulfilled)',
-  'function totalPendingUsdcOwed() external view returns (uint256)',
-  'function fulfillRedemption(uint256 requestId) external',
-  'function fulfillMultipleRedemptions(uint256[] calldata requestIds) external',
-  'function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)',
-];
+import { RoseTreasuryABI } from '../utils/contracts';
 
 // Types
 export interface RedemptionRequest {
@@ -86,7 +75,7 @@ function getTreasuryContract(): ethers.Contract {
     }
     treasuryContract = new ethers.Contract(
       config.contracts.treasury,
-      TREASURY_ABI,
+      RoseTreasuryABI,
       getProvider()
     );
   }
@@ -163,7 +152,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.treasury!,
-    TREASURY_ABI,
+    RoseTreasuryABI,
     getWsProvider()
   );
 

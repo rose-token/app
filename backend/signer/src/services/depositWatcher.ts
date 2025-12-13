@@ -8,14 +8,7 @@ import {
   getTargetAllocations,
 } from './lifi';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Treasury ABI for deposit events and functions
-const TREASURY_ABI = [
-  'event Deposited(address indexed user, uint256 usdcAmount, uint256 roseMinted)',
-  'function assets(bytes32 key) external view returns (address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)',
-  'function getAllAssets() external view returns (bytes32[] memory keys, tuple(address token, address priceFeed, uint8 decimals, uint256 targetBps, bool active)[] memory assetList)',
-  'function getAssetBreakdown(bytes32 key) external view returns (address token, uint256 balance, uint256 valueUSD, uint256 targetBps, uint256 actualBps, bool active)',
-];
+import { RoseTreasuryABI } from '../utils/contracts';
 
 // Types
 export interface DiversificationResult {
@@ -78,7 +71,7 @@ function getTreasuryContract(): ethers.Contract {
     }
     treasuryContract = new ethers.Contract(
       config.contracts.treasury,
-      TREASURY_ABI,
+      RoseTreasuryABI,
       getProvider()
     );
   }
@@ -313,7 +306,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.treasury!,
-    TREASURY_ABI,
+    RoseTreasuryABI,
     getWsProvider()
   );
 

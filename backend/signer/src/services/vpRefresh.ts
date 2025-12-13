@@ -6,19 +6,7 @@ import {
   calculateVotePower,
 } from './governance';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Marketplace ABI for reputation events
-const MARKETPLACE_ABI = [
-  'event ReputationChanged(address indexed user, uint256 taskValue)',
-  'event PaymentReleased(uint256 taskId, address indexed worker, uint256 amount)',
-  'event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee)',
-];
-
-// Governance ABI - only stakedRose exists on-chain
-// NOTE: VP is computed off-chain and stored in the 'stakers' database table
-const GOVERNANCE_ABI = [
-  'function stakedRose(address user) external view returns (uint256)',
-];
+import { RoseMarketplaceABI, RoseGovernanceABI } from '../utils/contracts';
 
 // Types
 export interface VPRefreshCandidate {
@@ -90,7 +78,7 @@ function getMarketplaceContract(): ethers.Contract {
     }
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace,
-      MARKETPLACE_ABI,
+      RoseMarketplaceABI,
       getProvider()
     );
   }
@@ -104,7 +92,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }
@@ -412,7 +400,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.marketplace!,
-    MARKETPLACE_ABI,
+    RoseMarketplaceABI,
     getWsProvider()
   );
 

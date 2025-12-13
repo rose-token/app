@@ -93,10 +93,7 @@ export interface ReceivedDelegation {
 // Contract Integration
 // ============================================================
 
-const GOVERNANCE_ABI = [
-  'function canReceiveDelegation(address user) external view returns (bool)',
-  'function isDelegateOptedIn(address delegate) external view returns (bool)',
-];
+import { RoseGovernanceABI } from '../utils/contracts';
 
 let governanceContract: ethers.Contract | null = null;
 
@@ -111,7 +108,7 @@ function getGovernanceContract(): ethers.Contract {
     }
     governanceContract = new ethers.Contract(
       config.contracts.governance,
-      GOVERNANCE_ABI,
+      RoseGovernanceABI,
       getProvider()
     );
   }

@@ -11,32 +11,7 @@ import axios from 'axios';
 import { config } from '../config';
 import { approveAndMergePR, isGitHubConfigured, parsePrUrl } from './github';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
-
-// Marketplace ABI - includes all 19 fields in Task struct
-const MARKETPLACE_ABI = [
-  'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
-  `function tasks(uint256) external view returns (
-    address customer,
-    address worker,
-    address stakeholder,
-    uint256 deposit,
-    uint256 stakeholderDeposit,
-    string title,
-    string detailedDescriptionHash,
-    string prUrl,
-    uint8 status,
-    bool customerApproval,
-    bool stakeholderApproval,
-    uint8 source,
-    uint256 proposalId,
-    bool isAuction,
-    uint256 winningBid,
-    address disputeInitiator,
-    uint256 disputedAt,
-    string disputeReasonHash,
-    bool githubIntegration
-  )`,
-];
+import { RoseMarketplaceABI } from '../utils/contracts';
 
 // IPFS Gateway for fetching task metadata (uses dedicated Pinata gateway for private files)
 const IPFS_GATEWAY = process.env.PINATA_GATEWAY
@@ -100,7 +75,7 @@ function getMarketplaceContract(): ethers.Contract {
     }
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace,
-      MARKETPLACE_ABI,
+      RoseMarketplaceABI,
       getProvider()
     );
   }
@@ -267,7 +242,7 @@ function setupEventListeners(): void {
   // Create new contract instance with WebSocket provider for event listening
   wsContract = new ethers.Contract(
     config.contracts.marketplace!,
-    MARKETPLACE_ABI,
+    RoseMarketplaceABI,
     getWsProvider()
   );
 
