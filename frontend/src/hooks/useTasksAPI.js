@@ -14,14 +14,15 @@ import { useAccount } from 'wagmi';
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 // DB status string to TaskStatus enum number mapping
+// Contract enum: Open=0, StakeholderRequired=1, InProgress=2, Completed=3, Closed=4, ApprovedPendingPayment=5, Disputed=6
 const STATUS_NUMBER_MAP = {
-  'Created': 0, // StakeholderRequired
-  'Staked': 1, // Open
+  'Created': 1, // StakeholderRequired
+  'Staked': 0, // Open
   'Claimed': 2, // InProgress
   'Completed': 3, // Completed
-  'Approved': 4, // ApprovedPendingPayment
-  'Closed': 5, // Closed
-  'Cancelled': 5, // Also Closed
+  'Approved': 5, // ApprovedPendingPayment
+  'Closed': 4, // Closed
+  'Cancelled': 4, // Also Closed
   'Disputed': 6, // Disputed
 };
 
