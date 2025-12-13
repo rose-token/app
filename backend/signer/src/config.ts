@@ -239,6 +239,16 @@ export const config = {
     // User VP refresh schedule (default: every 15 minutes)
     vpRefreshSchedule: process.env.ANALYTICS_VP_REFRESH_SCHEDULE || '*/15 * * * *',
   },
+
+  // Task validation configuration (periodic drift correction)
+  taskValidation: {
+    // Enable task validation job (default: true)
+    enabled: process.env.TASK_VALIDATION_ENABLED !== 'false',
+    // Cron schedule (default: every 15 minutes)
+    schedule: process.env.TASK_VALIDATION_SCHEDULE || '*/15 * * * *',
+    // Batch size for processing tasks (default: 50)
+    batchSize: parseInt(process.env.TASK_VALIDATION_BATCH_SIZE || '50'),
+  },
 };
 
 // Validate required env vars

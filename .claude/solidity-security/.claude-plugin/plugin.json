@@ -1,0 +1,10 @@
+{
+  "name": "solidity-security",
+  "description": "Smart contract security analysis using Slither static analyzer. Detects reentrancy, access control issues, integer overflows, unchecked calls, and DeFi-specific vulnerabilities.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Rose Protocol"
+  },
+  "commands": ["./commands/audit.md", "./commands/quick-scan.md"],
+  "agents": ["./agents/solidity-auditor.md"]
+}

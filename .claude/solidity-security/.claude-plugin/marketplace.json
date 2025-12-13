@@ -1,0 +1,14 @@
+{
+  "name": "solidity-security-marketplace",
+  "description": "Smart contract security tools",
+  "owner": {
+    "name": "Rose Protocol"
+  },
+  "plugins": [
+    {
+      "name": "solidity-security",
+      "source": "./",
+      "description": "Smart contract security analysis using Slither static analyzer"
+    }
+  ]
+}

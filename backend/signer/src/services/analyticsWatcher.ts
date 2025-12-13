@@ -430,6 +430,169 @@ async function handleTaskClosed(
   }
 }
 
+async function handleStakeholderUnstaked(
+  taskId: bigint,
+  stakeholder: string,
+  _stakeholderDeposit: bigint,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] StakeholderUnstaked: taskId=${taskId}, stakeholder=${stakeholder}`);
+
+  try {
+    // Clear stakeholder, revert status to 'Created' (awaiting new stakeholder)
+    await query(`
+      UPDATE analytics_tasks SET
+        stakeholder = NULL,
+        stakeholder_deposit = 0,
+        status = 'Created',
+        staked_at = NULL,
+        last_event_block = $2
+      WHERE task_id = $1
+    `, [Number(taskId), log.blockNumber]);
+
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] StakeholderUnstaked error:`, error);
+  }
+}
+
+async function handleTaskUnclaimed(
+  taskId: bigint,
+  previousWorker: string,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] TaskUnclaimed: taskId=${taskId}, previousWorker=${previousWorker}`);
+
+  try {
+    // Clear worker, revert status to 'Staked' (stakeholder still in place)
+    await query(`
+      UPDATE analytics_tasks SET
+        worker = NULL,
+        status = 'Staked',
+        claimed_at = NULL,
+        last_event_block = $2
+      WHERE task_id = $1
+    `, [Number(taskId), log.blockNumber]);
+
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] TaskUnclaimed error:`, error);
+  }
+}
+
+async function handleAuctionWinnerSelected(
+  taskId: bigint,
+  worker: string,
+  winningBid: bigint,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] AuctionWinnerSelected: taskId=${taskId}, worker=${worker}, winningBid=${winningBid}`);
+
+  try {
+    // Set worker and winning bid, update status to 'Claimed'
+    await query(`
+      UPDATE analytics_tasks SET
+        worker = $2,
+        winning_bid = $3,
+        status = 'Claimed',
+        claimed_at = $4,
+        last_event_block = $5
+      WHERE task_id = $1
+    `, [Number(taskId), worker.toLowerCase(), winningBid.toString(), timestamp.toISOString(), log.blockNumber]);
+
+    await ensureUser(worker, timestamp);
+    stats.tasksClaimed++;
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] AuctionWinnerSelected error:`, error);
+  }
+}
+
+async function handleDAOTaskCreated(
+  taskId: bigint,
+  proposer: string,
+  value: bigint,
+  proposalId: bigint,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] DAOTaskCreated: taskId=${taskId}, proposer=${proposer}, proposalId=${proposalId}`);
+
+  try {
+    // Fetch full task data from contract
+    const marketplace = getMarketplaceContract();
+    const taskData = await marketplace.tasks(taskId);
+
+    const [
+      customer, _worker, _stakeholder, deposit, _stakeholderDeposit,
+      title, detailedDescriptionHash, _prUrl, _status, _customerApproval,
+      _stakeholderApproval, source, _proposalId, isAuction, winningBid
+    ] = taskData;
+
+    await query(`
+      INSERT INTO analytics_tasks (
+        task_id, customer, deposit, status, created_at, created_block, last_event_block,
+        title, detailed_description_hash, source, proposal_id, is_auction, winning_bid
+      )
+      VALUES ($1, $2, $3, 'Created', $4, $5, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (task_id) DO UPDATE SET
+        customer = EXCLUDED.customer,
+        deposit = EXCLUDED.deposit,
+        title = EXCLUDED.title,
+        detailed_description_hash = EXCLUDED.detailed_description_hash,
+        source = EXCLUDED.source,
+        proposal_id = EXCLUDED.proposal_id,
+        is_auction = EXCLUDED.is_auction,
+        winning_bid = EXCLUDED.winning_bid,
+        last_event_block = GREATEST(analytics_tasks.last_event_block, EXCLUDED.last_event_block)
+    `, [
+      Number(taskId),
+      customer.toLowerCase(),
+      deposit.toString(),
+      timestamp.toISOString(),
+      log.blockNumber,
+      title || '',
+      detailedDescriptionHash || '',
+      Number(source),
+      Number(proposalId),
+      isAuction,
+      winningBid.toString()
+    ]);
+
+    await ensureUser(customer, timestamp);
+    await query(`
+      UPDATE analytics_users SET
+        tasks_created = tasks_created + 1,
+        total_spent_wei = total_spent_wei + $2
+      WHERE address = $1
+    `, [customer.toLowerCase(), deposit.toString()]);
+
+    stats.tasksCreated++;
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] DAOTaskCreated error:`, error);
+  }
+}
+
 // ============================================================
 // Governance Event Handlers
 // ============================================================
@@ -711,8 +874,12 @@ function setupMarketplaceListeners(): void {
   if (wsMarketplace) {
     wsMarketplace.removeAllListeners('TaskCreated');
     wsMarketplace.removeAllListeners('AuctionTaskCreated');
+    wsMarketplace.removeAllListeners('DAOTaskCreated');
     wsMarketplace.removeAllListeners('StakeholderStaked');
+    wsMarketplace.removeAllListeners('StakeholderUnstaked');
     wsMarketplace.removeAllListeners('TaskClaimed');
+    wsMarketplace.removeAllListeners('TaskUnclaimed');
+    wsMarketplace.removeAllListeners('AuctionWinnerSelected');
     wsMarketplace.removeAllListeners('TaskCompleted');
     wsMarketplace.removeAllListeners('TaskReadyForPayment');
     wsMarketplace.removeAllListeners('TaskDisputed');
@@ -785,6 +952,34 @@ function setupMarketplaceListeners(): void {
   wsMarketplace.on('TaskClosed', (taskId, event) => {
     handleTaskClosed(taskId, event).catch(err => {
       console.error('[AnalyticsWatcher] TaskClosed handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  wsMarketplace.on('StakeholderUnstaked', (taskId, stakeholder, stakeholderDeposit, event) => {
+    handleStakeholderUnstaked(taskId, stakeholder, stakeholderDeposit, event).catch(err => {
+      console.error('[AnalyticsWatcher] StakeholderUnstaked handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  wsMarketplace.on('TaskUnclaimed', (taskId, previousWorker, event) => {
+    handleTaskUnclaimed(taskId, previousWorker, event).catch(err => {
+      console.error('[AnalyticsWatcher] TaskUnclaimed handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  wsMarketplace.on('AuctionWinnerSelected', (taskId, worker, winningBid, event) => {
+    handleAuctionWinnerSelected(taskId, worker, winningBid, event).catch(err => {
+      console.error('[AnalyticsWatcher] AuctionWinnerSelected handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
+  wsMarketplace.on('DAOTaskCreated', (taskId, proposer, value, proposalId, event) => {
+    handleDAOTaskCreated(taskId, proposer, value, proposalId, event).catch(err => {
+      console.error('[AnalyticsWatcher] DAOTaskCreated handler error:', err);
       stats.lastError = err instanceof Error ? err.message : String(err);
     });
   });
@@ -975,6 +1170,38 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
       }
     }
 
+    const stakeholderUnstakedEvents = await marketplace.queryFilter('StakeholderUnstaked', start, end);
+    for (const event of stakeholderUnstakedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId, stakeholder, stakeholderDeposit] = event.args as unknown as [bigint, string, bigint];
+        await handleStakeholderUnstaked(taskId, stakeholder, stakeholderDeposit, event as ethers.EventLog);
+      }
+    }
+
+    const taskUnclaimedEvents = await marketplace.queryFilter('TaskUnclaimed', start, end);
+    for (const event of taskUnclaimedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId, previousWorker] = event.args as unknown as [bigint, string];
+        await handleTaskUnclaimed(taskId, previousWorker, event as ethers.EventLog);
+      }
+    }
+
+    const auctionWinnerSelectedEvents = await marketplace.queryFilter('AuctionWinnerSelected', start, end);
+    for (const event of auctionWinnerSelectedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId, worker, winningBid] = event.args as unknown as [bigint, string, bigint];
+        await handleAuctionWinnerSelected(taskId, worker, winningBid, event as ethers.EventLog);
+      }
+    }
+
+    const daoTaskCreatedEvents = await marketplace.queryFilter('DAOTaskCreated', start, end);
+    for (const event of daoTaskCreatedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId, proposer, value, proposalId] = event.args as unknown as [bigint, string, bigint, bigint];
+        await handleDAOTaskCreated(taskId, proposer, value, proposalId, event as ethers.EventLog);
+      }
+    }
+
     // Governance events
     const governance = getGovernanceContract();
     const proposalCreatedEvents = await governance.queryFilter('ProposalCreated', start, end);
@@ -1126,8 +1353,12 @@ export function stopAnalyticsWatcher(): void {
   if (wsMarketplace) {
     wsMarketplace.removeAllListeners('TaskCreated');
     wsMarketplace.removeAllListeners('AuctionTaskCreated');
+    wsMarketplace.removeAllListeners('DAOTaskCreated');
     wsMarketplace.removeAllListeners('StakeholderStaked');
+    wsMarketplace.removeAllListeners('StakeholderUnstaked');
     wsMarketplace.removeAllListeners('TaskClaimed');
+    wsMarketplace.removeAllListeners('TaskUnclaimed');
+    wsMarketplace.removeAllListeners('AuctionWinnerSelected');
     wsMarketplace.removeAllListeners('TaskCompleted');
     wsMarketplace.removeAllListeners('TaskReadyForPayment');
     wsMarketplace.removeAllListeners('TaskDisputed');

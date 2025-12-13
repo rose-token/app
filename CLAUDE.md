@@ -236,10 +236,11 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegate Opt-In Watcher | Event-driven | DelegateOptInChanged → sync missing stakers to DB |
 | Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
-| Analytics Watcher | Event-driven | TaskCreated/AuctionTaskCreated/VoteCast/Deposited → sync to analytics tables |
+| Analytics Watcher | Event-driven | TaskCreated/AuctionTaskCreated/DAOTaskCreated/StakeholderStaked/StakeholderUnstaked/TaskClaimed/TaskUnclaimed/AuctionWinnerSelected/TaskCompleted/TaskReadyForPayment/TaskDisputed/TaskCancelled/TaskClosed/VoteCast/Deposited → sync to analytics tables |
 | Analytics Daily Rollup | Daily 00:00 UTC | Aggregate daily metrics |
 | Analytics Treasury Snapshot | Hourly | Snapshot NAV and allocations |
 | Analytics VP Refresh | Every 15 min | Sync voting power to analytics_users |
+| Analytics Task Validation | Every 15 min | Re-sync active tasks from chain (drift correction) |
 
 ## Database Tables
 
@@ -272,6 +273,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Slow Track Watcher | `SLOW_TRACK_WATCHER_ENABLED` (true), `SLOW_TRACK_WATCHER_STARTUP_LOOKBACK` (10000) |
 | Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
+| Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
