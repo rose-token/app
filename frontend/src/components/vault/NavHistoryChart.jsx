@@ -257,7 +257,7 @@ const NavHistoryChart = () => {
 
   return (
     <div
-      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all duration-300 vault-card-hover"
+      className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
