@@ -11,7 +11,7 @@ const Header = ({ toggleSidebar }) => {
     <header
       className="sticky top-0 z-50 py-4 backdrop-blur-[20px] border-b"
       style={{
-        background: 'rgba(26, 26, 31, 0.85)',
+        background: 'rgba(26, 26, 31, 1)',
         borderColor: 'rgba(255, 255, 255, 0.08)'
       }}
     >
