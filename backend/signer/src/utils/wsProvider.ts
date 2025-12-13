@@ -26,29 +26,29 @@ export function getWsProvider(): ethers.WebSocketProvider {
     wsProvider = new ethers.WebSocketProvider(wsUrl);
     reconnectAttempts = 0;
 
-    // Handle WebSocket events via the underlying websocket
-    // Cast to any since ws library's WebSocket has these handlers but
-    // ethers.js WebSocketLike interface doesn't expose them
-    const ws = wsProvider.websocket as unknown as {
-      onopen: (() => void) | null;
-      onclose: ((event: { code: number; reason: string }) => void) | null;
-      onerror: ((error: Error) => void) | null;
+    // Handle WebSocket events via addEventListener to avoid overwriting ethers' internal handlers
+    // Using addEventListener instead of onopen/onclose/onerror ensures ethers can keep its own handlers
+    const rawWs = wsProvider.websocket as unknown as {
+      addEventListener: (
+        type: string,
+        listener: (event: { code?: number; reason?: string }) => void
+      ) => void;
     };
 
-    ws.onopen = () => {
+    rawWs.addEventListener('open', () => {
       console.log('[WsProvider] WebSocket connected');
       reconnectAttempts = 0;
-    };
+    });
 
-    ws.onclose = (event: { code: number; reason: string }) => {
+    rawWs.addEventListener('close', (event: { code?: number; reason?: string }) => {
       console.warn(`[WsProvider] WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`);
       wsProvider = null;
       scheduleReconnect();
-    };
+    });
 
-    ws.onerror = (error: Error) => {
-      console.error('[WsProvider] WebSocket error:', error);
-    };
+    rawWs.addEventListener('error', (event) => {
+      console.error('[WsProvider] WebSocket error:', event);
+    });
   }
   return wsProvider;
 }

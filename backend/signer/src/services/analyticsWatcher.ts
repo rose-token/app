@@ -740,7 +740,15 @@ async function handleTreasuryRedeemed(
 
 function setupMarketplaceListeners(): void {
   if (wsMarketplace) {
-    wsMarketplace.removeAllListeners();
+    wsMarketplace.removeAllListeners('TaskCreated');
+    wsMarketplace.removeAllListeners('AuctionTaskCreated');
+    wsMarketplace.removeAllListeners('StakeholderStaked');
+    wsMarketplace.removeAllListeners('TaskClaimed');
+    wsMarketplace.removeAllListeners('TaskCompleted');
+    wsMarketplace.removeAllListeners('TaskReadyForPayment');
+    wsMarketplace.removeAllListeners('TaskDisputed');
+    wsMarketplace.removeAllListeners('TaskCancelled');
+    wsMarketplace.removeAllListeners('TaskClosed');
   }
 
   wsMarketplace = new ethers.Contract(
@@ -817,7 +825,12 @@ function setupMarketplaceListeners(): void {
 
 function setupGovernanceListeners(): void {
   if (wsGovernance) {
-    wsGovernance.removeAllListeners();
+    wsGovernance.removeAllListeners('ProposalCreated');
+    wsGovernance.removeAllListeners('VoteCastFast');
+    wsGovernance.removeAllListeners('VoteCastSlow');
+    wsGovernance.removeAllListeners('ProposalFinalized');
+    wsGovernance.removeAllListeners('Deposited');
+    wsGovernance.removeAllListeners('Withdrawn');
   }
 
   wsGovernance = new ethers.Contract(
@@ -873,7 +886,8 @@ function setupGovernanceListeners(): void {
 
 function setupTreasuryListeners(): void {
   if (wsTreasury) {
-    wsTreasury.removeAllListeners();
+    wsTreasury.removeAllListeners('Deposited');
+    wsTreasury.removeAllListeners('Redeemed');
   }
 
   wsTreasury = new ethers.Contract(
@@ -1141,15 +1155,29 @@ export function stopAnalyticsWatcher(): void {
   }
 
   if (wsMarketplace) {
-    wsMarketplace.removeAllListeners();
+    wsMarketplace.removeAllListeners('TaskCreated');
+    wsMarketplace.removeAllListeners('AuctionTaskCreated');
+    wsMarketplace.removeAllListeners('StakeholderStaked');
+    wsMarketplace.removeAllListeners('TaskClaimed');
+    wsMarketplace.removeAllListeners('TaskCompleted');
+    wsMarketplace.removeAllListeners('TaskReadyForPayment');
+    wsMarketplace.removeAllListeners('TaskDisputed');
+    wsMarketplace.removeAllListeners('TaskCancelled');
+    wsMarketplace.removeAllListeners('TaskClosed');
     wsMarketplace = null;
   }
   if (wsGovernance) {
-    wsGovernance.removeAllListeners();
+    wsGovernance.removeAllListeners('ProposalCreated');
+    wsGovernance.removeAllListeners('VoteCastFast');
+    wsGovernance.removeAllListeners('VoteCastSlow');
+    wsGovernance.removeAllListeners('ProposalFinalized');
+    wsGovernance.removeAllListeners('Deposited');
+    wsGovernance.removeAllListeners('Withdrawn');
     wsGovernance = null;
   }
   if (wsTreasury) {
-    wsTreasury.removeAllListeners();
+    wsTreasury.removeAllListeners('Deposited');
+    wsTreasury.removeAllListeners('Redeemed');
     wsTreasury = null;
   }
 
