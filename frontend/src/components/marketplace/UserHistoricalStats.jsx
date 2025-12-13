@@ -140,8 +140,8 @@ const StatCard = ({ label, value, suffix, color }) => (
     }}
   >
     <div
-      className="text-xs font-semibold uppercase tracking-wide mb-2"
-      style={{ color, letterSpacing: '0.06em' }}
+      className="text-xs font-semibold uppercase tracking-[0.06em] lg:tracking-[0.001em] mb-2"
+      style={{ color }}
     >
       {label}
     </div>
