@@ -202,7 +202,7 @@ describe("Task Detailed Description", function () {
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
 
     await expect(
-      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, expiry, sig)
+      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, expiry, sig)
     )
       .to.emit(roseMarketplace, "TaskCreated")
       .withArgs(1, customer.address, taskDeposit);
@@ -219,7 +219,7 @@ describe("Task Detailed Description", function () {
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
 
     await expect(
-      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, "", expiry, sig)
+      roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, "", true, expiry, sig)
     ).to.be.revertedWith("Detailed description hash is required");
   });
 
@@ -230,7 +230,7 @@ describe("Task Detailed Description", function () {
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
 
     await expect(
-      roseMarketplace.connect(customer).createTask("", taskDeposit, ipfsHash, expiry, sig)
+      roseMarketplace.connect(customer).createTask("", taskDeposit, ipfsHash, true, expiry, sig)
     ).to.be.revertedWith("Title cannot be empty");
   });
 
@@ -238,7 +238,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const expiry = await getFutureExpiry();
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, expiry, sig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, expiry, sig);
 
     expect(await roseMarketplace.connect(customer).isTaskParticipant(1)).to.equal(true);
   });
@@ -247,7 +247,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Stakeholder stakes with vROSE (approve marketplace to pull vROSE for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -263,7 +263,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Stakeholder stakes with vROSE (approve marketplace to pull vROSE for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -283,7 +283,7 @@ describe("Task Detailed Description", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const expiry = await getFutureExpiry();
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, expiry, sig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, expiry, sig);
 
     expect(await roseMarketplace.connect(otherUser).isTaskParticipant(1)).to.equal(false);
   });

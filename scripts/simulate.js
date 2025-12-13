@@ -407,6 +407,7 @@ async function createTask(title, valueRose) {
     title,
     value,
     "ipfs://QmSimulationTask",
+    true, // githubIntegration
     expiry,
     signature
   );
@@ -503,6 +504,7 @@ async function runFullTaskCycle(valueRose) {
     `Simulation Task ${Date.now()}`,
     value,
     "ipfs://QmSimulation",
+    true, // githubIntegration
     createExpiry,
     createSig
   );
@@ -637,6 +639,7 @@ async function runPartialTaskCycle(options = {}) {
     title,
     value,
     description,
+    true, // githubIntegration
     createExpiry,
     createSig
   );

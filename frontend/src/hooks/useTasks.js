@@ -131,12 +131,15 @@ export const useTasks = ({ taskId = null } = {}) => {
         const [
           customer, worker, stakeholder, depositBig, stakeholderDepositBig,
           title, detailedDescriptionHash, prUrl, statusRaw, customerApproval,
-          stakeholderApproval, source, proposalId, isAuction, winningBidBig
+          stakeholderApproval, source, proposalId, isAuction, winningBidBig,
+          disputeInitiator, disputedAt, disputeReasonHash, githubIntegration
         ] = Array.isArray(task) ? task : [
           task.customer, task.worker, task.stakeholder, task.deposit,
           task.stakeholderDeposit ?? 0n, task.title, task.detailedDescriptionHash,
           task.prUrl, task.status, task.customerApproval, task.stakeholderApproval,
-          task.source ?? 0, task.proposalId ?? 0n, task.isAuction ?? false, task.winningBid ?? 0n
+          task.source ?? 0, task.proposalId ?? 0n, task.isAuction ?? false, task.winningBid ?? 0n,
+          task.disputeInitiator ?? '0x0000000000000000000000000000000000000000',
+          task.disputedAt ?? 0n, task.disputeReasonHash ?? '', task.githubIntegration ?? true
         ];
 
         return {
@@ -155,7 +158,11 @@ export const useTasks = ({ taskId = null } = {}) => {
           source: Number(source ?? 0),
           proposalId: proposalId?.toString() ?? '0',
           isAuction: Boolean(isAuction),
-          winningBid: winningBidBig?.toString() ?? '0'
+          winningBid: winningBidBig?.toString() ?? '0',
+          disputeInitiator: disputeInitiator || '0x0000000000000000000000000000000000000000',
+          disputedAt: disputedAt?.toString() ?? '0',
+          disputeReasonHash: disputeReasonHash || '',
+          githubIntegration: Boolean(githubIntegration ?? true)
         };
       })
       .filter(task => task !== null);

@@ -108,7 +108,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           address: marketplaceAddress,
           abi: RoseMarketplaceABI,
           functionName: 'createAuctionTask',
-          args: [title, tokenAmount, hash, BigInt(expiry), signature],
+          args: [title, tokenAmount, hash, useGithubIntegration, BigInt(expiry), signature],
           ...GAS_SETTINGS,
         });
 
@@ -197,7 +197,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           address: marketplaceAddress,
           abi: RoseMarketplaceABI,
           functionName: 'createTask',
-          args: [title, tokenAmount, hash, BigInt(expiry), signature],
+          args: [title, tokenAmount, hash, useGithubIntegration, BigInt(expiry), signature],
           ...GAS_SETTINGS,
         });
 

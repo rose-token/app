@@ -145,6 +145,14 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
   // Handle PR URL validation and submission
   const handleMarkCompleted = () => {
+    // Check if GitHub integration is enabled for this task (from on-chain data)
+    if (!task.githubIntegration) {
+      // Skip PR URL modal, complete directly with empty string
+      onComplete(task.id, '');
+      return;
+    }
+
+    // Show PR URL modal for GitHub-integrated tasks
     setPrUrl('');
     setPrUrlError('');
     setIsValidatingPr(false);

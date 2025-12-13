@@ -31,8 +31,8 @@ const MARKETPLACE_ABI = [
   'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
   'event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund)',
   'event TaskClosed(uint256 taskId)',
-  // Read function for full task data
-  'function tasks(uint256) view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, string title, string detailedDescriptionHash, string prUrl, uint8 status, bool customerApproval, bool stakeholderApproval, uint8 source, uint256 proposalId, bool isAuction, uint256 winningBid)',
+  // Read function for full task data (19 fields)
+  'function tasks(uint256) view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, string title, string detailedDescriptionHash, string prUrl, uint8 status, bool customerApproval, bool stakeholderApproval, uint8 source, uint256 proposalId, bool isAuction, uint256 winningBid, address disputeInitiator, uint256 disputedAt, string disputeReasonHash, bool githubIntegration)',
 ];
 
 const GOVERNANCE_ABI = [

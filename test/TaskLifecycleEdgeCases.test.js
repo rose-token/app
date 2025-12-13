@@ -203,7 +203,7 @@ describe("Task Lifecycle Edge Cases", function () {
     const sig = await generatePassportSignature(customer.address, "createTask", expiry);
 
     await expect(
-      roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash, expiry, sig)
+      roseMarketplace.connect(customer).createTask(taskTitle, 0, ipfsHash, true, expiry, sig)
     ).to.be.reverted;
   });
 
@@ -211,7 +211,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // otherUser has no vROSE, should fail (even with approval since they have no balance)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -235,7 +235,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Stakeholder stakes with vROSE (approve marketplace for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -256,7 +256,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
@@ -276,7 +276,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     const wrongDeposit = taskDeposit / 5n;
     await vRose.connect(stakeholder).approve(await roseMarketplace.getAddress(), wrongDeposit);
@@ -293,7 +293,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Stakeholder stakes with vROSE (approve marketplace for escrow)
     const stakeholderDeposit = taskDeposit / 10n;
@@ -315,7 +315,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Customer would need vROSE to stake - give them some
     const stakeholderDeposit = taskDeposit / 10n;
@@ -365,7 +365,7 @@ describe("Task Lifecycle Edge Cases", function () {
     await roseToken.connect(customer).approve(await roseMarketplace.getAddress(), taskDeposit);
     const createExpiry = await getFutureExpiry();
     const createSig = await generatePassportSignature(customer.address, "createTask", createExpiry);
-    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, createExpiry, createSig);
+    await roseMarketplace.connect(customer).createTask(taskTitle, taskDeposit, ipfsHash, true, createExpiry, createSig);
 
     // Stakeholder stakes with vROSE (approve marketplace for escrow)
     const stakeholderDeposit = taskDeposit / 10n;

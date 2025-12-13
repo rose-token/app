@@ -12,7 +12,7 @@ import { config } from '../config';
 import { approveAndMergePR, isGitHubConfigured, parsePrUrl } from './github';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 
-// Marketplace ABI - includes all 18 fields in Task struct
+// Marketplace ABI - includes all 19 fields in Task struct
 const MARKETPLACE_ABI = [
   'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
   `function tasks(uint256) external view returns (
@@ -33,7 +33,8 @@ const MARKETPLACE_ABI = [
     uint256 winningBid,
     address disputeInitiator,
     uint256 disputedAt,
-    string disputeReasonHash
+    string disputeReasonHash,
+    bool githubIntegration
   )`,
 ];
 

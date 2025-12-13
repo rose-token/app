@@ -869,6 +869,11 @@
         "type": "string"
       },
       {
+        "internalType": "bool",
+        "name": "_githubIntegration",
+        "type": "bool"
+      },
+      {
         "internalType": "uint256",
         "name": "_expiry",
         "type": "uint256"
@@ -939,6 +944,11 @@
         "internalType": "string",
         "name": "_detailedDescriptionHash",
         "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "_githubIntegration",
+        "type": "bool"
       },
       {
         "internalType": "uint256",
@@ -1357,6 +1367,11 @@
         "internalType": "string",
         "name": "disputeReasonHash",
         "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "githubIntegration",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

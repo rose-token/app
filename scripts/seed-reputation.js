@@ -108,6 +108,7 @@ async function main() {
       `Seed Task ${i + 1}`,
       TASK_VALUE,
       "ipfs://QmSeedTaskDescription",
+      true, // githubIntegration = true
       expiry,
       createSig
     );

@@ -12,7 +12,7 @@ import { query, getPool } from '../db/pool';
 import { getWsProvider } from '../utils/wsProvider';
 
 // Marketplace ABI - minimal interface for reading task data
-// Must match all 15 fields in Task struct (RoseMarketplace.sol:76-92)
+// Must match all 19 fields in Task struct (RoseMarketplace.sol)
 const MARKETPLACE_ABI = [
   `function tasks(uint256) external view returns (
     address customer,
@@ -29,7 +29,11 @@ const MARKETPLACE_ABI = [
     uint8 source,
     uint256 proposalId,
     bool isAuction,
-    uint256 winningBid
+    uint256 winningBid,
+    address disputeInitiator,
+    uint256 disputedAt,
+    string disputeReasonHash,
+    bool githubIntegration
   )`,
 ];
 

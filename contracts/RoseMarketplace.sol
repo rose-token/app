@@ -100,6 +100,8 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         address disputeInitiator;  // Address who raised the dispute
         uint256 disputedAt;        // Timestamp when dispute was raised
         string disputeReasonHash;  // IPFS hash of dispute reason
+        // GitHub integration
+        bool githubIntegration;    // Whether PR URL is required on completion
     }
     
 
@@ -248,6 +250,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
      * @param _title Short public title of the task
      * @param _tokenAmount Amount of ROSE tokens to deposit
      * @param _detailedDescriptionHash IPFS hash containing detailed task description (mandatory)
+     * @param _githubIntegration Whether PR URL is required on task completion
      * @param _expiry Signature expiry timestamp
      * @param _signature Passport verification signature from backend
      */
@@ -255,6 +258,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         string calldata _title,
         uint256 _tokenAmount,
         string calldata _detailedDescriptionHash,
+        bool _githubIntegration,
         uint256 _expiry,
         bytes calldata _signature
     ) external requiresPassport("createTask", _expiry, _signature) {
@@ -276,6 +280,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         newTask.stakeholderApproval = false;
         newTask.source = TaskSource.Customer;
         newTask.proposalId = 0;
+        newTask.githubIntegration = _githubIntegration;
 
         emit TaskCreated(taskCounter, msg.sender, _tokenAmount);
     }
@@ -286,6 +291,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
      * @param _title Short public title of the task
      * @param _maxBudget Maximum budget in ROSE tokens (deposited upfront)
      * @param _detailedDescriptionHash IPFS hash containing detailed task description (mandatory)
+     * @param _githubIntegration Whether PR URL is required on task completion
      * @param _expiry Signature expiry timestamp
      * @param _signature Passport verification signature from backend
      */
@@ -293,6 +299,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         string calldata _title,
         uint256 _maxBudget,
         string calldata _detailedDescriptionHash,
+        bool _githubIntegration,
         uint256 _expiry,
         bytes calldata _signature
     ) external requiresPassport("createTask", _expiry, _signature) {
@@ -316,6 +323,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         newTask.proposalId = 0;
         newTask.isAuction = true;
         newTask.winningBid = 0;
+        newTask.githubIntegration = _githubIntegration;
 
         emit AuctionTaskCreated(taskCounter, msg.sender, _maxBudget);
     }
@@ -355,6 +363,7 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
         newTask.stakeholderApproval = false;
         newTask.source = TaskSource.DAO;
         newTask.proposalId = _proposalId;
+        newTask.githubIntegration = true; // DAO tasks always require PR URL
 
         emit DAOTaskCreated(taskCounter, _proposer, _value, _proposalId);
         return taskCounter;
@@ -585,13 +594,17 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     /**
      * @dev Worker marks a task as completed. Customer & stakeholder still must approve to release funds & mint tokens.
      * @param _taskId ID of the task to mark completed
-     * @param _prUrl GitHub Pull Request URL for the completed work (mandatory)
+     * @param _prUrl GitHub Pull Request URL for the completed work (required only if githubIntegration is true)
      */
     function markTaskCompleted(uint256 _taskId, string calldata _prUrl) external {
         Task storage t = tasks[_taskId];
         require(t.worker == msg.sender, "Only assigned worker can mark completion");
         require(t.status == TaskStatus.InProgress, "Task must be in progress");
-        require(bytes(_prUrl).length > 0, "PR URL cannot be empty");
+
+        // Only require PR URL if GitHub integration is enabled for this task
+        if (t.githubIntegration) {
+            require(bytes(_prUrl).length > 0, "PR URL cannot be empty");
+        }
 
         t.status = TaskStatus.Completed;
         t.prUrl = _prUrl;
