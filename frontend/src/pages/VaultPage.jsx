@@ -44,7 +44,7 @@ const VaultPage = () => {
   };
 
   return (
-    <div className="max-w-6xl animate-fade-in">
+    <div className="max-w-6xl animate-page-entrance">
       {/* Header */}
       <div className="text-center mb-10">
         <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>

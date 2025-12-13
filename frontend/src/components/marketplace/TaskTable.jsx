@@ -453,7 +453,10 @@ const TaskTable = ({
 
                     {/* Status */}
                     <td className="px-2 md:px-4 py-4 md:py-5">
-                      <Badge variant={getStatusBadgeVariant(task.status, task.isAuction)}>
+                      <Badge
+                        variant={getStatusBadgeVariant(task.status, task.isAuction)}
+                        className={task.status === TaskStatus.Disputed ? 'animate-badge-pulse' : ''}
+                      >
                         {getStatusText(task.status, task.isAuction)}
                       </Badge>
                     </td>

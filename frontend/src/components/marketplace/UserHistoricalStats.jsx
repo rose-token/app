@@ -8,6 +8,7 @@ import { useAccount } from 'wagmi';
 import { useReputation } from '../../hooks/useReputation';
 import { Briefcase, Shield, Users, Clock, AlertTriangle, Coins, Star, RefreshCw } from 'lucide-react';
 import Spinner from '../ui/Spinner';
+import Stagger from '../ui/Stagger';
 
 /**
  * UserHistoricalStats - Displays user's marketplace activity metrics
@@ -82,8 +83,8 @@ const UserHistoricalStats = () => {
         // Empty state
         <EmptyState />
       ) : (
-        // Stats grid
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        // Stats grid with staggered animation
+        <Stagger delay={60} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <StatCard
             icon={<Briefcase className="h-4 w-4" />}
             label="Completed"
@@ -128,7 +129,7 @@ const UserHistoricalStats = () => {
             suffix="%"
             color="var(--rose-gold)"
           />
-        </div>
+        </Stagger>
       )}
     </div>
   );

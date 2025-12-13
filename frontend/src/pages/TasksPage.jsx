@@ -152,7 +152,7 @@ const TasksPage = () => {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-page-entrance">
       {/* Page Header */}
       <div className="mb-10 text-center">
         <h1

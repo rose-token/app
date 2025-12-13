@@ -38,7 +38,7 @@ const TaskDetailPage = () => {
 
   if (!isConnected) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         <WalletNotConnected />
       </div>
     );
@@ -46,7 +46,7 @@ const TaskDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         {/* Back Link */}
         <Link
           to="/"
@@ -69,7 +69,7 @@ const TaskDetailPage = () => {
 
   if (!task) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         {/* Back Link */}
         <Link
           to="/"
@@ -109,7 +109,7 @@ const TaskDetailPage = () => {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-page-entrance">
       {/* Back Link */}
       <Link
         to="/"
