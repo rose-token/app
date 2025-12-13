@@ -240,7 +240,7 @@ const TaskTable = ({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-6 py-5"
+        className="flex items-center justify-between px-4 md:px-6 py-4 md:py-5"
         style={{ borderBottom: '1px solid var(--border-subtle)' }}
       >
         <h2 className="font-display text-xl font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -272,7 +272,7 @@ const TaskTable = ({
       {/* Filters (collapsible) */}
       {showFilters && (
         <div
-          className="px-6 py-4 flex flex-wrap items-center gap-4"
+          className="px-4 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4"
           style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)' }}
         >
           {/* Status dropdown */}
@@ -332,22 +332,22 @@ const TaskTable = ({
         <table className="w-full">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="text-left px-3 md:px-6 py-3 md:py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Task
               </th>
-              <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="text-left px-2 md:px-4 py-3 md:py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Deposit
               </th>
-              <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="hidden md:table-cell text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Customer
               </th>
-              <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="hidden md:table-cell text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Stakeholder
               </th>
-              <th className="text-left px-4 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="text-left px-2 md:px-4 py-3 md:py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Status
               </th>
-              <th className="text-right px-6 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              <th className="text-right px-3 md:px-6 py-3 md:py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                 Action
               </th>
             </tr>
@@ -357,31 +357,31 @@ const TaskTable = ({
               // Loading skeleton
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td className="px-6 py-5">
-                    <div className="h-5 w-48 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
-                    <div className="h-3 w-24 rounded animate-pulse mt-2" style={{ background: 'var(--bg-secondary)' }} />
+                  <td className="px-3 md:px-6 py-4 md:py-5">
+                    <div className="h-5 w-32 md:w-48 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
+                    <div className="h-3 w-16 md:w-24 rounded animate-pulse mt-2" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
-                  <td className="px-4 py-5">
-                    <div className="h-5 w-24 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
+                  <td className="px-2 md:px-4 py-4 md:py-5">
+                    <div className="h-5 w-16 md:w-24 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="hidden md:table-cell px-4 py-5">
                     <div className="h-5 w-20 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
-                  <td className="px-4 py-5">
+                  <td className="hidden md:table-cell px-4 py-5">
                     <div className="h-5 w-20 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
-                  <td className="px-4 py-5">
-                    <div className="h-6 w-20 rounded-full animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
+                  <td className="px-2 md:px-4 py-4 md:py-5">
+                    <div className="h-6 w-16 md:w-20 rounded-full animate-pulse" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
-                  <td className="px-6 py-5 text-right">
-                    <div className="h-8 w-16 rounded animate-pulse ml-auto" style={{ background: 'var(--bg-secondary)' }} />
+                  <td className="px-3 md:px-6 py-4 md:py-5 text-right">
+                    <div className="h-8 w-14 md:w-16 rounded animate-pulse ml-auto" style={{ background: 'var(--bg-secondary)' }} />
                   </td>
                 </tr>
               ))
             ) : displayedTasks.length === 0 ? (
               // Empty state
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
+                <td colSpan={6} className="px-4 md:px-6 py-12 text-center">
                   <p style={{ color: 'var(--text-muted)' }}>No tasks found</p>
                   <Link to="/create-task">
                     <Button className="mt-4" size="sm">Create a Task</Button>
@@ -405,7 +405,7 @@ const TaskTable = ({
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     {/* Task title + ID */}
-                    <td className="px-6 py-5">
+                    <td className="px-3 md:px-6 py-4 md:py-5">
                       <div className="flex items-center gap-2">
                         {/* Star indicator for skill match */}
                         {hasSkillMatch(task.id, userSkills) && userSkills.length > 0 && (
@@ -419,7 +419,7 @@ const TaskTable = ({
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                           </svg>
                         )}
-                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                        <div className="font-medium text-sm md:text-base" style={{ color: 'var(--text-primary)' }}>
                           {task.description || 'Untitled Task'}
                         </div>
                       </div>
@@ -429,19 +429,19 @@ const TaskTable = ({
                     </td>
 
                     {/* Reward */}
-                    <td className="px-4 py-5">
-                      <span className="font-medium" style={{ color: 'var(--rose-gold)' }}>
+                    <td className="px-2 md:px-4 py-4 md:py-5">
+                      <span className="font-medium text-sm md:text-base" style={{ color: 'var(--rose-gold)' }}>
                         {formatReward(task.deposit)}
                       </span>
                     </td>
 
-                    {/* Customer */}
-                    <td className="px-4 py-5">
+                    {/* Customer - hidden on mobile */}
+                    <td className="hidden md:table-cell px-4 py-5">
                       <ProfileBadge address={task.customer} size="sm" showAddress={false} />
                     </td>
 
-                    {/* Stakeholder */}
-                    <td className="px-4 py-5">
+                    {/* Stakeholder - hidden on mobile */}
+                    <td className="hidden md:table-cell px-4 py-5">
                       {hasStakeholder ? (
                         <ProfileBadge address={task.stakeholder} size="sm" showAddress={false} />
                       ) : (
@@ -452,14 +452,14 @@ const TaskTable = ({
                     </td>
 
                     {/* Status */}
-                    <td className="px-4 py-5">
+                    <td className="px-2 md:px-4 py-4 md:py-5">
                       <Badge variant={getStatusBadgeVariant(task.status, task.isAuction)}>
                         {getStatusText(task.status, task.isAuction)}
                       </Badge>
                     </td>
 
                     {/* Action */}
-                    <td className="px-6 py-5 text-right">
+                    <td className="px-3 md:px-6 py-4 md:py-5 text-right">
                       {action && (
                         <Button
                           variant={action.variant}
@@ -482,7 +482,7 @@ const TaskTable = ({
       {/* Pagination Controls */}
       {pagination && pagination.totalPages > 1 && (
         <div
-          className="flex items-center justify-between px-6 py-4"
+          className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6 py-3 md:py-4"
           style={{ borderTop: '1px solid var(--border-subtle)' }}
         >
           <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -498,10 +498,10 @@ const TaskTable = ({
               Previous
             </Button>
             <span
-              className="text-sm px-3"
+              className="text-sm px-2 md:px-3"
               style={{ color: 'var(--text-secondary)' }}
             >
-              Page {pagination.page} of {pagination.totalPages}
+              {pagination.page}/{pagination.totalPages}
             </span>
             <Button
               variant="outline"
