@@ -216,8 +216,10 @@ const TaskTable = ({
   };
 
   // Status filter options
+  // Note: 'all' (Active Tasks) excludes Closed and Disputed by default
+  // Users must explicitly select Closed or Disputed to view them
   const statusOptions = [
-    { value: 'all', label: 'All Tasks' },
+    { value: 'all', label: 'Active Tasks' },
     { value: 'stakeholderRequired', label: 'Needs Stakeholder' },
     { value: 'open', label: 'Open' },
     { value: 'inProgress', label: 'In Progress' },

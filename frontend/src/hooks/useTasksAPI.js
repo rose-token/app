@@ -36,6 +36,15 @@ const STATUS_API_MAP = {
   disputed: 'disputed',
 };
 
+// Active statuses (excludes closed and disputed) - sent when 'all' filter is selected
+const ACTIVE_STATUSES = [
+  'stakeholderRequired',
+  'open',
+  'inProgress',
+  'completed',
+  'approvedPendingPayment',
+];
+
 /**
  * Paginated task list hook
  * @param {Object} options
@@ -93,10 +102,13 @@ export const useTasksAPI = ({
       params.set('sortOrder', sortOrder);
 
       // Status filter
-      if (filters.status && filters.status !== 'all') {
+      // When 'all' is selected, explicitly send active statuses (excludes closed/disputed)
+      // This ensures consistent behavior and doesn't rely on backend defaults
+      if (filters.status === 'all' || !filters.status) {
+        params.set('status', ACTIVE_STATUSES.join(','));
+      } else {
         params.set('status', STATUS_API_MAP[filters.status] || filters.status);
       }
-      // Note: When status is 'all', backend will use default (exclude closed/disputed)
 
       // myTasks filter
       if (filters.myTasks && account) {
