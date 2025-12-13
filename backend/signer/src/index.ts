@@ -19,6 +19,7 @@ import githubRoutes from './routes/github';
 import backupRoutes from './routes/backup';
 import databaseRoutes from './routes/database';
 import slowTrackRoutes from './routes/slowTrack';
+import analyticsRoutes from './routes/analytics';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -34,6 +35,8 @@ import { startDisputeWatcher } from './services/disputeWatcher';
 import { startStakerIndexer } from './services/stakerIndexer';
 import { startSlowTrackWatcher } from './services/slowTrackWatcher';
 import { startSnapshotWatcher } from './cron/snapshotWatcher';
+import { startAnalyticsWatcher } from './services/analyticsWatcher';
+import { startAnalyticsCron } from './cron/analyticsCron';
 
 const app = express();
 
@@ -77,6 +80,7 @@ app.use('/api/github', githubRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/slow-track', slowTrackRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -160,6 +164,14 @@ async function start() {
   startSlowTrackWatcher().catch((err) => {
     console.error('[SlowTrackWatcher] Failed to start:', err);
   });
+
+  // Start analytics watcher to populate dashboard metrics
+  startAnalyticsWatcher().catch((err) => {
+    console.error('[AnalyticsWatcher] Failed to start:', err);
+  });
+
+  // Start analytics cron jobs (daily rollup, hourly NAV, VP refresh)
+  startAnalyticsCron();
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);

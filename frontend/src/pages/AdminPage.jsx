@@ -318,7 +318,7 @@ const AdminPage = () => {
       </div>
 
       {/* Quick Navigation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Link
           to="/admin/disputes"
           className="rounded-[20px] p-6 transition-all hover:border-[rgba(248,113,113,0.5)]"
@@ -342,6 +342,33 @@ const AdminPage = () => {
               style={{ background: 'var(--error-bg)' }}
             >
               <span style={{ color: 'var(--error)', fontSize: '1.5rem' }}>!</span>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          to="/admin/analytics"
+          className="rounded-[20px] p-6 transition-all hover:border-[rgba(212,175,140,0.5)]"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-lg" style={{ color: 'var(--text-primary)' }}>
+                System Analytics
+              </h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                View metrics and activity trends
+              </p>
+            </div>
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(212, 175, 140, 0.15)' }}
+            >
+              <span style={{ color: 'var(--rose-gold)', fontSize: '1.5rem' }}>&#x1F4CA;</span>
             </div>
           </div>
         </Link>

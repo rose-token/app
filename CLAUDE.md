@@ -140,9 +140,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
-**Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only)
+**Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only), `/admin/analytics` Analytics Dashboard (owner-only)
 
-**Key Hooks:** useTasks (task fetching + all task actions), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers)
+**Key Hooks:** useTasks (task fetching + all task actions), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
 
 **Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
 
@@ -180,6 +180,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Backup | `/api/backup/create`, `/status`, `/restore` (owner-only, pg_dump → Pinata Hot Swaps) |
 | Database | `/api/database/tables` (GET), `/truncate` (POST, owner-only, creates backup then truncates all tables except schema_migrations) |
 | Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
+| Analytics | `/api/analytics/overview`, `/marketplace`, `/governance`, `/treasury`, `/users`, `/daily?days=30` (system-wide metrics, admin-only) |
 
 ## Backend Services
 
@@ -205,6 +206,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | database.ts | Database admin operations, truncate all tables (excludes schema_migrations) |
 | allocations.ts | Slow Track VP allocation tracking, attestation signing |
 | slowTrackWatcher.ts | Watch `VoteCastSlow`/`ProposalFinalized`, sync allocations to DB |
+| analyticsWatcher.ts | Watch Marketplace/Governance/Treasury events, sync to analytics tables |
+| analytics.ts | Analytics query functions (overview, marketplace, governance, treasury, users, daily) |
+| analyticsCron.ts | Daily rollup, hourly treasury snapshot, 15-min VP refresh |
 
 ## Scheduled Jobs
 
@@ -222,10 +226,14 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
 | Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
+| Analytics Watcher | Event-driven | TaskCreated/VoteCast/Deposited → sync to analytics tables |
+| Analytics Daily Rollup | Daily 00:00 UTC | Aggregate daily metrics |
+| Analytics Treasury Snapshot | Hourly | Snapshot NAV and allocations |
+| Analytics VP Refresh | Every 15 min | Sync voting power to analytics_users |
 
 ## Database Tables
 
-`profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`
+`profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`, `analytics_tasks`, `analytics_proposals`, `analytics_treasury`, `analytics_users`, `analytics_daily`
 
 ## Token Decimals
 
@@ -251,6 +259,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Staker Indexer | `STAKER_INDEXER_ENABLED` (true), `STAKER_INDEXER_STARTUP_LOOKBACK` (10000), `STAKER_VALIDATION_CRON` (weekly Sun 03:00 UTC) |
 | Snapshot Watcher | `SNAPSHOT_WATCHER_ENABLED` (true), `SNAPSHOT_WATCHER_STARTUP_LOOKBACK` (10000), `SNAPSHOT_WATCHER_COMPUTE_BUFFER` (300s), `SNAPSHOT_WATCHER_EXECUTE` (true) |
 | Slow Track Watcher | `SLOW_TRACK_WATCHER_ENABLED` (true), `SLOW_TRACK_WATCHER_STARTUP_LOOKBACK` (10000) |
+| Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
+| Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`

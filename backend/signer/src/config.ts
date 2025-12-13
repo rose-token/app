@@ -211,6 +211,26 @@ export const config = {
     // Blocks to look back on startup for VoteCastSlow events (default: 10000)
     startupBlockLookback: parseInt(process.env.SLOW_TRACK_WATCHER_STARTUP_LOOKBACK || '10000'),
   },
+
+  // Analytics watcher configuration (admin dashboard metrics)
+  analyticsWatcher: {
+    // Enable analytics event watching (default: true)
+    enabled: process.env.ANALYTICS_WATCHER_ENABLED !== 'false',
+    // Blocks to look back on startup (default: 50000 - ~3 days on Arbitrum)
+    startupBlockLookback: parseInt(process.env.ANALYTICS_WATCHER_STARTUP_LOOKBACK || '50000'),
+  },
+
+  // Analytics cron configuration (scheduled aggregations)
+  analyticsCron: {
+    // Enable analytics cron jobs (default: true)
+    enabled: process.env.ANALYTICS_CRON_ENABLED !== 'false',
+    // Daily rollup schedule (default: midnight UTC)
+    dailyRollupSchedule: process.env.ANALYTICS_DAILY_ROLLUP_SCHEDULE || '0 0 * * *',
+    // Treasury snapshot schedule (default: hourly)
+    treasurySnapshotSchedule: process.env.ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE || '0 * * * *',
+    // User VP refresh schedule (default: every 15 minutes)
+    vpRefreshSchedule: process.env.ANALYTICS_VP_REFRESH_SCHEDULE || '*/15 * * * *',
+  },
 };
 
 // Validate required env vars
