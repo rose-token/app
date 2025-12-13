@@ -14,9 +14,9 @@
     /* Background colors */
     --bg-primary: #1a1a1f;
     --bg-secondary: #222228;
-    --bg-card: rgba(38, 38, 45, 0.85);
+    --bg-card: rgba(38, 38, 45, 1.0);
     --bg-card-solid: #2a2a32;
-    --bg-card-hover: rgba(50, 50, 58, 0.9);
+    --bg-card-hover: rgba(50, 50, 58, 1.0);
 
     /* Border colors */
     --border-subtle: rgba(255, 255, 255, 0.08);
@@ -299,6 +299,10 @@
   }
 }
 
+[class*="backdrop-blur-[20px]"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 /* Override RainbowKit modal styles */
 div[data-rk] {
   --rk-colors-accentColor: var(--rose-gold) !important;

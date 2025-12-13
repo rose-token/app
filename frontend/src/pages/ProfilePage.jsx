@@ -30,26 +30,31 @@ const ProfilePage = () => {
 
   if (!isConnected) {
     return (
-      <div>
-        <h1
-          className="font-display text-3xl font-medium mb-6"
-          style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
-        >
-          User Profile
-        </h1>
+      <div className="animate-page-entrance">
+        <div className="mb-8 text-center">
+          <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
+            User <span className="gradient-text">Profile</span>
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
+            Manage Your Identity and Governance Position
+          </p>
+        </div>
         <WalletNotConnected />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1
-        className="font-display text-3xl font-medium mb-6"
-        style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
-      >
-        User Profile
-      </h1>
+    <div className="max-w-2xl mx-auto animate-page-entrance">
+      {/* Page Header */}
+      <div className="mb-8 text-center">
+        <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
+          User <span className="gradient-text">Profile</span>
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
+          Manage Your Identity and Governance Position
+        </p>
+      </div>
 
       {/* Profile Card */}
       {isLoading && !profile ? (
