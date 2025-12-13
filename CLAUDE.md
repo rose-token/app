@@ -368,7 +368,7 @@ import { RoseMarketplaceABI, RoseGovernanceABI, RoseTreasuryABI } from '../utils
 import { getMarketplaceContract, getGovernanceContract } from '../utils/contracts';
 ```
 
-**CI/CD:** The `deploy-signer.yml` workflow runs `npm run update-abi` before Docker build, ensuring ABIs are generated fresh from compiled contracts.
+**CI/CD:** The `deploy-signer.yml` workflow runs `npm run update-abi` before Docker build, ensuring ABIs are generated fresh from compiled contracts. Akash provider selection uses whitelist (priority) → blacklist fallback. Whitelist: if non-empty, only whitelisted providers are used; if empty, blacklist filtering applies.
 
 **Local Development:** After contract changes, run `npm run update-abi` to regenerate ABIs for both frontend and backend.
 
