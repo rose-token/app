@@ -29,6 +29,8 @@ const MARKETPLACE_ABI = [
   'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
   'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
   'event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund)',
+  // Read function for full task data
+  'function tasks(uint256) view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, string title, string detailedDescriptionHash, string prUrl, uint8 status, bool customerApproval, bool stakeholderApproval, uint8 source, uint256 proposalId, bool isAuction, uint256 winningBid)',
 ];
 
 const GOVERNANCE_ABI = [
@@ -180,14 +182,45 @@ async function handleTaskCreated(
   console.log(`[AnalyticsWatcher] TaskCreated: taskId=${taskId}, customer=${customer}`);
 
   try {
+    // Fetch full task data from contract
+    const marketplace = getMarketplaceContract();
+    const taskData = await marketplace.tasks(taskId);
+
+    const [
+      _customer, _worker, _stakeholder, _deposit, _stakeholderDeposit,
+      title, detailedDescriptionHash, _prUrl, _status, _customerApproval,
+      _stakeholderApproval, source, proposalId, isAuction, winningBid
+    ] = taskData;
+
     await query(`
-      INSERT INTO analytics_tasks (task_id, customer, deposit, status, created_at, created_block, last_event_block)
-      VALUES ($1, $2, $3, 'Created', $4, $5, $5)
+      INSERT INTO analytics_tasks (
+        task_id, customer, deposit, status, created_at, created_block, last_event_block,
+        title, detailed_description_hash, source, proposal_id, is_auction, winning_bid
+      )
+      VALUES ($1, $2, $3, 'Created', $4, $5, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (task_id) DO UPDATE SET
         customer = EXCLUDED.customer,
         deposit = EXCLUDED.deposit,
+        title = EXCLUDED.title,
+        detailed_description_hash = EXCLUDED.detailed_description_hash,
+        source = EXCLUDED.source,
+        proposal_id = EXCLUDED.proposal_id,
+        is_auction = EXCLUDED.is_auction,
+        winning_bid = EXCLUDED.winning_bid,
         last_event_block = GREATEST(analytics_tasks.last_event_block, EXCLUDED.last_event_block)
-    `, [Number(taskId), customer.toLowerCase(), deposit.toString(), timestamp.toISOString(), log.blockNumber]);
+    `, [
+      Number(taskId),
+      customer.toLowerCase(),
+      deposit.toString(),
+      timestamp.toISOString(),
+      log.blockNumber,
+      title || '',
+      detailedDescriptionHash || '',
+      Number(source),
+      proposalId ? Number(proposalId) : null,
+      isAuction,
+      winningBid.toString()
+    ]);
 
     await ensureUser(customer, timestamp);
     await query(`
@@ -209,7 +242,7 @@ async function handleTaskCreated(
 async function handleStakeholderStaked(
   taskId: bigint,
   stakeholder: string,
-  _stakeholderDeposit: bigint,
+  stakeholderDeposit: bigint,
   event: ethers.Log | ethers.ContractEventPayload
 ): Promise<void> {
   const log = extractLog(event);
@@ -221,11 +254,12 @@ async function handleStakeholderStaked(
     await query(`
       UPDATE analytics_tasks SET
         stakeholder = $2,
+        stakeholder_deposit = $3,
         status = 'Staked',
-        staked_at = $3,
-        last_event_block = $4
+        staked_at = $4,
+        last_event_block = $5
       WHERE task_id = $1
-    `, [Number(taskId), stakeholder.toLowerCase(), timestamp.toISOString(), log.blockNumber]);
+    `, [Number(taskId), stakeholder.toLowerCase(), stakeholderDeposit.toString(), timestamp.toISOString(), log.blockNumber]);
 
     await ensureUser(stakeholder, timestamp);
     await query(`
@@ -273,7 +307,7 @@ async function handleTaskClaimed(
 
 async function handleTaskCompleted(
   taskId: bigint,
-  _prUrl: string,
+  prUrl: string,
   event: ethers.Log | ethers.ContractEventPayload
 ): Promise<void> {
   const log = extractLog(event);
@@ -285,10 +319,11 @@ async function handleTaskCompleted(
     await query(`
       UPDATE analytics_tasks SET
         status = 'Completed',
-        completed_at = $2,
-        last_event_block = $3
+        pr_url = $2,
+        completed_at = $3,
+        last_event_block = $4
       WHERE task_id = $1
-    `, [Number(taskId), timestamp.toISOString(), log.blockNumber]);
+    `, [Number(taskId), prUrl || '', timestamp.toISOString(), log.blockNumber]);
 
     stats.tasksCompleted++;
     stats.lastEventBlock = log.blockNumber;
@@ -311,9 +346,12 @@ async function handleTaskReadyForPayment(
   console.log(`[AnalyticsWatcher] TaskReadyForPayment: taskId=${taskId}, worker=${worker}, amount=${amount}`);
 
   try {
+    // TaskReadyForPayment fires when both approvals are true
     await query(`
       UPDATE analytics_tasks SET
         status = 'Approved',
+        customer_approval = true,
+        stakeholder_approval = true,
         approved_at = $2,
         last_event_block = $3
       WHERE task_id = $1

@@ -20,6 +20,7 @@ import backupRoutes from './routes/backup';
 import databaseRoutes from './routes/database';
 import slowTrackRoutes from './routes/slowTrack';
 import analyticsRoutes from './routes/analytics';
+import tasksRoutes from './routes/tasks';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -81,6 +82,7 @@ app.use('/api/backup', backupRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/slow-track', slowTrackRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/tasks', tasksRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

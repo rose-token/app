@@ -142,7 +142,9 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only), `/admin/analytics` Analytics Dashboard (owner-only)
 
-**Key Hooks:** useTasks (task fetching + all task actions), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
+**Key Hooks:** useTasks (single task + action handlers), useTasksAPI (paginated task list from backend API, scales to 1000+ tasks), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
+
+**Task Table Pagination:** The task table uses backend pagination via `/api/tasks` endpoint (20 items per page). Data is sourced from `analytics_tasks` table, which is event-synced by analyticsWatcher. This scales to 100k+ tasks. Single task detail pages still use direct contract reads for authoritative data.
 
 **Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
 
@@ -181,6 +183,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Database | `/api/database/tables` (GET), `/truncate` (POST, owner-only, creates backup then truncates all tables except schema_migrations) |
 | Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
 | Analytics | `/api/analytics/overview`, `/marketplace`, `/governance`, `/treasury`, `/users`, `/daily?days=30` (system-wide metrics, admin-only) |
+| Tasks | `/api/tasks` GET (paginated list: page, limit, status, myTasks, isAuction, sortBy, sortOrder), `/api/tasks/counts` GET, `/api/tasks/:taskId` GET |
 
 ## Backend Services
 
@@ -208,6 +211,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | slowTrackWatcher.ts | Watch `VoteCastSlow`/`ProposalFinalized`, sync allocations to DB |
 | analyticsWatcher.ts | Watch Marketplace/Governance/Treasury events, sync to analytics tables |
 | analytics.ts | Analytics query functions (overview, marketplace, governance, treasury, users, daily) |
+| tasks.ts | Paginated task queries from analytics_tasks table (getTaskList, getTaskById, getTaskCountByStatus) |
 | analyticsCron.ts | Daily rollup, hourly treasury snapshot, 15-min VP refresh |
 
 ## Scheduled Jobs

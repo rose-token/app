@@ -144,6 +144,9 @@ const TaskTable = ({
   onCompleteTask,
   onApproveTask,
   onAcceptPayment,
+  // Optional pagination props
+  pagination = null,
+  onPageChange = null,
 }) => {
   const navigate = useNavigate();
   const { address: account } = useAccount();
@@ -473,6 +476,42 @@ const TaskTable = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {pagination && pagination.totalPages > 1 && (
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{ borderTop: '1px solid var(--border-subtle)' }}
+        >
+          <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Showing {displayedTasks.length} of {pagination.total} tasks
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasPrev}
+              onClick={() => onPageChange?.(pagination.page - 1)}
+            >
+              Previous
+            </Button>
+            <span
+              className="text-sm px-3"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasNext}
+              onClick={() => onPageChange?.(pagination.page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
