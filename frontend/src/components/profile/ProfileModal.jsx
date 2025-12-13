@@ -6,9 +6,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
+import { useIPFSImage } from '../../hooks/useIPFSImage';
 import SkillSelect from './SkillSelect';
 import { X, Upload, Loader2, AlertCircle, Camera, Info } from 'lucide-react';
-import { uploadFileToIPFS, getGatewayUrl } from '../../utils/ipfs/pinataService';
+import { uploadFileToIPFS } from '../../utils/ipfs/pinataService';
 
 /**
  * ProfileModal - Modal for creating/editing profile
@@ -37,6 +38,11 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // Fetch existing IPFS avatar with authentication (required for private Pinata files)
+  const { blobUrl: existingAvatarBlobUrl } = useIPFSImage(
+    formData.avatarUrl?.startsWith('ipfs://') ? formData.avatarUrl : null
+  );
 
   // Initialize form with existing profile data
   useEffect(() => {
@@ -213,14 +219,9 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
                   border: '2px dashed var(--border-color)',
                 }}
               >
-                {avatarPreview || formData.avatarUrl ? (
+                {avatarPreview || existingAvatarBlobUrl || formData.avatarUrl ? (
                   <img
-                    src={
-                      avatarPreview ||
-                      (formData.avatarUrl.startsWith('ipfs://')
-                        ? getGatewayUrl(formData.avatarUrl.replace('ipfs://', ''))
-                        : formData.avatarUrl)
-                    }
+                    src={avatarPreview || existingAvatarBlobUrl || formData.avatarUrl}
                     alt="Avatar preview"
                     className="w-full h-full object-cover"
                   />

@@ -6,10 +6,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../../hooks/useProfile';
+import { useIPFSImage } from '../../hooks/useIPFSImage';
 import { SkillBadgeList } from './SkillBadge';
 import ReputationStats from './ReputationStats';
 import { ExternalLink, Github, Twitter, Globe, Copy, Check, Edit2 } from 'lucide-react';
-import { getGatewayUrl } from '../../utils/ipfs/pinataService';
 
 /**
  * Generate a deterministic color from an address
@@ -136,6 +136,11 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
   const color = getAddressColor(address);
   const initials = getInitials(displayName, address);
 
+  // Fetch IPFS avatar with authentication (required for private Pinata files)
+  const { blobUrl: avatarBlobUrl } = useIPFSImage(
+    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
+  );
+
   const hasSocialLinks = website || twitter || github;
 
   return (
@@ -149,11 +154,7 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
         >
           {avatarUrl ? (
             <img
-              src={
-                avatarUrl.startsWith('ipfs://')
-                  ? getGatewayUrl(avatarUrl.replace('ipfs://', ''))
-                  : avatarUrl
-              }
+              src={avatarBlobUrl || avatarUrl}
               alt={displayName || 'Profile'}
               className="w-full h-full object-cover"
             />

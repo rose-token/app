@@ -382,3 +382,34 @@ export const fetchDisputeReason = async (ipfsHash) => {
     throw new Error('Failed to fetch dispute reason from IPFS');
   }
 };
+
+/**
+ * Fetch image/binary content from IPFS with authentication
+ * Used for private files that require JWT auth (e.g., profile avatars)
+ * @param {string} cid - IPFS CID
+ * @returns {Promise<Blob>} Image blob
+ */
+export const fetchIPFSImage = async (cid) => {
+  const fetchWithRetry = async (retries) => {
+    try {
+      const response = await axios.get(getGatewayUrl(cid), {
+        headers: getAuthHeaders(),
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchWithRetry(retries - 1);
+      }
+      throw error;
+    }
+  };
+
+  try {
+    return await fetchWithRetry(MAX_RETRIES);
+  } catch (error) {
+    console.error('Error fetching image from IPFS:', error);
+    throw new Error('Failed to fetch image from IPFS');
+  }
+};
