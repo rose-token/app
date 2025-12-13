@@ -92,14 +92,14 @@ const MyVotesPage = () => {
 
   if (!isConnected) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         <WalletNotConnected />
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-page-entrance">
       {/* Back Link */}
       <Link
         to="/governance"

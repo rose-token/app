@@ -1,5 +1,6 @@
 import React from 'react';
 import { Skeleton } from '../ui/skeleton';
+import Stagger from '../ui/Stagger';
 
 const StatCard = ({ label, value, isLoading, prefix = '', suffix = '', highlight = false, subtext = null, tooltip = null }) => (
   <div
@@ -68,7 +69,7 @@ const VaultStats = ({
         Vault Overview
       </h2>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <Stagger delay={75} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
           label="ROSE Price"
           value={formatUSD(rosePrice)}
@@ -99,7 +100,7 @@ const VaultStats = ({
             />
           </>
         )}
-      </div>
+      </Stagger>
     </div>
   );
 };

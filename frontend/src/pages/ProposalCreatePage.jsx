@@ -139,14 +139,14 @@ const ProposalCreatePage = () => {
 
   if (!isConnected) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         <WalletNotConnected />
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in max-w-3xl mx-auto">
+    <div className="animate-page-entrance max-w-3xl mx-auto">
       {/* Back Link */}
       <Link
         to="/governance"

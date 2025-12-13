@@ -67,7 +67,7 @@ const ProposalDetailPage = () => {
 
   if (!isConnected) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         <WalletNotConnected />
       </div>
     );
@@ -75,7 +75,7 @@ const ProposalDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="animate-fade-in text-center py-12">
+      <div className="animate-page-entrance text-center py-12">
         <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full mx-auto mb-4" />
         <p style={{ color: 'var(--text-muted)' }}>Loading proposal...</p>
       </div>
@@ -84,7 +84,7 @@ const ProposalDetailPage = () => {
 
   if (error || !proposal) {
     return (
-      <div className="animate-fade-in">
+      <div className="animate-page-entrance">
         <div className="card text-center py-12" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
           <p className="mb-4" style={{ color: 'var(--error)' }}>
             {error || 'Proposal not found'}
@@ -106,7 +106,7 @@ const ProposalDetailPage = () => {
   const canCancel = (isPending || isActive) && proposal.isProposer;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-page-entrance">
       {/* Back Link */}
       <Link
         to="/governance"

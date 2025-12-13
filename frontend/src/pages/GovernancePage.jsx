@@ -101,7 +101,7 @@ const GovernancePage = () => {
     : 0;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-page-entrance">
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="font-display text-4xl font-medium tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>

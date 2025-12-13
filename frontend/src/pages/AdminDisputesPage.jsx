@@ -180,7 +180,7 @@ const AdminDisputesPage = () => {
   // Show wallet not connected
   if (!isConnected) {
     return (
-      <div className="max-w-6xl animate-fade-in">
+      <div className="max-w-6xl animate-page-entrance">
         <WalletNotConnected />
       </div>
     );
@@ -189,7 +189,7 @@ const AdminDisputesPage = () => {
   // Show loading while checking admin status
   if (adminLoading) {
     return (
-      <div className="max-w-6xl animate-fade-in flex justify-center items-center min-h-[400px]">
+      <div className="max-w-6xl animate-page-entrance flex justify-center items-center min-h-[400px]">
         <div className="text-center">
           <div
             className="inline-block w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
@@ -212,7 +212,7 @@ const AdminDisputesPage = () => {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="max-w-6xl animate-fade-in">
+    <div className="max-w-6xl animate-page-entrance">
       {/* Header */}
       <div className="text-center mb-10">
         <h1
