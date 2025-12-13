@@ -68,6 +68,15 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // Extract avatarUrl early for hook (must be before any conditional returns)
+  const avatarUrl = profile?.avatarUrl;
+
+  // Fetch IPFS avatar with authentication (required for private Pinata files)
+  // Must be called before any conditional returns to follow React's Rules of Hooks
+  const { blobUrl: avatarBlobUrl } = useIPFSImage(
+    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
+  );
+
   const isOwnProfile = connectedAddress?.toLowerCase() === address?.toLowerCase();
 
   // Load profile
@@ -127,7 +136,6 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
   }
 
   const displayName = profile?.displayName || profile?.username;
-  const avatarUrl = profile?.avatarUrl;
   const bio = profile?.bio;
   const skills = profile?.skills || [];
   const website = profile?.website;
@@ -135,12 +143,6 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
   const github = profile?.github;
   const color = getAddressColor(address);
   const initials = getInitials(displayName, address);
-
-  // Fetch IPFS avatar with authentication (required for private Pinata files)
-  const { blobUrl: avatarBlobUrl } = useIPFSImage(
-    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
-  );
-
   const hasSocialLinks = website || twitter || github;
 
   return (

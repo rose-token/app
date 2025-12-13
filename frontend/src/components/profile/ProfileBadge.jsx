@@ -6,9 +6,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useProfile } from '../../hooks/useProfile';
+import { useIPFSImage } from '../../hooks/useIPFSImage';
 import { User } from 'lucide-react';
 import ProfileViewModal from './ProfileViewModal';
-import { getGatewayUrl } from '../../utils/ipfs/pinataService';
 
 /**
  * Generate a deterministic color from an address
@@ -73,6 +73,14 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
+  // Extract avatarUrl early for hook (must be before any conditional returns)
+  const avatarUrl = profile?.avatarUrl;
+
+  // Fetch IPFS avatar with authentication (required for private Pinata files)
+  const { blobUrl: avatarBlobUrl } = useIPFSImage(
+    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
+  );
+
   // Fetch profile
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +144,6 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
 
   const config = sizeConfig[size] || sizeConfig.sm;
   const displayName = profile?.displayName || profile?.username;
-  const avatarUrl = profile?.avatarUrl;
   const color = getAddressColor(address);
   const initials = getInitials(displayName, address);
 
@@ -160,12 +167,9 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
             style={{ backgroundColor: 'var(--bg-tertiary)' }}
           />
         ) : avatarUrl ? (
-          // Profile image
+          // Profile image (uses authenticated blob URL from useIPFSImage hook)
           <img
-            src={avatarUrl.startsWith('ipfs://')
-              ? getGatewayUrl(avatarUrl.replace('ipfs://', ''))
-              : avatarUrl
-            }
+            src={avatarBlobUrl || avatarUrl}
             alt={displayName || 'Profile'}
             className="w-full h-full object-cover"
             onError={(e) => {
