@@ -6,7 +6,7 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
 import { useReputation } from '../../hooks/useReputation';
-import { Briefcase, Shield, Users, Clock, AlertTriangle, Coins, Star, RefreshCw } from 'lucide-react';
+import { Briefcase, RefreshCw } from 'lucide-react';
 import Spinner from '../ui/Spinner';
 import Stagger from '../ui/Stagger';
 
@@ -86,44 +86,37 @@ const UserHistoricalStats = () => {
         // Stats grid with staggered animation
         <Stagger delay={60} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <StatCard
-            icon={<Briefcase className="h-5 w-5" />}
             label="Completed"
             value={reputation?.tasksAsWorker || 0}
             color="var(--success)"
           />
           <StatCard
-            icon={<Shield className="h-5 w-5" />}
             label="Validated"
             value={reputation?.tasksAsStakeholder || 0}
             color="var(--info)"
           />
           <StatCard
-            icon={<Users className="h-5 w-5" />}
             label="Created"
             value={reputation?.tasksAsCustomer || 0}
             color="var(--warning)"
           />
           <StatCard
-            icon={<Clock className="h-5 w-5" />}
             label="In Progress"
             value={inProgress}
             color="var(--rose-gold)"
           />
           <StatCard
-            icon={<AlertTriangle className="h-5 w-5" />}
             label="Disputed"
             value={reputation?.disputesInitiated || 0}
             color="var(--error)"
           />
           <StatCard
-            icon={<Coins className="h-5 w-5" />}
             label="Earned"
             value={formatEarned(reputation?.totalEarned || '0')}
             suffix="ROSE"
             color="var(--rose-pink)"
           />
           <StatCard
-            icon={<Star className="h-5 w-5" />}
             label="Rep Score"
             value={reputation?.reputationScore || 0}
             suffix="%"
@@ -138,7 +131,7 @@ const UserHistoricalStats = () => {
 /**
  * Individual stat card
  */
-const StatCard = ({ icon, label, value, suffix, color }) => (
+const StatCard = ({ label, value, suffix, color }) => (
   <div
     className="rounded-xl p-4 text-center transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)]"
     style={{
@@ -147,16 +140,10 @@ const StatCard = ({ icon, label, value, suffix, color }) => (
     }}
   >
     <div
-      className="flex items-center justify-center gap-1.5 mb-2"
-      style={{ color }}
+      className="text-xs font-semibold uppercase tracking-wide mb-2"
+      style={{ color, letterSpacing: '0.06em' }}
     >
-      {icon}
-      <span
-        className="text-xs font-semibold uppercase tracking-wide"
-        style={{ letterSpacing: '0.06em' }}
-      >
-        {label}
-      </span>
+      {label}
     </div>
     <div
       className="font-display text-xl font-semibold"

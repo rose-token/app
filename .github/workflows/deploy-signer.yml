@@ -262,13 +262,29 @@ jobs:
           echo "Deployment created: dseq=$DSEQ"
           echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
 
+          # Provider whitelist - preferred providers (takes priority over blacklist)
+          # If whitelist is non-empty, ONLY whitelisted providers are considered
+          PROVIDER_WHITELIST=(
+            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"  # provider.europlots.com
+          )
+
           # Provider blacklist - unreliable providers (by wallet address)
+          # Only used when whitelist is empty
           PROVIDER_BLACKLIST=(
             "akash1r2yz5fzkk9gt0r3mk9u2c29q5mmtef050cryak"  # provider.gpu.subangle.com
-            # "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc" # provider.europlots.com
-            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp" # forbidden
-            "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj" # forbidden
+            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp"  # forbidden
+            "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj"  # forbidden
           )
+
+          is_whitelisted() {
+            local addr="$1"
+            for whitelisted in "${PROVIDER_WHITELIST[@]}"; do
+              if [ "$addr" = "$whitelisted" ]; then
+                return 0  # true, is whitelisted
+              fi
+            done
+            return 1  # false, not whitelisted
+          }
 
           is_blacklisted() {
             local addr="$1"
@@ -278,6 +294,27 @@ jobs:
               fi
             done
             return 1  # false, not blacklisted
+          }
+
+          # Returns 0 (true) if provider should be used, 1 (false) if skipped
+          # Whitelist takes priority: if whitelist non-empty, only use whitelisted providers
+          should_use_provider() {
+            local addr="$1"
+            if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+              # Whitelist mode: only use whitelisted providers
+              if is_whitelisted "$addr"; then
+                return 0  # use this provider
+              else
+                return 1  # skip, not whitelisted
+              fi
+            else
+              # Blacklist mode: use all except blacklisted
+              if is_blacklisted "$addr"; then
+                return 1  # skip, blacklisted
+              else
+                return 0  # use this provider
+              fi
+            fi
           }
 
           # Step 3: Poll for bids
@@ -315,8 +352,12 @@ jobs:
           for i in $(seq 0 $((TOTAL_BIDS - 1))); do
             CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
 
-            if is_blacklisted "$CANDIDATE"; then
-              echo "Skipping blacklisted: $CANDIDATE"
+            if ! should_use_provider "$CANDIDATE"; then
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Skipping non-whitelisted: $CANDIDATE"
+              else
+                echo "Skipping blacklisted: $CANDIDATE"
+              fi
               continue
             fi
 
@@ -363,8 +404,14 @@ jobs:
 
           if [ "$LEASE_CREATED" = false ]; then
             if [ "$PROVIDERS_TRIED" -eq 0 ]; then
-              echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
-              printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Error: No whitelisted providers among $TOTAL_BIDS bid(s)"
+                echo "Whitelist:"
+                printf '  - %s\n' "${PROVIDER_WHITELIST[@]}"
+              else
+                echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
+                printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+              fi
             else
               echo "Error: All $PROVIDERS_TRIED provider(s) rejected the lease"
             fi
