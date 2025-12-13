@@ -30,6 +30,7 @@ const MARKETPLACE_ABI = [
   'event TaskReadyForPayment(uint256 taskId, address indexed worker, uint256 amount)',
   'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
   'event TaskCancelled(uint256 indexed taskId, address indexed cancelledBy, uint256 customerRefund, uint256 stakeholderRefund)',
+  'event TaskClosed(uint256 taskId)',
   // Read function for full task data
   'function tasks(uint256) view returns (address customer, address worker, address stakeholder, uint256 deposit, uint256 stakeholderDeposit, string title, string detailedDescriptionHash, string prUrl, uint8 status, bool customerApproval, bool stakeholderApproval, uint8 source, uint256 proposalId, bool isAuction, uint256 winningBid)',
 ];
@@ -434,6 +435,32 @@ async function handleTaskCancelled(
   }
 }
 
+async function handleTaskClosed(
+  taskId: bigint,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] TaskClosed: taskId=${taskId}`);
+
+  try {
+    await query(`
+      UPDATE analytics_tasks SET
+        status = 'Closed',
+        closed_at = $2,
+        last_event_block = $3
+      WHERE task_id = $1
+    `, [Number(taskId), timestamp.toISOString(), log.blockNumber]);
+
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] TaskClosed error:`, error);
+  }
+}
+
 // ============================================================
 // Governance Event Handlers
 // ============================================================
@@ -778,6 +805,13 @@ function setupMarketplaceListeners(): void {
     });
   });
 
+  wsMarketplace.on('TaskClosed', (taskId, event) => {
+    handleTaskClosed(taskId, event).catch(err => {
+      console.error('[AnalyticsWatcher] TaskClosed handler error:', err);
+      stats.lastError = err instanceof Error ? err.message : String(err);
+    });
+  });
+
   console.log('[AnalyticsWatcher] Marketplace listeners setup');
 }
 
@@ -947,6 +981,14 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
       if ('args' in event && event.args) {
         const [taskId, cancelledBy, customerRefund, stakeholderRefund] = event.args as unknown as [bigint, string, bigint, bigint];
         await handleTaskCancelled(taskId, cancelledBy, customerRefund, stakeholderRefund, event as ethers.EventLog);
+      }
+    }
+
+    const taskClosedEvents = await marketplace.queryFilter('TaskClosed', start, end);
+    for (const event of taskClosedEvents) {
+      if ('args' in event && event.args) {
+        const [taskId] = event.args as unknown as [bigint];
+        await handleTaskClosed(taskId, event as ethers.EventLog);
       }
     }
 
