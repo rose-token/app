@@ -518,6 +518,7 @@ import {
   verifyRevocationSignature,
   getEligibleDelegates,
 } from '../services/delegationV2';
+import { ensureStakerExists } from '../services/stakerIndexer';
 import {
   DelegationV2Request,
   DelegationV2Response,
@@ -741,7 +742,8 @@ router.get('/v2/nonce/:address', async (req: Request, res: Response) => {
 
 /**
  * GET /api/delegation/v2/opt-in/:address
- * Check if an address has opted in to receive delegations
+ * Check if an address has opted in to receive delegations.
+ * Also ensures the user is in stakers table if opted in (fixes delegates not showing in list).
  */
 router.get('/v2/opt-in/:address', async (req: Request, res: Response) => {
   try {
@@ -752,6 +754,16 @@ router.get('/v2/opt-in/:address', async (req: Request, res: Response) => {
     }
 
     const optedIn = await verifyDelegateOptIn(address);
+
+    // If opted in, ensure user is in stakers table (fixes delegates not showing in list)
+    if (optedIn) {
+      try {
+        await ensureStakerExists(address);
+      } catch (err) {
+        // Log but don't fail the request - opt-in status check still succeeded
+        console.warn(`[DelegationV2] Failed to ensure staker exists for ${address}:`, err);
+      }
+    }
 
     return res.json({
       delegate: ethers.getAddress(address),

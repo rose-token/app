@@ -448,6 +448,51 @@ export async function validateStakerCache(): Promise<{ mismatches: number; valid
 }
 
 /**
+ * Ensure a staker exists in the database by reading on-chain stake.
+ * Used when a user opts in to delegation but wasn't caught by event indexer.
+ * Idempotent - safe to call multiple times.
+ * Returns true if staker exists (or was added), false if no stake on-chain.
+ */
+export async function ensureStakerExists(address: string): Promise<boolean> {
+  const normalizedAddress = address.toLowerCase();
+
+  // Check if already exists
+  const existing = await query(
+    'SELECT 1 FROM stakers WHERE address = $1',
+    [normalizedAddress]
+  );
+
+  if (existing.rows.length > 0) {
+    return true; // Already tracked
+  }
+
+  // Read on-chain stake
+  const governance = getGovernanceContract();
+  const stakedRose: bigint = await governance.stakedRose(address);
+
+  if (stakedRose === 0n) {
+    return false; // No stake, no need to track
+  }
+
+  // Get reputation and current block
+  const reputation = await getReputationNew(normalizedAddress);
+  const votingPower = calculateVotingPower(stakedRose, reputation);
+  const currentBlock = await getProvider().getBlockNumber();
+
+  // Insert staker (use ON CONFLICT to handle race conditions)
+  await query(`
+    INSERT INTO stakers (address, staked_rose, voting_power, reputation, first_deposit_block, last_updated_block)
+    VALUES ($1, $2, $3, $4, $5, $5)
+    ON CONFLICT (address) DO NOTHING
+  `, [normalizedAddress, stakedRose.toString(), votingPower.toString(), reputation, currentBlock]);
+
+  console.log(`[StakerIndexer] Added missing staker ${normalizedAddress} (stake: ${ethers.formatEther(stakedRose)} ROSE)`);
+  stats.totalStakers++;
+  stats.activeStakers++;
+  return true;
+}
+
+/**
  * Refresh voting power for a specific staker (e.g., after reputation change)
  */
 export async function refreshStakerVP(address: string): Promise<void> {

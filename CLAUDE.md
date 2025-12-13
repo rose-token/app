@@ -205,6 +205,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | depositWatcher.ts | Watch `Deposited`, diversify |
 | redemptionWatcher.ts | Watch `RedemptionRequested`, liquidate, fulfill |
 | disputeWatcher.ts | Watch `TaskDisputed`/`DisputeResolved`, sync to DB |
+| delegateOptInWatcher.ts | Watch `DelegateOptInChanged`, sync missing stakers to DB (fixes delegates not showing in list) |
 | auction.ts | Off-chain bids, winner selection |
 | dispute.ts | Dispute queries, on-chain event recording |
 | backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
@@ -230,6 +231,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
 | Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
+| Delegate Opt-In Watcher | Event-driven | DelegateOptInChanged → sync missing stakers to DB |
 | Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
 | Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
 | Analytics Watcher | Event-driven | TaskCreated/AuctionTaskCreated/VoteCast/Deposited → sync to analytics tables |
@@ -262,6 +264,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegation | `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
 | VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
 | Dispute Watcher | `DISPUTE_WATCHER_ENABLED` (default: true), `DISPUTE_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
+| Delegate Opt-In Watcher | `DELEGATE_OPTIN_WATCHER_ENABLED` (default: true), `DELEGATE_OPTIN_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
 | Staker Indexer | `STAKER_INDEXER_ENABLED` (true), `STAKER_INDEXER_STARTUP_LOOKBACK` (10000), `STAKER_VALIDATION_CRON` (weekly Sun 03:00 UTC) |
 | Snapshot Watcher | `SNAPSHOT_WATCHER_ENABLED` (true), `SNAPSHOT_WATCHER_STARTUP_LOOKBACK` (10000), `SNAPSHOT_WATCHER_COMPUTE_BUFFER` (300s), `SNAPSHOT_WATCHER_EXECUTE` (true) |
 | Slow Track Watcher | `SLOW_TRACK_WATCHER_ENABLED` (true), `SLOW_TRACK_WATCHER_STARTUP_LOOKBACK` (10000) |
@@ -344,7 +347,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5.0, 1 run + viaIR optimizer. Networks: Arbitrum Sepolia (421614), Arbitrum One (42161). Frontend: Vite 7.x + wagmi + viem + RainbowKit. Backend: Express + TypeScript + PostgreSQL + ethers.js.
 
-**WebSocket Events:** All 8 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. HTTP provider is kept for `queryFilter` operations (startup catch-up). Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
+**WebSocket Events:** All 9 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. HTTP provider is kept for `queryFilter` operations (startup catch-up). Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
 
 ## Backend ABI Workflow
 

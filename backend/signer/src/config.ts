@@ -164,6 +164,14 @@ export const config = {
     startupBlockLookback: parseInt(process.env.DISPUTE_WATCHER_STARTUP_LOOKBACK || '10000'),
   },
 
+  // Delegate opt-in watcher configuration (fix delegates not showing in list after opt-in)
+  delegateOptInWatcher: {
+    // Enable delegate opt-in watching (default: true)
+    enabled: process.env.DELEGATE_OPTIN_WATCHER_ENABLED !== 'false',
+    // Blocks to look back on startup (default: 10000 - catch up on recent opt-ins)
+    startupBlockLookback: parseInt(process.env.DELEGATE_OPTIN_WATCHER_STARTUP_LOOKBACK || '10000'),
+  },
+
   // Database backup configuration (Pinata Hot Swaps)
   backup: {
     // Enable backup system (default: true)
