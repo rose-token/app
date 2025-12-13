@@ -23,6 +23,7 @@ const MARKETPLACE_EVENTS = parseAbi([
   'event TaskCreated(uint256 taskId, address indexed customer, uint256 deposit)',
   'event StakeholderStaked(uint256 taskId, address indexed stakeholder, uint256 deposit)',
   'event StakeholderFeeEarned(uint256 taskId, address indexed stakeholder, uint256 fee)',
+  'event TaskDisputed(uint256 indexed taskId, address indexed initiator, string reasonHash, uint256 timestamp)',
 ]);
 
 // Cache for reputation data
@@ -232,6 +233,7 @@ export const useReputation = (address) => {
         stakeholderEvents,
         claimedEvents,
         stakeholderFeeEvents,
+        disputeEvents,
       ] = await Promise.all([
         // Payments received (as worker)
         client.getLogs({
@@ -277,6 +279,15 @@ export const useReputation = (address) => {
           fromBlock: 'earliest',
           toBlock: 'latest',
         }).catch(() => []),
+
+        // Disputes initiated by user
+        client.getLogs({
+          address: MARKETPLACE_ADDRESS,
+          event: MARKETPLACE_EVENTS[7], // TaskDisputed
+          args: { initiator: address },
+          fromBlock: 'earliest',
+          toBlock: 'latest',
+        }).catch(() => []),
       ]);
 
       // Calculate totals (worker payments + stakeholder fees)
@@ -298,6 +309,7 @@ export const useReputation = (address) => {
         tasksAsStakeholder: stakeholderEvents.length,
         tasksAsCustomer: taskCreatedEvents.length,
         tasksClaimed: claimedEvents.length,
+        disputesInitiated: disputeEvents.length,
         totalEarned: formatUnits(totalEarned, 18),
         totalEarnedRaw: totalEarned.toString(),
         // On-chain governance data (merged in below)
