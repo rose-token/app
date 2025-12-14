@@ -56,6 +56,7 @@ export const useAvailableVP = (options = {}) => {
 
   // Cache tracking
   const lastFetched = useRef(null);
+  const lastVotingPower = useRef(null);
   const fetchInProgress = useRef(false);
   const debounceTimeout = useRef(null);
 
@@ -65,6 +66,12 @@ export const useAvailableVP = (options = {}) => {
    */
   const fetchAvailableVP = useCallback(async (bypassCache = false) => {
     if (!account || !votingPower) return;
+
+    // Invalidate cache if votingPower changed (e.g., from initial '0' to real value)
+    if (lastVotingPower.current !== votingPower) {
+      lastFetched.current = null;
+      lastVotingPower.current = votingPower;
+    }
 
     // Skip if data is fresh and not bypassing cache (inline check to avoid dependency issues)
     const isFresh = lastFetched.current && (Date.now() - lastFetched.current) < staleTime;
