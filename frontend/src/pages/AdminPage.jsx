@@ -7,6 +7,7 @@ import { useWhitelist } from '../hooks/useWhitelist';
 import { useBackup } from '../hooks/useBackup';
 import { usePause } from '../hooks/usePause';
 import { useTruncateDatabase } from '../hooks/useTruncateDatabase';
+import { useCamelotLP } from '../hooks/useCamelotLP';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
@@ -49,6 +50,13 @@ const AdminPage = () => {
     error: truncateError,
     clearError: clearTruncateError,
   } = useTruncateDatabase();
+  const {
+    getStatus: getCamelotStatus,
+    collectAllFees,
+    isLoading: camelotLoading,
+    error: camelotError,
+    clearError: clearCamelotError,
+  } = useCamelotLP();
 
   // Pause state
   const [pauseConfirm, setPauseConfirm] = useState(false);
@@ -76,6 +84,10 @@ const AdminPage = () => {
   const [truncateConfirm, setTruncateConfirm] = useState(false);
   const [truncateResult, setTruncateResult] = useState(null);
 
+  // Camelot LP state
+  const [camelotStatus, setCamelotStatus] = useState(null);
+  const [collectResult, setCollectResult] = useState(null);
+
   // Redirect non-admins to home
   useEffect(() => {
     if (!adminLoading && !isAdmin && isConnected) {
@@ -98,6 +110,30 @@ const AdminPage = () => {
         .catch((err) => console.error('Failed to fetch backup status:', err));
     }
   }, [isAdmin, getBackupStatus]);
+
+  // Fetch Camelot LP status when admin is confirmed
+  useEffect(() => {
+    if (isAdmin) {
+      getCamelotStatus()
+        .then(setCamelotStatus)
+        .catch((err) => console.error('Failed to fetch Camelot LP status:', err));
+    }
+  }, [isAdmin, getCamelotStatus]);
+
+  // Handle collecting Camelot LP fees
+  const handleCollectFees = async () => {
+    try {
+      clearCamelotError();
+      setCollectResult(null);
+      const result = await collectAllFees();
+      setCollectResult(result);
+      // Refresh status after collection
+      const newStatus = await getCamelotStatus();
+      setCamelotStatus(newStatus);
+    } catch (err) {
+      console.error('Failed to collect fees:', err);
+    }
+  };
 
   // Handle adding a new address to whitelist
   const handleAddAddress = async (e) => {
@@ -1051,6 +1087,238 @@ const AdminPage = () => {
         {restoreConfirm && (
           <p className="mt-3 text-sm" style={{ color: 'var(--error)' }}>
             Warning: This will OVERWRITE the entire database. Are you sure?
+          </p>
+        )}
+      </div>
+
+      {/* Camelot LP Fee Collection Card */}
+      <div
+        id="camelot-lp-section"
+        className="rounded-[20px] backdrop-blur-[20px] p-7 mb-6 transition-all hover:border-[rgba(74,222,128,0.35)]"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        <h2
+          className="font-display text-2xl font-medium mb-4"
+          style={{ letterSpacing: '-0.02em', color: 'var(--text-primary)' }}
+        >
+          Camelot LP Fee Collection
+        </h2>
+
+        <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
+          Collect trading fees from Camelot DEX LP positions and send them to Treasury.
+          Fee collection runs automatically daily at 06:00 UTC. You can also trigger manual collection.
+        </p>
+
+        {camelotError && (
+          <ErrorMessage message={camelotError} onDismiss={clearCamelotError} />
+        )}
+
+        {/* Status */}
+        {camelotStatus && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{ background: 'var(--bg-primary)' }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+              LP Status
+            </h4>
+            <div className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                <span className="font-medium">Enabled:</span>{' '}
+                <span style={{ color: camelotStatus.enabled ? 'var(--success)' : 'var(--error)' }}>
+                  {camelotStatus.enabled ? 'Yes' : 'No'}
+                </span>
+              </p>
+              <p>
+                <span className="font-medium">Configured:</span>{' '}
+                <span style={{ color: camelotStatus.isConfigured ? 'var(--success)' : 'var(--error)' }}>
+                  {camelotStatus.isConfigured ? 'Yes' : 'No'}
+                </span>
+              </p>
+              {camelotStatus.positionManager && (
+                <p>
+                  <span className="font-medium">Position Manager:</span>{' '}
+                  <span className="font-mono text-xs">{camelotStatus.positionManager}</span>
+                </p>
+              )}
+              {camelotStatus.treasury && (
+                <p>
+                  <span className="font-medium">Treasury:</span>{' '}
+                  <span className="font-mono text-xs">{camelotStatus.treasury}</span>
+                </p>
+              )}
+              <p>
+                <span className="font-medium">Cron Schedule:</span>{' '}
+                {camelotStatus.cronSchedule || '0 6 * * * (6am UTC)'}
+              </p>
+              <p>
+                <span className="font-medium">Positions:</span>{' '}
+                {camelotStatus.positionCount || 0}
+              </p>
+            </div>
+
+            {/* Position Details */}
+            {camelotStatus.positions && camelotStatus.positions.length > 0 && (
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <h5 className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                  Position Details
+                </h5>
+                <div className="space-y-2">
+                  {camelotStatus.positions.map((pos) => (
+                    <div
+                      key={pos.tokenId}
+                      className="p-3 rounded-lg text-sm"
+                      style={{ background: 'var(--bg-card)' }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                          Position #{pos.tokenId}
+                        </span>
+                        <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {pos.token0Symbol}/{pos.token1Symbol}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        <div>
+                          <span className="font-medium">Liquidity:</span>{' '}
+                          {pos.liquidity !== '0' ? pos.liquidity : '-'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Pending Fees:</span>
+                        </div>
+                        <div className="col-span-2 pl-4">
+                          {pos.pendingFees0 !== '0' ? (
+                            <span style={{ color: 'var(--success)' }}>
+                              {pos.pendingFees0} {pos.token0Symbol}
+                            </span>
+                          ) : (
+                            <span>0 {pos.token0Symbol}</span>
+                          )}
+                          {' / '}
+                          {pos.pendingFees1 !== '0' ? (
+                            <span style={{ color: 'var(--success)' }}>
+                              {pos.pendingFees1} {pos.token1Symbol}
+                            </span>
+                          ) : (
+                            <span>0 {pos.token1Symbol}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {camelotStatus.positionCount === 0 && (
+              <p className="mt-2" style={{ color: 'var(--warning)' }}>
+                No LP positions configured. Set CAMELOT_LP_POSITION_IDS environment variable.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Collection Result */}
+        {collectResult && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+            }}
+          >
+            <h4 className="font-medium mb-2" style={{ color: 'var(--success)' }}>
+              Fee Collection Complete
+            </h4>
+            <div className="space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <p>
+                <span className="font-medium">Timestamp:</span>{' '}
+                {new Date(collectResult.timestamp).toLocaleString()}
+              </p>
+
+              {/* Collected */}
+              {collectResult.collected && collectResult.collected.length > 0 && (
+                <div className="mt-2">
+                  <span className="font-medium" style={{ color: 'var(--success)' }}>
+                    Collected ({collectResult.collected.length}):
+                  </span>
+                  <div className="mt-1 space-y-1">
+                    {collectResult.collected.map((c) => (
+                      <div key={c.tokenId} className="pl-2">
+                        <span className="font-mono text-xs">#{c.tokenId}:</span>{' '}
+                        {c.amount0Formatted} {c.token0Symbol} + {c.amount1Formatted} {c.token1Symbol}
+                        {c.txHash && (
+                          <a
+                            href={`https://arbiscan.io/tx/${c.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 underline text-xs"
+                            style={{ color: 'var(--accent)' }}
+                          >
+                            View Tx
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Skipped */}
+              {collectResult.skipped && collectResult.skipped.length > 0 && (
+                <p className="mt-2">
+                  <span className="font-medium">Skipped (no pending fees):</span>{' '}
+                  {collectResult.skipped.join(', ')}
+                </p>
+              )}
+
+              {/* Errors */}
+              {collectResult.errors && collectResult.errors.length > 0 && (
+                <div className="mt-2">
+                  <span className="font-medium" style={{ color: 'var(--error)' }}>
+                    Errors ({collectResult.errors.length}):
+                  </span>
+                  <div className="mt-1 space-y-1">
+                    {collectResult.errors.map((e, i) => (
+                      <div key={i} className="pl-2 text-xs" style={{ color: 'var(--error)' }}>
+                        Position #{e.tokenId}: {e.error}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={handleCollectFees}
+            disabled={camelotLoading || !camelotStatus?.isConfigured}
+            className="flex items-center gap-2"
+          >
+            {camelotLoading ? (
+              <>
+                <div
+                  className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                  style={{ borderColor: 'var(--bg-primary)', borderTopColor: 'transparent' }}
+                />
+                Collecting Fees...
+              </>
+            ) : (
+              'Collect All Fees'
+            )}
+          </Button>
+        </div>
+
+        {!camelotStatus?.isConfigured && (
+          <p className="mt-3 text-sm" style={{ color: 'var(--warning)' }}>
+            Fee collection is not configured. Ensure CAMELOT_LP_POSITION_IDS, TREASURY_ADDRESS, and SIGNER_PRIVATE_KEY are set.
           </p>
         )}
       </div>
