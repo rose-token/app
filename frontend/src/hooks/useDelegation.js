@@ -59,17 +59,14 @@ export const useDelegation = () => {
   const [claimableRewards, setClaimableRewards] = useState(null);
   const [claimableLoading, setClaimableLoading] = useState(false);
 
-  // Get user's VP and delegation info from contract
+  // VP data from backend (VP is computed off-chain, not stored in contract)
+  const [vpData, setVpData] = useState(null);
+
+  // Get user's delegation eligibility info from contract
+  // Note: votingPower is computed off-chain and fetched from backend API
   const { data: contractData, refetch: refetchContract } = useReadContracts({
     contracts: [
-      // User's voting power
-      {
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'votingPower',
-        args: [account],
-      },
-      // User's staked ROSE
+      // User's staked ROSE (on-chain)
       {
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
@@ -192,6 +189,24 @@ export const useDelegation = () => {
     }
   }, [account]);
 
+  /**
+   * Fetch VP data from backend API
+   * VP is computed off-chain and stored in the stakers table
+   */
+  const fetchVPData = useCallback(async () => {
+    if (!account) return;
+
+    try {
+      const response = await fetch(`${SIGNER_URL}/api/governance/vp/${account}`);
+      if (response.ok) {
+        const data = await response.json();
+        setVpData(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch VP data:', err);
+    }
+  }, [account]);
+
   // Fetch all delegation data on mount and account/chain change
   useEffect(() => {
     if (account && chainId) {
@@ -200,11 +215,12 @@ export const useDelegation = () => {
         fetchDelegations(),
         fetchReceivedDelegations(),
         fetchOptInStatus(),
+        fetchVPData(),
       ]).finally(() => setIsLoading(false));
     }
-  }, [account, chainId, fetchEIP712Config, fetchDelegations, fetchReceivedDelegations, fetchOptInStatus]);
+  }, [account, chainId, fetchEIP712Config, fetchDelegations, fetchReceivedDelegations, fetchOptInStatus, fetchVPData]);
 
-  // Parse contract data
+  // Parse contract and backend data
   const parsedData = useMemo(() => {
     if (!contractData) return null;
 
@@ -213,12 +229,16 @@ export const useDelegation = () => {
       return result?.status === 'success' ? result.result : null;
     };
 
-    const votingPower = getResult(0) || 0n;
-    const stakedRose = getResult(1) || 0n;
-    const canDelegateRep = getResult(2) || false; // From RoseReputation
-    const reputation = getResult(3) || 6000n;
-    const isDelegateOptedInContract = getResult(4) || false;
-    const canReceiveDelegation = getResult(5) || false; // Combined check
+    // Contract data (indices shifted since we removed votingPower)
+    const stakedRose = getResult(0) || 0n;
+    const canDelegateRep = getResult(1) || false; // From RoseReputation
+    const reputation = getResult(2) || 6000n;
+    const isDelegateOptedInContract = getResult(3) || false;
+    const canReceiveDelegation = getResult(4) || false; // Combined check
+
+    // VP from backend API (computed off-chain, stored in stakers table)
+    // vpData has: votingPower, availableVP, delegatedOut, proposalVPLocked
+    const votingPower = vpData?.votingPower ? BigInt(vpData.votingPower) : 0n;
 
     // Calculate total delegated out from V2 delegations
     const totalDelegatedOutRaw = delegations.reduce(
@@ -267,7 +287,7 @@ export const useDelegation = () => {
       // Legacy compatibility
       isDelegating: delegations.length > 0,
     };
-  }, [contractData, delegations, receivedDelegations]);
+  }, [contractData, delegations, receivedDelegations, vpData]);
 
   /**
    * Fetch signed reputation attestation from backend
@@ -363,6 +383,7 @@ export const useDelegation = () => {
       // 5. Refresh delegation state
       await Promise.all([
         fetchDelegations(),
+        fetchVPData(),
         refetchContract(),
       ]);
 
@@ -385,7 +406,7 @@ export const useDelegation = () => {
     } finally {
       setActionLoading(prev => ({ ...prev, delegate: false }));
     }
-  }, [isConnected, account, eip712Config, parsedData, signTypedDataAsync, fetchDelegations, refetchContract]);
+  }, [isConnected, account, eip712Config, parsedData, signTypedDataAsync, fetchDelegations, fetchVPData, refetchContract]);
 
   /**
    * Revoke delegation to a specific delegate using signed revocation
@@ -717,6 +738,7 @@ export const useDelegation = () => {
         fetchDelegations(),
         fetchReceivedDelegations(),
         fetchOptInStatus(),
+        fetchVPData(),
         refetchContract(),
       ]);
     },
