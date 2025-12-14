@@ -165,10 +165,14 @@ const ProposalDetailPage = () => {
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {isActive ? 'Voting Ends' : 'Voting Ended'}
+                  {isPending ? 'Voting Starts' : isActive ? 'Voting Ends' : 'Voting Ended'}
                 </p>
                 <p className="font-medium">
-                  {isActive ? formatTimeRemaining(proposal.timeRemaining) : formatDate(proposal.votingEndsAt)}
+                  {isPending
+                    ? formatDate(proposal.votingStartsAt)
+                    : isActive
+                    ? formatTimeRemaining(proposal.timeRemaining)
+                    : formatDate(proposal.votingEndsAt)}
                 </p>
               </div>
             </div>
@@ -291,6 +295,7 @@ const ProposalDetailPage = () => {
             userVote={proposal.userVote}
             isProposer={proposal.isProposer}
             isActive={isActive}
+            isPending={isPending}
             onVote={vote}
             onVoteFast={voteFast}
             onVoteSlow={voteSlow}

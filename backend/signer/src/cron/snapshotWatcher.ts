@@ -224,13 +224,14 @@ function handleProposalCreated(
   event: ethers.Log
 ): void {
   const id = Number(proposalId);
-  console.log(`[SnapshotWatcher] ProposalCreated: id=${id}, track=${track === Track.Fast ? 'Fast' : 'Slow'}, proposer=${proposer}`);
+  console.log(`[SnapshotWatcher] ProposalCreated: id=${id}, track=${Number(track) === Track.Fast ? 'Fast' : 'Slow'}, proposer=${proposer}`);
 
   stats.proposalsDetected++;
   stats.lastEventBlock = Math.max(stats.lastEventBlock, event.blockNumber);
 
   // Only process Fast Track proposals (they need merkle root)
-  if (track !== Track.Fast) {
+  // Note: track from event args is bigint, must convert to Number for comparison
+  if (Number(track) !== Track.Fast) {
     console.log(`[SnapshotWatcher] Slow track proposal ${id}, skipping snapshot scheduling`);
     return;
   }
@@ -273,7 +274,8 @@ async function catchUpPendingProposals(): Promise<void> {
     };
 
     // Only process Fast Track
-    if (args.track !== Track.Fast) continue;
+    // Note: track from event args is bigint, must convert to Number for comparison
+    if (Number(args.track) !== Track.Fast) continue;
 
     const proposalId = Number(args.proposalId);
 
@@ -561,12 +563,12 @@ async function watchProposalDeadlines(): Promise<void> {
     for (const proposal of proposalsToFinalize) {
       // Check if execution is enabled
       if (config.snapshotWatcher?.executeOnChain === false) {
-        console.log(`[SnapshotWatcher] DRY RUN - Would finalize ${proposal.track === Track.Fast ? 'Fast' : 'Slow'} Track proposal ${proposal.id}`);
+        console.log(`[SnapshotWatcher] DRY RUN - Would finalize ${Number(proposal.track) === Track.Fast ? 'Fast' : 'Slow'} Track proposal ${proposal.id}`);
         continue;
       }
 
       try {
-        if (proposal.track === Track.Fast) {
+        if (Number(proposal.track) === Track.Fast) {
           await submitFastTrackFinalization(proposal.id);
         } else {
           await submitSlowTrackFinalization(proposal.id);
