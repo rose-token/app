@@ -21,6 +21,7 @@ import databaseRoutes from './routes/database';
 import slowTrackRoutes from './routes/slowTrack';
 import analyticsRoutes from './routes/analytics';
 import tasksRoutes from './routes/tasks';
+import camelotLPRoutes from './routes/camelotLP';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -39,6 +40,7 @@ import { startSlowTrackWatcher } from './services/slowTrackWatcher';
 import { startSnapshotWatcher } from './cron/snapshotWatcher';
 import { startAnalyticsWatcher } from './services/analyticsWatcher';
 import { startAnalyticsCron } from './cron/analyticsCron';
+import { startCamelotLPCron } from './cron/camelotLP';
 
 const app = express();
 
@@ -84,6 +86,7 @@ app.use('/api/database', databaseRoutes);
 app.use('/api/slow-track', slowTrackRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tasks', tasksRoutes);
+app.use('/api/camelot-lp', camelotLPRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -129,6 +132,7 @@ async function start() {
   startNavHistoryCron();
   startDelegateScoringCron();
   startBackupCron();
+  startCamelotLPCron();
 
   // Start event watchers (Phase 4)
   startVPRefreshWatcher();

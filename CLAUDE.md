@@ -188,6 +188,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
 | Analytics | `/api/analytics/overview`, `/marketplace`, `/governance`, `/treasury`, `/users`, `/daily?days=30` (system-wide metrics, admin-only) |
 | Tasks | `/api/tasks` GET (paginated list: page, limit, status, myTasks, isAuction, sortBy, sortOrder), `/api/tasks/counts` GET, `/api/tasks/:taskId` GET |
+| Camelot LP | `/api/camelot-lp/status` GET, `/position/:tokenId` GET, `/collect` POST, `/collect/:tokenId` POST (owner-only, LP fee collection) |
 
 ## Backend Services
 
@@ -218,6 +219,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | analytics.ts | Analytics query functions (overview, marketplace, governance, treasury, users, daily) |
 | tasks.ts | Paginated task queries from analytics_tasks table (getTaskList, getTaskById, getTaskCountByStatus) |
 | analyticsCron.ts | Daily rollup, hourly treasury snapshot, 15-min VP refresh |
+| camelotLP.ts | Collect trading fees from Camelot LP positions, send to Treasury |
 
 ## Scheduled Jobs
 
@@ -241,6 +243,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Treasury Snapshot | Hourly | Snapshot NAV and allocations |
 | Analytics VP Refresh | Every 15 min | Sync voting power to analytics_users |
 | Analytics Task Validation | Every 15 min | Re-sync active tasks from chain (drift correction) |
+| Camelot LP Fee Collection | Daily 06:00 UTC | Collect LP trading fees → Treasury |
 
 ## Database Tables
 
@@ -275,6 +278,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
+| Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
 
@@ -346,6 +350,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | BTC/USD | `0x6ce185860a4963106506C203335A2910D6ce18586` |
 | XAU/USD | `0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c` |
 | LiFi | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
+| Camelot PositionManager | `0x00c7f3082833e796A5b3e4Bd59f6642FF44DCD15` |
 
 ## Technical Stack
 
