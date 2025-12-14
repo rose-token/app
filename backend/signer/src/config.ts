@@ -249,6 +249,21 @@ export const config = {
     // Batch size for processing tasks (default: 50)
     batchSize: parseInt(process.env.TASK_VALIDATION_BATCH_SIZE || '50'),
   },
+
+  // Camelot LP fee collection configuration
+  camelotLP: {
+    // Enable Camelot LP fee collection (default: true)
+    enabled: process.env.CAMELOT_LP_ENABLED !== 'false',
+    // Camelot/Algebra NonfungiblePositionManager address
+    positionManager: process.env.CAMELOT_POSITION_MANAGER || '0x00c7f3082833e796A5b3e4Bd59f6642FF44DCD15',
+    // Comma-separated list of LP position NFT token IDs to collect from
+    positionIds: (process.env.CAMELOT_LP_POSITION_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id !== '' && !isNaN(Number(id))),
+    // Cron schedule for automatic fee collection (default: daily at 6am UTC)
+    cronSchedule: process.env.CAMELOT_LP_CRON_SCHEDULE || '0 6 * * *',
+  },
 };
 
 // Validate required env vars
