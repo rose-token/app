@@ -3,6 +3,7 @@ import { config } from '../config';
 import { DelegationAllocation, ClaimData, ClaimType, VoteReduction } from '../types';
 import { getWsProvider } from '../utils/wsProvider';
 import { RoseGovernanceABI } from '../utils/contracts';
+import { query } from '../db/pool';
 
 const wallet = new ethers.Wallet(config.signer.privateKey);
 
@@ -394,46 +395,23 @@ export async function getDelegatedVote(
 // ============ Claim Functions ============
 
 /**
- * Get all delegates a user has ever delegated to by querying DelegationChanged events
- * Returns unique delegates where user delegated (isDelegating = true)
+ * Get all delegates a user has active delegations to.
+ * Queries the delegations database table (off-chain EIP-712 delegations).
+ * Returns unique delegate addresses where delegation is active (not revoked, not expired).
  */
 export async function getUserDelegates(user: string): Promise<string[]> {
-  const contract = getGovernanceContract();
-
-  // Query DelegationChanged events where user is the delegator
-  // Filter topic: DelegationChanged(delegator indexed, delegate indexed, vpAmount, isDelegating)
-  const filter = contract.filters.DelegationChanged(user);
-
   try {
-    // Query events from a reasonable block range (last 90 days ~= 2M blocks on Arbitrum)
-    const currentBlock = await getProvider().getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - 2_000_000);
+    const result = await query(`
+      SELECT DISTINCT delegate
+      FROM delegations
+      WHERE LOWER(delegator) = LOWER($1)
+        AND revoked_at IS NULL
+        AND expiry > NOW()
+    `, [user]);
 
-    const events = await contract.queryFilter(filter, fromBlock, currentBlock);
-
-    // Track delegates and their current status
-    const delegateStatus = new Map<string, boolean>();
-
-    for (const event of events) {
-      if ('args' in event && event.args) {
-        const delegate = event.args.delegate as string;
-        const isDelegating = event.args.isDelegating as boolean;
-        delegateStatus.set(delegate.toLowerCase(), isDelegating);
-      }
-    }
-
-    // Return only delegates where user still has active delegation
-    // (most recent event was isDelegating = true)
-    const activeDelegates: string[] = [];
-    for (const [delegate, isActive] of delegateStatus) {
-      if (isActive) {
-        activeDelegates.push(delegate);
-      }
-    }
-
-    return activeDelegates;
+    return result.rows.map((row) => row.delegate as string);
   } catch (error) {
-    console.error('Error querying delegation events:', error);
+    console.error('Error querying user delegates from database:', error);
     return [];
   }
 }
