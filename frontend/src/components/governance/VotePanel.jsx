@@ -24,6 +24,7 @@ const VotePanel = ({
   userVote,
   isProposer,
   isActive,
+  isPending = false, // Fast Track only - waiting for VP snapshot
   onVote,
   onVoteFast,
   onVoteSlow,
@@ -407,6 +408,24 @@ const VotePanel = ({
         <div className="p-4 rounded-lg text-center" style={{ backgroundColor: 'var(--bg-secondary)' }}>
           <p style={{ color: 'var(--text-muted)' }}>
             You cannot vote on your own proposal
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fast Track proposals in Pending state - waiting for VP snapshot
+  if (isPending && track === Track.Fast) {
+    return (
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-3">Voting</h3>
+        <div className="p-4 rounded-lg text-center" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+          <p className="font-medium mb-2" style={{ color: 'var(--warning)' }}>
+            Waiting for Activation
+          </p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            This Fast Track proposal is waiting for the VP snapshot to be computed.
+            Voting will begin once activated.
           </p>
         </div>
       </div>
