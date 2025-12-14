@@ -154,6 +154,7 @@ jobs:
           BACKUP_REFERENCE_CID: ${{ secrets.BACKUP_REFERENCE_CID }}
           MERGEBOT_APP_ID: ${{ secrets.MERGEBOT_APP_ID }}
           MERGEBOT_PRIVATE_KEY: ${{ secrets.MERGEBOT_PRIVATE_KEY }}
+          CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -174,6 +175,7 @@ jobs:
           sed -i "s|\${BACKUP_REFERENCE_CID}|${BACKUP_REFERENCE_CID}|g" backend/signer/deploy.yaml
           sed -i "s|\${MERGEBOT_APP_ID}|${MERGEBOT_APP_ID}|g" backend/signer/deploy.yaml
           sed -i "s|\${MERGEBOT_PRIVATE_KEY}|${MERGEBOT_PRIVATE_KEY}|g" backend/signer/deploy.yaml
+          sed -i "s|\${CAMELOT_LP_POSITION_IDS}|${CAMELOT_LP_POSITION_IDS}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy.yaml | \
