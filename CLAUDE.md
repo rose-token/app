@@ -134,6 +134,11 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 **GitHub Integration:** On-chain `githubIntegration` bool in Task struct controls PR URL requirement. When `true`, `markTaskCompleted()` requires non-empty PR URL; when `false`, empty string allowed. Set at task creation via `createTask(..., githubIntegration, ...)` and `createAuctionTask()`. DAO tasks default to `true`. Frontend's TaskCard skips PR URL modal when `githubIntegration=false`.
 
+**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed.
+- `github_links` table: Wallet ↔ GitHub account linkage
+- `authorized_repos` table: Per-wallet repo authorization list
+- Authorization check in `approveAndMergePR()` verifies customer has authorized the target repo
+
 ## Security Patterns
 
 ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection, 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks).
@@ -189,6 +194,8 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics | `/api/analytics/overview`, `/marketplace`, `/governance`, `/treasury`, `/users`, `/daily?days=30` (system-wide metrics, admin-only) |
 | Tasks | `/api/tasks` GET (paginated list: page, limit, status, myTasks, isAuction, sortBy, sortOrder), `/api/tasks/counts` GET, `/api/tasks/:taskId` GET |
 | Camelot LP | `/api/camelot-lp/status` GET, `/position/:tokenId` GET, `/collect` POST, `/collect/:tokenId` POST (owner-only, LP fee collection) |
+| GitHub Auth | `/api/github/auth/start` GET (initiates OAuth), `/auth/status` GET, `/callback` GET (OAuth callback), `/auth/unlink` DELETE |
+| GitHub Repos | `/api/github/repos` GET (list authorized), `/repos/authorize` POST, `/repos/revoke` DELETE, `/repos/check` GET |
 
 ## Backend Services
 
@@ -247,7 +254,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 ## Database Tables
 
-`profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`, `analytics_tasks`, `analytics_proposals`, `analytics_treasury`, `analytics_users`, `analytics_daily`
+`profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`, `analytics_tasks`, `analytics_proposals`, `analytics_treasury`, `analytics_users`, `analytics_daily`, `github_links`, `authorized_repos`
 
 ## Token Decimals
 
@@ -277,10 +284,15 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
-| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED` |
+| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL` |
 | Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
+
+**GitHub OAuth Setup:** To enable user authentication for repository authorization:
+1. Go to GitHub > Settings > Developer Settings > GitHub Apps > Rose Protocol
+2. Under "General": Copy **Client ID** → `MERGEBOT_CLIENT_ID`, Generate **Client secret** → `MERGEBOT_CLIENT_SECRET`
+3. Under "Identifying and authorizing users": Add callback URL (e.g., `https://signer.rose-token.com/api/github/callback`)
 
 ## Pinata IPFS (Private Files)
 
