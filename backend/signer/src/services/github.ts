@@ -7,8 +7,10 @@
 
 import { App } from '@octokit/app';
 import { Octokit } from '@octokit/rest';
+import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getMarketplaceContract, getHttpProvider } from '../utils/contracts';
 
 // Types
 export interface ParsedPrUrl {
@@ -162,6 +164,54 @@ export async function validatePrUrl(prUrl: string): Promise<ValidatePrResult> {
       return { valid: false, error: 'PR not found or app lacks access to this repository' };
     }
 
+    return { valid: false, error: error.message || 'Failed to validate PR' };
+  }
+}
+
+/**
+ * Validate a PR URL with customer authorization check.
+ * This is called when workers submit a PR URL to ensure the customer has authorized the repository.
+ *
+ * @param prUrl - The GitHub PR URL to validate
+ * @param taskId - The task ID to look up the customer address
+ * @returns ValidatePrResult with authorization status
+ */
+export async function validatePrUrlWithAuth(
+  prUrl: string,
+  taskId: number
+): Promise<ValidatePrResult> {
+  // First parse the PR URL
+  const pr = parsePrUrl(prUrl);
+  if (!pr) {
+    return { valid: false, error: 'Invalid GitHub PR URL format' };
+  }
+
+  try {
+    // Fetch task from contract to get customer address
+    const marketplace = getMarketplaceContract(getHttpProvider());
+    const task = await marketplace.tasks(taskId);
+
+    // Check if task exists
+    if (task.customer === ethers.ZeroAddress) {
+      return { valid: false, error: 'Task not found' };
+    }
+
+    const customerAddress = task.customer;
+
+    // Check if customer has authorized this repo
+    const authorized = await isRepoAuthorized(customerAddress, pr.owner, pr.repo);
+    if (!authorized) {
+      return {
+        valid: false,
+        error: `Repository ${pr.owner}/${pr.repo} not authorized by task customer. The customer must authorize this repository in their Profile before you can submit work.`,
+      };
+    }
+
+    // If authorized, proceed with standard PR validation
+    return await validatePrUrl(prUrl);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('[GitHub] Error validating PR with auth:', error.message);
     return { valid: false, error: error.message || 'Failed to validate PR' };
   }
 }
