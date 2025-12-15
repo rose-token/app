@@ -30,7 +30,7 @@ export const GOVERNANCE_CONSTANTS = {
   NAY_VOTER_REWARD: 200, // 2%
   PROPOSER_REWARD: 100, // 1%
   DAO_MINT_PERCENT: 200, // 2%
-  SNAPSHOT_DELAY: 1 * 24 * 60 * 60, // 1 day for Fast Track snapshot
+  SNAPSHOT_DELAY: 1 * 1 * 60 * 60, // 1 hr for Fast Track snapshot
 };
 
 // Two-Track governance system (matches contract)
@@ -55,7 +55,7 @@ export const TRACK_CONSTANTS = {
     VOTING_PERIOD: 3 * 24 * 60 * 60, // 3 days
     QUORUM_BPS: 1000, // 10%
     TREASURY_LIMIT_BPS: 100, // 1% of treasury max
-    SNAPSHOT_DELAY: 1 * 24 * 60 * 60, // 1 day
+    SNAPSHOT_DELAY: 1 * 1 * 60 * 60, // 1 hr
   },
   [Track.Slow]: {
     VOTING_PERIOD: 14 * 24 * 60 * 60, // 14 days

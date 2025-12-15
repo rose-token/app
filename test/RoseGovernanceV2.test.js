@@ -49,7 +49,7 @@ describe("RoseGovernance - Two-Track System", function () {
   };
 
   // Time constants
-  const SNAPSHOT_DELAY = 24 * 60 * 60; // 1 day
+  const SNAPSHOT_DELAY = 1 * 60 * 60; // 1 hr
   const FAST_DURATION = 3 * 24 * 60 * 60; // 3 days
   const SLOW_DURATION = 14 * 24 * 60 * 60; // 14 days
 
