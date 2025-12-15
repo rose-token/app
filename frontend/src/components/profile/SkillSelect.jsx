@@ -110,7 +110,7 @@ const SkillSelect = ({ selected = [], onChange, max = MAX_SKILLS, disabled = fal
       {/* Dropdown menu */}
       {isOpen && (
         <div
-          className="absolute z-50 w-full mt-2 rounded-xl shadow-lg overflow-hidden"
+          className="absolute z-[100] w-full mt-2 rounded-xl shadow-lg overflow-hidden"
           style={{
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
