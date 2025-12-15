@@ -9,12 +9,12 @@ import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS, GOVERNANCE_CONSTANTS, Track, TrackLabels, TrackColors, TRACK_CONSTANTS } from '../constants/contracts';
-import { SKILLS } from '../constants/skills';
 import useProposals from '../hooks/useProposals';
 import useGovernance from '../hooks/useGovernance';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import Spinner from '../components/ui/Spinner';
+import SkillSelect from '../components/profile/SkillSelect';
 
 const ProposalCreatePage = () => {
   const navigate = useNavigate();
@@ -56,14 +56,9 @@ const ProposalCreatePage = () => {
     setFormErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // Handle skill toggle
-  const toggleSkill = (skill) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.includes(skill)
-        ? prev.skills.filter(s => s !== skill)
-        : [...prev.skills, skill],
-    }));
+  // Handle skills change
+  const handleSkillsChange = (skills) => {
+    setFormData(prev => ({ ...prev, skills }));
   };
 
   // Calculate track-specific limits
@@ -457,25 +452,10 @@ const ProposalCreatePage = () => {
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
             Select the skills required for this work (optional)
           </p>
-          <div className="flex flex-wrap gap-2">
-            {SKILLS.map(skill => (
-              <button
-                key={skill.id}
-                type="button"
-                onClick={() => toggleSkill(skill.id)}
-                className="px-3 py-1.5 rounded-full text-sm transition-all"
-                style={{
-                  backgroundColor: formData.skills.includes(skill.id)
-                    ? `${skill.color}30`
-                    : 'var(--bg-tertiary)',
-                  border: `1px solid ${formData.skills.includes(skill.id) ? skill.color : 'var(--border-color)'}`,
-                  color: formData.skills.includes(skill.id) ? skill.color : 'var(--text-secondary)',
-                }}
-              >
-                {skill.name}
-              </button>
-            ))}
-          </div>
+          <SkillSelect
+            selected={formData.skills}
+            onChange={handleSkillsChange}
+          />
         </div>
 
         {/* Submit */}

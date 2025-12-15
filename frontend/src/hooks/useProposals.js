@@ -203,12 +203,14 @@ export const useProposals = (options = {}) => {
             const timeRemaining = endsAt - now;
             const isExpired = timeRemaining <= 0;
 
-            // Fetch description from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
+            // Fetch description and skills from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
             let description = '';
+            let skills = [];
             if (descriptionHash && isCID(descriptionHash)) {
               try {
                 const ipfsData = await fetchProposalFromIPFS(descriptionHash);
                 description = ipfsData?.description || ipfsData || '';
+                skills = ipfsData?.skills || [];
               } catch (e) {
                 console.warn('Failed to fetch IPFS description:', e);
                 description = descriptionHash;
@@ -224,6 +226,7 @@ export const useProposals = (options = {}) => {
               title,
               description,
               descriptionHash,
+              skills,
               value: formatUnits(treasuryAmount, 18),
               valueRaw: treasuryAmount,
               deadline: Number(deadline),

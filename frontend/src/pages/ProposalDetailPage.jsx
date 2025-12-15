@@ -21,6 +21,7 @@ import QuorumBar from '../components/governance/QuorumBar';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import ProfileBadge from '../components/profile/ProfileBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
+import { SkillBadgeList } from '../components/profile/SkillBadge';
 
 const ProposalDetailPage = () => {
   const { id } = useParams();
@@ -224,6 +225,14 @@ const ProposalDetailPage = () => {
               )}
             </div>
           </div>
+
+          {/* Skills */}
+          {proposal.skills && proposal.skills.length > 0 && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-4">Skills Needed</h2>
+              <SkillBadgeList skills={proposal.skills} size="md" />
+            </div>
+          )}
 
           {/* Vote Results */}
           <div className="card">
