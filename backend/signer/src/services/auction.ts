@@ -9,7 +9,7 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
 import { query, getPool } from '../db/pool';
-import { getWsProvider } from '../utils/wsProvider';
+import { getWsProvider, onReconnect } from '../utils/wsProvider';
 import { RoseMarketplaceABI } from '../utils/contracts';
 
 // Task status enum (matches contract)
@@ -24,6 +24,12 @@ enum TaskStatus {
 }
 
 let marketplaceContract: ethers.Contract | null = null;
+
+// Clear cached contract on WebSocket reconnect to avoid stale provider
+onReconnect(() => {
+  console.log('[auction] WebSocket reconnected, clearing contract cache');
+  marketplaceContract = null;
+});
 
 function getProvider(): ethers.Provider {
   return getWsProvider();
