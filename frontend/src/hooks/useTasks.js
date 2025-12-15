@@ -638,6 +638,14 @@ export const useTasks = ({ taskId = null } = {}) => {
     enabled: isConnected && !!MARKETPLACE_ADDRESS
   });
 
+  useWatchContractEvent({
+    address: MARKETPLACE_ADDRESS,
+    abi: RoseMarketplaceABI,
+    eventName: 'AuctionWinnerSelected',
+    onLogs: () => debouncedFetchTasks(),
+    enabled: isConnected && !!MARKETPLACE_ADDRESS
+  });
+
   // Sync processedTasks to state
   useEffect(() => {
     setTasks(processedTasks);
