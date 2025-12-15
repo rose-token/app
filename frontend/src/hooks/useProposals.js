@@ -8,7 +8,7 @@ import { useAccount, useReadContract, useReadContracts, useWriteContract, usePub
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS, ProposalStatus, Track } from '../constants/contracts';
-import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
+import { uploadProposalToIPFS, fetchProposalFromIPFS, isCID } from '../utils/ipfs/pinataService';
 import { usePassportVerify } from './usePassportVerify';
 import { GAS_SETTINGS } from '../constants/gas';
 
@@ -203,9 +203,9 @@ export const useProposals = (options = {}) => {
             const timeRemaining = endsAt - now;
             const isExpired = timeRemaining <= 0;
 
-            // Fetch description from IPFS if it's a hash
+            // Fetch description from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
             let description = '';
-            if (descriptionHash && descriptionHash.startsWith('Qm')) {
+            if (descriptionHash && isCID(descriptionHash)) {
               try {
                 const ipfsData = await fetchProposalFromIPFS(descriptionHash);
                 description = ipfsData?.description || ipfsData || '';
