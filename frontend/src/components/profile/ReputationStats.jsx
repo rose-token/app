@@ -6,6 +6,7 @@
 import React from 'react';
 import { useReputation, getReputationSummary } from '../../hooks/useReputation';
 import { Briefcase, Shield, Users, Coins, RefreshCw } from 'lucide-react';
+import ReputationBadge from '../governance/ReputationBadge';
 
 /**
  * ReputationStats - Displays reputation metrics for an address
@@ -56,12 +57,24 @@ const CardStats = ({ summary, reputation, onRefresh }) => {
       }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h3
-          className="text-sm font-semibold uppercase tracking-wide"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          Reputation
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3
+            className="text-sm font-semibold uppercase tracking-wide"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Reputation
+          </h3>
+          {reputation?.reputationScore !== undefined && (
+            <ReputationBadge
+              score={reputation.reputationScore}
+              size="sm"
+              showTooltip={true}
+              tasksCompleted={reputation?.governanceStats?.tasksCompleted}
+              disputes={reputation?.governanceStats?.disputes}
+              failedProposals={reputation?.governanceStats?.failedProposals}
+            />
+          )}
+        </div>
         <button
           type="button"
           onClick={onRefresh}
