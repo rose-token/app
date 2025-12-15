@@ -341,6 +341,9 @@ describe("RoseGovernance - Two-Track System", function () {
     await mockMarketplace.setReputation(await reputation.getAddress());
     await governance.setDelegationSigner(delegationSigner.address);
 
+    // Set snapshot delay to match test constant (1 hour instead of default 1 day)
+    await governance.setSnapshotDelay(SNAPSHOT_DELAY);
+
     // Authorize token minting
     await roseToken.connect(owner).setAuthorized(owner.address, true);
     await roseToken
