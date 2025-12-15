@@ -70,12 +70,18 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
 
   // Extract avatarUrl early for hook (must be before any conditional returns)
   const avatarUrl = profile?.avatarUrl;
+  const isIPFSUrl = avatarUrl?.startsWith('ipfs://');
 
   // Fetch IPFS avatar with authentication (required for private Pinata files)
   // Must be called before any conditional returns to follow React's Rules of Hooks
-  const { blobUrl: avatarBlobUrl } = useIPFSImage(
-    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
+  const { blobUrl: avatarBlobUrl, loading: avatarLoading } = useIPFSImage(
+    isIPFSUrl ? avatarUrl : null
   );
+
+  // Determine the actual image URL to use:
+  // - For IPFS URLs, only use avatarBlobUrl (never fall back to raw ipfs://)
+  // - For HTTP URLs, use directly
+  const resolvedAvatarUrl = isIPFSUrl ? avatarBlobUrl : avatarUrl;
 
   const isOwnProfile = connectedAddress?.toLowerCase() === address?.toLowerCase();
 
@@ -152,11 +158,17 @@ const ProfileCard = ({ address, profileData, showReputation = true, onEdit }) =>
         {/* Avatar */}
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
-          style={{ backgroundColor: avatarUrl ? 'transparent' : color }}
+          style={{ backgroundColor: resolvedAvatarUrl ? 'transparent' : color }}
         >
-          {avatarUrl ? (
+          {avatarLoading ? (
+            // Loading skeleton while IPFS image is being fetched
+            <div
+              className="w-full h-full animate-pulse"
+              style={{ backgroundColor: 'var(--bg-tertiary)' }}
+            />
+          ) : resolvedAvatarUrl ? (
             <img
-              src={avatarBlobUrl || avatarUrl}
+              src={resolvedAvatarUrl}
               alt={displayName || 'Profile'}
               className="w-full h-full object-cover"
             />
