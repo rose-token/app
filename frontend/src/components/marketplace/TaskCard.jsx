@@ -15,7 +15,7 @@ import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrl
 import Spinner from '../ui/Spinner';
 import { SkillBadgeList } from '../profile/SkillBadge';
 
-const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {} }) => {
+const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {}, onRefetch }) => {
   const { address: account, isConnected, chain } = useAccount();
 
   const [detailedContent, setDetailedContent] = useState(null);
@@ -110,10 +110,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     };
   }, [task.detailedDescription]);
 
-  // Handle bid submission callback
+  // Handle bid submission callback - also refetch task for status updates
   const handleBidSubmitted = useCallback(() => {
     fetchBidInfo();
-  }, [fetchBidInfo]);
+    onRefetch?.();
+  }, [fetchBidInfo, onRefetch]);
 
   // Fetch detailed description from IPFS
   const loadDetailedDescription = async () => {

@@ -34,6 +34,7 @@ const TaskDetailPage = () => {
     handleCancelTask,
     handleUnstakeTask,
     clearError,
+    refetchTasks,
   } = useTasks({ taskId: parseInt(id) });
 
   if (!isConnected) {
@@ -151,6 +152,7 @@ const TaskDetailPage = () => {
         onUnstake={handleUnstakeTask}
         onCancel={handleCancelTask}
         loadingStates={loadingStates}
+        onRefetch={refetchTasks}
       />
     </div>
   );
