@@ -26,7 +26,6 @@ const ProposalCreatePage = () => {
     title: '',
     description: '',
     value: '',
-    deadline: '',
     deliverables: '',
     skills: [],
     track: Track.Slow, // Default to Slow Track
@@ -93,17 +92,6 @@ const ProposalCreatePage = () => {
       errors.value = `Fast Track limit: ${fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% of treasury)`;
     }
 
-    if (!formData.deadline) {
-      errors.deadline = 'Deadline is required';
-    } else {
-      const deadlineDate = new Date(formData.deadline);
-      const minDeadline = new Date();
-      minDeadline.setDate(minDeadline.getDate() + 7); // Minimum 1 week
-      if (deadlineDate < minDeadline) {
-        errors.deadline = 'Deadline must be at least 1 week from now';
-      }
-    }
-
     if (!formData.deliverables.trim()) {
       errors.deliverables = 'Deliverables are required';
     }
@@ -126,11 +114,6 @@ const ProposalCreatePage = () => {
       console.error('Failed to create proposal:', err);
     }
   };
-
-  // Calculate minimum deadline (1 week from now)
-  const minDeadline = new Date();
-  minDeadline.setDate(minDeadline.getDate() + 7);
-  const minDeadlineStr = minDeadline.toISOString().split('T')[0];
 
   if (!isConnected) {
     return (
@@ -375,51 +358,28 @@ const ProposalCreatePage = () => {
           )}
         </div>
 
-        {/* Value and Deadline */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="card">
-            <label className="block font-medium mb-2">
-              Value (ROSE) <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="number"
-              name="value"
-              value={formData.value}
-              onChange={handleChange}
-              placeholder="0"
-              min="0"
-              step="1"
-              className="w-full px-4 py-3 rounded-lg"
-              style={{
-                backgroundColor: 'var(--bg-tertiary)',
-                border: formErrors.value ? '1px solid var(--error)' : '1px solid var(--border-color)',
-              }}
-            />
-            {formErrors.value && (
-              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.value}</span>
-            )}
-          </div>
-
-          <div className="card">
-            <label className="block font-medium mb-2">
-              Deadline <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="date"
-              name="deadline"
-              value={formData.deadline}
-              onChange={handleChange}
-              min={minDeadlineStr}
-              className="w-full px-4 py-3 rounded-lg"
-              style={{
-                backgroundColor: 'var(--bg-tertiary)',
-                border: formErrors.deadline ? '1px solid var(--error)' : '1px solid var(--border-color)',
-              }}
-            />
-            {formErrors.deadline && (
-              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.deadline}</span>
-            )}
-          </div>
+        {/* Value */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Value (ROSE) <span style={{ color: 'var(--error)' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="value"
+            value={formData.value}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="1"
+            className="w-full px-4 py-3 rounded-lg"
+            style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              border: formErrors.value ? '1px solid var(--error)' : '1px solid var(--border-color)',
+            }}
+          />
+          {formErrors.value && (
+            <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.value}</span>
+          )}
         </div>
 
         {/* Deliverables */}

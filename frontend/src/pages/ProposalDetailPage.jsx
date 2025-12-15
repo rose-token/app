@@ -182,21 +182,11 @@ const ProposalDetailPage = () => {
           {/* Value & Deliverables */}
           <div className="card">
             <h2 className="text-lg font-semibold mb-4">Funding Request</h2>
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+            <div className="mb-4">
               <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
                 <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Requested Amount</p>
                 <p className="text-2xl font-bold gradient-text">
                   {parseFloat(proposal.value).toLocaleString()} ROSE
-                </p>
-              </div>
-              <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Deadline</p>
-                <p className="text-lg font-semibold">
-                  {new Date(proposal.deadline * 1000).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
                 </p>
               </div>
             </div>

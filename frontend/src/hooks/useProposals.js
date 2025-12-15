@@ -887,7 +887,7 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const { title, description, value, deadline, deliverables, skills, track = Track.Slow } = proposalData;
+      const { title, description, value, deliverables, skills, track = Track.Slow } = proposalData;
 
       // Upload description to IPFS
       console.log('Uploading proposal description to IPFS...');
@@ -901,7 +901,8 @@ export const useProposals = (options = {}) => {
       console.log('IPFS hash:', descriptionHash);
 
       const valueWei = parseUnits(value.toString(), 18);
-      const deadlineTimestamp = Math.floor(new Date(deadline).getTime() / 1000);
+      // Default deadline: 30 days from now (deadline field hidden from UI)
+      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
 
       // Get passport signature from backend signer
       console.log('Getting passport signature...');
