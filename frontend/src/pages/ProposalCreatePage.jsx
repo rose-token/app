@@ -9,12 +9,12 @@ import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import RoseTokenABI from '../contracts/RoseTokenABI.json';
 import { CONTRACTS, GOVERNANCE_CONSTANTS, Track, TrackLabels, TrackColors, TRACK_CONSTANTS } from '../constants/contracts';
-import { SKILLS } from '../constants/skills';
 import useProposals from '../hooks/useProposals';
 import useGovernance from '../hooks/useGovernance';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import Spinner from '../components/ui/Spinner';
+import SkillSelect from '../components/profile/SkillSelect';
 
 const ProposalCreatePage = () => {
   const navigate = useNavigate();
@@ -26,7 +26,6 @@ const ProposalCreatePage = () => {
     title: '',
     description: '',
     value: '',
-    deadline: '',
     deliverables: '',
     skills: [],
     track: Track.Slow, // Default to Slow Track
@@ -56,14 +55,9 @@ const ProposalCreatePage = () => {
     setFormErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // Handle skill toggle
-  const toggleSkill = (skill) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.includes(skill)
-        ? prev.skills.filter(s => s !== skill)
-        : [...prev.skills, skill],
-    }));
+  // Handle skills change
+  const handleSkillsChange = (skills) => {
+    setFormData(prev => ({ ...prev, skills }));
   };
 
   // Calculate track-specific limits
@@ -98,17 +92,6 @@ const ProposalCreatePage = () => {
       errors.value = `Fast Track limit: ${fastTrackLimit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE (1% of treasury)`;
     }
 
-    if (!formData.deadline) {
-      errors.deadline = 'Deadline is required';
-    } else {
-      const deadlineDate = new Date(formData.deadline);
-      const minDeadline = new Date();
-      minDeadline.setDate(minDeadline.getDate() + 7); // Minimum 1 week
-      if (deadlineDate < minDeadline) {
-        errors.deadline = 'Deadline must be at least 1 week from now';
-      }
-    }
-
     if (!formData.deliverables.trim()) {
       errors.deliverables = 'Deliverables are required';
     }
@@ -131,11 +114,6 @@ const ProposalCreatePage = () => {
       console.error('Failed to create proposal:', err);
     }
   };
-
-  // Calculate minimum deadline (1 week from now)
-  const minDeadline = new Date();
-  minDeadline.setDate(minDeadline.getDate() + 7);
-  const minDeadlineStr = minDeadline.toISOString().split('T')[0];
 
   if (!isConnected) {
     return (
@@ -380,51 +358,28 @@ const ProposalCreatePage = () => {
           )}
         </div>
 
-        {/* Value and Deadline */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="card">
-            <label className="block font-medium mb-2">
-              Value (ROSE) <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="number"
-              name="value"
-              value={formData.value}
-              onChange={handleChange}
-              placeholder="0"
-              min="0"
-              step="1"
-              className="w-full px-4 py-3 rounded-lg"
-              style={{
-                backgroundColor: 'var(--bg-tertiary)',
-                border: formErrors.value ? '1px solid var(--error)' : '1px solid var(--border-color)',
-              }}
-            />
-            {formErrors.value && (
-              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.value}</span>
-            )}
-          </div>
-
-          <div className="card">
-            <label className="block font-medium mb-2">
-              Deadline <span style={{ color: 'var(--error)' }}>*</span>
-            </label>
-            <input
-              type="date"
-              name="deadline"
-              value={formData.deadline}
-              onChange={handleChange}
-              min={minDeadlineStr}
-              className="w-full px-4 py-3 rounded-lg"
-              style={{
-                backgroundColor: 'var(--bg-tertiary)',
-                border: formErrors.deadline ? '1px solid var(--error)' : '1px solid var(--border-color)',
-              }}
-            />
-            {formErrors.deadline && (
-              <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.deadline}</span>
-            )}
-          </div>
+        {/* Value */}
+        <div className="card">
+          <label className="block font-medium mb-2">
+            Value (ROSE) <span style={{ color: 'var(--error)' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="value"
+            value={formData.value}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="1"
+            className="w-full px-4 py-3 rounded-lg"
+            style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              border: formErrors.value ? '1px solid var(--error)' : '1px solid var(--border-color)',
+            }}
+          />
+          {formErrors.value && (
+            <span className="text-xs" style={{ color: 'var(--error)' }}>{formErrors.value}</span>
+          )}
         </div>
 
         {/* Deliverables */}
@@ -457,25 +412,10 @@ const ProposalCreatePage = () => {
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
             Select the skills required for this work (optional)
           </p>
-          <div className="flex flex-wrap gap-2">
-            {SKILLS.map(skill => (
-              <button
-                key={skill.id}
-                type="button"
-                onClick={() => toggleSkill(skill.id)}
-                className="px-3 py-1.5 rounded-full text-sm transition-all"
-                style={{
-                  backgroundColor: formData.skills.includes(skill.id)
-                    ? `${skill.color}30`
-                    : 'var(--bg-tertiary)',
-                  border: `1px solid ${formData.skills.includes(skill.id) ? skill.color : 'var(--border-color)'}`,
-                  color: formData.skills.includes(skill.id) ? skill.color : 'var(--text-secondary)',
-                }}
-              >
-                {skill.name}
-              </button>
-            ))}
-          </div>
+          <SkillSelect
+            selected={formData.skills}
+            onChange={handleSkillsChange}
+          />
         </div>
 
         {/* Submit */}

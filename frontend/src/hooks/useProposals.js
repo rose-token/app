@@ -203,12 +203,14 @@ export const useProposals = (options = {}) => {
             const timeRemaining = endsAt - now;
             const isExpired = timeRemaining <= 0;
 
-            // Fetch description from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
+            // Fetch description and skills from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
             let description = '';
+            let skills = [];
             if (descriptionHash && isCID(descriptionHash)) {
               try {
                 const ipfsData = await fetchProposalFromIPFS(descriptionHash);
                 description = ipfsData?.description || ipfsData || '';
+                skills = ipfsData?.skills || [];
               } catch (e) {
                 console.warn('Failed to fetch IPFS description:', e);
                 description = descriptionHash;
@@ -224,6 +226,7 @@ export const useProposals = (options = {}) => {
               title,
               description,
               descriptionHash,
+              skills,
               value: formatUnits(treasuryAmount, 18),
               valueRaw: treasuryAmount,
               deadline: Number(deadline),
@@ -884,7 +887,7 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const { title, description, value, deadline, deliverables, skills, track = Track.Slow } = proposalData;
+      const { title, description, value, deliverables, skills, track = Track.Slow } = proposalData;
 
       // Upload description to IPFS
       console.log('Uploading proposal description to IPFS...');
@@ -898,7 +901,8 @@ export const useProposals = (options = {}) => {
       console.log('IPFS hash:', descriptionHash);
 
       const valueWei = parseUnits(value.toString(), 18);
-      const deadlineTimestamp = Math.floor(new Date(deadline).getTime() / 1000);
+      // Default deadline: 30 days from now (deadline field hidden from UI)
+      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
 
       // Get passport signature from backend signer
       console.log('Getting passport signature...');

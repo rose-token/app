@@ -418,37 +418,19 @@ export async function getUserDelegates(user: string): Promise<string[]> {
 
 /**
  * Get all proposals a delegate has voted on using DelegatedVoteCast events
+ *
+ * NOTE: The current RoseGovernance contract uses off-chain delegation only
+ * (EIP-712 signatures stored in database). There is no on-chain DelegatedVoteCast
+ * event. This function returns an empty array since on-chain delegated voting
+ * is not implemented in the current contract version.
  */
 export async function getDelegateVotedProposals(
-  delegate: string
+  _delegate: string
 ): Promise<Array<{ proposalId: number; support: boolean }>> {
-  const contract = getGovernanceContract();
-
-  // Query DelegatedVoteCast events where this address is the delegate
-  const filter = contract.filters.DelegatedVoteCast(null, delegate);
-
-  try {
-    const currentBlock = await getProvider().getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - 2_000_000);
-
-    const events = await contract.queryFilter(filter, fromBlock, currentBlock);
-
-    const votedProposals: Array<{ proposalId: number; support: boolean }> = [];
-
-    for (const event of events) {
-      if ('args' in event && event.args) {
-        votedProposals.push({
-          proposalId: Number(event.args.proposalId),
-          support: event.args.support as boolean,
-        });
-      }
-    }
-
-    return votedProposals;
-  } catch (error) {
-    console.error('Error querying delegate vote events:', error);
-    return [];
-  }
+  // The current governance contract has no DelegatedVoteCast event.
+  // Delegations are handled off-chain via EIP-712 signatures stored in DB.
+  // Return empty array since there's no on-chain delegated vote tracking.
+  return [];
 }
 
 /**
@@ -689,47 +671,31 @@ export async function signUndelegateWithReduction(
 
 /**
  * Phase 1: Get delegator's contribution to a specific proposal via delegate
+ *
+ * NOTE: The current RoseGovernance contract uses off-chain delegation only.
+ * There is no on-chain delegatorVoteContribution tracking. Returns 0.
  */
 export async function getDelegatorContribution(
-  proposalId: number,
-  delegate: string,
-  delegator: string
+  _proposalId: number,
+  _delegate: string,
+  _delegator: string
 ): Promise<bigint> {
-  const contract = getGovernanceContract();
-  const contribution = await contract.delegatorVoteContribution(proposalId, delegate, delegator);
-  return BigInt(contribution);
+  // The current governance contract has no on-chain delegator vote contribution tracking.
+  // Delegations are handled off-chain via EIP-712 signatures stored in DB.
+  return 0n;
 }
 
 /**
  * Phase 2: Get all delegates with pending VP for a finalized proposal
+ *
+ * NOTE: The current RoseGovernance contract uses off-chain delegation only.
+ * There is no on-chain DelegatedVoteCast event or delegatedVoteAllocated tracking.
+ * Returns empty array.
  */
-export async function getDelegatesWithPendingVP(proposalId: number): Promise<string[]> {
-  const contract = getGovernanceContract();
-  const delegatesWithPendingVP: string[] = [];
-
-  // Get all delegates who voted on this proposal via events
-  const filter = contract.filters.DelegatedVoteCast(proposalId);
-  const currentBlock = await getProvider().getBlockNumber();
-  const deploymentBlock = parseInt(process.env.GOVERNANCE_DEPLOYMENT_BLOCK || '0') || 0;
-
-  try {
-    const events = await contract.queryFilter(filter, deploymentBlock, currentBlock);
-
-    for (const event of events) {
-      if ('args' in event && event.args) {
-        const delegate = (event.args.delegate as string).toLowerCase();
-        // Check if they still have allocated VP (not already freed)
-        const allocated = BigInt(await contract.delegatedVoteAllocated(proposalId, delegate));
-        if (allocated > 0n && !delegatesWithPendingVP.includes(delegate)) {
-          delegatesWithPendingVP.push(delegate);
-        }
-      }
-    }
-  } catch (error) {
-    console.error(`Error querying delegates for proposal ${proposalId}:`, error);
-  }
-
-  return delegatesWithPendingVP;
+export async function getDelegatesWithPendingVP(_proposalId: number): Promise<string[]> {
+  // The current governance contract has no DelegatedVoteCast event or
+  // delegatedVoteAllocated tracking. Delegations are handled off-chain.
+  return [];
 }
 
 /**
