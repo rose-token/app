@@ -39,10 +39,18 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // Check if existing avatar is IPFS URL
+  const isIPFSUrl = formData.avatarUrl?.startsWith('ipfs://');
+
   // Fetch existing IPFS avatar with authentication (required for private Pinata files)
-  const { blobUrl: existingAvatarBlobUrl } = useIPFSImage(
-    formData.avatarUrl?.startsWith('ipfs://') ? formData.avatarUrl : null
+  const { blobUrl: existingAvatarBlobUrl, loading: avatarLoading } = useIPFSImage(
+    isIPFSUrl ? formData.avatarUrl : null
   );
+
+  // Determine the resolved avatar URL for the existing avatar:
+  // - For IPFS URLs, only use existingAvatarBlobUrl (never fall back to raw ipfs://)
+  // - For HTTP URLs, use directly
+  const resolvedExistingAvatarUrl = isIPFSUrl ? existingAvatarBlobUrl : formData.avatarUrl;
 
   // Initialize form with existing profile data
   useEffect(() => {
@@ -219,9 +227,15 @@ const ProfileModal = ({ isOpen, onClose, mode = 'edit' }) => {
                   border: '2px dashed var(--border-color)',
                 }}
               >
-                {avatarPreview || existingAvatarBlobUrl || formData.avatarUrl ? (
+                {avatarLoading && !avatarPreview ? (
+                  // Loading skeleton while IPFS image is being fetched
+                  <div
+                    className="w-full h-full animate-pulse"
+                    style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  />
+                ) : avatarPreview || resolvedExistingAvatarUrl ? (
                   <img
-                    src={avatarPreview || existingAvatarBlobUrl || formData.avatarUrl}
+                    src={avatarPreview || resolvedExistingAvatarUrl}
                     alt="Avatar preview"
                     className="w-full h-full object-cover"
                   />

@@ -75,11 +75,18 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
 
   // Extract avatarUrl early for hook (must be before any conditional returns)
   const avatarUrl = profile?.avatarUrl;
+  const isIPFSUrl = avatarUrl?.startsWith('ipfs://');
 
   // Fetch IPFS avatar with authentication (required for private Pinata files)
-  const { blobUrl: avatarBlobUrl } = useIPFSImage(
-    avatarUrl?.startsWith('ipfs://') ? avatarUrl : null
+  const { blobUrl: avatarBlobUrl, loading: avatarLoading } = useIPFSImage(
+    isIPFSUrl ? avatarUrl : null
   );
+
+  // Determine the actual image URL to use:
+  // - For IPFS URLs, only use avatarBlobUrl (never fall back to raw ipfs://)
+  // - For HTTP URLs, use directly
+  const resolvedAvatarUrl = isIPFSUrl ? avatarBlobUrl : avatarUrl;
+  const isAvatarLoading = isIPFSUrl && avatarLoading;
 
   // Fetch profile
   useEffect(() => {
@@ -160,16 +167,16 @@ const ProfileBadge = ({ address, size = 'sm', showName = true, clickable = true 
           backgroundColor: avatarUrl ? 'transparent' : color,
         }}
       >
-        {loading ? (
+        {loading || isAvatarLoading ? (
           // Loading skeleton
           <div
             className="w-full h-full animate-pulse"
             style={{ backgroundColor: 'var(--bg-tertiary)' }}
           />
-        ) : avatarUrl ? (
-          // Profile image (uses authenticated blob URL from useIPFSImage hook)
+        ) : resolvedAvatarUrl ? (
+          // Profile image (uses authenticated blob URL from useIPFSImage hook for IPFS URLs)
           <img
-            src={avatarBlobUrl || avatarUrl}
+            src={resolvedAvatarUrl}
             alt={displayName || 'Profile'}
             className="w-full h-full object-cover"
             onError={(e) => {
