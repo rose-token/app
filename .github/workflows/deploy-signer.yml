@@ -154,6 +154,8 @@ jobs:
           BACKUP_REFERENCE_CID: ${{ secrets.BACKUP_REFERENCE_CID }}
           MERGEBOT_APP_ID: ${{ secrets.MERGEBOT_APP_ID }}
           MERGEBOT_PRIVATE_KEY: ${{ secrets.MERGEBOT_PRIVATE_KEY }}
+          MERGEBOT_CLIENT_ID: ${{ secrets.MERGEBOT_CLIENT_ID }}
+          MERGEBOT_CLIENT_SECRET: ${{ secrets.MERGEBOT_CLIENT_SECRET }}
           CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
@@ -175,6 +177,8 @@ jobs:
           sed -i "s|\${BACKUP_REFERENCE_CID}|${BACKUP_REFERENCE_CID}|g" backend/signer/deploy.yaml
           sed -i "s|\${MERGEBOT_APP_ID}|${MERGEBOT_APP_ID}|g" backend/signer/deploy.yaml
           sed -i "s|\${MERGEBOT_PRIVATE_KEY}|${MERGEBOT_PRIVATE_KEY}|g" backend/signer/deploy.yaml
+          sed -i "s|\${MERGEBOT_CLIENT_ID}|${MERGEBOT_CLIENT_ID}|g" backend/signer/deploy.yaml
+          sed -i "s|\${MERGEBOT_CLIENT_SECRET}|${MERGEBOT_CLIENT_SECRET}|g" backend/signer/deploy.yaml
           sed -i "s|\${CAMELOT_LP_POSITION_IDS}|${CAMELOT_LP_POSITION_IDS}|g" backend/signer/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
@@ -186,7 +190,9 @@ jobs:
             sed 's/REACT_APP_PINATA_JWT=.*/REACT_APP_PINATA_JWT=***REDACTED***/g' | \
             sed 's/BACKUP_REFERENCE_CID=.*/BACKUP_REFERENCE_CID=***REDACTED***/g' | \
             sed 's/MERGEBOT_APP_ID=.*/MERGEBOT_APP_ID=***REDACTED***/g' | \
-            sed 's/MERGEBOT_PRIVATE_KEY=.*/MERGEBOT_PRIVATE_KEY=***REDACTED***/g'
+            sed 's/MERGEBOT_PRIVATE_KEY=.*/MERGEBOT_PRIVATE_KEY=***REDACTED***/g' | \
+            sed 's/MERGEBOT_CLIENT_ID=.*/MERGEBOT_CLIENT_ID=***REDACTED***/g' | \
+            sed 's/MERGEBOT_CLIENT_SECRET=.*/MERGEBOT_CLIENT_SECRET=***REDACTED***/g'
 
           SDL_CONTENT=$(cat backend/signer/deploy.yaml)
 

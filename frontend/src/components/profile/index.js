@@ -9,3 +9,4 @@ export { default as ProfileCard } from './ProfileCard';
 export { default as ProfileModal } from './ProfileModal';
 export { default as ProfileViewModal } from './ProfileViewModal';
 export { default as ReputationStats } from './ReputationStats';
+export { default as GitHubIntegration } from './GitHubIntegration';

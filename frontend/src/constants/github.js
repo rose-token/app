@@ -45,19 +45,27 @@ export const validatePrUrl = (url) => {
 };
 
 /**
- * Validate PR URL with the backend (checks if app has access and PR is open).
+ * Validate PR URL with the backend (checks if app has access, PR is open, and customer authorized repo).
  * @param {string} url - The PR URL to validate
  * @param {string} signerUrl - The backend signer URL
+ * @param {number|string} [taskId] - Optional task ID for customer authorization check
  * @returns {Promise<{valid: boolean, error?: string, title?: string}>}
  */
-export const validatePrUrlWithBackend = async (url, signerUrl) => {
+export const validatePrUrlWithBackend = async (url, signerUrl, taskId) => {
   try {
+    const body = { prUrl: url };
+
+    // Include taskId if provided for authorization check
+    if (taskId !== undefined && taskId !== null) {
+      body.taskId = taskId;
+    }
+
     const response = await fetch(`${signerUrl}${GITHUB_INTEGRATION.VALIDATE_ENDPOINT}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prUrl: url }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();

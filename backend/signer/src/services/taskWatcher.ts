@@ -210,7 +210,8 @@ async function handleTaskReadyForPayment(
     console.log(`[TaskWatcher] Processing GitHub merge for task ${taskIdNum}, PR: ${task.prUrl}`);
     stats.mergesAttempted++;
 
-    const result = await approveAndMergePR(task.prUrl, taskIdNum);
+    // Pass customer address for authorization check
+    const result = await approveAndMergePR(task.prUrl, taskIdNum, task.customer);
 
     if (result.success) {
       stats.mergesSucceeded++;
@@ -379,7 +380,8 @@ export async function processTaskManually(taskId: number): Promise<{
   }
 
   stats.mergesAttempted++;
-  const result = await approveAndMergePR(task.prUrl, taskId);
+  // Pass customer address for authorization check
+  const result = await approveAndMergePR(task.prUrl, taskId, task.customer);
 
   if (result.success) {
     stats.mergesSucceeded++;

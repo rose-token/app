@@ -148,7 +148,14 @@ export const config = {
     enabled: process.env.GITHUB_BOT_ENABLED !== 'false',
     // Blocks to look back on startup for TaskReadyForPayment events
     startupBlockLookback: parseInt(process.env.GITHUB_WATCHER_STARTUP_LOOKBACK || '100'),
+    // OAuth settings for user authentication (GitHub App OAuth)
+    clientId: process.env.MERGEBOT_CLIENT_ID || '',
+    clientSecret: process.env.MERGEBOT_CLIENT_SECRET || '',
+    callbackUrl: process.env.MERGEBOT_CALLBACK_URL || 'https://signer.rose-token.com/api/github/callback',
   },
+
+  // Frontend URL for OAuth redirects
+  frontendUrl: process.env.FRONTEND_URL || 'https://rose-token.com',
 
   // Task watcher configuration (GitHub PR auto-merge on task approval)
   taskWatcher: {

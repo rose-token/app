@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { useProfile } from '../hooks/useProfile';
 import useGovernance from '../hooks/useGovernance';
@@ -8,9 +8,10 @@ import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import PassportStatus from '../components/passport/PassportStatus';
 import ProfileCard from '../components/profile/ProfileCard';
 import ProfileModal from '../components/profile/ProfileModal';
+import { GitHubIntegration } from '../components/profile';
 import ReputationBadge from '../components/governance/ReputationBadge';
 import { PASSPORT_THRESHOLDS } from '../constants/passport';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const ProfilePage = () => {
   const { profile, isLoading, error, refreshProfile } = useProfile();
@@ -25,8 +26,41 @@ const ProfilePage = () => {
     canVote,
   } = useGovernance();
   const { isDelegating, delegatedTo, delegatorCount, totalDelegatedPower, canDelegate } = useDelegation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [githubNotification, setGithubNotification] = useState(null);
+
+  // Handle GitHub OAuth redirect params
+  useEffect(() => {
+    const githubStatus = searchParams.get('github');
+    if (githubStatus === 'linked') {
+      const username = searchParams.get('username');
+      setGithubNotification({
+        type: 'success',
+        message: `GitHub account @${username} linked successfully!`,
+      });
+      // Clean up URL params
+      searchParams.delete('github');
+      searchParams.delete('username');
+      setSearchParams(searchParams);
+    } else if (githubStatus === 'error') {
+      setGithubNotification({
+        type: 'error',
+        message: 'Failed to link GitHub account. Please try again.',
+      });
+      searchParams.delete('github');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Auto-hide notification after 5 seconds
+  useEffect(() => {
+    if (githubNotification) {
+      const timer = setTimeout(() => setGithubNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [githubNotification]);
 
   if (!isConnected) {
     return (
@@ -55,6 +89,25 @@ const ProfilePage = () => {
           Manage Your Identity and Governance Position
         </p>
       </div>
+
+      {/* GitHub OAuth Notification */}
+      {githubNotification && (
+        <div
+          className="p-4 rounded-xl mb-6 flex items-center gap-3"
+          style={{
+            background: githubNotification.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'var(--error-bg)',
+            border: `1px solid ${githubNotification.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`,
+            color: githubNotification.type === 'success' ? 'var(--success)' : 'var(--error)',
+          }}
+        >
+          {githubNotification.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          )}
+          <span>{githubNotification.message}</span>
+        </div>
+      )}
 
       {/* Profile Card */}
       {isLoading && !profile ? (
@@ -283,6 +336,17 @@ const ProfilePage = () => {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* GitHub Integration Section */}
+      <div className="mt-6">
+        <h2
+          className="font-display text-xl font-medium mb-4"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          GitHub Integration
+        </h2>
+        <GitHubIntegration />
       </div>
 
       {/* Edit Profile Modal */}

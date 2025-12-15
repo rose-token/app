@@ -7,8 +7,10 @@
 
 import { App } from '@octokit/app';
 import { Octokit } from '@octokit/rest';
+import { ethers } from 'ethers';
 import { config } from '../config';
 import { query } from '../db/pool';
+import { getMarketplaceContract, getHttpProvider } from '../utils/contracts';
 
 // Types
 export interface ParsedPrUrl {
@@ -60,7 +62,7 @@ function getApp(): AppWithRest {
  * Get an authenticated Octokit instance for a specific repo owner.
  * Caches installation IDs to reduce API calls.
  */
-async function getOctokitForRepo(owner: string): Promise<InstanceType<typeof Octokit>> {
+export async function getOctokitForRepo(owner: string): Promise<InstanceType<typeof Octokit>> {
   const ghApp = getApp();
 
   // Check cache first
@@ -167,6 +169,54 @@ export async function validatePrUrl(prUrl: string): Promise<ValidatePrResult> {
 }
 
 /**
+ * Validate a PR URL with customer authorization check.
+ * This is called when workers submit a PR URL to ensure the customer has authorized the repository.
+ *
+ * @param prUrl - The GitHub PR URL to validate
+ * @param taskId - The task ID to look up the customer address
+ * @returns ValidatePrResult with authorization status
+ */
+export async function validatePrUrlWithAuth(
+  prUrl: string,
+  taskId: number
+): Promise<ValidatePrResult> {
+  // First parse the PR URL
+  const pr = parsePrUrl(prUrl);
+  if (!pr) {
+    return { valid: false, error: 'Invalid GitHub PR URL format' };
+  }
+
+  try {
+    // Fetch task from contract to get customer address
+    const marketplace = getMarketplaceContract(getHttpProvider());
+    const task = await marketplace.tasks(taskId);
+
+    // Check if task exists
+    if (task.customer === ethers.ZeroAddress) {
+      return { valid: false, error: 'Task not found' };
+    }
+
+    const customerAddress = task.customer;
+
+    // Check if customer has authorized this repo
+    const authorized = await isRepoAuthorized(customerAddress, pr.owner, pr.repo);
+    if (!authorized) {
+      return {
+        valid: false,
+        error: `Repository ${pr.owner}/${pr.repo} not authorized by task customer. The customer must authorize this repository in their Profile before you can submit work.`,
+      };
+    }
+
+    // If authorized, proceed with standard PR validation
+    return await validatePrUrl(prUrl);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('[GitHub] Error validating PR with auth:', error.message);
+    return { valid: false, error: error.message || 'Failed to validate PR' };
+  }
+}
+
+/**
  * Create an approval review on a PR.
  */
 export async function approvePR(prUrl: string, taskId: number): Promise<GitHubResult> {
@@ -242,14 +292,53 @@ export async function mergePR(
 }
 
 /**
+ * Check if a wallet is authorized to auto-merge to a repository.
+ * Returns true if the customer has authorized this repo for auto-merge.
+ */
+export async function isRepoAuthorized(
+  walletAddress: string,
+  repoOwner: string,
+  repoName: string
+): Promise<boolean> {
+  const result = await query(
+    `SELECT id FROM authorized_repos
+     WHERE LOWER(wallet_address) = LOWER($1)
+     AND LOWER(repo_owner) = LOWER($2)
+     AND LOWER(repo_name) = LOWER($3)`,
+    [walletAddress, repoOwner, repoName]
+  );
+  return result.rows.length > 0;
+}
+
+/**
  * Approve and merge a PR in a single operation.
  * Logs the result to the database.
+ *
+ * @param prUrl - The GitHub PR URL
+ * @param taskId - The task ID for logging
+ * @param customerAddress - Optional customer address for authorization check.
+ *                         If provided, verifies the customer has authorized this repo.
  */
-export async function approveAndMergePR(prUrl: string, taskId: number): Promise<GitHubResult> {
+export async function approveAndMergePR(
+  prUrl: string,
+  taskId: number,
+  customerAddress?: string
+): Promise<GitHubResult> {
   const pr = parsePrUrl(prUrl);
   if (!pr) {
     await logMergeAttempt(taskId, prUrl, 'approve_and_merge', false, 'Invalid PR URL');
     return { success: false, error: 'Invalid PR URL' };
+  }
+
+  // Security check: Verify customer authorized this repo (if customerAddress provided)
+  if (customerAddress) {
+    const authorized = await isRepoAuthorized(customerAddress, pr.owner, pr.repo);
+    if (!authorized) {
+      const errorMsg = `Repository ${pr.owner}/${pr.repo} not authorized by customer ${customerAddress}`;
+      console.warn(`[GitHub] ${errorMsg}`);
+      await logMergeAttempt(taskId, prUrl, 'approve_and_merge', false, errorMsg);
+      return { success: false, error: 'Repository not authorized for auto-merge. Customer must authorize this repo first.' };
+    }
   }
 
   try {

@@ -168,7 +168,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       return;
     }
 
-    // Step 2: Backend validation (checks if PR exists, app has access, PR is open)
+    // Step 2: Backend validation (checks if PR exists, app has access, PR is open, customer authorized repo)
     // Only validate with backend if the PR URL looks like a GitHub PR
     if (GITHUB_INTEGRATION.PR_URL_REGEX.test(prUrl.trim())) {
       setIsValidatingPr(true);
@@ -176,7 +176,8 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
       try {
         const signerUrl = import.meta.env.VITE_PASSPORT_SIGNER_URL;
-        const result = await validatePrUrlWithBackend(prUrl, signerUrl);
+        // Pass task.id for customer authorization check
+        const result = await validatePrUrlWithBackend(prUrl, signerUrl, task.id);
 
         if (!result.valid) {
           setPrUrlError(result.error || 'Failed to validate PR URL');

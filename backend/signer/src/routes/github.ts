@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { validatePrUrl, getGitHubStatus, parsePrUrl } from '../services/github';
+import { validatePrUrl, validatePrUrlWithAuth, getGitHubStatus, parsePrUrl } from '../services/github';
 import { getTaskWatcherStats, processTaskManually } from '../services/taskWatcher';
 import { query } from '../db/pool';
 import { config } from '../config';
@@ -20,10 +20,14 @@ const router = Router();
  * - URL is valid format
  * - App has access to the repo
  * - PR exists and is open
+ * - Customer has authorized the repository (when taskId provided)
+ *
+ * @body prUrl - The GitHub PR URL to validate
+ * @body taskId - Optional task ID for customer authorization check
  */
 router.post('/validate-pr', async (req: Request, res: Response) => {
   try {
-    const { prUrl } = req.body;
+    const { prUrl, taskId } = req.body;
 
     if (!prUrl || typeof prUrl !== 'string') {
       return res.status(400).json({
@@ -32,6 +36,20 @@ router.post('/validate-pr', async (req: Request, res: Response) => {
       });
     }
 
+    // If taskId is provided, validate with customer authorization check
+    if (taskId !== undefined && taskId !== null) {
+      const parsedTaskId = parseInt(taskId, 10);
+      if (isNaN(parsedTaskId) || parsedTaskId <= 0) {
+        return res.status(400).json({
+          valid: false,
+          error: 'Invalid task ID',
+        });
+      }
+      const result = await validatePrUrlWithAuth(prUrl, parsedTaskId);
+      return res.json(result);
+    }
+
+    // Otherwise, just validate the PR URL without authorization check
     const result = await validatePrUrl(prUrl);
     return res.json(result);
   } catch (error) {
