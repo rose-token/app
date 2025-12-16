@@ -284,7 +284,7 @@ jobs:
       - name: Deploy Frontend to Akash Console
         env:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
-          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND_PROD }}
+          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND }}
           IMAGE_TAG: ${{ needs.build-and-push-frontend.outputs.image_tag }}
         run: |
           # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
@@ -606,7 +606,7 @@ jobs:
       - name: Deploy Signer to Akash Console
         env:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
-          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_PROD }}
+          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ }}
           IMAGE_TAG: ${{ needs.build-and-push-signer.outputs.image_tag }}
           SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
           VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
