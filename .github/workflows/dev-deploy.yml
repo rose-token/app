@@ -296,6 +296,8 @@ jobs:
           VITE_PINATA_GATEWAY: ${{ secrets.REACT_APP_PINATA_GATEWAY }}
           VITE_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
           VITE_BUILD_VERSION: ${{ github.sha }}
+          VITE_CHAIN_ID: ${{ vars.VITE_CHAIN_ID }}
+          VITE_RPC_WS_URL: wss://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -316,6 +318,8 @@ jobs:
           sed -i "s|\${VITE_PINATA_GATEWAY}|${VITE_PINATA_GATEWAY}|g" frontend/deploy.yaml
           sed -i "s|\${VITE_PINATA_JWT}|${VITE_PINATA_JWT}|g" frontend/deploy.yaml
           sed -i "s|\${VITE_BUILD_VERSION}|${VITE_BUILD_VERSION}|g" frontend/deploy.yaml
+          sed -i "s|\${VITE_CHAIN_ID}|${VITE_CHAIN_ID}|g" frontend/deploy.yaml
+          sed -i "s|\${VITE_RPC_WS_URL}|${VITE_RPC_WS_URL}|g" frontend/deploy.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat frontend/deploy.yaml | \
@@ -652,6 +656,7 @@ jobs:
           MERGEBOT_CLIENT_ID: ${{ secrets.MERGEBOT_CLIENT_ID }}
           MERGEBOT_CLIENT_SECRET: ${{ secrets.MERGEBOT_CLIENT_SECRET }}
           CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
+          VITE_CHAIN_ID: ${{ vars.VITE_CHAIN_ID }}
         run: |
           # Update image in SDL (use short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -660,6 +665,7 @@ jobs:
 
           # Substitute secrets into SDL
           sed -i "s|\${SIGNER_PRIVATE_KEY}|${SIGNER_PRIVATE_KEY}|g" backend/signer/deploy.yaml
+          sed -i "s|\${VITE_CHAIN_ID}|${VITE_CHAIN_ID}|g" backend/signer/deploy.yaml
           sed -i "s|\${VITE_GITCOIN_SCORER_ID}|${VITE_GITCOIN_SCORER_ID}|g" backend/signer/deploy.yaml
           sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" backend/signer/deploy.yaml
           sed -i "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" backend/signer/deploy.yaml
