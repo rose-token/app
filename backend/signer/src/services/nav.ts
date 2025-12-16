@@ -252,7 +252,7 @@ export async function getNavHistory(options: NavHistoryOptions = {}): Promise<Na
   let countQuery: string;
 
   if (interval === 'daily') {
-    // Aggregate to daily (first snapshot of each day)
+    // Aggregate to daily (latest snapshot of each day)
     dataQuery = `
       SELECT DISTINCT ON (DATE(recorded_at))
         id, recorded_at, rose_price_usd, total_hard_assets_usd,
@@ -260,7 +260,7 @@ export async function getNavHistory(options: NavHistoryOptions = {}): Promise<Na
         actual_usdc_bps, actual_rose_bps, rebalance_needed
       FROM nav_snapshots
       ${whereClause}
-      ORDER BY DATE(recorded_at) DESC, recorded_at ASC
+      ORDER BY DATE(recorded_at) DESC, recorded_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
     countQuery = `
@@ -276,7 +276,7 @@ export async function getNavHistory(options: NavHistoryOptions = {}): Promise<Na
         actual_usdc_bps, actual_rose_bps, rebalance_needed
       FROM nav_snapshots
       ${whereClause}
-      ORDER BY DATE_TRUNC('week', recorded_at) DESC, recorded_at ASC
+      ORDER BY DATE_TRUNC('week', recorded_at) DESC, recorded_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
     countQuery = `

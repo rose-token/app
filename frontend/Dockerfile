@@ -15,6 +15,9 @@ RUN npm install
 # Copy source
 COPY . .
 
+# Cache bust arg - changes each commit to invalidate cache
+ARG CACHE_BUST
+
 # Build args for Vite env vars (baked in at build time)
 ARG VITE_TOKEN_ADDRESS
 ARG VITE_TREASURY_ADDRESS

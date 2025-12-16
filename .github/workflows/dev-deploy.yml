@@ -258,6 +258,7 @@ jobs:
           cache-to: type=gha,mode=max
           no-cache: true
           build-args: |
+            CACHE_BUST=${{ github.sha }}
             VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
             VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
             VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
