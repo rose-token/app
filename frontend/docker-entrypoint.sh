@@ -29,6 +29,10 @@ else
     sed -i "s|__VITE_PINATA_GATEWAY__|${VITE_PINATA_GATEWAY}|g" "$file"
     sed -i "s|__VITE_PINATA_JWT__|${VITE_PINATA_JWT}|g" "$file"
     sed -i "s|__VITE_BUILD_VERSION__|${VITE_BUILD_VERSION}|g" "$file"
+
+    # Chain configuration
+    sed -i "s|__VITE_CHAIN_ID__|${VITE_CHAIN_ID}|g" "$file"
+    sed -i "s|__VITE_RPC_WS_URL__|${VITE_RPC_WS_URL}|g" "$file"
   done
 
   echo "Placeholder replacement complete for $(echo "$JS_FILES" | wc -l | tr -d ' ') JS files."
