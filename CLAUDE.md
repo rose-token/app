@@ -400,6 +400,27 @@ gh pr create --title "feat: ..." --body "..." && gh pr checks --watch
 
 Never push directly to main.
 
+## Pinned Contracts (CI/CD)
+
+Skip contract deployment by setting all 7 GitHub secrets:
+
+| Secret | Contract |
+|--------|----------|
+| `TOKEN_ADDRESS` | RoseToken |
+| `TREASURY_ADDRESS` | RoseTreasury |
+| `MARKETPLACE_ADDRESS` | RoseMarketplace |
+| `GOVERNANCE_ADDRESS` | RoseGovernance |
+| `REPUTATION_ADDRESS` | RoseReputation |
+| `VROSE_ADDRESS` | vROSE |
+| `USDC_ADDRESS` | Mock USDC |
+
+**Behavior:**
+- All 7 set → `deploy-contracts` job skipped, pinned addresses used
+- Any missing → Full deployment runs (fail-safe default)
+- Reputation seeding also skipped when pinned
+
+**Note:** Treasury stores LiFi, asset tokens, and price feeds internally. Pinning Treasury pins all related infrastructure.
+
 ## MockLiFi (Testnet)
 
 **Critical:** MockLiFiDiamond calculates swap output **before** transferring tokens. This is required because ROSE price depends on Treasury's ROSE balance (`circulatingSupply = totalSupply - treasuryBalance`). Transferring ROSE first would change the price and cause slippage failures.
