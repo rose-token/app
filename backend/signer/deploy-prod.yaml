@@ -3,7 +3,7 @@ version: "2.0"
 
 services:
   signer:
-    image: ghcr.io/emmadorably/rose-token-v3/passport-signer:latest
+    image: ghcr.io/rose-token/app/passport-signer:latest
     expose:
       - port: 3000
         as: 80
@@ -54,13 +54,13 @@ profiles:
     signer:
       resources:
         cpu:
-          units: 1.5
+          units: 0.75
         memory:
-          size: 2Gi
+          size: 1Gi
         storage:
           - size: 1Gi
           - name: data
-            size: 10Gi
+            size: 5Gi
             attributes:
               persistent: true
               class: beta3
