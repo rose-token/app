@@ -2,13 +2,14 @@ const hre = require("hardhat");
 const fs = require("fs");
 
 // ============ Mainnet Addresses (Arbitrum One) ============
+// Note: Using lowercase addresses - ethers.js v6 is strict about EIP-55 checksums
 const ARBITRUM_MAINNET = {
-  usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",      // Native USDC on Arbitrum
-  tbtc: "0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40",      // tBTC on Arbitrum
+  usdc: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",      // Native USDC on Arbitrum
+  tbtc: "0x6c84a8f1c29108f47a79964b5fe888d4f4d0de40",      // tBTC on Arbitrum
   xaut: "0x40461291347e1ecbb09499f3371d3f17f10d7159",      // Tether Gold (XAUt) on Arbitrum
-  btcUsdFeed: "0x6ce185860a4963106506C203335A2910413708e9", // Chainlink BTC/USD Arbitrum
-  xauUsdFeed: "0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c", // Chainlink XAU/USD Arbitrum
-  lifiDiamond: "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE", // LiFi Diamond Arbitrum
+  btcUsdFeed: "0x6ce185860a4963106506c203335a2910413708e9", // Chainlink BTC/USD Arbitrum
+  xauUsdFeed: "0x1f954dc24a49708c26e0c1777f16750b5c6d5a2c", // Chainlink XAU/USD Arbitrum
+  lifiDiamond: "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", // LiFi Diamond Arbitrum
 };
 
 async function main() {
