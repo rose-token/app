@@ -1,612 +1,376 @@
-# Rose Token - Decentralized Task Marketplace
+# Rose Protocol
 
-A worker-focused decentralized marketplace with task-value-based token distribution, built on Ethereum using Solidity and React.
+A worker-focused decentralized marketplace with real-world asset (RWA)-backed treasury, two-track governance, and reputation-gated participation.
 
 ![License](https://img.shields.io/badge/license-PPL-blue.svg)
-![Solidity](https://img.shields.io/badge/solidity-0.8.17-purple.svg)
-![Network](https://img.shields.io/badge/network-Optimism_Sepolia-red.svg)
+![Solidity](https://img.shields.io/badge/solidity-0.8.20-purple.svg)
+![Network](https://img.shields.io/badge/network-Arbitrum-blue.svg)
 
 ## Overview
 
-Rose Token is a decentralized Web3 marketplace that connects customers with workers through a transparent, blockchain-based task completion system. The platform uses a task-value-based token distribution model that prioritizes worker compensation while maintaining quality through stakeholder validation.
+Rose Protocol is a Web3 cooperative platform that connects customers with workers through transparent, blockchain-based task completion. The platform features:
 
-### Core Roles
+- **RWA-Backed Treasury**: ROSE tokens backed by BTC, Gold, and USDC with NAV-based pricing
+- **Three-Party Task System**: Customers, workers, and stakeholders collaborate with aligned incentives
+- **Two-Track Governance**: Fast track (3 days) for small proposals, slow track (14 days) for major decisions
+- **Reputation System**: 36-month decay with eligibility gating for proposals, voting, and delegation
+- **Sybil Resistance**: Gitcoin Passport verification on all user actions
 
-- **Customers**: Create tasks and deposit ROSE tokens as payment
-- **Workers**: Claim and complete tasks to earn ROSE tokens
-- **Stakeholders**: Validate completed work by staking ROSE tokens
+## Quick Start
 
-### Tokenomics Model
+```bash
+# Smart Contracts
+npm install
+npm test                              # Run all tests
+npm run compile                       # Compile contracts
+npm run deploy:arbitrumSepolia        # Deploy to testnet
 
-The platform implements a **worker-focused tokenomics model** introduced in November 2024:
+# Frontend
+cd frontend && npm install && npm run dev
 
-**For a 10 ROSE task:**
-- Customer deposits: **10 ROSE** (escrowed in marketplace contract)
-- Stakeholder stakes: **1 ROSE** (10% of task value, returned on completion)
-- Platform mints: **0.2 ROSE** → DAO treasury (2% of task value, creates ~2% annual inflation)
-
-**Distribution on completion:**
-- **Worker receives**: 9.5 ROSE (95% of customer deposit)
-- **Stakeholder receives**: 1.5 ROSE total (1.0 stake returned + 0.5 fee = 50% ROI)
-- **DAO receives**: 0.2 ROSE (minted separately, not from distribution pot)
-
-**Key Features:**
-- Task-value-based distribution (no fixed base reward)
-- 95% of customer payment goes directly to workers
-- Stakeholders earn 50% ROI on their 10% stake
-- Platform mints only 2% of task value to DAO (sustainable inflation)
-- All three roles must be held by different addresses per task (prevents self-dealing)
-
-## Smart Contracts
-
-The platform consists of **2 core smart contracts**:
-
-### 1. RoseMarketplace (331 lines)
-The central hub for task management and token distribution.
-
-**Key Features:**
-- Automatically deploys RoseToken in constructor
-- Funds DAO treasury with 10,000 ROSE on deployment
-- Manages complete task lifecycle with 6 statuses
-- Handles ROSE token escrow and distribution
-- Enforces strict role separation (customer ≠ stakeholder ≠ worker)
-- Integrates with IPFS for detailed task descriptions
-
-**Task Status Flow:**
-```
-StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPayment → Closed
-     ↓                 ↓
-     └─────────────────┴──→ (cancelTask) → Closed (with refunds)
+# Backend
+cd backend/signer && npm install && npm run dev
 ```
 
-### 2. RoseToken (94 lines)
-ERC20 token with controlled minting.
+## Architecture
 
-**Specifications:**
-- Name: "Rose Token"
-- Symbol: "ROSE"
-- Decimals: 18
-- Minting: Restricted to RoseMarketplace contract only
-- Standard: Full ERC20 implementation (transfer, approve, transferFrom)
+### Smart Contracts (6 Core)
+
+| Contract | Purpose | Lines |
+|----------|---------|-------|
+| **RoseToken** | ERC20 with authorized mint/burn | 168 |
+| **vROSE** | Soulbound governance receipt (1:1 with staked ROSE) | 205 |
+| **RoseTreasury** | NAV-based pricing, RWA management, redemption queue | 931 |
+| **RoseMarketplace** | Task escrow, stakeholder validation, dispute resolution | 911 |
+| **RoseGovernance** | Two-track proposals, quadratic VP, voter rewards | 966 |
+| **RoseReputation** | 36-month decay buckets, eligibility thresholds | 205 |
+
+### Deployment Order
+
+```
+1. RoseToken (temp auth: deployer)
+2. vROSE
+3. RoseTreasury (+ add assets: BTC 30%, GOLD 30%, STABLE 20%, ROSE 20%)
+4. RoseMarketplace
+5. RoseReputation (temp governance: deployer)
+6. RoseGovernance
+
+Post-deploy: Wire contracts via setAuthorized(), setGovernance(), setMarketplace(), etc.
+```
+
+## Tokenomics
+
+### Payment Distribution
+
+For a **10 ROSE task**:
+- Customer deposits: **10 ROSE** (escrowed)
+- Stakeholder stakes: **1 vROSE** (10% as collateral)
+
+On completion:
+- **Worker**: 9.5 ROSE (95%)
+- **Stakeholder**: 0.5 ROSE fee + 1 vROSE returned (50% ROI)
+- **DAO Treasury**: 0.2 ROSE minted (2%)
+
+### Treasury NAV Formula
+
+```
+ROSE Price = Hard Assets USD / Circulating Supply
+
+Hard Assets = BTC + Gold + USDC (excludes treasury ROSE holdings)
+Circulating Supply = Total Supply - Treasury ROSE Balance
+```
+
+### Target Allocations
+
+| Asset | Allocation | Oracle |
+|-------|------------|--------|
+| BTC (tBTC) | 30% | Chainlink BTC/USD |
+| Gold (XAUt) | 30% | Chainlink XAU/USD |
+| USDC | 20% | $1.00 (stable) |
+| ROSE | 20% | NAV price |
 
 ## Task Lifecycle
 
-### 1. Task Creation (Status: StakeholderRequired)
-Customer creates task with:
-- **Short title**: Max 100 characters (on-chain)
-- **IPFS hash**: Detailed description stored on IPFS (privacy-protected)
-- **Token amount**: Payment in ROSE tokens (escrowed)
-
-```javascript
-await marketplace.createTask(
-  "Build landing page",
-  "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
-  ethers.utils.parseEther("10")
-);
+```
+Customer creates task
+         ↓
+   StakeholderRequired ←────────────────┐
+         ↓ stakeholderStake()           │
+       Open ──────────────────→ Closed  │ (cancel)
+         ↓ claimTask()                  │
+    InProgress ───→ Disputed ──→ Closed │ (resolve)
+         ↓ markTaskCompleted()          │
+     Completed ───→ Disputed ──→ Closed │
+         ↓ approve × 2                  │
+ApprovedPendingPayment                  │
+         ↓ acceptPayment()              │
+      Closed ←──────────────────────────┘
 ```
 
-### 2. Stakeholder Stakes (Status: Open)
-Stakeholder deposits exactly 10% of task value to validate future work:
+### Auction Mode
 
-```javascript
-await marketplace.stakeholderStake(taskId);
-// Requires prior approval for 10% of task value
+For competitive pricing:
+1. Customer deposits max budget
+2. Workers bid off-chain (backend stores bids)
+3. Customer selects winner at their actual bid
+4. On completion:
+   - Worker receives their bid (95%)
+   - Spread (midpoint - bid) → Treasury
+   - Surplus (deposit - midpoint) → Customer refund
+
+## Governance
+
+### Two-Track System
+
+| Feature | Fast Track | Slow Track |
+|---------|------------|------------|
+| Duration | 3 days | 14 days |
+| Quorum | 10% | 25% |
+| Treasury Limit | ≤1% | Unlimited |
+| VP Model | Abundant (vote full VP on multiple) | Scarce (VP is budget) |
+| Verification | Merkle proof | Backend attestation |
+
+### Voting Power Formula
+
+```
+VP = sqrt(stakedRose) × (reputation / 100)
 ```
 
-### 3. Worker Claims (Status: InProgress)
-Worker claims task on first-come, first-served basis:
+Where reputation = `(successValue - disputeValue) / successValue × 100` over 36 months.
 
-```javascript
-await marketplace.claimTask(taskId);
-```
+### Eligibility Thresholds
 
-**Worker Unclaim Feature** (Added October 2025):
-Workers can unclaim tasks they cannot complete:
+| Action | Reputation | Tasks Required |
+|--------|------------|----------------|
+| Propose | 90% | 10 completed |
+| Vote | 70% | - |
+| Delegate | 90% | 10 completed |
 
-```javascript
-await marketplace.unclaimTask(taskId);
-// Task reverts to Open status for another worker
-```
+### Rewards
 
-### 4. Worker Completes (Status: Completed)
-Worker marks task as completed:
+On successful proposal completion:
+- **DAO Treasury**: 2% of task value
+- **Voter Pool** (winning side): 2%
+- **Proposer**: 1%
 
-```javascript
-await marketplace.markTaskCompleted(taskId);
-```
+## Backend Services
 
-### 5. Approval Process (Status: ApprovedPendingPayment)
-Both customer and stakeholder must approve (order doesn't matter):
+### Event Watchers (9)
 
-```javascript
-await marketplace.approveCompletionByCustomer(taskId);
-await marketplace.approveCompletionByStakeholder(taskId);
-```
+| Watcher | Purpose |
+|---------|---------|
+| **DepositWatcher** | Auto-diversify USDC into BTC/Gold via LiFi |
+| **RedemptionWatcher** | Liquidate RWA for redemption fulfillment |
+| **AnalyticsWatcher** | Sync events to PostgreSQL for dashboards |
+| **StakerIndexer** | Maintain off-chain VP cache |
+| **SnapshotWatcher** | Compute VP snapshots, auto-finalize proposals |
+| **DisputeWatcher** | Sync dispute events to database |
+| **DelegateOptInWatcher** | Track delegate opt-in status |
+| **SlowTrackWatcher** | Track Slow Track vote allocations |
+| **TaskWatcher** | Trigger GitHub PR auto-merge |
 
-### 6. Payment Distribution (Status: Closed)
-Worker accepts payment, triggering automatic distribution:
+### API Routes
 
-```javascript
-await marketplace.acceptPayment(taskId);
-// Distributes: 95% to worker, 5% fee + stake to stakeholder
-// Mints: 2% to DAO treasury
-```
+| Route | Purpose |
+|-------|---------|
+| `/api/passport` | Gitcoin Passport verification |
+| `/api/governance` | VP queries, merkle proofs, vote signatures |
+| `/api/delegation/v2` | Off-chain EIP-712 delegations |
+| `/api/treasury` | NAV history, rebalance triggers |
+| `/api/auction` | Off-chain bid storage |
+| `/api/tasks` | Paginated task list (scales to 100k+) |
+| `/api/analytics` | Admin dashboards |
+| `/api/backup` | PostgreSQL → Pinata backups |
 
-### Cancellation (Alternative Flow)
-Tasks can be cancelled before worker claims:
+### Scheduled Jobs
 
-**From StakeholderRequired:**
-- Customer can cancel and receive full refund
+| Job | Schedule | Purpose |
+|-----|----------|---------|
+| NAV Snapshot | Daily 00:00 UTC | Store price history |
+| Rebalance | 1st of month | Multi-swap to target allocations |
+| Delegate Scoring | Hourly | Score proposals, free VP |
+| Database Backup | Daily 02:00 UTC | PostgreSQL → Pinata |
+| Analytics Rollup | Daily 00:00 UTC | Aggregate metrics |
+| Camelot LP Fees | Daily 06:00 UTC | Collect DEX trading fees |
 
-**From Open:**
-- Customer OR stakeholder can cancel
-- Both receive full refunds (deposit + stake)
+## Frontend
 
-**Restrictions:**
-- Cannot cancel after worker claims (InProgress or later)
-- Emits `TaskCancelled` event with refund amounts
+### Tech Stack
 
-## IPFS Integration
+- **React 18** + **Vite 7**
+- **wagmi** + **viem** for blockchain
+- **RainbowKit** for wallet connection
+- **TanStack Query** for caching
+- **TailwindCSS** for styling
+- **Pinata** for private IPFS
 
-Task descriptions are stored on IPFS via Pinata for privacy and gas efficiency:
+### Key Pages
 
-**Benefits:**
-- Reduces on-chain storage costs
-- Enables rich formatting (markdown, structured data)
-- Privacy-protected (only task participants can view details)
-- Immutable task specifications
+| Route | Purpose |
+|-------|---------|
+| `/` | Task marketplace with pagination |
+| `/vault` | Treasury deposits/redemptions |
+| `/governance` | Proposals, staking, voting |
+| `/delegates` | Delegation management |
+| `/profile` | User profile and stats |
+| `/admin` | Owner-only system management |
 
-**Privacy Enforcement:**
-- Frontend checks `isTaskParticipant(taskId)` before fetching
-- Only customer, stakeholder, and worker can view detailed descriptions
-- Non-participants see privacy notice
-- IPFS content public but hash not discoverable without contract access
+### Site-Wide Security
 
-## Frontend Application
+- Passport score ≥ 20 required for all routes (except `/help`)
+- Whitelist bypass available for testing
+- Strict blocking (no graceful degradation)
 
-React 18.2.0 application with MetaMask integration and responsive UI.
-
-### Pages
-- **TasksPage**: Main marketplace with filtering, sorting, and task management
-- **ProfilePage**: User profile and role management
-- **HelpPage**: Documentation and bug reporting
-
-### Key Components
-
-**Marketplace:**
-- `TaskList.jsx` - Task display with filtering/sorting
-- `TaskCard.jsx` - Individual task cards with status-based actions
-- `TaskFilters.jsx` - Filter by status and role
-- `TokenDistributionChart.jsx` - Visual 95/5 split representation
-- `ProgressTracker.jsx` - Task progress for participants
-
-**Wallet:**
-- `TokenBalance.jsx` - ROSE balance display
-- `NetworkSelector.jsx` - Network switching
-- `WalletNotConnected.jsx` - MetaMask connection prompts
-
-### Custom Hooks
-- `useEthereum.js` - MetaMask connection and account management
-- `useContract.js` - Contract initialization and method calls
-- `useNotifications.js` - Toast notification system
-- `useProfile.js` - User profile state
-
-### Theme & Styling
-
-The application uses a **soft red rose color palette** with centralized CSS variables:
-
-**Core Colors:**
-- Deep Rose (`#B1452C`) - Primary brand color, buttons, navbar
-- Warm Peach (`#E4A97F`) - Positive actions, success states
-- Dark Brown (`#421F16`) - Destructive actions, warnings
-- Medium Brown (`#755947`) - Secondary elements, borders
-- Cream Background (`#F6E8D5`) - Page and card backgrounds
-
-**Styling Best Practices:**
-- All colors defined as CSS variables in `frontend/src/index.css`
-- Semantic naming (e.g., `bg-primary`, `text-accent`, `bg-task-claim`)
-- Tailwind CSS integration via `tailwind.config.js`
-- Dark mode support built-in
-- Single source of truth for theme management
-
-## Development Setup
+## Development
 
 ### Prerequisites
-- Node.js 18.x or higher
-- MetaMask wallet extension
-- Optimism Sepolia testnet ETH (for deployment)
-- Pinata account (for IPFS integration)
 
-### Smart Contract Development
+- Node.js 20+
+- PostgreSQL 14+
+- MetaMask or compatible wallet
+
+### Environment Variables
+
+**Root `.env`**:
+```bash
+ARBITRUM_SEPOLIA_RPC_URL=https://...
+PRIVATE_KEY=0x...
+DAO_TREASURY_ADDRESS=0x...
+ARBISCAN_API_KEY=...
+PASSPORT_SIGNER_ADDRESS=0x...
+```
+
+**Frontend `.env`**:
+```bash
+VITE_MARKETPLACE_ADDRESS=0x...
+VITE_TOKEN_ADDRESS=0x...
+VITE_TREASURY_ADDRESS=0x...
+VITE_GOVERNANCE_ADDRESS=0x...
+VITE_VROSE_ADDRESS=0x...
+VITE_PINATA_JWT=...
+VITE_PINATA_GATEWAY=https://...
+```
+
+**Backend `.env`**:
+```bash
+DATABASE_URL=postgresql://...
+RPC_URL=https://...
+RPC_WS_URL=wss://...
+SIGNER_PRIVATE_KEY=0x...
+VITE_GITCOIN_API_KEY=...
+```
+
+### Testing
 
 ```bash
-# Install dependencies
-npm install
-
-# Compile contracts
-npm run compile
-
-# Run all tests (5 test suites, ~626 lines)
+# All tests (8 suites)
 npm test
 
-# Run specific test file
+# Individual suites
+npx hardhat test test/RoseTreasury.test.js
 npx hardhat test test/RoseMarketplace.test.js
-npx hardhat test test/RoseToken.test.js
-npx hardhat test test/TaskLifecycleEdgeCases.test.js
-npx hardhat test test/DetailedDescription.test.js
-
-# Start local Hardhat node
-npx hardhat node
-
-# Deploy to local network
-npx hardhat run scripts/deploy.js --network localhost
-
-# Deploy to Optimism Sepolia testnet
-npm run deploy:opsepolia
-
-# Update contract ABIs in frontend
-npm run update-abi
+npx hardhat test test/RoseGovernanceV2.test.js
+npx hardhat test test/vROSE.test.js
 ```
 
-### Frontend Development
+### ABI Workflow
 
+After contract changes:
 ```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server (http://localhost:3000)
-npm start
-
-# Build for production
-npm run build
-
-# Run frontend tests
-npm test
+npm run update-abi  # Generates ABIs for frontend + backend
 ```
 
-## Environment Configuration
+## CI/CD
 
-### Root Directory `.env`
-Required for contract deployment:
+### PR Build (`pr-build.yml`)
 
-```bash
-# Optimism Sepolia RPC endpoint
-OP_SEPOLIA_RPC_URL=https://sepolia.optimism.io
+Parallel jobs:
+1. **build-contracts**: Test → Compile → Update ABIs
+2. **build-frontend**: Install → Build with placeholder addresses
 
-# Deployer wallet private key (without 0x prefix)
-PRIVATE_KEY=your_wallet_private_key
+### Deploy (`combined-deploy.yml`)
 
-# DAO treasury address
-DAO_TREASURY_ADDRESS=0x_treasury_address
+On push to main:
+1. Run tests
+2. Deploy contracts to Arbitrum Sepolia
+3. Save addresses to `deployment-output.json`
+4. Build and deploy frontend to GitHub Pages
 
-# Optimism Etherscan API key (for contract verification)
-OPTIMISM_ETHERSCAN_API_KEY=your_optimism_etherscan_api_key
-```
+### Backend Deploy (`deploy-signer.yml`)
 
-### Frontend `.env`
-Required for frontend application:
+Deploys to Akash Network with:
+- PostgreSQL database
+- WebSocket event listeners
+- Scheduled cron jobs
 
-```bash
-# Deployed contract addresses (from deployment-output.json)
-REACT_APP_MARKETPLACE_ADDRESS=0x_deployed_marketplace_address
-REACT_APP_TOKEN_ADDRESS=0x_deployed_token_address
+## Security
 
-# Optional: Custom RPC URL (defaults to MetaMask provider)
-RPC_OP_SEPOLIA_URL=https://sepolia.optimism.io
+### Smart Contract Patterns
 
-# Pinata IPFS credentials
-REACT_APP_PINATA_API_KEY=your_pinata_api_key
-REACT_APP_PINATA_SECRET_API_KEY=your_pinata_secret_key
-REACT_APP_PINATA_JWT=your_pinata_jwt_token
-```
+- **ReentrancyGuard** on all 6 contracts
+- **CEI Pattern** (Checks-Effects-Interactions)
+- **SafeERC20** for token transfers
+- **Signature replay protection** via `usedSignatures` mapping
+- **Oracle staleness check** (1 hour max)
+- **Same-block protection** (prevents flash loan attacks on Treasury)
 
-Use `frontend/.env.example` as a template.
+### Economic Security
 
-## Testing
+- Quadratic VP prevents whale dominance
+- Stakeholder collateral (10%) aligns incentives
+- Reputation decay prevents resting on old performance
+- Passport gating prevents sybil attacks
 
-The project includes **5 comprehensive test suites** covering ~626 lines:
+### Centralization Points (MVP Trade-offs)
 
-| Test Suite | Lines | Coverage |
-|------------|-------|----------|
-| `RoseMarketplace.test.js` | 228 | Task lifecycle, payments, escrow |
-| `RoseToken.test.js` | 130 | Minting, transfers, approvals |
-| `TaskLifecycleEdgeCases.test.js` | 123 | Edge cases, error conditions |
-| `DetailedDescription.test.js` | 74 | IPFS integration, privacy |
-| *(Worker Unclaim Tests)* | 71 | Unclaim functionality, re-claiming |
+- Owner can resolve disputes
+- Single passport signer
+- Rebalancer wallet has swap privileges
 
-**Test Coverage:**
-- ✅ Complete task lifecycle from creation to payment
-- ✅ Token minting and distribution (95/5 split + 2% DAO)
-- ✅ Worker unclaim and re-claim scenarios
-- ✅ Role separation enforcement
-- ✅ Invalid state transitions
-- ✅ Unauthorized access attempts
-- ✅ Edge cases and error conditions
+## Mainnet Addresses (Arbitrum One)
 
-```bash
-# Run all tests
-npm test
-
-# Run with gas reporting
-npx hardhat test --network hardhat
-```
-
-## CI/CD Workflows
-
-The project uses **GitHub Actions** with 2 automated workflows:
-
-### 1. PR Build Workflow (`pr-build.yml`)
-Runs on all pull requests with **parallel jobs**:
-
-**build-contracts job:**
-- Install dependencies (`npm ci`)
-- Run all tests (`npx hardhat test`)
-- Compile contracts (`npx hardhat compile`)
-- Generate ABIs (`node scripts/update-abi.js`)
-
-**build-frontend job:**
-- Install dependencies (root + frontend)
-- Compile contracts and update ABIs
-- Build frontend with placeholder addresses
-- Validate build succeeds
-
-### 2. Combined Deploy Workflow (`combined-deploy.yml`)
-Runs on main branch pushes and manual triggers:
-
-**deploy-contracts job:**
-- Run tests and compile
-- Deploy to Optimism Sepolia testnet
-- Wait 90 seconds for contract propagation
-- Verify on Optimism Etherscan
-- Save deployment addresses as artifact
-
-**deploy-frontend job:**
-- Download contract addresses
-- Update ABIs with real addresses
-- Build frontend
-- Deploy to GitHub Pages
-
-**Required GitHub Secrets:**
-- `OP_SEPOLIA_RPC_URL`
-- `PRIVATE_KEY`
-- `DAO_TREASURY_ADDRESS`
-- `OPTIMISM_ETHERSCAN_API_KEY`
-- `REACT_APP_PINATA_API_KEY`
-- `REACT_APP_PINATA_SECRET_API_KEY`
-- `REACT_APP_PINATA_JWT`
-
-## Deployment
-
-### Contract Deployment Order
-
-1. **RoseMarketplace** deploys first
-2. RoseMarketplace constructor automatically deploys **RoseToken**
-3. DAO treasury funded with 10,000 ROSE on deployment
-4. Deployment creates `deployment-output.json` with addresses
-
-```bash
-# Deploy to Optimism Sepolia
-npm run deploy:opsepolia
-
-# Output includes:
-# - Deployer's ETH balance (before/after)
-# - Total gas costs
-# - All contract addresses
-```
-
-### Post-Deployment Steps
-
-1. Copy contract addresses from `deployment-output.json`
-2. Update `frontend/.env` with addresses
-3. Run `npm run update-abi` to sync ABIs to frontend
-4. Deploy frontend or test locally
-
-## Network Configuration
-
-**Supported Networks:**
-- **Local Development**: Hardhat node (localhost:8545, chainId: 1337)
-- **Testnet**: Optimism Sepolia (chainId: 11155420)
-- **Frontend Default**: Optimism Sepolia
-
-**Gas Optimization:**
-- Optimizer enabled with 1 run
-- `viaIR: true` for additional optimizations
-- Prioritizes lower transaction costs over deployment costs
-
-## Security Features
-
-### Role Separation Enforcement
-
-The marketplace enforces strict role separation to prevent conflicts of interest:
-
-**Enforced Rules:**
-1. Customer ≠ Stakeholder (prevents self-validation)
-2. Customer ≠ Worker (prevents self-payment)
-3. Stakeholder ≠ Worker (prevents validating own work)
-
-**Error Messages:**
-- "Customer cannot be stakeholder for their own task"
-- "Customer cannot claim their own task"
-- "Stakeholder cannot claim task they are validating"
-- "Worker cannot be stakeholder for their own task"
-
-**Frontend Validation:**
-- Pre-checks before transaction submission
-- Disabled buttons for invalid actions
-- User-friendly error messages
-
-**Security Benefits:**
-- Prevents self-dealing
-- Maintains validation integrity
-- Ensures fairness across all participants
-- Protects tokenomics model
-
-## Project History
-
-### November 2024: New Tokenomics Model
-- Implemented task-value-based distribution
-- Changed split to 95% worker, 5% stakeholder fee
-- Added 2% platform minting to DAO treasury
-- Removed fixed base reward system
-- Stakeholder stake requirement: 10% of task value
-- Stakeholder ROI: 50% on stake (5% fee + stake returned)
-
-### October 2025: Worker Unclaim Feature
-- Added `unclaimTask()` function
-- Workers can release tasks they cannot complete
-- Task reverts to Open status for re-claiming
-- Prevents tasks from being stuck indefinitely
-- No financial penalty for honest unclaims
-
-### October 2024: MVP Simplification
-- Removed competitive bidding system
-- Removed multi-stakeholder approval workflow
-- Removed comments and dispute resolution
-- Removed PGP encryption features
-- Removed RoseReputation contract
-- Removed BidEvaluationManager contract
-- Removed TokenStaking and StakeholderRegistry contracts
-- Removed governance layer (RoseGovernance contract)
-- Simplified to 2 core contracts
-- Focus on direct task creation and completion
-
-## Architecture Philosophy
-
-The project follows a **"Progressive Enhancement"** approach:
-
-**Current Phase - MVP:**
-- ✅ Simple task creation with ROSE deposits
-- ✅ First-come, first-served worker claiming
-- ✅ Single-stakeholder validation
-- ✅ Direct payment distribution
-- ✅ Worker unclaim functionality
-- ✅ IPFS integration for privacy
-
-**Future Enhancements:**
-- 🔮 Competitive bidding and worker selection
-- 🔮 Multi-stakeholder validation
-- 🔮 On-chain commenting system
-- 🔮 Dispute resolution mechanisms
-- 🔮 Advanced refund logic
-- 🔮 Reputation tracking system
-- 🔮 Governance proposals
-
-## Key Metrics
-
-- **Smart Contracts**: 2 (RoseMarketplace, RoseToken)
-- **Test Suites**: 5 (~626 total lines)
-- **Frontend Pages**: 3 (Tasks, Profile, Help)
-- **Custom Hooks**: 5 (Ethereum, Contract, Notifications, Profile)
-- **Worker Share**: 95% of customer deposit
-- **Stakeholder Fee**: 5% of customer deposit
-- **Stakeholder Stake**: 10% of task value (returned on completion)
-- **Stakeholder ROI**: 50% (5% fee on 10% stake)
-- **Platform Mint**: 2% of task value → DAO treasury
-- **Annual Inflation**: ~2% (from platform minting)
-- **CI/CD Workflows**: 2 (PR Build, Combined Deploy)
+| Asset | Address |
+|-------|---------|
+| USDC | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
+| tBTC | `0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40` |
+| XAUt | `0x40461291347e1ecbb09499f3371d3f17f10d7159` |
+| BTC/USD Feed | `0x6ce185860a4963106506C203335A2910413708e9` |
+| XAU/USD Feed | `0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c` |
+| LiFi Diamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
 
 ## Technology Stack
 
-**Smart Contracts:**
-- Solidity 0.8.17
-- Hardhat development framework
-- Ethers.js v5.7.2
-- Chai testing library
+| Layer | Technologies |
+|-------|-------------|
+| **Contracts** | Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5, Hardhat |
+| **Frontend** | React 18, Vite 7, wagmi, viem, RainbowKit, TailwindCSS |
+| **Backend** | TypeScript, Express, PostgreSQL, ethers.js v6 |
+| **Infrastructure** | Arbitrum, Pinata IPFS, Akash Network, GitHub Actions |
 
-**Frontend:**
-- React 18.2.0
-- React Router v6
-- Tailwind CSS
-- Radix UI components
-- @tanstack/react-query 4.36.1
-- DOMPurify 3.2.6 (XSS protection)
-- Recharts 2.15.3 (data visualization)
+## Git Workflow
 
-**Web3 Integration:**
-- @metamask/sdk-react 0.32.1
-- ethers.js 5.7.2
-- react-app-rewired (webpack customization)
-
-**IPFS:**
-- @pinata/sdk 2.1.0
-- Pinata Cloud service
-
-**Network:**
-- Optimism Sepolia testnet (chainId: 11155420)
-
-## Contributing
-
-### Git Workflow
-
-1. Create feature branch:
-   ```bash
-   git checkout -b feature/descriptive-name
-   ```
-
-2. Make changes and commit:
-   ```bash
-   git add .
-   git commit -m "feat: descriptive message"
-   ```
-
-3. Push branch:
-   ```bash
-   git push -u origin feature/descriptive-name
-   ```
-
-4. Create pull request:
-   ```bash
-   gh pr create --title "feat: your feature" --body "Description"
-   ```
-
-5. Monitor CI/CD:
-   ```bash
-   gh pr checks --watch
-   ```
-
-**Important:**
-- All PRs must pass CI/CD checks before merging
-- Never push directly to main branch
-- Fix CI/CD failures immediately
-- Follow semantic commit messages
-
-### Development Best Practices
-
-1. **Read Before Modifying**: Always read existing code before making changes
-2. **Test Coverage**: Ensure all tests pass (`npm test`)
-3. **ABI Sync**: Run `npm run update-abi` after contract changes
-4. **No Over-Engineering**: Keep solutions simple and focused
-5. **Security First**: Watch for vulnerabilities (XSS, injection, OWASP top 10)
-6. **Gas Optimization**: Consider gas costs in contract changes
-7. **MVP Scope**: Don't reference removed features
-
-## Resources
-
-- **Hardhat**: https://hardhat.org/docs
-- **Ethers.js v5**: https://docs.ethers.org/v5/
-- **React Router v6**: https://reactrouter.com/
-- **Tailwind CSS**: https://tailwindcss.com/docs
-- **Radix UI**: https://www.radix-ui.com/
-- **Pinata IPFS**: https://docs.pinata.cloud/
-- **MetaMask SDK**: https://docs.metamask.io/wallet/how-to/use-sdk/
+```bash
+# Never push directly to main
+git checkout -b feature/your-feature
+git push -u origin feature/your-feature
+gh pr create --title "feat: description" --body "..."
+gh pr checks --watch
+```
 
 ## License
 
-This project is licensed under the Peer Production License (PPL).
+[Peer Production License (PPL)](LICENSE) - Commercial use permitted for worker-owned cooperatives only.
 
-## Support
+## Resources
 
-For issues, questions, or contributions:
-- **GitHub Issues**: https://github.com/emmadorably/rose-token/issues
-- **Documentation**: See `CLAUDE.md` for detailed project guidance
+- [CLAUDE.md](CLAUDE.md) - Detailed technical reference
+- [Hardhat Docs](https://hardhat.org/docs)
+- [wagmi Docs](https://wagmi.sh)
+- [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts)
+- [Chainlink Data Feeds](https://docs.chain.link/data-feeds)
 
 ---
 
-**Last Updated**: November 2024
-**Solidity Version**: 0.8.17
-**Node Version**: 18.x
-**Network**: Optimism Sepolia (chainId: 11155420)
-**Status**: MVP - Production Ready
+**Network**: Arbitrum Sepolia (testnet) / Arbitrum One (mainnet)
+**Solidity**: 0.8.20
+**Node**: 20+
