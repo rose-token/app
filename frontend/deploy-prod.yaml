@@ -1,0 +1,39 @@
+---
+version: "2.0"
+
+services:
+  frontend:
+    image: ghcr.io/emmadorably/rose-token-v3/rose-frontend:latest
+    expose:
+      - port: 80
+        as: 80
+        accept:
+          - app.rose-token.com
+        to:
+          - global: true
+
+profiles:
+  compute:
+    frontend:
+      resources:
+        cpu:
+          units: 0.50
+        memory:
+          size: 512Mi
+        storage:
+          - size: 512Mi
+
+  placement:
+    dcloud:
+      attributes:
+        host: akash
+      pricing:
+        frontend:
+          denom: uakt
+          amount: 500
+
+deployment:
+  frontend:
+    dcloud:
+      profile: frontend
+      count: 1

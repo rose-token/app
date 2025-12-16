@@ -1,0 +1,81 @@
+---
+version: "2.0"
+
+services:
+  signer:
+    image: ghcr.io/emmadorably/rose-token-v3/passport-signer:latest
+    expose:
+      - port: 3000
+        as: 80
+        accept:
+          - signer.rose-token.com
+        to:
+          - global: true
+    env:
+      - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
+      - VITE_GITCOIN_SCORER_ID=${VITE_GITCOIN_SCORER_ID}
+      - VITE_GITCOIN_API_KEY=${VITE_GITCOIN_API_KEY}
+      - DATABASE_URL=postgresql://rose:${POSTGRES_PASSWORD}@localhost:5432/rose
+      - POSTGRES_USER=rose
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=rose
+      - DB_STARTUP_DELAY_MS=5000
+      - PROFILE_CHAIN_ID=42161
+      - THRESHOLD_CREATE_TASK=20
+      - THRESHOLD_STAKE=20
+      - THRESHOLD_CLAIM=20
+      - SIGNATURE_TTL=3600
+      - ALLOWED_ORIGINS=*
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=30
+      - GOVERNANCE_ADDRESS=${GOVERNANCE_ADDRESS}
+      - REPUTATION_ADDRESS=${REPUTATION_ADDRESS}
+      - TREASURY_ADDRESS=${TREASURY_ADDRESS}
+      - MARKETPLACE_ADDRESS=${MARKETPLACE_ADDRESS}
+      - RPC_URL=${ARBITRUM_RPC_URL}
+      - RPC_WS_URL=${ARBITRUM_RPC_WS_URL}
+      - REACT_APP_PINATA_JWT=${REACT_APP_PINATA_JWT}
+      - BACKUP_REFERENCE_CID=${BACKUP_REFERENCE_CID}
+      - MERGEBOT_APP_ID=${MERGEBOT_APP_ID}
+      - MERGEBOT_PRIVATE_KEY=${MERGEBOT_PRIVATE_KEY}
+      - MERGEBOT_CLIENT_ID=${MERGEBOT_CLIENT_ID}
+      - MERGEBOT_CLIENT_SECRET=${MERGEBOT_CLIENT_SECRET}
+      - MERGEBOT_CALLBACK_URL=https://signer.rose-token.com/api/github/callback
+      - FRONTEND_URL=https://app.rose-token.com
+      - CAMELOT_LP_POSITION_IDS=${CAMELOT_LP_POSITION_IDS}
+    params:
+      storage:
+        data:
+          mount: /var/lib/postgresql/data
+          readOnly: false
+
+profiles:
+  compute:
+    signer:
+      resources:
+        cpu:
+          units: 1.5
+        memory:
+          size: 2Gi
+        storage:
+          - size: 1Gi
+          - name: data
+            size: 10Gi
+            attributes:
+              persistent: true
+              class: beta3
+
+  placement:
+    dcloud:
+      attributes:
+        host: akash
+      pricing:
+        signer:
+          denom: uakt
+          amount: 1500
+
+deployment:
+  signer:
+    dcloud:
+      profile: signer
+      count: 1

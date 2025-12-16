@@ -1,0 +1,889 @@
+name: Production Deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to production environment'
+        required: true
+        default: 'true'
+
+permissions:
+  contents: read
+  actions: write
+  packages: write
+
+concurrency:
+  group: "prod-deploy"
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  SIGNER_IMAGE_NAME: ${{ github.repository }}/passport-signer
+  FRONTEND_IMAGE_NAME: ${{ github.repository }}/rose-frontend
+
+jobs:
+  # Job 0: Check if contracts are pinned (all 7 address variables set)
+  resolve-addresses:
+    runs-on: ubuntu-latest
+    environment: prod
+    outputs:
+      skip_deployment: ${{ steps.check.outputs.skip_deployment }}
+      token_address: ${{ steps.check.outputs.token_address }}
+      treasury_address: ${{ steps.check.outputs.treasury_address }}
+      marketplace_address: ${{ steps.check.outputs.marketplace_address }}
+      governance_address: ${{ steps.check.outputs.governance_address }}
+      reputation_address: ${{ steps.check.outputs.reputation_address }}
+      vrose_address: ${{ steps.check.outputs.vrose_address }}
+      usdc_address: ${{ steps.check.outputs.usdc_address }}
+
+    steps:
+      - name: Check for Pinned Contract Addresses
+        id: check
+        env:
+          TOKEN_ADDRESS: ${{ vars.TOKEN_ADDRESS }}
+          TREASURY_ADDRESS: ${{ vars.TREASURY_ADDRESS }}
+          MARKETPLACE_ADDRESS: ${{ vars.MARKETPLACE_ADDRESS }}
+          GOVERNANCE_ADDRESS: ${{ vars.GOVERNANCE_ADDRESS }}
+          REPUTATION_ADDRESS: ${{ vars.REPUTATION_ADDRESS }}
+          VROSE_ADDRESS: ${{ vars.VROSE_ADDRESS }}
+          USDC_ADDRESS: ${{ vars.USDC_ADDRESS }}
+        run: |
+          echo "============================================"
+          echo "CONTRACT ADDRESS RESOLUTION (PRODUCTION)"
+          echo "============================================"
+
+          # Check if all required addresses are set as variables
+          SKIP_DEPLOYMENT="false"
+
+          if [ -n "$TOKEN_ADDRESS" ] && \
+             [ -n "$TREASURY_ADDRESS" ] && \
+             [ -n "$MARKETPLACE_ADDRESS" ] && \
+             [ -n "$GOVERNANCE_ADDRESS" ] && \
+             [ -n "$REPUTATION_ADDRESS" ] && \
+             [ -n "$VROSE_ADDRESS" ] && \
+             [ -n "$USDC_ADDRESS" ]; then
+            SKIP_DEPLOYMENT="true"
+            echo "Pinned contract addresses found (PINNED MODE)"
+            echo ""
+            echo "Pinned Addresses:"
+            echo "  Token:        $TOKEN_ADDRESS"
+            echo "  Treasury:     $TREASURY_ADDRESS"
+            echo "  Marketplace:  $MARKETPLACE_ADDRESS"
+            echo "  Governance:   $GOVERNANCE_ADDRESS"
+            echo "  Reputation:   $REPUTATION_ADDRESS"
+            echo "  vROSE:        $VROSE_ADDRESS"
+            echo "  USDC:         $USDC_ADDRESS"
+            echo ""
+            echo "Contract deployment will be SKIPPED"
+          else
+            echo "Some contract addresses missing (DEPLOYMENT MODE)"
+            echo ""
+            echo "Missing Addresses (will be deployed):"
+            [ -z "$TOKEN_ADDRESS" ] && echo "  - TOKEN_ADDRESS"
+            [ -z "$TREASURY_ADDRESS" ] && echo "  - TREASURY_ADDRESS"
+            [ -z "$MARKETPLACE_ADDRESS" ] && echo "  - MARKETPLACE_ADDRESS"
+            [ -z "$GOVERNANCE_ADDRESS" ] && echo "  - GOVERNANCE_ADDRESS"
+            [ -z "$REPUTATION_ADDRESS" ] && echo "  - REPUTATION_ADDRESS"
+            [ -z "$VROSE_ADDRESS" ] && echo "  - VROSE_ADDRESS"
+            [ -z "$USDC_ADDRESS" ] && echo "  - USDC_ADDRESS"
+            echo ""
+            echo "Full contract deployment will run"
+          fi
+          echo "============================================"
+
+          # Set outputs (variables can be passed through outputs, unlike secrets)
+          echo "skip_deployment=$SKIP_DEPLOYMENT" >> $GITHUB_OUTPUT
+          echo "token_address=${TOKEN_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "treasury_address=${TREASURY_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "marketplace_address=${MARKETPLACE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "governance_address=${GOVERNANCE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "reputation_address=${REPUTATION_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "vrose_address=${VROSE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "usdc_address=${USDC_ADDRESS}" >> $GITHUB_OUTPUT
+
+  # Job 1: Deploy contracts to Arbitrum One (skipped if pinned)
+  deploy-contracts:
+    needs: resolve-addresses
+    if: needs.resolve-addresses.outputs.skip_deployment != 'true'
+    runs-on: ubuntu-latest
+    environment: prod
+    outputs:
+      token_address: ${{ steps.save_addresses.outputs.token_address }}
+      treasury_address: ${{ steps.save_addresses.outputs.treasury_address }}
+      marketplace_address: ${{ steps.save_addresses.outputs.marketplace_address }}
+      governance_address: ${{ steps.save_addresses.outputs.governance_address }}
+      reputation_address: ${{ steps.save_addresses.outputs.reputation_address }}
+      vrose_address: ${{ steps.save_addresses.outputs.vrose_address }}
+      usdc_address: ${{ steps.save_addresses.outputs.usdc_address }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npx hardhat test
+
+      - name: Compile contracts
+        run: npx hardhat compile
+
+      - name: Update ABIs
+        run: node scripts/update-abi.js
+
+      - name: Deploy to Arbitrum One (Mainnet)
+        env:
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          ARBISCAN_API_KEY: ${{ secrets.ARBISCAN_API_KEY }}
+          PASSPORT_SIGNER_ADDRESS: ${{ secrets.PASSPORT_SIGNER_ADDRESS }}
+        run: npx hardhat run scripts/deploy-mainnet.js --network arbitrum
+
+      - name: Save Contract Addresses
+        id: save_addresses
+        run: |
+          TOKEN_ADDRESS=$(cat deployment-output.json | jq -r '.tokenAddress')
+          TREASURY_ADDRESS=$(cat deployment-output.json | jq -r '.treasuryAddress')
+          MARKETPLACE_ADDRESS=$(cat deployment-output.json | jq -r '.marketplaceAddress')
+          GOVERNANCE_ADDRESS=$(cat deployment-output.json | jq -r '.governanceAddress')
+          REPUTATION_ADDRESS=$(cat deployment-output.json | jq -r '.reputationAddress')
+          VROSE_ADDRESS=$(cat deployment-output.json | jq -r '.vRoseAddress')
+          USDC_ADDRESS=$(cat deployment-output.json | jq -r '.externalAddresses.usdc')
+
+          echo "Saving contract addresses for subsequent jobs"
+          echo "Token: $TOKEN_ADDRESS"
+          echo "Treasury: $TREASURY_ADDRESS"
+          echo "Marketplace: $MARKETPLACE_ADDRESS"
+          echo "Governance: $GOVERNANCE_ADDRESS"
+          echo "Reputation: $REPUTATION_ADDRESS"
+          echo "vROSE: $VROSE_ADDRESS"
+          echo "USDC: $USDC_ADDRESS"
+
+          echo "token_address=$TOKEN_ADDRESS" >> $GITHUB_OUTPUT
+          echo "treasury_address=$TREASURY_ADDRESS" >> $GITHUB_OUTPUT
+          echo "marketplace_address=$MARKETPLACE_ADDRESS" >> $GITHUB_OUTPUT
+          echo "governance_address=$GOVERNANCE_ADDRESS" >> $GITHUB_OUTPUT
+          echo "reputation_address=$REPUTATION_ADDRESS" >> $GITHUB_OUTPUT
+          echo "vrose_address=$VROSE_ADDRESS" >> $GITHUB_OUTPUT
+          echo "usdc_address=$USDC_ADDRESS" >> $GITHUB_OUTPUT
+
+          echo "{\"tokenAddress\":\"$TOKEN_ADDRESS\",\"treasuryAddress\":\"$TREASURY_ADDRESS\",\"marketplaceAddress\":\"$MARKETPLACE_ADDRESS\",\"governanceAddress\":\"$GOVERNANCE_ADDRESS\",\"reputationAddress\":\"$REPUTATION_ADDRESS\",\"vRoseAddress\":\"$VROSE_ADDRESS\",\"usdcAddress\":\"$USDC_ADDRESS\"}" > contract-addresses.json
+
+      - name: Upload Contract Addresses Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-addresses-prod
+          path: contract-addresses.json
+          retention-days: 1
+
+      - name: Upload Deployment Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-output-prod
+          path: deployment-output.json
+          retention-days: 90
+
+  # Job 2: Build and push Docker image for frontend
+  build-and-push-frontend:
+    needs: [resolve-addresses, deploy-contracts]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ github.sha }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Build Version
+        run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=prod-latest,enable=true
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: true
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
+            VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
+            VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
+            VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
+            VITE_GOVERNANCE_ADDRESS=${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
+            VITE_REPUTATION_ADDRESS=${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
+            VITE_VROSE_ADDRESS=${{ needs.deploy-contracts.outputs.vrose_address || needs.resolve-addresses.outputs.vrose_address }}
+            VITE_USDC_ADDRESS=${{ needs.deploy-contracts.outputs.usdc_address || needs.resolve-addresses.outputs.usdc_address }}
+            VITE_BUILD_VERSION=${{ env.BUILD_VERSION }}
+            VITE_PINATA_JWT=${{ secrets.REACT_APP_PINATA_JWT }}
+            VITE_PINATA_GATEWAY=${{ secrets.REACT_APP_PINATA_GATEWAY }}
+            VITE_PASSPORT_SIGNER_URL=${{ secrets.VITE_PASSPORT_SIGNER_URL }}
+            VITE_GITCOIN_SCORER_ID=${{ secrets.VITE_GITCOIN_SCORER_ID }}
+            VITE_GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }}
+
+      - name: Output image info
+        run: |
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
+          echo "Image digest: ${{ steps.build.outputs.digest }}"
+
+  # Job 3: Deploy frontend to Akash Network
+  deploy-frontend-akash:
+    needs: [resolve-addresses, deploy-contracts, build-and-push-frontend]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-frontend.result == 'success'
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Frontend to Akash Console
+        env:
+          AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
+          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND_PROD }}
+          IMAGE_TAG: ${{ needs.build-and-push-frontend.outputs.image_tag }}
+        run: |
+          # Update image in SDL (use short SHA to match docker/metadata-action output)
+          SHORT_SHA="${IMAGE_TAG:0:7}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${SHORT_SHA}"
+          sed -i "s|image:.*rose-frontend.*|image: ${IMAGE}|g" frontend/deploy-prod.yaml
+
+          echo "Updated SDL:"
+          cat frontend/deploy-prod.yaml
+
+          SDL_CONTENT=$(cat frontend/deploy-prod.yaml)
+
+          # Check if we have an existing deployment to update
+          if [ -n "$AKASH_DSEQ" ]; then
+            echo "Checking existing deployment: $AKASH_DSEQ"
+            EXISTING=$(curl -s "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            DEPLOYMENT_STATE=$(echo "$EXISTING" | jq -r '.data.deployment.state // .data.state // empty')
+            echo "Deployment state: $DEPLOYMENT_STATE"
+
+            if [ "$DEPLOYMENT_STATE" = "active" ]; then
+              echo "Updating existing deployment..."
+              UPDATE_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl}}')
+
+              UPDATE_RESPONSE=$(curl -s -X PUT "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+                -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "$UPDATE_PAYLOAD")
+
+              echo "Update response:"
+              echo "$UPDATE_RESPONSE" | jq .
+
+              if echo "$UPDATE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+                echo "Update failed, will create new deployment"
+              else
+                echo "Frontend deployment updated successfully!"
+                echo "View at: https://console.akash.network/deployments/$AKASH_DSEQ"
+                exit 0
+              fi
+            else
+              echo "Existing deployment not active (state: $DEPLOYMENT_STATE), creating new..."
+            fi
+          else
+            echo "No AKASH_DSEQ_FRONTEND_PROD secret set, creating new deployment..."
+          fi
+
+          # Step 1: Create certificate (only needed for new deployments)
+          echo "Step 1: Creating certificate..."
+          CERT_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/certificates" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json")
+
+          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.data.certPem')
+          ENCRYPTED_KEY=$(echo "$CERT_RESPONSE" | jq -r '.data.encryptedKey')
+
+          if [ -z "$CERT_PEM" ] || [ "$CERT_PEM" = "null" ]; then
+            echo "Failed to create certificate"
+            echo "$CERT_RESPONSE" | jq .
+            exit 1
+          fi
+          echo "Certificate created successfully"
+
+          # Step 2: Create deployment
+          echo "Step 2: Creating deployment..."
+          DEPLOY_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl, deposit: 5}}')
+          echo "Deployment payload structure:"
+          echo "$DEPLOY_PAYLOAD" | jq 'del(.data.sdl)' # Show structure without full SDL
+
+          DEPLOY_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/deployments" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$DEPLOY_PAYLOAD")
+
+          echo "Deployment response:"
+          echo "$DEPLOY_RESPONSE" | jq .
+
+          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
+          MANIFEST=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.manifest // .manifest // empty')
+          if [ -z "$DSEQ" ]; then
+            echo "Failed to create deployment"
+            exit 1
+          fi
+          echo "Deployment created: dseq=$DSEQ"
+          echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
+
+          # Provider whitelist - preferred providers (takes priority over blacklist)
+          PROVIDER_WHITELIST=(
+            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"  # provider.europlots.com
+          )
+
+          # Provider blacklist - unreliable providers
+          PROVIDER_BLACKLIST=(
+            "akash1r2yz5fzkk9gt0r3mk9u2c29q5mmtef050cryak"
+            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp"
+            "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj"
+          )
+
+          is_whitelisted() {
+            local addr="$1"
+            for whitelisted in "${PROVIDER_WHITELIST[@]}"; do
+              if [ "$addr" = "$whitelisted" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          is_blacklisted() {
+            local addr="$1"
+            for blacklisted in "${PROVIDER_BLACKLIST[@]}"; do
+              if [ "$addr" = "$blacklisted" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          should_use_provider() {
+            local addr="$1"
+            if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+              if is_whitelisted "$addr"; then
+                return 0
+              else
+                return 1
+              fi
+            else
+              if is_blacklisted "$addr"; then
+                return 1
+              else
+                return 0
+              fi
+            fi
+          }
+
+          # Step 3: Poll for bids
+          echo "Step 3: Waiting for provider bids..."
+          BID_COUNT=0
+          for i in $(seq 1 10); do
+            sleep 3
+            BID_RESPONSE=$(curl -s "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            BID_COUNT=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
+            if [ "$BID_COUNT" -gt 0 ]; then
+              echo "Received $BID_COUNT bid(s)"
+              echo "First bid:"
+              echo "$BID_RESPONSE" | jq '.data[0].bid.id'
+              break
+            fi
+            echo "Attempt $i: No bids yet..."
+          done
+
+          if [ "$BID_COUNT" -eq 0 ]; then
+            echo "No bids received after 30 seconds"
+            echo "Bid response:"
+            echo "$BID_RESPONSE" | jq .
+            exit 1
+          fi
+
+          # Step 4: Try providers until lease succeeds
+          echo "Step 4: Creating lease (with fallback)..."
+          TOTAL_BIDS=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
+          LEASE_CREATED=false
+          PROVIDERS_TRIED=0
+
+          for i in $(seq 0 $((TOTAL_BIDS - 1))); do
+            CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
+
+            if ! should_use_provider "$CANDIDATE"; then
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Skipping non-whitelisted: $CANDIDATE"
+              else
+                echo "Skipping blacklisted: $CANDIDATE"
+              fi
+              continue
+            fi
+
+            PROVIDERS_TRIED=$((PROVIDERS_TRIED + 1))
+            GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.gseq // 1")
+            OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.oseq // 1")
+            echo "Trying provider $PROVIDERS_TRIED: $CANDIDATE"
+
+            LEASE_PAYLOAD=$(jq -n \
+              --arg manifest "$MANIFEST" \
+              --arg certPem "$CERT_PEM" \
+              --arg keyPem "$ENCRYPTED_KEY" \
+              --arg dseq "$DSEQ" \
+              --argjson gseq "$GSEQ" \
+              --argjson oseq "$OSEQ" \
+              --arg provider "$CANDIDATE" \
+              '{
+                manifest: $manifest,
+                certificate: {certPem: $certPem, keyPem: $keyPem},
+                leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
+              }')
+
+            LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$LEASE_PAYLOAD")
+
+            if echo "$LEASE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+              ERROR_MSG=$(echo "$LEASE_RESPONSE" | jq -r '.message // .error')
+              echo "Provider rejected: $ERROR_MSG - trying next..."
+              continue
+            fi
+
+            LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.data.leaseId // .data.id // .leaseId // .id // empty')
+            echo "Lease response:"
+            echo "$LEASE_RESPONSE" | jq .
+            LEASE_CREATED=true
+            PROVIDER="$CANDIDATE"
+            break
+          done
+
+          if [ "$LEASE_CREATED" = false ]; then
+            if [ "$PROVIDERS_TRIED" -eq 0 ]; then
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Error: No whitelisted providers among $TOTAL_BIDS bid(s)"
+                printf '  - %s\n' "${PROVIDER_WHITELIST[@]}"
+              else
+                echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
+                printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+              fi
+            else
+              echo "Error: All $PROVIDERS_TRIED provider(s) rejected the lease"
+            fi
+            exit 1
+          fi
+
+          echo "Frontend lease created successfully with provider: $PROVIDER"
+          echo "Frontend Deployment ID: $DSEQ"
+          echo "View at: https://console.akash.network/deployments/$DSEQ"
+
+  # Job 4: Build and push Docker image for signer
+  build-and-push-signer:
+    needs: [resolve-addresses, deploy-contracts]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ github.sha }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Compile contracts and generate ABIs
+        run: npm run update-abi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=prod-latest,enable=true
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/signer
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: true
+
+      - name: Output image info
+        run: |
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
+          echo "Image digest: ${{ steps.build.outputs.digest }}"
+
+  # Job 5: Deploy signer to Akash Network
+  deploy-signer-akash:
+    needs: [resolve-addresses, deploy-contracts, build-and-push-signer]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-signer.result == 'success'
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Signer to Akash Console
+        env:
+          AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
+          AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_PROD }}
+          IMAGE_TAG: ${{ needs.build-and-push-signer.outputs.image_tag }}
+          SIGNER_PRIVATE_KEY: ${{ secrets.PASSPORT_SIGNER_PRIVATE_KEY }}
+          VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
+          VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          ARBITRUM_RPC_WS_URL: ${{ secrets.ARBITRUM_RPC_WS_URL }}
+          GOVERNANCE_ADDRESS: ${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
+          REPUTATION_ADDRESS: ${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
+          TREASURY_ADDRESS: ${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
+          MARKETPLACE_ADDRESS: ${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
+          REACT_APP_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
+          BACKUP_REFERENCE_CID: ${{ secrets.BACKUP_REFERENCE_CID }}
+          MERGEBOT_APP_ID: ${{ secrets.MERGEBOT_APP_ID }}
+          MERGEBOT_PRIVATE_KEY: ${{ secrets.MERGEBOT_PRIVATE_KEY }}
+          MERGEBOT_CLIENT_ID: ${{ secrets.MERGEBOT_CLIENT_ID }}
+          MERGEBOT_CLIENT_SECRET: ${{ secrets.MERGEBOT_CLIENT_SECRET }}
+          CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
+        run: |
+          # Update image in SDL (use short SHA to match docker/metadata-action output)
+          SHORT_SHA="${IMAGE_TAG:0:7}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}:${SHORT_SHA}"
+          sed -i "s|image:.*passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy-prod.yaml
+
+          # Substitute secrets into SDL
+          sed -i "s|\${SIGNER_PRIVATE_KEY}|${SIGNER_PRIVATE_KEY}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${VITE_GITCOIN_SCORER_ID}|${VITE_GITCOIN_SCORER_ID}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${ARBITRUM_RPC_URL}|${ARBITRUM_RPC_URL}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${ARBITRUM_RPC_WS_URL}|${ARBITRUM_RPC_WS_URL}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${GOVERNANCE_ADDRESS}|${GOVERNANCE_ADDRESS}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${REPUTATION_ADDRESS}|${REPUTATION_ADDRESS}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${TREASURY_ADDRESS}|${TREASURY_ADDRESS}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${MARKETPLACE_ADDRESS}|${MARKETPLACE_ADDRESS}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${REACT_APP_PINATA_JWT}|${REACT_APP_PINATA_JWT}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${BACKUP_REFERENCE_CID}|${BACKUP_REFERENCE_CID}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${MERGEBOT_APP_ID}|${MERGEBOT_APP_ID}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${MERGEBOT_PRIVATE_KEY}|${MERGEBOT_PRIVATE_KEY}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${MERGEBOT_CLIENT_ID}|${MERGEBOT_CLIENT_ID}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${MERGEBOT_CLIENT_SECRET}|${MERGEBOT_CLIENT_SECRET}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${CAMELOT_LP_POSITION_IDS}|${CAMELOT_LP_POSITION_IDS}|g" backend/signer/deploy-prod.yaml
+
+          echo "Updated SDL (secrets redacted):"
+          cat backend/signer/deploy-prod.yaml | \
+            sed 's/SIGNER_PRIVATE_KEY=.*/SIGNER_PRIVATE_KEY=***REDACTED***/g' | \
+            sed 's/GITCOIN_API_KEY=.*/GITCOIN_API_KEY=***REDACTED***/g' | \
+            sed 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=***REDACTED***/g' | \
+            sed 's/postgresql:\/\/rose:.*/postgresql:\/\/rose:***REDACTED***@localhost:5432\/rose/g' | \
+            sed 's/REACT_APP_PINATA_JWT=.*/REACT_APP_PINATA_JWT=***REDACTED***/g' | \
+            sed 's/BACKUP_REFERENCE_CID=.*/BACKUP_REFERENCE_CID=***REDACTED***/g' | \
+            sed 's/MERGEBOT_APP_ID=.*/MERGEBOT_APP_ID=***REDACTED***/g' | \
+            sed 's/MERGEBOT_PRIVATE_KEY=.*/MERGEBOT_PRIVATE_KEY=***REDACTED***/g' | \
+            sed 's/MERGEBOT_CLIENT_ID=.*/MERGEBOT_CLIENT_ID=***REDACTED***/g' | \
+            sed 's/MERGEBOT_CLIENT_SECRET=.*/MERGEBOT_CLIENT_SECRET=***REDACTED***/g'
+
+          SDL_CONTENT=$(cat backend/signer/deploy-prod.yaml)
+
+          # Check if we have an existing deployment to update
+          if [ -n "$AKASH_DSEQ" ]; then
+            echo "Checking existing deployment: $AKASH_DSEQ"
+            EXISTING=$(curl -s "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            DEPLOYMENT_STATE=$(echo "$EXISTING" | jq -r '.data.deployment.state // .data.state // empty')
+            echo "Deployment state: $DEPLOYMENT_STATE"
+
+            if [ "$DEPLOYMENT_STATE" = "active" ]; then
+              echo "Updating existing deployment..."
+              UPDATE_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl}}')
+
+              UPDATE_RESPONSE=$(curl -s -X PUT "https://console-api.akash.network/v1/deployments/${AKASH_DSEQ}" \
+                -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "$UPDATE_PAYLOAD")
+
+              echo "Update response:"
+              echo "$UPDATE_RESPONSE" | jq .
+
+              if echo "$UPDATE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+                echo "Update failed, will create new deployment"
+              else
+                echo "Signer deployment updated successfully!"
+                echo "View at: https://console.akash.network/deployments/$AKASH_DSEQ"
+                exit 0
+              fi
+            else
+              echo "Existing deployment not active (state: $DEPLOYMENT_STATE), creating new..."
+            fi
+          else
+            echo "No AKASH_DSEQ_PROD secret set, creating new deployment..."
+          fi
+
+          # Step 1: Create certificate (only needed for new deployments)
+          echo "Step 1: Creating certificate..."
+          CERT_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/certificates" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json")
+
+          CERT_PEM=$(echo "$CERT_RESPONSE" | jq -r '.data.certPem')
+          ENCRYPTED_KEY=$(echo "$CERT_RESPONSE" | jq -r '.data.encryptedKey')
+
+          if [ -z "$CERT_PEM" ] || [ "$CERT_PEM" = "null" ]; then
+            echo "Failed to create certificate"
+            echo "$CERT_RESPONSE" | jq .
+            exit 1
+          fi
+          echo "Certificate created successfully"
+
+          # Step 2: Create deployment
+          echo "Step 2: Creating deployment..."
+          DEPLOY_PAYLOAD=$(jq -n --arg sdl "$SDL_CONTENT" '{data: {sdl: $sdl, deposit: 5}}')
+          echo "Deployment payload structure:"
+          echo "$DEPLOY_PAYLOAD" | jq 'del(.data.sdl)' # Show structure without full SDL
+
+          DEPLOY_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/deployments" \
+            -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$DEPLOY_PAYLOAD")
+
+          echo "Deployment response:"
+          echo "$DEPLOY_RESPONSE" | jq .
+
+          DSEQ=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.dseq // .dseq // empty')
+          MANIFEST=$(echo "$DEPLOY_RESPONSE" | jq -r '.data.manifest // .manifest // empty')
+          if [ -z "$DSEQ" ]; then
+            echo "Failed to create deployment"
+            exit 1
+          fi
+          echo "Deployment created: dseq=$DSEQ"
+          echo "Manifest received: $(echo "$MANIFEST" | head -c 100)..."
+
+          # Provider whitelist - preferred providers (takes priority over blacklist)
+          PROVIDER_WHITELIST=(
+            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"  # provider.europlots.com
+          )
+
+          # Provider blacklist - unreliable providers
+          PROVIDER_BLACKLIST=(
+            "akash1r2yz5fzkk9gt0r3mk9u2c29q5mmtef050cryak"
+            "akash19yhu3jgw8h0320av98h8n5qczje3pj3u9u2amp"
+            "akash1xcclnvcl7nup95lp8tp9jzf54q8wk6t0uwjkzj"
+          )
+
+          is_whitelisted() {
+            local addr="$1"
+            for whitelisted in "${PROVIDER_WHITELIST[@]}"; do
+              if [ "$addr" = "$whitelisted" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          is_blacklisted() {
+            local addr="$1"
+            for blacklisted in "${PROVIDER_BLACKLIST[@]}"; do
+              if [ "$addr" = "$blacklisted" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          should_use_provider() {
+            local addr="$1"
+            if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+              if is_whitelisted "$addr"; then
+                return 0
+              else
+                return 1
+              fi
+            else
+              if is_blacklisted "$addr"; then
+                return 1
+              else
+                return 0
+              fi
+            fi
+          }
+
+          # Step 3: Poll for bids
+          echo "Step 3: Waiting for provider bids..."
+          BID_COUNT=0
+          for i in $(seq 1 10); do
+            sleep 3
+            BID_RESPONSE=$(curl -s "https://console-api.akash.network/v1/bids?dseq=${DSEQ}" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}")
+
+            BID_COUNT=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
+            if [ "$BID_COUNT" -gt 0 ]; then
+              echo "Received $BID_COUNT bid(s)"
+              echo "First bid:"
+              echo "$BID_RESPONSE" | jq '.data[0].bid.id'
+              break
+            fi
+            echo "Attempt $i: No bids yet..."
+          done
+
+          if [ "$BID_COUNT" -eq 0 ]; then
+            echo "No bids received after 30 seconds"
+            echo "Bid response:"
+            echo "$BID_RESPONSE" | jq .
+            exit 1
+          fi
+
+          # Step 4: Try providers until lease succeeds
+          echo "Step 4: Creating lease (with fallback)..."
+          TOTAL_BIDS=$(echo "$BID_RESPONSE" | jq '(.data // []) | length')
+          LEASE_CREATED=false
+          PROVIDERS_TRIED=0
+
+          for i in $(seq 0 $((TOTAL_BIDS - 1))); do
+            CANDIDATE=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.provider")
+
+            if ! should_use_provider "$CANDIDATE"; then
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Skipping non-whitelisted: $CANDIDATE"
+              else
+                echo "Skipping blacklisted: $CANDIDATE"
+              fi
+              continue
+            fi
+
+            PROVIDERS_TRIED=$((PROVIDERS_TRIED + 1))
+            GSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.gseq // 1")
+            OSEQ=$(echo "$BID_RESPONSE" | jq -r ".data[$i].bid.id.oseq // 1")
+            echo "Trying provider $PROVIDERS_TRIED: $CANDIDATE"
+
+            LEASE_PAYLOAD=$(jq -n \
+              --arg manifest "$MANIFEST" \
+              --arg certPem "$CERT_PEM" \
+              --arg keyPem "$ENCRYPTED_KEY" \
+              --arg dseq "$DSEQ" \
+              --argjson gseq "$GSEQ" \
+              --argjson oseq "$OSEQ" \
+              --arg provider "$CANDIDATE" \
+              '{
+                manifest: $manifest,
+                certificate: {certPem: $certPem, keyPem: $keyPem},
+                leases: [{dseq: $dseq, gseq: $gseq, oseq: $oseq, provider: $provider}]
+              }')
+
+            LEASE_RESPONSE=$(curl -s -X POST "https://console-api.akash.network/v1/leases" \
+              -H "x-api-key: ${AKASH_CONSOLE_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$LEASE_PAYLOAD")
+
+            if echo "$LEASE_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+              ERROR_MSG=$(echo "$LEASE_RESPONSE" | jq -r '.message // .error')
+              echo "Provider rejected: $ERROR_MSG - trying next..."
+              continue
+            fi
+
+            LEASE_ID=$(echo "$LEASE_RESPONSE" | jq -r '.data.leaseId // .data.id // .leaseId // .id // empty')
+            echo "Lease response:"
+            echo "$LEASE_RESPONSE" | jq .
+            LEASE_CREATED=true
+            PROVIDER="$CANDIDATE"
+            break
+          done
+
+          if [ "$LEASE_CREATED" = false ]; then
+            if [ "$PROVIDERS_TRIED" -eq 0 ]; then
+              if [ ${#PROVIDER_WHITELIST[@]} -gt 0 ]; then
+                echo "Error: No whitelisted providers among $TOTAL_BIDS bid(s)"
+                printf '  - %s\n' "${PROVIDER_WHITELIST[@]}"
+              else
+                echo "Error: All $TOTAL_BIDS provider(s) are blacklisted"
+                printf '  - %s\n' "${PROVIDER_BLACKLIST[@]}"
+              fi
+            else
+              echo "Error: All $PROVIDERS_TRIED provider(s) rejected the lease"
+            fi
+            exit 1
+          fi
+
+          echo "Signer lease created successfully with provider: $PROVIDER"
+          echo "Signer Deployment ID: $DSEQ"
+          echo "View at: https://console.akash.network/deployments/$DSEQ"

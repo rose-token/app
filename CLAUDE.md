@@ -421,6 +421,47 @@ Skip contract deployment by setting all 7 GitHub **variables** (not secrets - ad
 
 **Note:** Treasury stores LiFi, asset tokens, and price feeds internally. Pinning Treasury pins all related infrastructure.
 
+## Production Deployment (Mainnet)
+
+**Workflow:** `.github/workflows/prod-deploy.yml`
+**Trigger:** Push to `main` branch OR manual `workflow_dispatch`
+**Network:** Arbitrum One (chainId 42161)
+
+**Domains:**
+| Service | Domain |
+|---------|--------|
+| Frontend | `app.rose-token.com` |
+| Backend | `signer.rose-token.com` |
+
+**Key Differences from Dev:**
+| Aspect | Dev | Prod |
+|--------|-----|------|
+| Deploy Script | `deploy.js` | `deploy-mainnet.js` |
+| Mocks | All mocks deployed | Real contracts only |
+| Tokens | MockERC20 | Real USDC, tBTC, XAUt |
+| Oracles | MockV3Aggregator | Real Chainlink feeds |
+| LiFi | MockLiFiDiamond | Real LiFi Diamond |
+| Seeding | Treasury + Reputation | None |
+| Slippage | 100% (disabled) | 1% default |
+
+**GitHub Environment:** `prod` (separate from `dev`)
+
+**Required Secrets:**
+- `ARBITRUM_RPC_URL` - Mainnet HTTP RPC endpoint
+- `ARBITRUM_RPC_WS_URL` - Mainnet WebSocket RPC endpoint (for event watchers)
+- `PRIVATE_KEY` - Deployer private key (funded with ETH)
+- `PASSPORT_SIGNER_ADDRESS` - Backend signer wallet
+- `AKASH_DSEQ_FRONTEND_PROD` - Frontend deployment ID (after first deploy)
+- `AKASH_DSEQ_PROD` - Backend deployment ID (after first deploy)
+- All other secrets from dev (PINATA, GITCOIN, POSTGRES, MERGEBOT, etc.)
+
+**Pinned Contracts:** Same pattern as dev - set all 7 variables to skip deployment.
+
+**Files:**
+- `scripts/deploy-mainnet.js` - Mainnet deploy script (no mocks)
+- `frontend/deploy-prod.yaml` - Akash SDL for app.rose-token.com
+- `backend/signer/deploy-prod.yaml` - Akash SDL for signer.rose-token.com
+
 ## Docker Cache-Busting (CI/CD)
 
 Frontend Docker build uses `CACHE_BUST=${{ github.sha }}` to ensure contract addresses are always fresh. This prevents stale `VITE_*_ADDRESS` values from being baked into cached layers.
