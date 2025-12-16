@@ -15,23 +15,21 @@ RUN npm install
 # Copy source
 COPY . .
 
-# Cache bust arg - changes each commit to invalidate cache
-ARG CACHE_BUST
-
-# Build args for Vite env vars (baked in at build time)
-ARG VITE_TOKEN_ADDRESS
-ARG VITE_TREASURY_ADDRESS
-ARG VITE_MARKETPLACE_ADDRESS
-ARG VITE_GOVERNANCE_ADDRESS
-ARG VITE_REPUTATION_ADDRESS
-ARG VITE_VROSE_ADDRESS
-ARG VITE_USDC_ADDRESS
-ARG VITE_BUILD_VERSION
-ARG VITE_PINATA_JWT
-ARG VITE_PINATA_GATEWAY
-ARG VITE_PASSPORT_SIGNER_URL
-ARG VITE_GITCOIN_SCORER_ID
-ARG VITE_GITCOIN_API_KEY
+# Set placeholder values for Vite env vars
+# These will be replaced at runtime by docker-entrypoint.sh
+ENV VITE_TOKEN_ADDRESS=__VITE_TOKEN_ADDRESS__
+ENV VITE_TREASURY_ADDRESS=__VITE_TREASURY_ADDRESS__
+ENV VITE_MARKETPLACE_ADDRESS=__VITE_MARKETPLACE_ADDRESS__
+ENV VITE_GOVERNANCE_ADDRESS=__VITE_GOVERNANCE_ADDRESS__
+ENV VITE_REPUTATION_ADDRESS=__VITE_REPUTATION_ADDRESS__
+ENV VITE_VROSE_ADDRESS=__VITE_VROSE_ADDRESS__
+ENV VITE_USDC_ADDRESS=__VITE_USDC_ADDRESS__
+ENV VITE_PASSPORT_SIGNER_URL=__VITE_PASSPORT_SIGNER_URL__
+ENV VITE_GITCOIN_SCORER_ID=__VITE_GITCOIN_SCORER_ID__
+ENV VITE_GITCOIN_API_KEY=__VITE_GITCOIN_API_KEY__
+ENV VITE_PINATA_GATEWAY=__VITE_PINATA_GATEWAY__
+ENV VITE_PINATA_JWT=__VITE_PINATA_JWT__
+ENV VITE_BUILD_VERSION=__VITE_BUILD_VERSION__
 
 # Build the app
 RUN npm run build
@@ -45,6 +43,11 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Copy nginx config for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy entrypoint script for runtime env var injection
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 80
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
