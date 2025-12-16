@@ -613,6 +613,7 @@ jobs:
           VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          ARBITRUM_RPC_WS_URL: ${{ secrets.ARBITRUM_RPC_WS_URL }}
           GOVERNANCE_ADDRESS: ${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
           REPUTATION_ADDRESS: ${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
           TREASURY_ADDRESS: ${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
@@ -636,6 +637,7 @@ jobs:
           sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${ARBITRUM_RPC_URL}|${ARBITRUM_RPC_URL}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${ARBITRUM_RPC_WS_URL}|${ARBITRUM_RPC_WS_URL}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${GOVERNANCE_ADDRESS}|${GOVERNANCE_ADDRESS}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${REPUTATION_ADDRESS}|${REPUTATION_ADDRESS}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${TREASURY_ADDRESS}|${TREASURY_ADDRESS}|g" backend/signer/deploy-prod.yaml

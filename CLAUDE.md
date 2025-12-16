@@ -447,7 +447,8 @@ Skip contract deployment by setting all 7 GitHub **variables** (not secrets - ad
 **GitHub Environment:** `prod` (separate from `dev`)
 
 **Required Secrets:**
-- `ARBITRUM_RPC_URL` - Mainnet RPC endpoint
+- `ARBITRUM_RPC_URL` - Mainnet HTTP RPC endpoint
+- `ARBITRUM_RPC_WS_URL` - Mainnet WebSocket RPC endpoint (for event watchers)
 - `PRIVATE_KEY` - Deployer private key (funded with ETH)
 - `PASSPORT_SIGNER_ADDRESS` - Backend signer wallet
 - `AKASH_DSEQ_FRONTEND_PROD` - Frontend deployment ID (after first deploy)
