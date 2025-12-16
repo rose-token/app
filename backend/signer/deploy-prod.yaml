@@ -53,13 +53,13 @@ profiles:
     signer:
       resources:
         cpu:
-          units: 0.75
+          units: 1.5
         memory:
-          size: 1Gi
+          size: 2Gi
         storage:
           - size: 1Gi
           - name: data
-            size: 5Gi
+            size: 10Gi
             attributes:
               persistent: true
               class: beta3

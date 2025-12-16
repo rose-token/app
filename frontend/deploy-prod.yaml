@@ -17,9 +17,9 @@ profiles:
     frontend:
       resources:
         cpu:
-          units: 0.25
+          units: 0.50
         memory:
-          size: 256Mi
+          size: 512Mi
         storage:
           - size: 512Mi
 
