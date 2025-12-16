@@ -402,10 +402,10 @@ Never push directly to main.
 
 ## Pinned Contracts (CI/CD)
 
-Skip contract deployment by setting all 7 GitHub secrets:
+Skip contract deployment by setting all 7 GitHub **variables** (not secrets - addresses are public):
 
-| Secret | Contract |
-|--------|----------|
+| Variable | Contract |
+|----------|----------|
 | `TOKEN_ADDRESS` | RoseToken |
 | `TREASURY_ADDRESS` | RoseTreasury |
 | `MARKETPLACE_ADDRESS` | RoseMarketplace |

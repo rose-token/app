@@ -25,7 +25,7 @@ env:
   FRONTEND_IMAGE_NAME: ${{ github.repository }}/rose-frontend
 
 jobs:
-  # Job 0: Resolve contract addresses (pinned from secrets or fresh deployment)
+  # Job 0: Check if contracts are pinned (all 7 address variables set)
   resolve-addresses:
     runs-on: ubuntu-latest
     environment: dev
@@ -43,19 +43,19 @@ jobs:
       - name: Check for Pinned Contract Addresses
         id: check
         env:
-          TOKEN_ADDRESS: ${{ secrets.TOKEN_ADDRESS }}
-          TREASURY_ADDRESS: ${{ secrets.TREASURY_ADDRESS }}
-          MARKETPLACE_ADDRESS: ${{ secrets.MARKETPLACE_ADDRESS }}
-          GOVERNANCE_ADDRESS: ${{ secrets.GOVERNANCE_ADDRESS }}
-          REPUTATION_ADDRESS: ${{ secrets.REPUTATION_ADDRESS }}
-          VROSE_ADDRESS: ${{ secrets.VROSE_ADDRESS }}
-          USDC_ADDRESS: ${{ secrets.USDC_ADDRESS }}
+          TOKEN_ADDRESS: ${{ vars.TOKEN_ADDRESS }}
+          TREASURY_ADDRESS: ${{ vars.TREASURY_ADDRESS }}
+          MARKETPLACE_ADDRESS: ${{ vars.MARKETPLACE_ADDRESS }}
+          GOVERNANCE_ADDRESS: ${{ vars.GOVERNANCE_ADDRESS }}
+          REPUTATION_ADDRESS: ${{ vars.REPUTATION_ADDRESS }}
+          VROSE_ADDRESS: ${{ vars.VROSE_ADDRESS }}
+          USDC_ADDRESS: ${{ vars.USDC_ADDRESS }}
         run: |
           echo "============================================"
           echo "CONTRACT ADDRESS RESOLUTION"
           echo "============================================"
 
-          # Check if all required addresses are set as secrets
+          # Check if all required addresses are set as variables
           SKIP_DEPLOYMENT="false"
 
           if [ -n "$TOKEN_ADDRESS" ] && \
@@ -66,7 +66,7 @@ jobs:
              [ -n "$VROSE_ADDRESS" ] && \
              [ -n "$USDC_ADDRESS" ]; then
             SKIP_DEPLOYMENT="true"
-            echo "✓ All contract addresses found in secrets (PINNED MODE)"
+            echo "✓ All contract addresses found in variables (PINNED MODE)"
             echo ""
             echo "Pinned Addresses:"
             echo "  Token:        $TOKEN_ADDRESS"
@@ -80,7 +80,7 @@ jobs:
             echo "→ Contract deployment will be SKIPPED"
             echo "→ Reputation seeding will be SKIPPED"
           else
-            echo "✗ Some contract addresses missing from secrets (DEPLOYMENT MODE)"
+            echo "✗ Some contract addresses missing from variables (DEPLOYMENT MODE)"
             echo ""
             echo "Missing Addresses (will be deployed):"
             [ -z "$TOKEN_ADDRESS" ] && echo "  - TOKEN_ADDRESS"
@@ -96,7 +96,7 @@ jobs:
           fi
           echo "============================================"
 
-          # Set outputs
+          # Set outputs (variables can be passed through outputs, unlike secrets)
           echo "skip_deployment=$SKIP_DEPLOYMENT" >> $GITHUB_OUTPUT
           echo "token_address=${TOKEN_ADDRESS}" >> $GITHUB_OUTPUT
           echo "treasury_address=${TREASURY_ADDRESS}" >> $GITHUB_OUTPUT
