@@ -11,7 +11,7 @@ import { useCamelotLP } from '../hooks/useCamelotLP';
 import WalletNotConnected from '../components/wallet/WalletNotConnected';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import { Button } from '../components/ui/button';
-import { ethers } from 'ethers';
+import { isAddress } from 'viem';
 
 const AdminPage = () => {
   const { isConnected } = useAccount();
@@ -143,7 +143,7 @@ const AdminPage = () => {
       return;
     }
 
-    if (!ethers.isAddress(newAddress)) {
+    if (!isAddress(newAddress)) {
       alert('Please enter a valid Ethereum address');
       return;
     }

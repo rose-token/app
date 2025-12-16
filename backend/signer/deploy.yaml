@@ -8,7 +8,7 @@ services:
       - port: 3000
         as: 80
         accept:
-          - signer.rose-token.com
+          - signer-dev.rose-token.com
         to:
           - global: true
     env:
@@ -39,7 +39,7 @@ services:
       - MERGEBOT_PRIVATE_KEY=${MERGEBOT_PRIVATE_KEY}
       - MERGEBOT_CLIENT_ID=${MERGEBOT_CLIENT_ID}
       - MERGEBOT_CLIENT_SECRET=${MERGEBOT_CLIENT_SECRET}
-      - MERGEBOT_CALLBACK_URL=https://signer.rose-token.com/api/github/callback
+      - MERGEBOT_CALLBACK_URL=https://signer-dev.rose-token.com/api/github/callback
       - FRONTEND_URL=https://rose-token.com
       - CAMELOT_LP_POSITION_IDS=${CAMELOT_LP_POSITION_IDS}
     params:
