@@ -232,7 +232,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
           tags: |
-            type=sha,prefix=
+            type=sha,prefix=prod-
             type=raw,value=prod-latest,enable=true
 
       - name: Build and push Docker image
@@ -287,9 +287,9 @@ jobs:
           AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND_PROD }}
           IMAGE_TAG: ${{ needs.build-and-push-frontend.outputs.image_tag }}
         run: |
-          # Update image in SDL (use short SHA to match docker/metadata-action output)
+          # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${SHORT_SHA}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:prod-${SHORT_SHA}"
           sed -i "s|image:.*rose-frontend.*|image: ${IMAGE}|g" frontend/deploy-prod.yaml
 
           echo "Updated SDL:"
@@ -569,7 +569,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}
           tags: |
-            type=sha,prefix=
+            type=sha,prefix=prod-
             type=raw,value=prod-latest,enable=true
 
       - name: Build and push Docker image
@@ -626,9 +626,9 @@ jobs:
           MERGEBOT_CLIENT_SECRET: ${{ secrets.MERGEBOT_CLIENT_SECRET }}
           CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
         run: |
-          # Update image in SDL (use short SHA to match docker/metadata-action output)
+          # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}:${SHORT_SHA}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}:prod-${SHORT_SHA}"
           sed -i "s|image:.*passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy-prod.yaml
 
           # Substitute secrets into SDL
