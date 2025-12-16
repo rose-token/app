@@ -205,7 +205,10 @@ jobs:
   # Job 2: Build and push Docker image for frontend
   build-and-push-frontend:
     needs: [resolve-addresses, deploy-contracts]
-    if: always() && !cancelled()
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -277,7 +280,10 @@ jobs:
   # Job 3: Deploy frontend to Akash Network
   deploy-frontend-akash:
     needs: [resolve-addresses, deploy-contracts, build-and-push-frontend]
-    if: always() && !cancelled() && needs.build-and-push-frontend.result == 'success'
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-frontend.result == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
@@ -527,7 +533,10 @@ jobs:
   # Job 4: Build and push Docker image for signer
   build-and-push-signer:
     needs: [resolve-addresses, deploy-contracts]
-    if: always() && !cancelled()
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -594,7 +603,10 @@ jobs:
   # Job 5: Deploy signer to Akash Network
   deploy-signer-akash:
     needs: [resolve-addresses, deploy-contracts, build-and-push-signer]
-    if: always() && !cancelled() && needs.build-and-push-signer.result == 'success'
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-signer.result == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
