@@ -421,6 +421,19 @@ Skip contract deployment by setting all 7 GitHub **variables** (not secrets - ad
 
 **Note:** Treasury stores LiFi, asset tokens, and price feeds internally. Pinning Treasury pins all related infrastructure.
 
+## Docker Cache-Busting (CI/CD)
+
+Frontend Docker build uses `CACHE_BUST=${{ github.sha }}` to ensure contract addresses are always fresh. This prevents stale `VITE_*_ADDRESS` values from being baked into cached layers.
+
+**How it works:**
+- `cache-from: type=gha` pulls cached base layers (fast)
+- `CACHE_BUST` arg changes each commit, invalidating subsequent layers
+- `no-cache: true` ensures Dockerfile instructions re-run
+
+**Troubleshooting stale addresses:**
+1. Clear GitHub Actions cache (Actions tab → Caches → Delete)
+2. Retrigger workflow - new `github.sha` busts cache automatically
+
 ## MockLiFi (Testnet)
 
 **Critical:** MockLiFiDiamond calculates swap output **before** transferring tokens. This is required because ROSE price depends on Treasury's ROSE balance (`circulatingSupply = totalSupply - treasuryBalance`). Transferring ROSE first would change the price and cause slippage failures.
