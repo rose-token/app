@@ -25,8 +25,91 @@ env:
   FRONTEND_IMAGE_NAME: ${{ github.repository }}/rose-frontend
 
 jobs:
-  # Job 1: Deploy contracts to Arbitrum Sepolia
+  # Job 0: Check if contracts are pinned (all 7 address variables set)
+  resolve-addresses:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      skip_deployment: ${{ steps.check.outputs.skip_deployment }}
+      token_address: ${{ steps.check.outputs.token_address }}
+      treasury_address: ${{ steps.check.outputs.treasury_address }}
+      marketplace_address: ${{ steps.check.outputs.marketplace_address }}
+      governance_address: ${{ steps.check.outputs.governance_address }}
+      reputation_address: ${{ steps.check.outputs.reputation_address }}
+      vrose_address: ${{ steps.check.outputs.vrose_address }}
+      usdc_address: ${{ steps.check.outputs.usdc_address }}
+
+    steps:
+      - name: Check for Pinned Contract Addresses
+        id: check
+        env:
+          TOKEN_ADDRESS: ${{ vars.TOKEN_ADDRESS }}
+          TREASURY_ADDRESS: ${{ vars.TREASURY_ADDRESS }}
+          MARKETPLACE_ADDRESS: ${{ vars.MARKETPLACE_ADDRESS }}
+          GOVERNANCE_ADDRESS: ${{ vars.GOVERNANCE_ADDRESS }}
+          REPUTATION_ADDRESS: ${{ vars.REPUTATION_ADDRESS }}
+          VROSE_ADDRESS: ${{ vars.VROSE_ADDRESS }}
+          USDC_ADDRESS: ${{ vars.USDC_ADDRESS }}
+        run: |
+          echo "============================================"
+          echo "CONTRACT ADDRESS RESOLUTION"
+          echo "============================================"
+
+          # Check if all required addresses are set as variables
+          SKIP_DEPLOYMENT="false"
+
+          if [ -n "$TOKEN_ADDRESS" ] && \
+             [ -n "$TREASURY_ADDRESS" ] && \
+             [ -n "$MARKETPLACE_ADDRESS" ] && \
+             [ -n "$GOVERNANCE_ADDRESS" ] && \
+             [ -n "$REPUTATION_ADDRESS" ] && \
+             [ -n "$VROSE_ADDRESS" ] && \
+             [ -n "$USDC_ADDRESS" ]; then
+            SKIP_DEPLOYMENT="true"
+            echo "✓ All contract addresses found in variables (PINNED MODE)"
+            echo ""
+            echo "Pinned Addresses:"
+            echo "  Token:        $TOKEN_ADDRESS"
+            echo "  Treasury:     $TREASURY_ADDRESS"
+            echo "  Marketplace:  $MARKETPLACE_ADDRESS"
+            echo "  Governance:   $GOVERNANCE_ADDRESS"
+            echo "  Reputation:   $REPUTATION_ADDRESS"
+            echo "  vROSE:        $VROSE_ADDRESS"
+            echo "  USDC:         $USDC_ADDRESS"
+            echo ""
+            echo "→ Contract deployment will be SKIPPED"
+            echo "→ Reputation seeding will be SKIPPED"
+          else
+            echo "✗ Some contract addresses missing from variables (DEPLOYMENT MODE)"
+            echo ""
+            echo "Missing Addresses (will be deployed):"
+            [ -z "$TOKEN_ADDRESS" ] && echo "  - TOKEN_ADDRESS"
+            [ -z "$TREASURY_ADDRESS" ] && echo "  - TREASURY_ADDRESS"
+            [ -z "$MARKETPLACE_ADDRESS" ] && echo "  - MARKETPLACE_ADDRESS"
+            [ -z "$GOVERNANCE_ADDRESS" ] && echo "  - GOVERNANCE_ADDRESS"
+            [ -z "$REPUTATION_ADDRESS" ] && echo "  - REPUTATION_ADDRESS"
+            [ -z "$VROSE_ADDRESS" ] && echo "  - VROSE_ADDRESS"
+            [ -z "$USDC_ADDRESS" ] && echo "  - USDC_ADDRESS"
+            echo ""
+            echo "→ Full contract deployment will run"
+            echo "→ Reputation seeding will run"
+          fi
+          echo "============================================"
+
+          # Set outputs (variables can be passed through outputs, unlike secrets)
+          echo "skip_deployment=$SKIP_DEPLOYMENT" >> $GITHUB_OUTPUT
+          echo "token_address=${TOKEN_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "treasury_address=${TREASURY_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "marketplace_address=${MARKETPLACE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "governance_address=${GOVERNANCE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "reputation_address=${REPUTATION_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "vrose_address=${VROSE_ADDRESS}" >> $GITHUB_OUTPUT
+          echo "usdc_address=${USDC_ADDRESS}" >> $GITHUB_OUTPUT
+
+  # Job 1: Deploy contracts to Arbitrum Sepolia (skipped if pinned)
   deploy-contracts:
+    needs: resolve-addresses
+    if: needs.resolve-addresses.outputs.skip_deployment != 'true'
     runs-on: ubuntu-latest
     environment: dev
     outputs:
@@ -121,7 +204,11 @@ jobs:
 
   # Job 2: Build and push Docker image for frontend
   build-and-push-frontend:
-    needs: deploy-contracts
+    needs: [resolve-addresses, deploy-contracts]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -171,13 +258,13 @@ jobs:
           cache-to: type=gha,mode=max
           no-cache: true
           build-args: |
-            VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address }}
-            VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address }}
-            VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address }}
-            VITE_GOVERNANCE_ADDRESS=${{ needs.deploy-contracts.outputs.governance_address }}
-            VITE_REPUTATION_ADDRESS=${{ needs.deploy-contracts.outputs.reputation_address }}
-            VITE_VROSE_ADDRESS=${{ needs.deploy-contracts.outputs.vrose_address }}
-            VITE_USDC_ADDRESS=${{ needs.deploy-contracts.outputs.usdc_address }}
+            VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
+            VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
+            VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
+            VITE_GOVERNANCE_ADDRESS=${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
+            VITE_REPUTATION_ADDRESS=${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
+            VITE_VROSE_ADDRESS=${{ needs.deploy-contracts.outputs.vrose_address || needs.resolve-addresses.outputs.vrose_address }}
+            VITE_USDC_ADDRESS=${{ needs.deploy-contracts.outputs.usdc_address || needs.resolve-addresses.outputs.usdc_address }}
             VITE_BUILD_VERSION=${{ env.BUILD_VERSION }}
             VITE_PINATA_JWT=${{ secrets.REACT_APP_PINATA_JWT }}
             VITE_PINATA_GATEWAY=${{ secrets.REACT_APP_PINATA_GATEWAY }}
@@ -192,7 +279,11 @@ jobs:
 
   # Job 3: Deploy frontend to Akash Network
   deploy-frontend-akash:
-    needs: [deploy-contracts, build-and-push-frontend]
+    needs: [resolve-addresses, deploy-contracts, build-and-push-frontend]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-frontend.result == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
@@ -441,7 +532,11 @@ jobs:
 
   # Job 4: Build and push Docker image for signer
   build-and-push-signer:
-    needs: deploy-contracts
+    needs: [resolve-addresses, deploy-contracts]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped')
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -507,7 +602,11 @@ jobs:
 
   # Job 5: Deploy signer to Akash Network
   deploy-signer-akash:
-    needs: [deploy-contracts, build-and-push-signer]
+    needs: [resolve-addresses, deploy-contracts, build-and-push-signer]
+    if: |
+      always() && !cancelled() &&
+      needs.resolve-addresses.result == 'success' &&
+      needs.build-and-push-signer.result == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
@@ -525,10 +624,10 @@ jobs:
           VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           ARBITRUM_SEPOLIA_RPC_URL: ${{ secrets.ARBITRUM_SEPOLIA_RPC_URL }}
-          GOVERNANCE_ADDRESS: ${{ needs.deploy-contracts.outputs.governance_address || secrets.GOVERNANCE_ADDRESS }}
-          REPUTATION_ADDRESS: ${{ needs.deploy-contracts.outputs.reputation_address || secrets.REPUTATION_ADDRESS }}
-          TREASURY_ADDRESS: ${{ needs.deploy-contracts.outputs.treasury_address || secrets.TREASURY_ADDRESS }}
-          MARKETPLACE_ADDRESS: ${{ needs.deploy-contracts.outputs.marketplace_address || secrets.MARKETPLACE_ADDRESS }}
+          GOVERNANCE_ADDRESS: ${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
+          REPUTATION_ADDRESS: ${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
+          TREASURY_ADDRESS: ${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
+          MARKETPLACE_ADDRESS: ${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
           REACT_APP_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
           BACKUP_REFERENCE_CID: ${{ secrets.BACKUP_REFERENCE_CID }}
           MERGEBOT_APP_ID: ${{ secrets.MERGEBOT_APP_ID }}
