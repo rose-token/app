@@ -10,7 +10,7 @@ RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source
 COPY . .
@@ -33,8 +33,12 @@ ENV VITE_BUILD_VERSION=__VITE_BUILD_VERSION__
 ENV VITE_CHAIN_ID=__VITE_CHAIN_ID__
 ENV VITE_RPC_WS_URL=__VITE_RPC_WS_URL__
 
-# Build the app
-RUN npm run build
+# Cache bust arg - changes with each commit to invalidate cached npm/Vite output
+ARG CACHE_BUST
+RUN echo "Cache bust: ${CACHE_BUST}"
+
+# Build the app (--force skips Vite dependency optimization cache)
+RUN npx vite build --force
 
 # Serve stage
 FROM nginx:alpine

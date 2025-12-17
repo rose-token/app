@@ -244,6 +244,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
 
       - name: Output image info
         run: |
