@@ -13,4 +13,7 @@ export const SUPPORTED_NETWORKS = [
   { id: NETWORK_IDS.ARBITRUM, name: NETWORK_NAMES[NETWORK_IDS.ARBITRUM] }
 ];
 
-export const DEFAULT_NETWORK = NETWORK_IDS.ARBITRUM_SEPOLIA;
+// Determine default network from environment
+const chainId = import.meta.env.VITE_CHAIN_ID || '__VITE_CHAIN_ID__';
+const isMainnet = chainId == 42161;
+export const DEFAULT_NETWORK = isMainnet ? NETWORK_IDS.ARBITRUM : NETWORK_IDS.ARBITRUM_SEPOLIA;
