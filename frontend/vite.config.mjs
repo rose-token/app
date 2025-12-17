@@ -1,11 +1,17 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Build hash for cache busting - injected at Docker build time
+// This ensures Vite generates new file hashes on every deploy
+const buildHash = process.env.VITE_BUILD_HASH || 'dev'
+
 export default defineConfig({
   plugins: [react()],
   base: '/',
   define: {
     global: 'globalThis',
+    // Inject build hash as a global constant - forces bundle hash to change
+    __BUILD_HASH__: JSON.stringify(buildHash),
   },
   server: {
     port: 3000,

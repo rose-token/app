@@ -213,9 +213,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set Build Version
-        run: echo "BUILD_VERSION=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -245,7 +242,22 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           build-args: |
-            CACHE_BUST=${{ github.sha }}
+            VITE_BUILD_HASH=${{ github.sha }}
+            VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
+            VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
+            VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
+            VITE_GOVERNANCE_ADDRESS=${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
+            VITE_REPUTATION_ADDRESS=${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
+            VITE_VROSE_ADDRESS=${{ needs.deploy-contracts.outputs.vrose_address || needs.resolve-addresses.outputs.vrose_address }}
+            VITE_USDC_ADDRESS=${{ needs.deploy-contracts.outputs.usdc_address || needs.resolve-addresses.outputs.usdc_address }}
+            VITE_PASSPORT_SIGNER_URL=${{ secrets.VITE_PASSPORT_SIGNER_URL }}
+            VITE_GITCOIN_SCORER_ID=${{ secrets.VITE_GITCOIN_SCORER_ID }}
+            VITE_GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }}
+            VITE_PINATA_GATEWAY=${{ secrets.REACT_APP_PINATA_GATEWAY }}
+            VITE_PINATA_JWT=${{ secrets.REACT_APP_PINATA_JWT }}
+            VITE_BUILD_VERSION=${{ github.sha }}
+            VITE_CHAIN_ID=42161
+            VITE_RPC_WS_URL=${{ secrets.ARBITRUM_RPC_WS_URL }}
 
       - name: Output image info
         run: |
@@ -271,51 +283,15 @@ jobs:
           AKASH_CONSOLE_API_KEY: ${{ secrets.AKASH_CONSOLE_API_KEY }}
           AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND }}
           IMAGE_TAG: ${{ needs.build-and-push-frontend.outputs.image_tag }}
-          # Contract addresses from deployment
-          VITE_TOKEN_ADDRESS: ${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
-          VITE_TREASURY_ADDRESS: ${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
-          VITE_MARKETPLACE_ADDRESS: ${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
-          VITE_GOVERNANCE_ADDRESS: ${{ needs.deploy-contracts.outputs.governance_address || needs.resolve-addresses.outputs.governance_address }}
-          VITE_REPUTATION_ADDRESS: ${{ needs.deploy-contracts.outputs.reputation_address || needs.resolve-addresses.outputs.reputation_address }}
-          VITE_VROSE_ADDRESS: ${{ needs.deploy-contracts.outputs.vrose_address || needs.resolve-addresses.outputs.vrose_address }}
-          VITE_USDC_ADDRESS: ${{ needs.deploy-contracts.outputs.usdc_address || needs.resolve-addresses.outputs.usdc_address }}
-          # API/Config from secrets
-          VITE_PASSPORT_SIGNER_URL: ${{ secrets.VITE_PASSPORT_SIGNER_URL }}
-          VITE_GITCOIN_SCORER_ID: ${{ secrets.VITE_GITCOIN_SCORER_ID }}
-          VITE_GITCOIN_API_KEY: ${{ secrets.VITE_GITCOIN_API_KEY }}
-          VITE_PINATA_GATEWAY: ${{ secrets.REACT_APP_PINATA_GATEWAY }}
-          VITE_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
-          VITE_BUILD_VERSION: ${{ github.sha }}
-          VITE_CHAIN_ID: 42161
-          VITE_RPC_WS_URL: ${{ secrets.ARBITRUM_RPC_WS_URL }}
         run: |
           # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
+          # Note: All VITE_* env vars are baked into the image at build time
           SHORT_SHA="${IMAGE_TAG:0:7}"
           IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:prod-${SHORT_SHA}"
           sed -i "s|image:.*rose-frontend.*|image: ${IMAGE}|g" frontend/deploy-prod.yaml
 
-          # Substitute environment variables into SDL (like backend)
-          sed -i "s|\${VITE_TOKEN_ADDRESS}|${VITE_TOKEN_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_TREASURY_ADDRESS}|${VITE_TREASURY_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_MARKETPLACE_ADDRESS}|${VITE_MARKETPLACE_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_GOVERNANCE_ADDRESS}|${VITE_GOVERNANCE_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_REPUTATION_ADDRESS}|${VITE_REPUTATION_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_VROSE_ADDRESS}|${VITE_VROSE_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_USDC_ADDRESS}|${VITE_USDC_ADDRESS}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_PASSPORT_SIGNER_URL}|${VITE_PASSPORT_SIGNER_URL}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_GITCOIN_SCORER_ID}|${VITE_GITCOIN_SCORER_ID}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_GITCOIN_API_KEY}|${VITE_GITCOIN_API_KEY}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_PINATA_GATEWAY}|${VITE_PINATA_GATEWAY}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_PINATA_JWT}|${VITE_PINATA_JWT}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_BUILD_VERSION}|${VITE_BUILD_VERSION}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_CHAIN_ID}|${VITE_CHAIN_ID}|g" frontend/deploy-prod.yaml
-          sed -i "s|\${VITE_RPC_WS_URL}|${VITE_RPC_WS_URL}|g" frontend/deploy-prod.yaml
-
-          echo "Updated SDL (secrets redacted):"
-          cat frontend/deploy-prod.yaml | \
-            sed 's/VITE_GITCOIN_API_KEY=.*/VITE_GITCOIN_API_KEY=***REDACTED***/g' | \
-            sed 's/VITE_PINATA_JWT=.*/VITE_PINATA_JWT=***REDACTED***/g' | \
-            sed 's/VITE_RPC_WS_URL=.*/VITE_RPC_WS_URL=***REDACTED***/g'
+          echo "Updated SDL:"
+          cat frontend/deploy-prod.yaml
 
           SDL_CONTENT=$(cat frontend/deploy-prod.yaml)
 

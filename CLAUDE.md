@@ -462,18 +462,26 @@ Skip contract deployment by setting all 7 GitHub **variables** (not secrets - ad
 - `frontend/deploy-prod.yaml` - Akash SDL for app.rose-token.com
 - `backend/signer/deploy-prod.yaml` - Akash SDL for signer.rose-token.com
 
-## Docker Cache-Busting (CI/CD)
+## Frontend Build-Time Environment Variables
 
-Frontend Docker build uses `CACHE_BUST=${{ github.sha }}` to ensure contract addresses are always fresh. This prevents stale `VITE_*_ADDRESS` values from being baked into cached layers.
+All `VITE_*` environment variables are passed as Docker build args and baked into the bundle at build time. This ensures:
+- Fresh values on every deploy (no caching issues)
+- New Vite bundle hashes when config changes (forces browser cache invalidation)
+- No runtime env var injection needed (simpler, more reliable)
 
 **How it works:**
-- `cache-from: type=gha` pulls cached base layers (fast)
-- `CACHE_BUST` arg changes each commit, invalidating subsequent layers
-- `no-cache: true` ensures Dockerfile instructions re-run
+1. CI/CD passes all `VITE_*` values as Docker `build-args`
+2. Dockerfile converts ARGs to ENV for Vite build
+3. `VITE_BUILD_HASH=${{ github.sha }}` forces new bundle filenames on every deploy
+4. Vite's `import.meta.env.VITE_*` inlines values at build time
+5. Container runs plain nginx (no entrypoint script needed)
 
-**Troubleshooting stale addresses:**
-1. Clear GitHub Actions cache (Actions tab → Caches → Delete)
-2. Retrigger workflow - new `github.sha` busts cache automatically
+**Key files:**
+- `frontend/Dockerfile` - ARG/ENV declarations, build command
+- `frontend/vite.config.mjs` - `__BUILD_HASH__` injection for cache busting
+- `.github/workflows/dev-deploy.yml` - build-args in `build-and-push-frontend` job
+
+**Note:** Frontend env vars (API keys, etc.) are public by design - they're in the JS bundle sent to browsers. For truly sensitive keys, proxy through the backend.
 
 ## MockLiFi (Testnet)
 
