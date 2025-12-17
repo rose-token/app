@@ -1,6 +1,6 @@
 # Rose Protocol
 
-A worker-focused decentralized marketplace with real-world asset (RWA)-backed treasury, two-track governance, and reputation-gated participation.
+A worker-focused decentralized marketplace with multi-asset treasury, two-track governance, and reputation-gated participation.
 
 ![License](https://img.shields.io/badge/license-PPL-blue.svg)
 ![Solidity](https://img.shields.io/badge/solidity-0.8.20-purple.svg)
@@ -10,7 +10,7 @@ A worker-focused decentralized marketplace with real-world asset (RWA)-backed tr
 
 Rose Protocol is a Web3 cooperative platform that connects customers with workers through transparent, blockchain-based task completion. The platform features:
 
-- **RWA-Backed Treasury**: ROSE tokens backed by BTC, Gold, and USDC with NAV-based pricing
+- **Multi-Asset Treasury**: Treasury holds diversified assets (BTC, Gold, USDC) with on-chain price feeds
 - **Three-Party Task System**: Customers, workers, and stakeholders collaborate with aligned incentives
 - **Two-Track Governance**: Fast track (3 days) for small proposals, slow track (14 days) for major decisions
 - **Reputation System**: 36-month decay with eligibility gating for proposals, voting, and delegation
@@ -40,7 +40,7 @@ cd backend/signer && npm install && npm run dev
 |----------|---------|-------|
 | **RoseToken** | ERC20 with authorized mint/burn | 168 |
 | **vROSE** | Soulbound governance receipt (1:1 with staked ROSE) | 205 |
-| **RoseTreasury** | NAV-based pricing, RWA management, redemption queue | 931 |
+| **RoseTreasury** | Multi-asset management, deposits, redemptions | 931 |
 | **RoseMarketplace** | Task escrow, stakeholder validation, dispute resolution | 911 |
 | **RoseGovernance** | Two-track proposals, quadratic VP, voter rewards | 966 |
 | **RoseReputation** | 36-month decay buckets, eligibility thresholds | 205 |
@@ -50,7 +50,7 @@ cd backend/signer && npm install && npm run dev
 ```
 1. RoseToken (temp auth: deployer)
 2. vROSE
-3. RoseTreasury (+ add assets: BTC 30%, GOLD 30%, STABLE 20%, ROSE 20%)
+3. RoseTreasury (+ add supported assets)
 4. RoseMarketplace
 5. RoseReputation (temp governance: deployer)
 6. RoseGovernance
@@ -68,26 +68,8 @@ For a **10 ROSE task**:
 
 On completion:
 - **Worker**: 9.5 ROSE (95%)
-- **Stakeholder**: 0.5 ROSE fee + 1 vROSE returned (50% ROI)
+- **Stakeholder**: 0.5 ROSE fee + 1 vROSE returned
 - **DAO Treasury**: 0.2 ROSE minted (2%)
-
-### Treasury NAV Formula
-
-```
-ROSE Price = Hard Assets USD / Circulating Supply
-
-Hard Assets = BTC + Gold + USDC (excludes treasury ROSE holdings)
-Circulating Supply = Total Supply - Treasury ROSE Balance
-```
-
-### Target Allocations
-
-| Asset | Allocation | Oracle |
-|-------|------------|--------|
-| BTC (tBTC) | 30% | Chainlink BTC/USD |
-| Gold (XAUt) | 30% | Chainlink XAU/USD |
-| USDC | 20% | $1.00 (stable) |
-| ROSE | 20% | NAV price |
 
 ## Task Lifecycle
 
@@ -159,8 +141,8 @@ On successful proposal completion:
 
 | Watcher | Purpose |
 |---------|---------|
-| **DepositWatcher** | Auto-diversify USDC into BTC/Gold via LiFi |
-| **RedemptionWatcher** | Liquidate RWA for redemption fulfillment |
+| **DepositWatcher** | Process deposits, execute treasury operations |
+| **RedemptionWatcher** | Process redemption requests |
 | **AnalyticsWatcher** | Sync events to PostgreSQL for dashboards |
 | **StakerIndexer** | Maintain off-chain VP cache |
 | **SnapshotWatcher** | Compute VP snapshots, auto-finalize proposals |
@@ -176,7 +158,7 @@ On successful proposal completion:
 | `/api/passport` | Gitcoin Passport verification |
 | `/api/governance` | VP queries, merkle proofs, vote signatures |
 | `/api/delegation/v2` | Off-chain EIP-712 delegations |
-| `/api/treasury` | NAV history, rebalance triggers |
+| `/api/treasury` | Treasury status and operations |
 | `/api/auction` | Off-chain bid storage |
 | `/api/tasks` | Paginated task list (scales to 100k+) |
 | `/api/analytics` | Admin dashboards |
@@ -186,8 +168,8 @@ On successful proposal completion:
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| NAV Snapshot | Daily 00:00 UTC | Store price history |
-| Rebalance | 1st of month | Multi-swap to target allocations |
+| Treasury Snapshot | Daily 00:00 UTC | Store asset state |
+| Asset Management | 1st of month | Treasury operations |
 | Delegate Scoring | Hourly | Score proposals, free VP |
 | Database Backup | Daily 02:00 UTC | PostgreSQL → Pinata |
 | Analytics Rollup | Daily 00:00 UTC | Aggregate metrics |
@@ -374,3 +356,9 @@ gh pr checks --watch
 **Network**: Arbitrum Sepolia (testnet) / Arbitrum One (mainnet)
 **Solidity**: 0.8.20
 **Node**: 20+
+
+---
+
+## Disclaimer
+
+This software is provided as-is, without warranty of any kind. ROSE is a governance and utility token for the Rose Protocol marketplace. Nothing in this repository constitutes financial advice, investment advice, or an offer of securities. The protocol's treasury operations are software mechanisms for managing protocol-owned assets and do not represent any guarantee of value or returns. Users are solely responsible for understanding and complying with applicable laws in their jurisdiction. Use at your own risk.
