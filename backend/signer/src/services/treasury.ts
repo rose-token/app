@@ -301,7 +301,8 @@ export async function executeRebalance(): Promise<RebalanceResult> {
         swap.toAsset,
         swap.amountIn,
         quote.minAmountOut,
-        quote.lifiData
+        quote.lifiData,
+        quote.gasLimit
       );
 
       swapDetails.push({

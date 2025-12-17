@@ -127,6 +127,7 @@ export async function getSwapQuote(
   minAmountOut: bigint;
   estimatedAmountOut: bigint;
   gasCost: bigint;
+  gasLimit: bigint;
 }> {
   // On testnet, generate mock calldata for MockLiFiDiamond
   // LiFi API only supports mainnet chains
@@ -160,6 +161,7 @@ export async function getSwapQuote(
       minAmountOut,
       estimatedAmountOut,
       gasCost: 0n,
+      gasLimit: 500000n, // Safe default for mock swaps
     };
   }
 
@@ -201,9 +203,13 @@ export async function getSwapQuote(
     0n
   );
 
+  // Parse gasLimit from quote
+  const gasLimit = BigInt(quote.transactionRequest.gasLimit || '500000');
+
   console.log(
     `[LiFi] Quote: ${ethers.formatUnits(amountIn, quote.action.fromToken.decimals)} ${quote.action.fromToken.symbol} -> ` +
-      `${ethers.formatUnits(estimatedAmountOut, quote.action.toToken.decimals)} ${quote.action.toToken.symbol}`
+      `${ethers.formatUnits(estimatedAmountOut, quote.action.toToken.decimals)} ${quote.action.toToken.symbol}, ` +
+      `gasLimit: ${gasLimit.toString()}`
   );
 
   return {
@@ -211,6 +217,7 @@ export async function getSwapQuote(
     minAmountOut,
     estimatedAmountOut,
     gasCost,
+    gasLimit,
   };
 }
 
@@ -352,7 +359,8 @@ export async function executeDiversificationSwap(
   toAssetKey: string,
   amountIn: bigint,
   minAmountOut: bigint,
-  lifiData: string
+  lifiData: string,
+  gasLimit: bigint
 ): Promise<string> {
   if (!config.contracts.treasury) {
     throw new Error('TREASURY_ADDRESS not configured');
@@ -375,8 +383,12 @@ export async function executeDiversificationSwap(
   const fromAssetBytes32 = ethers.encodeBytes32String(fromAssetKey);
   const toAssetBytes32 = ethers.encodeBytes32String(toAssetKey);
 
+  // Add 20% buffer to LiFi's gasLimit for the outer Treasury call
+  // This accounts for Treasury's overhead: balance checks, event emission, slippage check
+  const gasLimitWithBuffer = (gasLimit * 120n) / 100n;
+
   console.log(
-    `[LiFi] Executing swap: ${fromAssetKey} -> ${toAssetKey}, amount: ${amountIn.toString()}`
+    `[LiFi] Executing swap: ${fromAssetKey} -> ${toAssetKey}, amount: ${amountIn.toString()}, gasLimit: ${gasLimitWithBuffer.toString()}`
   );
 
   const tx = await treasury.executeSwap(
@@ -384,7 +396,8 @@ export async function executeDiversificationSwap(
     toAssetBytes32,
     amountIn,
     minAmountOut,
-    lifiData
+    lifiData,
+    { gasLimit: gasLimitWithBuffer }
   );
 
   const receipt = await tx.wait();

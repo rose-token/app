@@ -174,7 +174,8 @@ async function processDiversification(
             swap.assetKey,
             swap.usdcAmount,
             quote.minAmountOut,
-            quote.lifiData
+            quote.lifiData,
+            quote.gasLimit
           );
           swapResult.txHash = txHash;
           stats.swapsExecuted++;
