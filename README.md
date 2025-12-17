@@ -264,26 +264,36 @@ npm run update-abi  # Generates ABIs for frontend + backend
 
 ## CI/CD
 
-### PR Build (`pr-build.yml`)
+### Dev Environment (`dev-deploy.yml`)
 
-Parallel jobs:
-1. **build-contracts**: Test → Compile → Update ABIs
-2. **build-frontend**: Install → Build with placeholder addresses
+Triggered on pull requests:
 
-### Deploy (`combined-deploy.yml`)
+| Job | Purpose |
+|-----|---------|
+| **resolve-addresses** | Check for pinned contract addresses |
+| **deploy-contracts** | Test → Compile → Deploy to Arbitrum Sepolia (skipped if pinned) |
+| **build-and-push-frontend** | Build Docker image with contract addresses baked in |
+| **deploy-frontend-akash** | Deploy frontend to Akash Network |
+| **build-and-push-signer** | Build backend Docker image with ABIs |
+| **deploy-signer-akash** | Deploy backend to Akash Network with PostgreSQL |
 
-On push to main:
-1. Run tests
-2. Deploy contracts to Arbitrum Sepolia
-3. Save addresses to `deployment-output.json`
-4. Build and deploy frontend to GitHub Pages
+### Production (`prod-deploy.yml`)
 
-### Backend Deploy (`deploy-signer.yml`)
+Triggered on push to main:
 
-Deploys to Akash Network with:
-- PostgreSQL database
-- WebSocket event listeners
-- Scheduled cron jobs
+| Job | Purpose |
+|-----|---------|
+| **resolve-addresses** | Check for pinned contract addresses |
+| **deploy-contracts** | Test → Compile → Deploy to Arbitrum One (skipped if pinned) |
+| **build-and-push-frontend** | Build Docker image for `app.rose-token.com` |
+| **deploy-frontend-akash** | Deploy frontend to Akash Network |
+| **build-and-push-signer** | Build backend Docker image |
+| **deploy-signer-akash** | Deploy backend to `signer.rose-token.com` |
+
+### Pinned Contracts
+
+Skip contract deployment by setting all 7 GitHub variables in the environment:
+`TOKEN_ADDRESS`, `TREASURY_ADDRESS`, `MARKETPLACE_ADDRESS`, `GOVERNANCE_ADDRESS`, `REPUTATION_ADDRESS`, `VROSE_ADDRESS`, `USDC_ADDRESS`
 
 ## Security
 
