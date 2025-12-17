@@ -5,7 +5,7 @@ import { webSocket } from 'viem';
 // Determine chain based on environment
 const chainId = import.meta.env.VITE_CHAIN_ID || '__VITE_CHAIN_ID__';
 console.log('VITE_CHAIN_ID:', chainId);
-const isMainnet = chainId === '42161' || chainId === 42161;
+const isMainnet = chainId == 42161;
 console.log('isMainnet:', isMainnet, '| Expected chain:', isMainnet ? 'Arbitrum One (42161)' : 'Arbitrum Sepolia (421614)');
 
 // RPC WebSocket URLs
