@@ -263,7 +263,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | ROSE/vROSE/stakedRose | 18 |
 | VP | 9 |
 | USDC/NAV/XAUt | 6 |
-| TBTC | 8 |
+| tBTC | 18 |
 | Chainlink | 8 |
 
 ## Environment Variables

@@ -86,9 +86,9 @@ async function main() {
     await (await mockUsdc.mint(deployer.address, mintAmount)).wait();
     console.log("Minted 1,000,000 USDC to deployer ✓");
 
-    // Deploy mock TBTC if needed
+    // Deploy mock TBTC if needed (18 decimals to match real tBTC on Arbitrum)
     if (!addresses.tbtc) {
-      const mockTbtc = await MockToken.deploy("Mock TBTC", "TBTC", 8);
+      const mockTbtc = await MockToken.deploy("Mock TBTC", "TBTC", 18);
       await mockTbtc.waitForDeployment();
       addresses.tbtc = await mockTbtc.getAddress();
       console.log("Mock TBTC deployed to:", addresses.tbtc);
@@ -134,7 +134,7 @@ async function main() {
 
     // Configure token decimals on the mock LiFi
     await (await mockLiFi.setTokenDecimals(addresses.usdc, 6)).wait();
-    await (await mockLiFi.setTokenDecimals(addresses.tbtc, 8)).wait();
+    await (await mockLiFi.setTokenDecimals(addresses.tbtc, 18)).wait();   // tBTC has 18 decimals
     await (await mockLiFi.setTokenDecimals(addresses.xaut, 6)).wait();
     console.log("Token decimals configured on MockLiFi ✓");
 
@@ -142,8 +142,8 @@ async function main() {
     // Formula: amountOut = (amountIn * rate) / 1e18
     // For USDC (6 dec) -> Asset swaps: rate = (assetAmount per $1) * 1e18 / 1e6
     //
-    // BTC @ $60,000: (1e8 / 60000) * 1e18 / 1e6 = 1.6666e15
-    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.tbtc, 1666666666666666n)).wait();
+    // BTC @ $60,000 (18 decimals): (1e18 / 60000) * 1e18 / 1e6 = 1.6666e25
+    await (await mockLiFi.setExchangeRate(addresses.usdc, addresses.tbtc, 16666666666666666666666666n)).wait();
     // Gold @ $2,000: rate = outputUnits * 1e18 / inputUnits
     // $1 USDC = 0.0005 oz XAUt = 500 XAUt units
     // rate = 500 * 1e18 / 1e6 = 5e14
@@ -154,8 +154,8 @@ async function main() {
     // Formula: amountOut = (amountIn * rate) / 1e18
     // For Asset -> USDC swaps: rate = price * 1e6 * 1e18 / 10^assetDecimals
     //
-    // BTC @ $60,000: 60000 * 1e6 * 1e18 / 1e8 = 6e20
-    await (await mockLiFi.setExchangeRate(addresses.tbtc, addresses.usdc, 600000000000000000000n)).wait();
+    // BTC @ $60,000 (18 decimals): 60000 * 1e6 * 1e18 / 1e18 = 6e10
+    await (await mockLiFi.setExchangeRate(addresses.tbtc, addresses.usdc, 60000000000n)).wait();
     // Gold @ $2,000: 2000 * 1e6 * 1e18 / 1e6 = 2e21 (XAUt has 6 decimals)
     await (await mockLiFi.setExchangeRate(addresses.xaut, addresses.usdc, 2000000000000000000000n)).wait();
     console.log("Reverse exchange rates (Asset → USDC) configured ✓");
@@ -166,7 +166,7 @@ async function main() {
     const mockXaut_lifi = await hre.ethers.getContractAt("MockERC20", addresses.xaut);
 
     // Fund with massive liquidity for stress testing redemptions
-    await (await mockTbtc_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("10000", 8))).wait();      // 10k BTC
+    await (await mockTbtc_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("10000", 18))).wait();     // 10k BTC (18 decimals)
     await (await mockXaut_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("1000000", 6))).wait();    // 1M XAUt
     await (await mockUsdc_lifi.mint(addresses.lifiDiamond, hre.ethers.parseUnits("1000000000", 6))).wait(); // 1B USDC
     console.log("MockLiFi funded with liquidity (1B USDC, 10k BTC, 1M XAUt) ✓");
@@ -242,7 +242,7 @@ async function main() {
     btcKey,
     addresses.tbtc,
     addresses.btcUsdFeed,
-    8,    // decimals
+    18,   // decimals - tBTC has 18 decimals (both mock and mainnet)
     3000  // 30%
   )).wait();
   console.log("  BTC asset registered (30%) ✓");

@@ -276,6 +276,20 @@ contract RoseTreasury is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
+     * @dev Update asset decimals (for fixing misconfigured assets)
+     * @param key Asset key
+     * @param newDecimals New token decimals
+     */
+    function updateAssetDecimals(bytes32 key, uint8 newDecimals) external onlyOwner {
+        Asset storage asset = assets[key];
+        if (asset.token == address(0)) revert AssetNotFound();
+
+        asset.decimals = newDecimals;
+
+        emit AssetUpdated(key, asset.token, asset.priceFeed, asset.targetBps);
+    }
+
+    /**
      * @dev Deactivate an asset (keeps data but excludes from calculations)
      * @param key Asset key
      */
