@@ -16,6 +16,10 @@ Rose Protocol is a Web3 cooperative platform that connects customers with worker
 - **Reputation System**: 36-month decay with eligibility gating for proposals, voting, and delegation
 - **Sybil Resistance**: Gitcoin Passport verification on all user actions
 
+## Disclaimer
+
+This software is provided as-is, without warranty of any kind. ROSE is a governance and utility token for the Rose Protocol marketplace. Nothing in this repository constitutes financial advice, investment advice, or an offer of securities. The protocol's treasury operations are software mechanisms for managing protocol-owned assets and do not represent any guarantee of value or returns. Users are solely responsible for understanding and complying with applicable laws in their jurisdiction. Use at your own risk. This is Beta software. Unaudited. Deposit only what you can afford to lose. Treasury assets may fluctuate in value. Subject to available liquidity.
+
 ## Quick Start
 
 ```bash
@@ -371,4 +375,4 @@ gh pr checks --watch
 
 ## Disclaimer
 
-This software is provided as-is, without warranty of any kind. ROSE is a governance and utility token for the Rose Protocol marketplace. Nothing in this repository constitutes financial advice, investment advice, or an offer of securities. The protocol's treasury operations are software mechanisms for managing protocol-owned assets and do not represent any guarantee of value or returns. Users are solely responsible for understanding and complying with applicable laws in their jurisdiction. Use at your own risk.
+This software is provided as-is, without warranty of any kind. ROSE is a governance and utility token for the Rose Protocol marketplace. Nothing in this repository constitutes financial advice, investment advice, or an offer of securities. The protocol's treasury operations are software mechanisms for managing protocol-owned assets and do not represent any guarantee of value or returns. Users are solely responsible for understanding and complying with applicable laws in their jurisdiction. Use at your own risk. This is Beta software. Unaudited. Deposit only what you can afford to lose. Treasury assets may fluctuate in value. Subject to available liquidity.
