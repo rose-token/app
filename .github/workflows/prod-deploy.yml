@@ -286,7 +286,7 @@ jobs:
           VITE_PINATA_GATEWAY: ${{ secrets.REACT_APP_PINATA_GATEWAY }}
           VITE_PINATA_JWT: ${{ secrets.REACT_APP_PINATA_JWT }}
           VITE_BUILD_VERSION: ${{ github.sha }}
-          VITE_CHAIN_ID: "42161"
+          VITE_CHAIN_ID: 42161
           VITE_RPC_WS_URL: ${{ secrets.ARBITRUM_RPC_WS_URL }}
         run: |
           # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
