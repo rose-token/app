@@ -631,7 +631,8 @@ async function processPendingRedemptions(): Promise<void> {
               'STABLE',
               swap.amountToSell,
               quote.minAmountOut,
-              quote.lifiData
+              quote.lifiData,
+              quote.gasLimit
             );
 
             console.log(`[RedemptionWatcher] Liquidation swap executed: ${txHash}`);
