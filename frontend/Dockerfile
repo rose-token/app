@@ -37,8 +37,8 @@ ENV VITE_RPC_WS_URL=__VITE_RPC_WS_URL__
 ARG CACHE_BUST
 RUN echo "Cache bust: ${CACHE_BUST}"
 
-# Build the app (--force skips Vite dependency optimization cache)
-RUN npx vite build --force
+# Clear any Vite cache and build fresh
+RUN rm -rf node_modules/.vite .vite && npm run build
 
 # Serve stage
 FROM nginx:alpine
