@@ -1,16 +1,17 @@
 import React from 'react';
 import { useSwitchChain, useChainId } from 'wagmi';
+import { DEFAULT_NETWORK, NETWORK_NAMES } from '../../constants/networks';
 
 const NetworkSelector = () => {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  
+
+  // Only show the network for current environment
   const networks = [
-    { id: 421614, name: 'Arbitrum Sepolia' },
-    { id: 42161, name: 'Arbitrum One' }
+    { id: DEFAULT_NETWORK, name: NETWORK_NAMES[DEFAULT_NETWORK] }
   ];
 
-  const currentNetwork = networks.find(network => network.id === chainId) || { name: 'Unknown Network' };
+  const currentNetwork = networks.find(network => network.id == chainId) || { name: 'Unknown Network' };
 
   return (
     <div className="relative">
