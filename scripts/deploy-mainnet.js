@@ -80,7 +80,7 @@ async function main() {
     btcKey,
     addresses.tbtc,
     addresses.btcUsdFeed,
-    8,    // decimals
+    18,   // decimals - tBTC on Arbitrum has 18 decimals
     3000  // 30%
   )).wait();
   console.log("  BTC asset registered (30%)");
