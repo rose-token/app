@@ -39,7 +39,6 @@ const ProposalDetailPage = () => {
     voteCombined,
     freeVP,
     finalizeProposal,
-    executeProposal,
     cancelProposal,
   } = useProposals({ proposalId: id });
 
@@ -103,7 +102,7 @@ const ProposalDetailPage = () => {
   const isPassed = proposal.status === ProposalStatus.Passed;
   const isExecuted = proposal.status === ProposalStatus.Executed;
   const canFinalize = isActive && proposal.isExpired;
-  const canExecute = isPassed;
+  // Note: executeProposal is now auto-executed by backend after 24h grace period
   const canCancel = (isPending || isActive) && proposal.isProposer;
 
   return (
@@ -320,7 +319,7 @@ const ProposalDetailPage = () => {
           )}
 
           {/* Admin Actions */}
-          {(canFinalize || canExecute || canCancel) && (
+          {(canFinalize || canCancel) && (
             <div className="card">
               <h3 className="text-lg font-semibold mb-4">Actions</h3>
               <div className="space-y-3">
@@ -331,17 +330,6 @@ const ProposalDetailPage = () => {
                     className="btn-primary w-full"
                   >
                     {actionLoading[`finalize-${proposal.id}`] ? 'Finalizing...' : 'Finalize Proposal'}
-                  </button>
-                )}
-
-                {canExecute && (
-                  <button
-                    onClick={() => executeProposal(proposal.id)}
-                    disabled={actionLoading[`execute-${proposal.id}`]}
-                    className="btn-primary w-full"
-                    style={{ backgroundColor: 'var(--success)' }}
-                  >
-                    {actionLoading[`execute-${proposal.id}`] ? 'Executing...' : 'Execute Proposal'}
                   </button>
                 )}
 
@@ -360,6 +348,21 @@ const ProposalDetailPage = () => {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Auto-execution notice for passed proposals */}
+          {isPassed && (
+            <div
+              className="card"
+              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+            >
+              <h3 className="font-semibold mb-2" style={{ color: 'var(--success)' }}>
+                Proposal Passed
+              </h3>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                This proposal will be automatically executed 24 hours after voting ended.
+              </p>
             </div>
           )}
 

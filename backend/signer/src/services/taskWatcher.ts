@@ -36,6 +36,7 @@ interface TaskData {
   prUrl: string;
   detailedDescriptionHash: string;
   status: number;
+  source: number;  // 0 = Customer, 1 = DAO
 }
 
 interface IpfsMetadata {
@@ -101,6 +102,7 @@ async function getTaskData(taskId: number): Promise<TaskData | null> {
       prUrl: task.prUrl,
       detailedDescriptionHash: task.detailedDescriptionHash,
       status: Number(task.status),
+      source: Number(task.source),  // 0 = Customer, 1 = DAO
     };
   } catch (error) {
     console.error(`[TaskWatcher] Failed to fetch task ${taskId}:`, error);
@@ -210,8 +212,10 @@ async function handleTaskReadyForPayment(
     console.log(`[TaskWatcher] Processing GitHub merge for task ${taskIdNum}, PR: ${task.prUrl}`);
     stats.mergesAttempted++;
 
-    // Pass customer address for authorization check
-    const result = await approveAndMergePR(task.prUrl, taskIdNum, task.customer);
+    // Skip customer authorization for DAO tasks (source = 1)
+    // DAO tasks have the proposer as "customer" who hasn't authorized any repos
+    const customerForAuth = task.source === 1 ? undefined : task.customer;
+    const result = await approveAndMergePR(task.prUrl, taskIdNum, customerForAuth);
 
     if (result.success) {
       stats.mergesSucceeded++;
@@ -380,8 +384,9 @@ export async function processTaskManually(taskId: number): Promise<{
   }
 
   stats.mergesAttempted++;
-  // Pass customer address for authorization check
-  const result = await approveAndMergePR(task.prUrl, taskId, task.customer);
+  // Skip customer authorization for DAO tasks (source = 1)
+  const customerForAuth = task.source === 1 ? undefined : task.customer;
+  const result = await approveAndMergePR(task.prUrl, taskId, customerForAuth);
 
   if (result.success) {
     stats.mergesSucceeded++;

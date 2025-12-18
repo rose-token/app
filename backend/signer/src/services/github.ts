@@ -196,18 +196,24 @@ export async function validatePrUrlWithAuth(
       return { valid: false, error: 'Task not found' };
     }
 
-    const customerAddress = task.customer;
+    // Skip authorization check for DAO tasks (source = 1)
+    // DAO tasks have the proposer as "customer" who hasn't authorized any repos
+    const isDAOTask = Number(task.source) === 1;
 
-    // Check if customer has authorized this repo
-    const authorized = await isRepoAuthorized(customerAddress, pr.owner, pr.repo);
-    if (!authorized) {
-      return {
-        valid: false,
-        error: `Repository ${pr.owner}/${pr.repo} not authorized by task customer. The customer must authorize this repository in their Profile before you can submit work.`,
-      };
+    if (!isDAOTask) {
+      const customerAddress = task.customer;
+
+      // Check if customer has authorized this repo
+      const authorized = await isRepoAuthorized(customerAddress, pr.owner, pr.repo);
+      if (!authorized) {
+        return {
+          valid: false,
+          error: `Repository ${pr.owner}/${pr.repo} not authorized by task customer. The customer must authorize this repository in their Profile before you can submit work.`,
+        };
+      }
     }
 
-    // If authorized, proceed with standard PR validation
+    // Proceed with standard PR validation
     return await validatePrUrl(prUrl);
   } catch (err: unknown) {
     const error = err as Error;

@@ -103,7 +103,7 @@ Web3 marketplace with task-value-based token distribution.
 
 **Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
 
-**Lifecycle:** Active → voting period → Passed/Failed. Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
+**Lifecycle:** Active → voting period → Passed/Failed. Passed proposals are auto-executed by backend after 24h grace period (creates DAO task). Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
 
 **Two-token:** ROSE locked in governance, vROSE as 1:1 receipt for stakeholder escrow.
 
@@ -134,7 +134,7 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 **GitHub Integration:** On-chain `githubIntegration` bool in Task struct controls PR URL requirement. When `true`, `markTaskCompleted()` requires non-empty PR URL; when `false`, empty string allowed. Set at task creation via `createTask(..., githubIntegration, ...)` and `createAuctionTask()`. DAO tasks default to `true`. Frontend's TaskCard skips PR URL modal when `githubIntegration=false`.
 
-**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed.
+**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed. 
 - `github_links` table: Wallet ↔ GitHub account linkage
 - `authorized_repos` table: Per-wallet repo authorization list
 - Authorization check in `approveAndMergePR()` verifies customer has authorized the target repo
@@ -237,7 +237,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegate Scoring | Every 1h | Score proposals, free VP |
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
-| Snapshot Watcher | Event-driven + 60s poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline |
+| Snapshot Watcher | Event-driven + 15m poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline; Auto-execute passed proposals after 24h grace period |
 | Staker Validation | Weekly Sun 03:00 UTC | Verify staker cache matches on-chain |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
