@@ -5,7 +5,7 @@ A worker-focused decentralized marketplace with multi-asset treasury, two-track 
 ![License](https://img.shields.io/badge/license-PPL-blue.svg)
 ![Solidity](https://img.shields.io/badge/solidity-0.8.20-purple.svg)
 ![Network](https://img.shields.io/badge/network-Arbitrum-blue.svg)
-
+ 
 **Live App**: [app.rose-token.com](https://app.rose-token.com)
 
 **Dev App**: [dev.rose-token.com](https://dev.rose-token.com)
