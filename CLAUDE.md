@@ -134,10 +134,11 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 **GitHub Integration:** On-chain `githubIntegration` bool in Task struct controls PR URL requirement. When `true`, `markTaskCompleted()` requires non-empty PR URL; when `false`, empty string allowed. Set at task creation via `createTask(..., githubIntegration, ...)` and `createAuctionTask()`. DAO tasks default to `true`. Frontend's TaskCard skips PR URL modal when `githubIntegration=false`.
 
-**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed. 
+**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed.
 - `github_links` table: Wallet ↔ GitHub account linkage
 - `authorized_repos` table: Per-wallet repo authorization list
 - Authorization check in `approveAndMergePR()` verifies customer has authorized the target repo
+- **DAO tasks:** Instead of customer authorization, DAO tasks (created via governance proposals) require PRs to be submitted to a configured repository (default: `rose-token/app`, configurable via `DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME` env vars)
 
 ## Security Patterns
 
@@ -284,7 +285,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
-| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL` |
+| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app) |
 | Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`

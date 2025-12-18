@@ -212,8 +212,20 @@ async function handleTaskReadyForPayment(
     console.log(`[TaskWatcher] Processing GitHub merge for task ${taskIdNum}, PR: ${task.prUrl}`);
     stats.mergesAttempted++;
 
-    // Skip customer authorization for DAO tasks (source = 1)
-    // DAO tasks have the proposer as "customer" who hasn't authorized any repos
+    // For DAO tasks, verify PR is to allowed repo before merging
+    if (task.source === 1) {
+      const pr = parsePrUrl(task.prUrl);
+      const { owner, repo } = config.github.daoTaskRepo;
+      if (!pr || pr.owner !== owner || pr.repo !== repo) {
+        stats.mergesFailed++;
+        stats.lastError = `DAO task PR not to ${owner}/${repo}`;
+        console.error(`[TaskWatcher] DAO task ${taskIdNum} PR not to ${owner}/${repo}, skipping merge`);
+        return;
+      }
+    }
+
+    // For DAO tasks, skip customer auth (we verified repo above)
+    // For customer tasks, pass customer address for authorization check
     const customerForAuth = task.source === 1 ? undefined : task.customer;
     const result = await approveAndMergePR(task.prUrl, taskIdNum, customerForAuth);
 
@@ -384,7 +396,19 @@ export async function processTaskManually(taskId: number): Promise<{
   }
 
   stats.mergesAttempted++;
-  // Skip customer authorization for DAO tasks (source = 1)
+
+  // For DAO tasks, verify PR is to allowed repo before merging
+  if (task.source === 1) {
+    const pr = parsePrUrl(task.prUrl);
+    const { owner, repo } = config.github.daoTaskRepo;
+    if (!pr || pr.owner !== owner || pr.repo !== repo) {
+      stats.mergesFailed++;
+      return { success: false, error: `DAO task PR must be to ${owner}/${repo}` };
+    }
+  }
+
+  // For DAO tasks, skip customer auth (we verified repo above)
+  // For customer tasks, pass customer address for authorization check
   const customerForAuth = task.source === 1 ? undefined : task.customer;
   const result = await approveAndMergePR(task.prUrl, taskId, customerForAuth);
 

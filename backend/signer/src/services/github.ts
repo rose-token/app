@@ -196,11 +196,20 @@ export async function validatePrUrlWithAuth(
       return { valid: false, error: 'Task not found' };
     }
 
-    // Skip authorization check for DAO tasks (source = 1)
-    // DAO tasks have the proposer as "customer" who hasn't authorized any repos
+    // Check authorization based on task source
     const isDAOTask = Number(task.source) === 1;
 
-    if (!isDAOTask) {
+    if (isDAOTask) {
+      // DAO tasks can only submit PRs to configured repo
+      const { owner, repo } = config.github.daoTaskRepo;
+      if (pr.owner !== owner || pr.repo !== repo) {
+        return {
+          valid: false,
+          error: `DAO tasks can only submit PRs to ${owner}/${repo}. Got: ${pr.owner}/${pr.repo}`,
+        };
+      }
+    } else {
+      // Customer tasks require customer authorization
       const customerAddress = task.customer;
 
       // Check if customer has authorized this repo
