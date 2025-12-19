@@ -256,21 +256,21 @@ export function calculateDiversificationSwaps(
     return diversifyByRatio(depositAmountUsdc, targetAllocations);
   }
 
-  // Calculate targets based on hard assets only (exclude ROSE allocation)
+  // Get allocation percentages (in basis points, out of 10000 total)
   const allocBTC = targetAllocations.get('BTC') ?? 0;
   const allocGOLD = targetAllocations.get('GOLD') ?? 0;
   const allocUSDC = targetAllocations.get('STABLE') ?? 0;
-  const hardAllocTotal = allocBTC + allocGOLD + allocUSDC;
 
-  if (hardAllocTotal === 0) return swaps;
+  if (allocBTC === 0 && allocGOLD === 0 && allocUSDC === 0) return swaps;
 
   // Total hard assets AFTER deposit
   const newHardTotal = currentBTC + currentGOLD + currentUSDC + depositAmountUsdc;
 
-  // Target values based on hard assets only
-  const targetBTC = (newHardTotal * BigInt(allocBTC)) / BigInt(hardAllocTotal);
-  const targetGOLD = (newHardTotal * BigInt(allocGOLD)) / BigInt(hardAllocTotal);
-  const targetUSDC = (newHardTotal * BigInt(allocUSDC)) / BigInt(hardAllocTotal);
+  // Target values using allocation percentages directly (not rescaled)
+  // The 20% ROSE allocation provides headroom without affecting BTC/GOLD/USDC ratios
+  const targetBTC = (newHardTotal * BigInt(allocBTC)) / 10000n;
+  const targetGOLD = (newHardTotal * BigInt(allocGOLD)) / 10000n;
+  const targetUSDC = (newHardTotal * BigInt(allocUSDC)) / 10000n;
 
   // Pre-deposit USDC balance
   const preDepositUSDC = currentUSDC;
