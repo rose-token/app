@@ -61,8 +61,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               }}>
                         <defs>
                             <linearGradient id="roseGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#E6B0AA"/>
-                                <stop offset="100%" stop-color="#c48b85"/>
+                                <stop offset="0%" stop-color="#d4a5a5"/>
+                                <stop offset="100%" stop-color="#d4af8c"/>
                             </linearGradient>
                         </defs>
                         
