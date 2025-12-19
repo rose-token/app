@@ -103,7 +103,7 @@ Web3 marketplace with task-value-based token distribution.
 
 **Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
 
-**Lifecycle:** Active → voting period → Passed/Failed. Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
+**Lifecycle:** Active → voting period → Passed/Failed. Passed proposals are auto-executed by backend after 24h grace period (creates DAO task). Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
 
 **Two-token:** ROSE locked in governance, vROSE as 1:1 receipt for stakeholder escrow.
 
@@ -138,6 +138,7 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 - `github_links` table: Wallet ↔ GitHub account linkage
 - `authorized_repos` table: Per-wallet repo authorization list
 - Authorization check in `approveAndMergePR()` verifies customer has authorized the target repo
+- **DAO tasks:** Instead of customer authorization, DAO tasks (created via governance proposals) require PRs to be submitted to a configured repository (default: `rose-token/app`, configurable via `DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME` env vars)
 
 ## Security Patterns
 
@@ -237,7 +238,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Delegate Scoring | Every 1h | Score proposals, free VP |
 | VP Refresh | Event-driven | ReputationChanged → refresh |
 | Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
-| Snapshot Watcher | Event-driven + 60s poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline |
+| Snapshot Watcher | Event-driven + 15m poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline; Auto-execute passed proposals after 24h grace period |
 | Staker Validation | Weekly Sun 03:00 UTC | Verify staker cache matches on-chain |
 | Deposit Watcher | Event-driven | Deposited → diversify |
 | Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
@@ -284,7 +285,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
-| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL` |
+| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app) |
 | Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`

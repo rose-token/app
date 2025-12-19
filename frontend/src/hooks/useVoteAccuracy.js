@@ -10,7 +10,8 @@ import { CONTRACTS, ProposalStatus } from '../constants/contracts';
 
 // Governance events for vote tracking
 const GOVERNANCE_EVENTS = parseAbi([
-  'event DelegatedVoteCast(uint256 indexed proposalId, address indexed delegate, bool support, uint256 votePower)',
+  'event VoteCastFast(uint256 indexed proposalId, address indexed voter, bool support, uint256 vpAmount)',
+  'event VoteCastSlow(uint256 indexed proposalId, address indexed voter, bool support, uint256 vpAmount, uint256 nonce)',
   'event ProposalFinalized(uint256 indexed proposalId, uint8 status)',
 ]);
 
@@ -51,12 +52,21 @@ export const useVoteAccuracy = (delegateAddress) => {
 
     try {
       // Fetch delegate votes and proposal outcomes in parallel
-      const [delegateVotes, finalizedProposals] = await Promise.all([
-        // Get all votes cast by this delegate
+      const [fastVotes, slowVotes, finalizedProposals] = await Promise.all([
+        // Get fast track votes cast by this delegate
         publicClient.getLogs({
           address: CONTRACTS.GOVERNANCE,
-          event: GOVERNANCE_EVENTS[0], // DelegatedVoteCast
-          args: { delegate: delegateAddress },
+          event: GOVERNANCE_EVENTS[0], // VoteCastFast
+          args: { voter: delegateAddress },
+          fromBlock: 'earliest',
+          toBlock: 'latest',
+        }).catch(() => []),
+
+        // Get slow track votes cast by this delegate
+        publicClient.getLogs({
+          address: CONTRACTS.GOVERNANCE,
+          event: GOVERNANCE_EVENTS[1], // VoteCastSlow
+          args: { voter: delegateAddress },
           fromBlock: 'earliest',
           toBlock: 'latest',
         }).catch(() => []),
@@ -64,11 +74,14 @@ export const useVoteAccuracy = (delegateAddress) => {
         // Get all finalized proposals
         publicClient.getLogs({
           address: CONTRACTS.GOVERNANCE,
-          event: GOVERNANCE_EVENTS[1], // ProposalFinalized
+          event: GOVERNANCE_EVENTS[2], // ProposalFinalized
           fromBlock: 'earliest',
           toBlock: 'latest',
         }).catch(() => []),
       ]);
+
+      // Combine votes from both tracks
+      const delegateVotes = [...fastVotes, ...slowVotes];
 
       // Build map of proposal outcomes
       const proposalOutcomes = new Map();

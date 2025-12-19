@@ -209,11 +209,10 @@ async function storeProposalBlocks(
 
 /**
  * Get all delegates who voted on a specific proposal
- * Uses stored block ranges or falls back to querying from deployment block
+ * Queries VoteCastFast and VoteCastSlow events, then filters to only opted-in delegates
  */
 async function getDelegatesWhoVoted(proposalId: number): Promise<string[]> {
   const contract = getGovernanceContract();
-  const filter = contract.filters.DelegatedVoteCast(proposalId);
 
   try {
     const currentBlock = await getProvider().getBlockNumber();
@@ -241,15 +240,25 @@ async function getDelegatesWhoVoted(proposalId: number): Promise<string[]> {
       );
     }
 
-    const events = await contract.queryFilter(filter, fromBlock, toBlock);
+    // Query both vote event types (Fast and Slow track)
+    const fastFilter = contract.filters.VoteCastFast(proposalId);
+    const slowFilter = contract.filters.VoteCastSlow(proposalId);
 
-    const delegates = new Set<string>();
+    const [fastEvents, slowEvents] = await Promise.all([
+      contract.queryFilter(fastFilter, fromBlock, toBlock),
+      contract.queryFilter(slowFilter, fromBlock, toBlock),
+    ]);
+
+    const allEvents = [...fastEvents, ...slowEvents];
+    const voters = new Set<string>();
     let minEventBlock = toBlock;
     let maxEventBlock = fromBlock;
 
-    for (const event of events) {
+    for (const event of allEvents) {
       if ('args' in event && event.args) {
-        delegates.add((event.args.delegate as string).toLowerCase());
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const args = event.args as any;
+        voters.add((args.voter as string).toLowerCase());
         // Track actual block range where events occurred
         if (event.blockNumber < minEventBlock) minEventBlock = event.blockNumber;
         if (event.blockNumber > maxEventBlock) maxEventBlock = event.blockNumber;
@@ -257,11 +266,24 @@ async function getDelegatesWhoVoted(proposalId: number): Promise<string[]> {
     }
 
     // Store discovered block range for future queries (only if we found events)
-    if (!storedBlocks && delegates.size > 0) {
+    if (!storedBlocks && voters.size > 0) {
       await storeProposalBlocks(proposalId, minEventBlock, maxEventBlock);
     }
 
-    return Array.from(delegates);
+    // Filter to only opted-in delegates
+    const delegates: string[] = [];
+    for (const voter of voters) {
+      try {
+        const isDelegate = await contract.isDelegateOptedIn(voter);
+        if (isDelegate) {
+          delegates.push(voter);
+        }
+      } catch {
+        // Skip if we can't check delegate status
+      }
+    }
+
+    return delegates;
   } catch (error) {
     console.error(`Error querying delegates for proposal ${proposalId}:`, error);
     return [];
@@ -305,8 +327,8 @@ async function updateDelegateScoreForProposal(
 ): Promise<void> {
   const contract = getGovernanceContract();
 
-  // Get the delegate's vote on this proposal
-  const voteRecord = await contract.getDelegatedVote(proposalId, delegate);
+  // Get the delegate's vote on this proposal using the votes() view function
+  const voteRecord = await contract.votes(proposalId, delegate);
 
   if (!voteRecord.hasVoted) {
     return; // Delegate didn't vote on this proposal

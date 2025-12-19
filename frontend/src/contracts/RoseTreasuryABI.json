@@ -1730,6 +1730,24 @@
         "type": "bytes32"
       },
       {
+        "internalType": "uint8",
+        "name": "newDecimals",
+        "type": "uint8"
+      }
+    ],
+    "name": "updateAssetDecimals",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      },
+      {
         "internalType": "address",
         "name": "newPriceFeed",
         "type": "address"

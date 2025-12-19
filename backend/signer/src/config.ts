@@ -152,6 +152,11 @@ export const config = {
     clientId: process.env.MERGEBOT_CLIENT_ID || '',
     clientSecret: process.env.MERGEBOT_CLIENT_SECRET || '',
     callbackUrl: process.env.MERGEBOT_CALLBACK_URL || 'https://signer.rose-token.com/api/github/callback',
+    // Allowed repository for DAO task PRs (governance proposals)
+    daoTaskRepo: {
+      owner: process.env.DAO_TASK_REPO_OWNER || 'rose-token',
+      repo: process.env.DAO_TASK_REPO_NAME || 'app',
+    },
   },
 
   // Frontend URL for OAuth redirects

@@ -49,6 +49,8 @@ export interface SnapshotWatcherStats {
   pendingSnapshots: number;
   fastFinalized: number;
   slowFinalized: number;
+  proposalsAutoExecuted: number;
+  executionsFailed: number;
   lastError: string | null;
   lastEventBlock: number;
 }
@@ -68,6 +70,8 @@ const stats: SnapshotWatcherStats = {
   pendingSnapshots: 0,
   fastFinalized: 0,
   slowFinalized: 0,
+  proposalsAutoExecuted: 0,
+  executionsFailed: 0,
   lastError: null,
   lastEventBlock: 0,
 };
@@ -77,7 +81,10 @@ const pendingTimers: Map<number, NodeJS.Timeout> = new Map();
 
 // Finalization check interval
 let finalizationInterval: NodeJS.Timeout | null = null;
-const FINALIZATION_CHECK_INTERVAL = 900000; // Check every 15 minute
+const FINALIZATION_CHECK_INTERVAL = 900000; // Check every 15 minutes
+
+// Auto-execution grace period (24 hours after voting ends)
+const EXECUTION_GRACE_PERIOD_SECONDS = 24 * 60 * 60; // 24 hours
 
 function getProvider(): ethers.Provider {
   return getWsProvider();
@@ -585,6 +592,111 @@ async function watchProposalDeadlines(): Promise<void> {
   }
 }
 
+// ============================================================
+// Proposal Auto-Execution (24h grace period after passing)
+// ============================================================
+
+interface ProposalToExecute {
+  id: number;
+  votingEndsAt: number;
+}
+
+/**
+ * Get all Passed proposals that have waited 24h since voting ended
+ */
+async function getProposalsToExecute(): Promise<ProposalToExecute[]> {
+  const governance = getGovernanceContract();
+  const now = Math.floor(Date.now() / 1000);
+  const proposals: ProposalToExecute[] = [];
+
+  // Get proposal count
+  const proposalCount = await governance.proposalCounter();
+
+  // Check each proposal
+  for (let i = 1; i <= Number(proposalCount); i++) {
+    try {
+      const proposal: ProposalData = await governance.proposals(i);
+
+      // Only Passed proposals (status = 2) that have waited 24h
+      if (proposal.status === ProposalStatus.Passed) {
+        const graceEndTime = Number(proposal.votingEndsAt) + EXECUTION_GRACE_PERIOD_SECONDS;
+        if (graceEndTime < now) {
+          proposals.push({
+            id: i,
+            votingEndsAt: Number(proposal.votingEndsAt),
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[SnapshotWatcher] Error checking proposal ${i} for execution:`, error);
+    }
+  }
+
+  return proposals;
+}
+
+/**
+ * Execute a passed proposal (creates DAO task)
+ */
+async function executePassedProposal(proposalId: number): Promise<void> {
+  console.log(`[SnapshotWatcher] Auto-executing proposal ${proposalId} (24h grace period elapsed)`);
+
+  try {
+    const governance = getGovernanceContract(true); // With signer
+
+    const tx = await governance.executeProposal(proposalId);
+    console.log(`[SnapshotWatcher] Execution tx submitted: ${tx.hash}`);
+
+    await tx.wait();
+    console.log(`[SnapshotWatcher] Proposal ${proposalId} auto-executed successfully`);
+
+    stats.proposalsAutoExecuted++;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    stats.lastError = errorMsg;
+    stats.executionsFailed++;
+    console.error(`[SnapshotWatcher] Error auto-executing proposal ${proposalId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Watch for Passed proposals past 24h grace period and auto-execute
+ */
+async function watchProposalExecutions(): Promise<void> {
+  console.log('[SnapshotWatcher] Checking for proposals to auto-execute...');
+
+  try {
+    const proposalsToExecute = await getProposalsToExecute();
+
+    if (proposalsToExecute.length === 0) {
+      console.log('[SnapshotWatcher] No proposals ready for auto-execution');
+      return;
+    }
+
+    console.log(`[SnapshotWatcher] Found ${proposalsToExecute.length} proposals to auto-execute`);
+
+    for (const proposal of proposalsToExecute) {
+      // Check if execution is enabled
+      if (config.snapshotWatcher?.executeOnChain === false) {
+        console.log(`[SnapshotWatcher] DRY RUN - Would auto-execute proposal ${proposal.id}`);
+        continue;
+      }
+
+      try {
+        await executePassedProposal(proposal.id);
+      } catch (error) {
+        // Log error but continue with other proposals
+        console.error(`[SnapshotWatcher] Failed to auto-execute proposal ${proposal.id}:`, error);
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    stats.lastError = errorMsg;
+    console.error('[SnapshotWatcher] Error in watchProposalExecutions:', error);
+  }
+}
+
 /**
  * Start the finalization watcher loop
  */
@@ -593,17 +705,23 @@ function startFinalizationWatcher(): void {
     clearInterval(finalizationInterval);
   }
 
-  console.log('[SnapshotWatcher] Starting finalization watcher (checking every 60s)');
+  console.log('[SnapshotWatcher] Starting finalization & execution watcher (checking every 15m)');
 
   // Run immediately on startup
   watchProposalDeadlines().catch((err) => {
     console.error('[SnapshotWatcher] Error in initial finalization check:', err);
+  });
+  watchProposalExecutions().catch((err) => {
+    console.error('[SnapshotWatcher] Error in initial execution check:', err);
   });
 
   // Then run periodically
   finalizationInterval = setInterval(() => {
     watchProposalDeadlines().catch((err) => {
       console.error('[SnapshotWatcher] Error in periodic finalization check:', err);
+    });
+    watchProposalExecutions().catch((err) => {
+      console.error('[SnapshotWatcher] Error in periodic execution check:', err);
     });
   }, FINALIZATION_CHECK_INTERVAL);
 }

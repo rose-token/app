@@ -36,6 +36,7 @@ interface TaskData {
   prUrl: string;
   detailedDescriptionHash: string;
   status: number;
+  source: number;  // 0 = Customer, 1 = DAO
 }
 
 interface IpfsMetadata {
@@ -101,6 +102,7 @@ async function getTaskData(taskId: number): Promise<TaskData | null> {
       prUrl: task.prUrl,
       detailedDescriptionHash: task.detailedDescriptionHash,
       status: Number(task.status),
+      source: Number(task.source),  // 0 = Customer, 1 = DAO
     };
   } catch (error) {
     console.error(`[TaskWatcher] Failed to fetch task ${taskId}:`, error);
@@ -210,8 +212,22 @@ async function handleTaskReadyForPayment(
     console.log(`[TaskWatcher] Processing GitHub merge for task ${taskIdNum}, PR: ${task.prUrl}`);
     stats.mergesAttempted++;
 
-    // Pass customer address for authorization check
-    const result = await approveAndMergePR(task.prUrl, taskIdNum, task.customer);
+    // For DAO tasks, verify PR is to allowed repo before merging
+    if (task.source === 1) {
+      const pr = parsePrUrl(task.prUrl);
+      const { owner, repo } = config.github.daoTaskRepo;
+      if (!pr || pr.owner !== owner || pr.repo !== repo) {
+        stats.mergesFailed++;
+        stats.lastError = `DAO task PR not to ${owner}/${repo}`;
+        console.error(`[TaskWatcher] DAO task ${taskIdNum} PR not to ${owner}/${repo}, skipping merge`);
+        return;
+      }
+    }
+
+    // For DAO tasks, skip customer auth (we verified repo above)
+    // For customer tasks, pass customer address for authorization check
+    const customerForAuth = task.source === 1 ? undefined : task.customer;
+    const result = await approveAndMergePR(task.prUrl, taskIdNum, customerForAuth);
 
     if (result.success) {
       stats.mergesSucceeded++;
@@ -380,8 +396,21 @@ export async function processTaskManually(taskId: number): Promise<{
   }
 
   stats.mergesAttempted++;
-  // Pass customer address for authorization check
-  const result = await approveAndMergePR(task.prUrl, taskId, task.customer);
+
+  // For DAO tasks, verify PR is to allowed repo before merging
+  if (task.source === 1) {
+    const pr = parsePrUrl(task.prUrl);
+    const { owner, repo } = config.github.daoTaskRepo;
+    if (!pr || pr.owner !== owner || pr.repo !== repo) {
+      stats.mergesFailed++;
+      return { success: false, error: `DAO task PR must be to ${owner}/${repo}` };
+    }
+  }
+
+  // For DAO tasks, skip customer auth (we verified repo above)
+  // For customer tasks, pass customer address for authorization check
+  const customerForAuth = task.source === 1 ? undefined : task.customer;
+  const result = await approveAndMergePR(task.prUrl, taskId, customerForAuth);
 
   if (result.success) {
     stats.mergesSucceeded++;
