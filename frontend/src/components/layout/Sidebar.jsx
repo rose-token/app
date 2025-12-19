@@ -54,13 +54,24 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center font-display text-xl font-semibold"
-              style={{
-                background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
-                color: 'var(--bg-primary)',
-                boxShadow: '0 0 24px rgba(212, 165, 165, 0.35)'
-              }}
+             
             >
-              R
+              <svg width="100%" height="100%" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"  style={{
+                filter: 'drop-shadow(0 0 15px rgba(212, 165, 165, 0.55))'
+              }}>
+                        <defs>
+                            <linearGradient id="roseGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#d4a5a5"/>
+                                <stop offset="100%" stop-color="#d4af8c"/>
+                            </linearGradient>
+                        </defs>
+                        
+                        <path d="M256 0L478.71 128.57V383.43L256 512L33.29 383.43V128.57L256 0Z" fill="url(#roseGoldGrad)" opacity="0.4"/>
+                        
+                        <path d="M256 85.33L404.48 170.67V341.33L256 426.67L107.52 341.33V170.67L256 85.33Z" fill="url(#roseGoldGrad)" opacity="0.7"/>
+
+                        <path d="M256 170.67L330.24 213.33V298.67L256 341.33L181.76 298.67V213.33L256 170.67Z" fill="url(#roseGoldGrad)"/>
+                    </svg>
             </div>
             <span
               className="text-2xl font-display font-semibold"
