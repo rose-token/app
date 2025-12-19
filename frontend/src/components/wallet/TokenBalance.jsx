@@ -62,18 +62,19 @@ const TokenBalance = () => {
         border: '1px solid var(--border-subtle)'
       }}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-[18px] w-[18px]"
-        style={{ color: 'var(--rose-pink)' }}
-      >
-        <path d="M12 2s.35-.008 8 9c0 0-7.5 13-8 13-.5 0-8-13-8-13 7.65-9.008 8-9 8-9Z" />
+      <svg width="12%" height="12%" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+              <linearGradient id="roseGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#d4a5a5"/>
+                  <stop offset="100%" stop-color="#d4af8c"/>
+              </linearGradient>
+          </defs>
+          
+          <path d="M256 0L478.71 128.57V383.43L256 512L33.29 383.43V128.57L256 0Z" fill="url(#roseGoldGrad)" opacity="0.4"/>
+          
+          <path d="M256 85.33L404.48 170.67V341.33L256 426.67L107.52 341.33V170.67L256 85.33Z" fill="url(#roseGoldGrad)" opacity="0.7"/>
+
+          <path d="M256 170.67L330.24 213.33V298.67L256 341.33L181.76 298.67V213.33L256 170.67Z" fill="url(#roseGoldGrad)"/>
       </svg>
       <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{formattedBalance} ROSE</span>
     </div>
