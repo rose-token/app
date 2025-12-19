@@ -200,6 +200,14 @@ export async function validatePrUrlWithAuth(
     const isDAOTask = Number(task.source) === 1;
 
     if (isDAOTask) {
+      // Security: Block DAO task PR validation from dev environment
+      if (!config.isProduction) {
+        return {
+          valid: false,
+          error: 'DAO task PR operations blocked on non-production environment',
+        };
+      }
+
       // DAO tasks can only submit PRs to configured repo
       const { owner, repo } = config.github.daoTaskRepo;
       if (pr.owner !== owner || pr.repo !== repo) {

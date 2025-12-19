@@ -285,7 +285,7 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
 | Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
-| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app) |
+| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app), `IS_PRODUCTION` (true for prod; blocks DAO task PR merges on dev) |
 | Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`

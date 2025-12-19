@@ -622,6 +622,7 @@ jobs:
           MERGEBOT_CLIENT_SECRET: ${{ secrets.MERGEBOT_CLIENT_SECRET }}
           CAMELOT_LP_POSITION_IDS: ${{ secrets.CAMELOT_LP_POSITION_IDS }}
           VITE_CHAIN_ID: "42161"
+          IS_PRODUCTION: "true"
         run: |
           # Update image in SDL (use prod-prefixed short SHA to match docker/metadata-action output)
           SHORT_SHA="${IMAGE_TAG:0:7}"
@@ -647,6 +648,7 @@ jobs:
           sed -i "s|\${MERGEBOT_CLIENT_ID}|${MERGEBOT_CLIENT_ID}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${MERGEBOT_CLIENT_SECRET}|${MERGEBOT_CLIENT_SECRET}|g" backend/signer/deploy-prod.yaml
           sed -i "s|\${CAMELOT_LP_POSITION_IDS}|${CAMELOT_LP_POSITION_IDS}|g" backend/signer/deploy-prod.yaml
+          sed -i "s|\${IS_PRODUCTION}|${IS_PRODUCTION}|g" backend/signer/deploy-prod.yaml
 
           echo "Updated SDL (secrets redacted):"
           cat backend/signer/deploy-prod.yaml | \

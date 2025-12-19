@@ -136,6 +136,10 @@ export const config = {
     startupBlockLookback: parseInt(process.env.REDEMPTION_WATCHER_STARTUP_LOOKBACK || '100'),
   },
 
+  // Environment configuration
+  // IMPORTANT: Set IS_PRODUCTION=true in prod to prevent dev signer from merging DAO PRs to prod repos
+  isProduction: process.env.IS_PRODUCTION === 'true',
+
   // GitHub Bot configuration (auto-approve and merge PRs on task completion)
   github: {
     // GitHub App ID (provided via secrets)

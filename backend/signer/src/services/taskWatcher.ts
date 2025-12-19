@@ -214,6 +214,14 @@ async function handleTaskReadyForPayment(
 
     // For DAO tasks, verify PR is to allowed repo before merging
     if (task.source === 1) {
+      // Security: Block DAO task merges from dev environment
+      if (!config.isProduction) {
+        stats.mergesFailed++;
+        stats.lastError = 'DAO task PR merges blocked on non-production environment';
+        console.error(`[TaskWatcher] DAO task ${taskIdNum} blocked: not production environment`);
+        return;
+      }
+
       const pr = parsePrUrl(task.prUrl);
       const { owner, repo } = config.github.daoTaskRepo;
       if (!pr || pr.owner !== owner || pr.repo !== repo) {
@@ -399,6 +407,12 @@ export async function processTaskManually(taskId: number): Promise<{
 
   // For DAO tasks, verify PR is to allowed repo before merging
   if (task.source === 1) {
+    // Security: Block DAO task merges from dev environment
+    if (!config.isProduction) {
+      stats.mergesFailed++;
+      return { success: false, error: 'DAO task PR merges blocked on non-production environment' };
+    }
+
     const pr = parsePrUrl(task.prUrl);
     const { owner, repo } = config.github.daoTaskRepo;
     if (!pr || pr.owner !== owner || pr.repo !== repo) {
