@@ -256,7 +256,9 @@ async function getDelegatesWhoVoted(proposalId: number): Promise<string[]> {
 
     for (const event of allEvents) {
       if ('args' in event && event.args) {
-        voters.add((event.args.voter as string).toLowerCase());
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const args = event.args as any;
+        voters.add((args.voter as string).toLowerCase());
         // Track actual block range where events occurred
         if (event.blockNumber < minEventBlock) minEventBlock = event.blockNumber;
         if (event.blockNumber > maxEventBlock) maxEventBlock = event.blockNumber;
