@@ -201,11 +201,19 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 | POST /api/vp-refresh/check/:address | `vp-refresh-check` |
 | POST /api/treasury/redemption-watcher/process | `redemption-watcher-process` |
 | POST /api/github/retry/:taskId | `github-retry` |
-| POST /api/auction/register | `auction-register` |
-| POST /api/auction/confirm-winner | `auction-confirm-winner` |
 | POST /api/auction/:taskId/sync | `auction-sync` |
 
 **Key difference from adminAuth/userAuth:** Signer auth verifies caller is the backend signer (for internal operations). Cron jobs/watchers call service functions directly (in-process), so signerAuth protects against unauthorized external HTTP callers.
+
+**Auction Transaction Verification:** Frontend-called auction endpoints verify the on-chain transaction instead of requiring a signature:
+- **Endpoints:** `POST /api/auction/register`, `POST /api/auction/confirm-winner`
+- **Flow:** Frontend sends `txHash` → Backend fetches receipt → Parses event logs → Verifies data matches request
+- **RPC Lag Handling:** Backend retries receipt fetch 3 times with 1s delay
+
+| Endpoint | Required | Verified Event |
+|----------|----------|----------------|
+| POST /api/auction/register | `txHash` | `AuctionTaskCreated(taskId, customer, maxBudget)` |
+| POST /api/auction/confirm-winner | `txHash` | `AuctionWinnerSelected(taskId, worker, winningBid)` |
 
 ## PostgreSQL Security
 
