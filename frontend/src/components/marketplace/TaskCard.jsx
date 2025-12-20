@@ -404,11 +404,11 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             <p className="text-sm font-medium mt-1" style={{ color: 'var(--text-primary)' }}>{formatTokens(task.stakeholderDeposit)} ROSE</p>
           </div>
         )}
-        {/* Show winning bid for auctions in progress or beyond */}
+        {/* Show winning bid for auctions in progress or beyond - display midpoint (what customer pays) */}
         {isAuction && task.winningBid && task.winningBid !== '0' && (
           <div>
             <p style={labelStyle}>Winning Bid</p>
-            <p className="text-sm font-medium mt-1" style={{ color: 'var(--success)' }}>{formatTokens(task.winningBid)} ROSE</p>
+            <p className="text-sm font-medium mt-1" style={{ color: 'var(--success)' }}>{parseFloat(formatUnits((BigInt(task.deposit) + BigInt(task.winningBid)) / 2n, 18)).toFixed(2)} ROSE</p>
           </div>
         )}
         {/* GitHub Integration Status */}
