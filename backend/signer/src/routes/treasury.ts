@@ -27,6 +27,69 @@ setInterval(() => {
 }, 60000);
 
 /**
+ * Verify owner signature for rebalance authorization via frontend trigger.
+ * Owner signs: keccak256(abi.encodePacked(callerAddress, "rebalance", timestamp))
+ *
+ * This proves the caller controls the Treasury owner wallet.
+ * Timestamp prevents replay attacks (must be within 5 minutes).
+ * Each signature can only be used once (nonce-like protection).
+ */
+function verifyOwnerSignature(
+  callerAddress: string,
+  ownerAddress: string,
+  timestamp: number,
+  signature: string
+): { valid: boolean; error?: string } {
+  try {
+    // Check if signature was already used (replay protection)
+    if (usedSignatures.has(signature)) {
+      console.log('[Treasury API] Signature already used (replay attempt)');
+      return { valid: false, error: 'Signature already used' };
+    }
+
+    // Check caller claims to be owner
+    if (callerAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+      console.log('[Treasury API] Caller is not owner:', { callerAddress, ownerAddress });
+      return { valid: false, error: 'Caller is not owner' };
+    }
+
+    // Check timestamp is within acceptable window (5 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    const timeDiff = Math.abs(now - timestamp);
+    if (timeDiff > SIGNATURE_TTL) {
+      console.log('[Treasury API] Signature timestamp expired:', { now, timestamp, diff: timeDiff });
+      return { valid: false, error: 'Signature expired' };
+    }
+
+    // Recreate the message hash
+    const messageHash = ethers.solidityPackedKeccak256(
+      ['address', 'string', 'uint256'],
+      [callerAddress, 'rebalance', timestamp]
+    );
+
+    // Recover signer from signature
+    const recovered = ethers.verifyMessage(ethers.getBytes(messageHash), signature);
+
+    // Verify recovered address matches owner address
+    const valid = recovered.toLowerCase() === ownerAddress.toLowerCase();
+    if (!valid) {
+      console.log('[Treasury API] Owner signature verification failed:', {
+        expected: ownerAddress,
+        recovered,
+      });
+      return { valid: false, error: 'Invalid signature' };
+    }
+
+    // Mark signature as used (only after successful verification)
+    usedSignatures.set(signature, now);
+    return { valid: true };
+  } catch (error) {
+    console.error('[Treasury API] Owner signature verification error:', error);
+    return { valid: false, error: 'Signature verification failed' };
+  }
+}
+
+/**
  * Verify admin signature for rebalance authorization.
  * Signer signs: keccak256(abi.encodePacked(signerAddress, "rebalance", timestamp))
  *
@@ -87,28 +150,34 @@ function verifyRebalanceSignature(timestamp: number, signature: string): { valid
  *
  * Security model:
  * - Frontend: Shows admin UI only to Treasury owner (via useIsAdmin hook)
- * - Backend: Verifies callerAddress matches Treasury.owner() to prevent unauthorized API calls
+ * - Backend: Verifies signature proves caller controls Treasury.owner() wallet
  * - Contract: Backend signer is set as 'rebalancer' role, allowing forceRebalance() execution
  *
- * The owner check here is a defense-in-depth measure. The true authorization is that
- * only the admin UI (visible to owner) should call this endpoint, and the backend
- * signer has rebalancer privileges on the contract.
+ * The signature verification ensures the caller cryptographically proves they control
+ * the owner wallet, not just that they know the owner's address.
  *
- * Body: { callerAddress: string }
+ * Body: { callerAddress: string, timestamp: number, signature: string }
  * Response: { success, txHash, swapsExecuted, swapDetails, totalHardAssets, rebalanceNeeded }
  */
 router.post('/rebalance/trigger', async (req: Request, res: Response) => {
   try {
-    const { callerAddress } = req.body;
+    const { callerAddress, timestamp, signature } = req.body;
 
-    // Validate required field
-    if (!callerAddress) {
+    // Validate required fields
+    if (!callerAddress || !timestamp || !signature) {
       return res.status(400).json({
-        error: 'Missing required field: callerAddress',
+        error: 'Missing required fields',
+        required: ['callerAddress', 'timestamp', 'signature'],
       });
     }
 
-    // Verify caller is contract owner
+    // Validate timestamp is a number
+    const ts = parseInt(timestamp);
+    if (isNaN(ts)) {
+      return res.status(400).json({ error: 'Invalid timestamp format' });
+    }
+
+    // Get contract owner address
     const provider = getWsProvider();
 
     const treasuryAddress = config.contracts?.treasury || process.env.TREASURY_ADDRESS;
@@ -124,17 +193,20 @@ router.post('/rebalance/trigger', async (req: Request, res: Response) => {
 
     const ownerAddress = await treasury.owner();
 
-    if (callerAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+    // Verify signature proves caller controls owner wallet
+    const verification = verifyOwnerSignature(callerAddress, ownerAddress, ts, signature);
+    if (!verification.valid) {
       console.log('[Treasury API] Unauthorized rebalance attempt:', {
         caller: callerAddress,
         owner: ownerAddress,
+        error: verification.error,
       });
       return res.status(403).json({
-        error: 'Unauthorized: Only contract owner can trigger rebalance',
+        error: verification.error || 'Unauthorized',
       });
     }
 
-    console.log('[Treasury API] Admin rebalance triggered by owner:', callerAddress);
+    console.log('[Treasury API] Admin rebalance triggered by verified owner:', callerAddress);
     const result = await executeRebalance();
 
     return res.json({

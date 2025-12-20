@@ -52,7 +52,7 @@ Web3 marketplace with task-value-based token distribution.
 **Flows:**
 - **Deposit:** Passport signature required (action: "deposit") → USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
 - **Redeem:** Passport signature required (action: "redeem") → Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
-- **Rebalance:** No drift threshold or cooldown. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only. Backend `/api/treasury/rebalance/run` requires signed message authentication.
+- **Rebalance:** No drift threshold or cooldown. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only. Backend rebalance endpoints require signed message authentication: `/api/treasury/rebalance/trigger` (owner wallet signature) and `/api/treasury/rebalance/run` (backend signer signature).
 
 **Same-Block Protection:** Users cannot redeem in the same block as a deposit (prevents flash loan attacks). No time-based cooldowns - deposits and redemptions are otherwise unrestricted. Contract tracks `lastDepositBlock[user]` and checks `block.number > lastDepositBlock[user]` before allowing redemption. View function: `canRedeemAfterDeposit(address)`.
 
@@ -149,7 +149,7 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 ## Security Patterns
 
-ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection, 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks).
+ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection (treasury rebalance endpoints), 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks), signed message authentication for admin endpoints (owner wallet or backend signer).
 
 ## PostgreSQL Security
 
