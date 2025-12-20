@@ -2,7 +2,7 @@
  * GitHub Repository Management Routes
  *
  * Allows customers to authorize specific repositories for auto-merge.
- * Only repos where the user has write access can be authorized.
+ * Only repos where the user has admin access can be authorized.
  */
 
 import { Router, Request, Response } from 'express';
@@ -44,7 +44,7 @@ router.get('/repos', async (req: Request, res: Response) => {
  * POST /api/github/repos/authorize
  *
  * Authorize a repo for auto-merge.
- * Verifies that the linked GitHub user has write access to the repo.
+ * Verifies that the linked GitHub user has admin access to the repo.
  *
  * Requires signature verification to prove caller controls the wallet.
  */
@@ -69,21 +69,20 @@ router.post('/repos/authorize', createUserAuth('github-repo-authorize'), async (
 
     const githubUsername = linkResult.rows[0].github_username;
 
-    // Verify user has push access to the repo
+    // Verify user has admin access to the repo
     try {
       const octokit = await getOctokitForRepo(repoOwner);
 
-      // Check if the linked GitHub user has admin/push access
+      // Check if the linked GitHub user has admin access (required to authorize repos)
       const { data: permission } = await octokit.rest.repos.getCollaboratorPermissionLevel({
         owner: repoOwner,
         repo: repoName,
         username: githubUsername,
       });
 
-      const allowedPermissions = ['admin', 'write', 'maintain'];
-      if (!allowedPermissions.includes(permission.permission)) {
+      if (permission.permission !== 'admin') {
         return res.status(403).json({
-          error: `GitHub user @${githubUsername} does not have write access to ${repoOwner}/${repoName}`,
+          error: `GitHub user @${githubUsername} is not an admin of ${repoOwner}/${repoName}. Only repository admins can authorize repos for GitHub integration.`,
         });
       }
     } catch (error: unknown) {
