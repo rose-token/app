@@ -1,5 +1,5 @@
 # CLAUDE.md
- 
+
 Guidance for Claude Code. ALWAYS ASK CLARIFYING QUESTIONS. ALWAYS UPDATE CLAUDE.MD AS YOUR LAST TODO STEP.
 
 ## Quick Reference
@@ -9,15 +9,13 @@ Guidance for Claude Code. ALWAYS ASK CLARIFYING QUESTIONS. ALWAYS UPDATE CLAUDE.
 | Deploy | `npm run deploy:arbitrumSepolia` / `deploy:arbitrum` |
 | Simulate | `npx hardhat run scripts/simulate.js --network arbitrumSepolia` |
 
----
-
 ## Project Overview
 
 Web3 marketplace with task-value-based token distribution.
 
 **Tokenomics:** Customer deposits ROSE → Stakeholder stakes 10% → On completion: Worker 95%, Stakeholder 5% + stake, DAO mints 2%.
 
-**Auction Spread:** For auctions, customer sees midpoint price: `(maxBudget + workerBid) / 2`. Spread goes to treasury. Example: ask=100, bid=80 → customer pays 90, treasury gets 10, worker gets 80.
+**Auction Spread:** Customer sees midpoint: `(maxBudget + workerBid) / 2`. Spread → treasury. Example: ask=100, bid=80 → customer pays 90, treasury 10, worker 80.
 
 ## Contract Architecture
 
@@ -25,94 +23,59 @@ Web3 marketplace with task-value-based token distribution.
 |----------|---------|
 | RoseToken | ERC20 authorized mint/burn |
 | RoseMarketplace | Task lifecycle, escrow, payments, passport verification |
-| RoseTreasury | RWA-backed (BTC/Gold/USDC via Chainlink+LiFi), configurable asset registry, redemption queue, passport verification |
+| RoseTreasury | RWA-backed (BTC/Gold/USDC via Chainlink+LiFi), asset registry, redemption queue |
 | RoseGovernance | Proposals, quadratic voting, delegation, rewards |
 | RoseReputation | Monthly buckets, 3yr decay, eligibility checks |
 | vROSE | Soulbound governance receipt |
 
 **Deploy order:** Token → vROSE → Treasury → Marketplace → Reputation → Governance
 
-**Post-deploy:** `setAuthorized`, `setGovernance`, `setMarketplace`, `setVRoseToken`, `setReputation`, `setRebalancer`, `setDelegationSigner`, `setPassportSigner` (Treasury), `addAsset(BTC,GOLD,STABLE,ROSE)`
+**Post-deploy:** `setAuthorized`, `setGovernance`, `setMarketplace`, `setVRoseToken`, `setReputation`, `setRebalancer`, `setDelegationSigner`, `setPassportSigner`, `addAsset(BTC,GOLD,STABLE,ROSE)`
 
 ## Constants
 
-| Area | Constant | Value |
-|------|----------|-------|
-| Payment | Worker/Stakeholder/DAO | 95%/5%/2% mint |
-| Treasury | Drift/Oracle | disabled/1h stale |
-| Treasury | Allocations | BTC=30%, Gold=30%, USDC=20%, ROSE=20% |
-| Governance | Vote/Quorum/Pass | 2wk/33%/58.33% |
-| Reputation | Propose/Vote/Delegate | 90%+10tasks/70%/90%+10tasks |
-| Reputation | Bucket/Decay | 30d/36 buckets (3yr) |
+| Area | Values |
+|------|--------|
+| Payment | Worker 95%, Stakeholder 5%, DAO 2% mint |
+| Treasury | Allocations: BTC=30%, Gold=30%, USDC=20%, ROSE=20%. Oracle 1h stale |
+| Governance | 2wk vote, 33% quorum, 58.33% pass |
+| Reputation | Propose/Delegate: 90%+10tasks, Vote: 70%. 30d buckets, 36 buckets (3yr) |
+| Decimals | ROSE/vROSE/tBTC: 18, VP: 9, USDC/NAV/XAUt: 6, Chainlink: 8 |
 
 ## Treasury NAV
 
 **Formula:** `ROSE Price = HardAssetsUSD / CirculatingSupply` (BTC+Gold+USDC, excludes treasury ROSE)
 
 **Flows:**
-- **Deposit:** Passport signature required (action: "deposit") → USDC → Treasury → ROSE minted → Backend diversifies via LiFi (smart rebalancing)
-- **Redeem:** Passport signature required (action: "redeem") → Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
-- **Rebalance:** No drift threshold or cooldown. `rebalance()` is owner-only; `forceRebalance()` is rebalancer-only. Backend rebalance endpoints require signed message authentication: `/api/treasury/rebalance/trigger` (owner wallet signature) and `/api/treasury/rebalance/run` (backend signer signature).
+- **Deposit:** Passport sig → USDC → Treasury → ROSE minted → Backend diversifies via LiFi
+- **Redeem:** Passport sig → Instant if buffer sufficient, else queued → Backend liquidates → `fulfillRedemption()`
+- **Rebalance:** Owner-only `rebalance()`, rebalancer-only `forceRebalance()`. No drift/cooldown
 
-**Same-Block Protection:** Users cannot redeem in the same block as a deposit (prevents flash loan attacks). No time-based cooldowns - deposits and redemptions are otherwise unrestricted. Contract tracks `lastDepositBlock[user]` and checks `block.number > lastDepositBlock[user]` before allowing redemption. View function: `canRedeemAfterDeposit(address)`.
+**Same-Block Protection:** `block.number > lastDepositBlock[user]` required for redemption (flash loan prevention). View: `canRedeemAfterDeposit(address)`
 
-**Smart Diversification** (deposit watcher):
-1. Phase 1: Fill USDC buffer deficit first (critical for redemption liquidity)
-2. Phase 2: Fill BTC/GOLD deficits proportionally
-3. Phase 3: Any remaining excess → RWA by target ratio
-- Does NOT buy ROSE (handled by monthly rebalance buybacks)
-- First deposit uses simple 50/50 BTC/GOLD ratio split
+**Smart Diversification:** Phase 1: USDC buffer deficit → Phase 2: BTC/GOLD deficits proportionally → Phase 3: Excess → RWA by ratio. Never buys ROSE. First deposit: 50/50 BTC/GOLD.
 
-**Redemption Queue:** NAV locked at request, 1 pending/user, no cancel, FIFO. Events: `RedemptionRequested`, `RedemptionFulfilled`
+**Redemption Queue:** NAV locked at request, 1 pending/user, no cancel, FIFO.
 
-**Redemption Liquidation** (redemption watcher):
-1. Calculates shortfall including 20% USDC target buffer post-redemption
-2. Adds 0.1% rounding buffer to cover integer division losses in swaps
-3. Uses ceiling division for token amounts to ensure sufficient USDC
-4. Never sells ROSE - only liquidates BTC/GOLD using **waterfall algorithm**:
-   - Goal: Bring all sellable RWA assets to equal USD values after liquidation
-   - Sells from highest-value asset first until it matches the next
-   - Once assets equalize, splits remaining shortfall equally among them
-   - Example: BTC=$150k, GOLD=$50k, need $150k → sell $125k BTC, $25k GOLD → both end at $25k
+**Redemption Liquidation:** Waterfall algorithm - sell highest-value RWA first to equalize USD values. Never sells ROSE. Adds 0.1% rounding buffer.
 
-**ROSE Price Protection** (monthly rebalance):
-- Prevents buying ROSE at market prices > NAV (premium protection)
-- Prevents selling ROSE at market prices < NAV (discount protection)
-- Default threshold: 10% (1000 bps) in either direction
-- Config: `REBALANCE_MAX_ROSE_PREMIUM_BPS`, `REBALANCE_MAX_ROSE_DISCOUNT_BPS`
-- Skipped ROSE swaps don't fail entire rebalance (graceful degradation)
+**ROSE Price Protection:** 10% threshold (1000 bps) prevents buying at premium or selling at discount. Config: `REBALANCE_MAX_ROSE_PREMIUM_BPS`, `REBALANCE_MAX_ROSE_DISCOUNT_BPS`
 
-## Governance System (Two-Track)
+## Governance (Two-Track)
 
-**VP:** `√(stakedRose) × reputation` where reputation = `(success-dispute)/success×100` using ^0.6 sublinear points
+**VP:** `√(stakedRose) × reputation` where reputation = `(success-dispute)/success×100` using ^0.6 sublinear
 
-**Two Tracks:**
 | Track | Duration | Quorum | VP Model | Treasury Limit |
 |-------|----------|--------|----------|----------------|
-| Fast | 3 days | 10% | Abundant (vote full VP on multiple proposals) | ≤1% of treasury |
-| Slow | 14 days | 25% | Scarce (VP is budget across proposals) | Any amount |
+| Fast | 3 days | 10% | Abundant (full VP per proposal) | ≤1% |
+| Slow | 14 days | 25% | Scarce (VP budget across proposals) | Any |
 
-**Fast Track Flow:**
-1. Proposal created (status: Pending)
-2. Backend computes VP snapshot after `snapshotDelay` (1 day)
-3. Backend submits merkle root via `setVPMerkleRoot()`
-4. Proposal activates, voting begins
-5. Users vote with merkle proof of their VP
-6. Voting ends → Backend auto-calls `finalizeProposal()` → Pass/Fail
+**Fast Track:** Proposal → 1d delay → Backend submits merkle root → Voting with proofs → Auto-finalize
+**Slow Track:** Proposal (Active immediately) → Backend attestations → Voting → Backend finalizes with snapshot
 
-**Slow Track Flow:**
-1. Proposal created (status: Active, voting starts immediately)
-2. Users request attestation of available VP from backend
-3. Backend tracks allocations across proposals
-4. Users vote with backend-signed attestation
-5. Voting ends → Backend computes VP snapshot at deadline
-6. Backend calls `finalizeSlowProposal(merkleRoot, totalVP, sig)` → Pass/Fail
+**Off-Chain Delegation:** EIP-712 signed, stored in DB. Requires `setDelegateOptIn(true)`. Fields: `vpAmount` (0=full), `nonce`, `expiry`, `signature`.
 
-**Off-Chain Delegation:** EIP-712 signed delegations stored in DB. Delegates must opt-in via `setDelegateOptIn(true)`. Delegations have `vpAmount` (0 = full delegation), `nonce` (sequential per delegator for replay protection), `expiry` (auto-expire), and `signature`. Revocation requires signed authorization. Reflected in VP snapshots via `vpSnapshot.getActiveDelegations()`.
-
-**Lifecycle:** Active → voting period → Passed/Failed. Passed proposals are auto-executed by backend after 24h grace period (creates DAO task). Quorum miss extends (max 3). Max 4 edits. Rewards: DAO 2%, Yay voters 2%, Proposer 1%.
-
-**Two-token:** ROSE locked in governance, vROSE as 1:1 receipt for stakeholder escrow.
+**Lifecycle:** Active → Passed/Failed. Auto-execute after 24h grace (creates DAO task). Max 3 quorum extensions, 4 edits. Rewards: DAO 2%, Yay 2%, Proposer 1%.
 
 ## Task Status Flow
 
@@ -121,375 +84,186 @@ StakeholderRequired → Open → InProgress → Completed → ApprovedPendingPay
         ↓               ↓           ↓           ↓
         │               │           │           └─→ disputeTaskAsWorker() → Disputed
         │               │           └─→ disputeTaskAsCustomer() → Disputed
-        │               └─→ unstakeStakeholder() → StakeholderRequired (stakeholder exits, task remains)
-        └───────────────┴─→ cancelTask() → Closed (refunds both parties)
+        │               └─→ unstakeStakeholder() → StakeholderRequired
+        └───────────────┴─→ cancelTask() → Closed (refunds)
 
-Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
+Disputed → resolveDispute(workerPct 0-100) → Closed (split, no DAO mint)
 ```
 
-**Unstake:** Stakeholders can exit tasks in `Open` status via `unstakeStakeholder()`. Returns vROSE to stakeholder, task reverts to `StakeholderRequired` for another stakeholder to step in.
+**Dispute:** Customer disputes `InProgress`, Worker disputes `Completed`. Owner resolves with `workerPct`. Reason as IPFS hash.
 
-**Dispute Resolution:**
-- Customer can dispute `InProgress` tasks via `disputeTaskAsCustomer(taskId, reasonHash)`
-- Worker can dispute `Completed` tasks via `disputeTaskAsWorker(taskId, reasonHash)`
-- Owner resolves via `resolveDispute(taskId, workerPct)` where `workerPct` is 0-100
-- Resolution: worker gets `workerPct%` of deposit, customer gets rest, stakeholder gets vROSE back
-- NO DAO mint for disputed tasks
-- Reason stored as IPFS hash on-chain
+**Auction:** Off-chain bids, `selectAuctionWinner` uses actual bid. Spread → treasury, surplus → customer.
 
-**Auction Mode:** Bids off-chain, customer sees midpoint as "bid". `selectAuctionWinner` uses actual worker bid. On completion: spread (midpoint - bid) → treasury, reduced surplus (deposit - midpoint) → customer.
+**GitHub Integration:** `githubIntegration` bool controls PR URL requirement. DAO tasks default `true`.
 
-**GitHub Integration:** On-chain `githubIntegration` bool in Task struct controls PR URL requirement. When `true`, `markTaskCompleted()` requires non-empty PR URL; when `false`, empty string allowed. Set at task creation via `createTask(..., githubIntegration, ...)` and `createAuctionTask()`. DAO tasks default to `true`. Frontend's TaskCard skips PR URL modal when `githubIntegration=false`.
+**Repo Authorization:** OAuth link → Authorize repos → Bot only merges authorized. DAO tasks require configured repo (`DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME`).
 
-**GitHub Repository Authorization:** Security feature requiring customers to authorize specific repositories before the bot can auto-merge PRs. Flow: Link GitHub account via OAuth → Authorize repos (verifies write access) → Bot only merges to authorized repos. Prevents arbitrary merges to any repo where the Rose Protocol GitHub App is installed.
-- `github_links` table: Wallet ↔ GitHub account linkage
-- `authorized_repos` table: Per-wallet repo authorization list
-- Authorization check in `approveAndMergePR()` verifies customer has authorized the target repo
-- **DAO tasks:** Instead of customer authorization, DAO tasks (created via governance proposals) require PRs to be submitted to a configured repository (default: `rose-token/app`, configurable via `DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME` env vars)
+## Security
 
-## Security Patterns
+ReentrancyGuard (all contracts), CEI pattern, SafeERC20, 1h oracle staleness, 1% slippage, same-block protection.
 
-ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection (admin endpoints), 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks), signed message authentication for admin endpoints (owner wallet or backend signer).
+**Auth Middleware Pattern:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`, 5-min TTL replay protection.
 
-**Admin Endpoint Authentication:** All admin mutation endpoints require cryptographic proof of wallet ownership via signature verification:
-- **Middleware:** `backend/signer/src/middleware/adminAuth.ts` - centralized `createAdminAuth(action)` factory
-- **Frontend Hook:** `frontend/src/hooks/useAdminAuth.js` - centralized `adminPost`/`adminDelete` helpers
-- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
-- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
-- **Verification:** Backend verifies signature recovers to `Treasury.owner()` address
+| Type | Middleware | Verifies | Endpoints |
+|------|------------|----------|-----------|
+| Admin | `createAdminAuth(action)` | Treasury.owner() | rebalance/trigger, backup/*, whitelist/*, camelot-lp/collect, database/truncate |
+| User | `createUserAuth(action)` | Self (callerAddress) | github/auth/unlink, github/repos/* |
+| Signer | `createSignerAuth(action)` | Backend signer | delegate-scoring/*, vp-refresh/*, redemption-watcher/*, github/retry, auction/sync |
+| Tx Verify | — | On-chain event | auction/register (AuctionTaskCreated), auction/confirm-winner (AuctionWinnerSelected) |
 
-| Endpoint | Action String |
-|----------|---------------|
-| POST /api/treasury/rebalance/trigger | `rebalance` |
-| POST /api/backup/create | `backup-create` |
-| POST /api/backup/restore | `backup-restore` |
-| POST /api/database/truncate | `database-truncate` |
-| POST /api/whitelist | `whitelist-add` |
-| DELETE /api/whitelist/:address | `whitelist-remove` |
-| POST /api/camelot-lp/collect | `camelot-collect` |
-| POST /api/camelot-lp/collect/:tokenId | `camelot-collect` |
-
-**GET endpoints unchanged:** Read-only admin endpoints (`/backup/status`, `/database/tables`, etc.) use simple address comparison (acceptable for non-mutations).
-
-**User Endpoint Authentication:** User-facing mutation endpoints require cryptographic proof of wallet ownership via signature verification (self-attestation):
-- **Middleware:** `backend/signer/src/middleware/userAuth.ts` - centralized `createUserAuth(action)` factory
-- **Frontend Hook:** `frontend/src/hooks/useUserAuth.js` - centralized `userPost`/`userDelete` helpers
-- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
-- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
-- **Verification:** Backend verifies signature recovers to `callerAddress` (self-attestation, not owner)
-
-| Endpoint | Action String |
-|----------|---------------|
-| DELETE /api/github/auth/unlink | `github-unlink` |
-| POST /api/github/repos/authorize | `github-repo-authorize` |
-| DELETE /api/github/repos/revoke | `github-repo-revoke` |
-
-**Key difference from adminAuth:** User auth verifies caller controls claimed address (self-attestation), admin auth verifies caller is Treasury.owner().
-
-**Signer Endpoint Authentication:** Backend-only mutation endpoints require cryptographic proof from the backend signer (derived from `SIGNER_PRIVATE_KEY`):
-- **Middleware:** `backend/signer/src/middleware/signerAuth.ts` - centralized `createSignerAuth(action)` factory
-- **Utility:** `backend/signer/src/utils/signerRequest.ts` - for testing/debugging (optional)
-- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
-- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
-- **Verification:** Backend verifies signature recovers to backend signer address
-
-| Endpoint | Action String |
-|----------|---------------|
-| POST /api/delegate-scoring/run | `delegate-scoring-run` |
-| POST /api/delegate-scoring/score-proposal/:id | `delegate-scoring-score-proposal` |
-| POST /api/vp-refresh/process | `vp-refresh-process` |
-| POST /api/vp-refresh/check/:address | `vp-refresh-check` |
-| POST /api/treasury/redemption-watcher/process | `redemption-watcher-process` |
-| POST /api/github/retry/:taskId | `github-retry` |
-| POST /api/auction/:taskId/sync | `auction-sync` |
-
-**Key difference from adminAuth/userAuth:** Signer auth verifies caller is the backend signer (for internal operations). Cron jobs/watchers call service functions directly (in-process), so signerAuth protects against unauthorized external HTTP callers.
-
-**Auction Transaction Verification:** Frontend-called auction endpoints verify the on-chain transaction instead of requiring a signature:
-- **Endpoints:** `POST /api/auction/register`, `POST /api/auction/confirm-winner`
-- **Flow:** Frontend sends `txHash` → Backend fetches receipt → Parses event logs → Verifies data matches request
-- **RPC Lag Handling:** Backend retries receipt fetch 3 times with 1s delay
-
-| Endpoint | Required | Verified Event |
-|----------|----------|----------------|
-| POST /api/auction/register | `txHash` | `AuctionTaskCreated(taskId, customer, maxBudget)` |
-| POST /api/auction/confirm-winner | `txHash` | `AuctionWinnerSelected(taskId, worker, winningBid)` |
+**Frontend Hooks:** `useAdminAuth` (`adminPost`/`adminDelete`), `useUserAuth` (`userPost`/`userDelete`)
 
 ## PostgreSQL Security
 
-**Network Isolation:** PostgreSQL runs inside the backend container (not exposed externally). Only port 3000 (API) is exposed via Akash SDL. PostgreSQL binds to `localhost` only via `listen_addresses = 'localhost'` (defense-in-depth in both postgresql.conf and supervisord command).
+Localhost-only binding, `scram-sha-256` required, `POSTGRES_PASSWORD` mandatory. External connections rejected. Auto-migrates from `trust` auth.
 
-**Authentication:** `scram-sha-256` required for all connections (no `trust` auth). `POSTGRES_PASSWORD` environment variable is mandatory - container fails to start without it.
-
-**pg_hba.conf:**
-```
-local   all  all                 scram-sha-256
-host    all  all  127.0.0.1/32   scram-sha-256
-host    all  all  ::1/128        scram-sha-256
-host    all  all  0.0.0.0/0      reject
-host    all  all  ::/0           reject
-```
-
-**Hardening (postgresql.conf):**
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `listen_addresses` | `localhost` | No external binding |
-| `max_connections` | `20` | Limit connections |
-| `password_encryption` | `scram-sha-256` | Strong password hashing |
-| `log_connections` | `on` | Security auditing |
-| `log_disconnections` | `on` | Security auditing |
-| `log_statement` | `ddl` | Track schema changes |
-
-**Migration:** Existing deployments with `trust` auth are auto-migrated to `scram-sha-256` on container restart. Backups of old configs are created with timestamps.
+**pg_hba.conf:** local/127.0.0.1/::1 → scram-sha-256, 0.0.0.0/:: → reject
 
 ## Frontend
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
 
-**Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only), `/admin/analytics` Analytics Dashboard (owner-only)
+**Routes:** `/` Tasks, `/create-task`, `/task/:id`, `/vault`, `/governance`, `/governance/:id`, `/delegates`, `/profile`, `/admin` (owner), `/admin/disputes`, `/admin/analytics`
 
-**Key Hooks:** useTasks (single task + action handlers), useTasksAPI (paginated task list from backend API, scales to 1000+ tasks), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache, returns tasksAsWorker/tasksAsStakeholder/tasksAsCustomer/tasksClaimed/disputesInitiated/totalEarned/reputationScore), useIsAdmin (Treasury owner check), useAdminAuth (signed request helpers for admin endpoints - `adminPost`/`adminDelete`), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useWhitelist (whitelist management), useCamelotLP (LP fee collection), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
+**Key Hooks:** `useTasks` (single+actions), `useTasksAPI` (paginated), `useTaskSkills` (IPFS+matching), `useVaultData` (45s), `useGovernance`, `useProposals`, `useDelegation`, `useAuction`, `useReputation` (5m cache), `useIsAdmin`, `useAdminAuth`, `useRebalance`, `useDispute`, `useBackup`, `usePause`, `useTruncateDatabase`, `useWhitelist`, `useCamelotLP`, `useIPFSImage` (private IPFS with JWT, returns blob URLs), `useAnalytics` (60s poll)
 
-**UserHistoricalStats:** Replaces TokenDistributionChart on TasksPage. Shows 7 stats in responsive grid (Completed/Validated/Created/In Progress/Disputed/Earned/Rep Score). Uses `useReputation` hook. Empty state shows "Complete your first task" CTA when all stats are zero.
+**Task Table:** Backend pagination via `/api/tasks` (20/page, from `analytics_tasks`). Hides Closed/Disputed by default. Skills matching with gold star icon.
 
-**Task Table Pagination:** The task table uses backend pagination via `/api/tasks` endpoint (20 items per page). Data is sourced from `analytics_tasks` table, which is event-synced by analyticsWatcher. This scales to 100k+ tasks. Single task detail pages still use direct contract reads for authoritative data.
+**Passport:** Thresholds: CREATE/STAKE/CLAIM/DEPOSIT/REDEEM=20, PROPOSE=25. Site-wide gate (score>=20), `/help` bypasses. Whitelisted addresses bypass.
 
-**Task Table Filtering:** By default, the task table hides `Closed` and `Disputed` tasks. Users must explicitly select these statuses in the filter dropdown to view them.
+**UI:** `<Spinner />` for loading. `useIPFSImage` required for private images (never use `getGatewayUrl()` directly).
 
-**Task Skills Matching:** Tasks can have optional required skills (stored in IPFS). When creating a task, users can select up to 10 skills from the predefined list. In the task table, a gold star icon appears before tasks where the user's profile skills overlap with the task's required skills. The "Skills Match" filter checkbox shows only matching tasks (disabled if user has no profile skills). Skills data is fetched progressively from IPFS with 5-minute caching via `useTaskSkills` hook. On the task detail page (`/task/:id`), required skills are displayed prominently via auto-fetch from IPFS.
+**Vault Copy:** "Exchange ROSE" = redeem(). Neutral language, beta banner, NAV tooltip.
 
-**Admin Page:** Only visible/accessible to Treasury contract owner (read via `Treasury.owner()`). Non-owners silently redirected to `/`. Features: System Status card (pause/unpause Treasury with two-step confirmation), manual treasury rebalance trigger, database backup/restore, whitelist management, database truncation (danger zone with mandatory backup).
-
-**Pause System:** Treasury contract inherits OpenZeppelin Pausable. When paused, deposits, redemptions, rebalancing, and swaps are disabled. Admin can pause/unpause via System Status card (two-step confirmation). Vault page shows warning banner when paused. DepositCard/RedeemCard disable operations when paused.
-
-**Vault Copy:** User-facing terminology differs from contract functions: "Exchange ROSE" (UI) maps to `redeem()`/`requestRedemption()` (contract). Vault page displays beta banner, NAV tooltip on price, and uses neutral language (no "guaranteed", "backed", "always"). Header: "Diversified On-chain Assets, Transparent Holdings".
-
-**Passport:** `usePassport` (Gitcoin 1h cache), `usePassportVerify` (backend). Thresholds: CREATE=20, STAKE=20, CLAIM=20, PROPOSE=25, DEPOSIT=20, REDEEM=20
-
-**Site-Wide Gate:** `ProtectedRoutes` component gates entire app with Passport score >= 20 check. Flow: Connect wallet → Verify passport → Access site. `/help` route bypasses gate. Whitelisted addresses bypass automatically via `usePassport`. Strict blocking (no graceful degradation) for sybil protection.
-
-**UI Components:** Reusable components in `frontend/src/components/ui/`. Use `<Spinner />` for all loading states (default h-4 w-4, customize via className prop).
-
-**Transaction History:** `TransactionHistory.jsx` fetches deposit/redemption events directly from blockchain (7-day lookback). Shows `Deposit` and `Exchange` labels in UI (mapping to `Deposited`/`Redeemed`/`RedemptionFulfilled` events). Real-time updates via event watchers.
-
-## Backend API (`backend/signer/`)
+## Backend API
 
 | Category | Endpoints |
 |----------|-----------|
-| Passport | `/api/passport/verify`, `/score/:addr`, `/signer` |
-| Governance | `/api/governance/vp/:addr`, `/vp/available/:addr` (Slow Track alias), `/vp/attestation` (POST, Slow Track alias), `/proposals/:id/proof/:addr` (Fast Track merkle proof), `/total-vp`, `/delegations/:addr`, `/received/:delegate`, `/reputation-signed/:addr`, `/vote-signature` |
-| Delegation | `/api/delegation/vote-signature`, `/confirm-vote`, `/claim-signature`, `/claimable/:user`, `/undelegate-signature`, `/global-power/:delegate`, `/confirm-undelegate` |
-| Delegation V2 | `/api/delegation/v2/store` (POST), `/v2/user/:addr`, `/v2/received/:delegate`, `/v2/revoke` (POST, signed), `/v2/nonce/:addr`, `/v2/opt-in/:addr`, `/v2/stats`, `/v2/eip712-config/:chainId`, `/v2/delegates` (eligible delegates list) (Off-chain EIP-712 delegations) |
-| Delegate Scoring | `/api/delegate-scoring/score/:delegate`, `/eligibility/:delegate`, `/leaderboard`, `/stats`, `/run` |
-| VP Refresh | `/api/vp-refresh/stats`, `/pending`, `/config`, `/check/:addr`, `/process` |
-| Treasury | `/api/treasury/history`, `/rebalances`, `/stats`, `/vault-status`, `/rebalance/status`, `/rebalance/run`, `/rebalance/trigger`, `/redeem-check`, `/redemption/:id`, `/user-pending/:addr`, `/pending-redemptions`, `/redemption-watcher/*` |
-| Auction | `/api/auction/register`, `/bid`, `/:taskId/bids`, `/:taskId/count`, `/:taskId/my-bid/:worker`, `/:taskId`, `/select-winner`, `/confirm-winner`, `/:taskId/sync` |
-| Profile | `/api/profile` POST, `/api/profile/:addr` GET |
-| Whitelist | `/api/whitelist` GET/POST, `/api/whitelist/:address` GET/DELETE (owner-only mutations) |
-| Dispute | `/api/dispute/list`, `/api/dispute/stats`, `/api/dispute/:taskId` (admin queries, on-chain events synced to DB) |
-| Backup | `/api/backup/create`, `/status`, `/restore` (owner-only, pg_dump → Pinata Hot Swaps) |
-| Database | `/api/database/tables` (GET), `/truncate` (POST, owner-only, creates backup then truncates all tables except schema_migrations) |
-| Slow Track | `/api/slow-track/attestation` (POST), `/allocations/:addr`, `/available/:addr`, `/stats` (Slow Track VP allocation) |
-| Analytics | `/api/analytics/overview`, `/marketplace`, `/governance`, `/treasury`, `/users`, `/daily?days=30` (system-wide metrics, admin-only) |
-| Tasks | `/api/tasks` GET (paginated list: page, limit, status, myTasks, isAuction, sortBy, sortOrder), `/api/tasks/counts` GET, `/api/tasks/:taskId` GET |
-| Camelot LP | `/api/camelot-lp/status` GET, `/position/:tokenId` GET, `/collect` POST, `/collect/:tokenId` POST (owner-only, LP fee collection) |
-| GitHub Auth | `/api/github/auth/start` GET (initiates OAuth), `/auth/status` GET, `/callback` GET (OAuth callback), `/auth/unlink` DELETE |
-| GitHub Repos | `/api/github/repos` GET (list authorized), `/repos/authorize` POST, `/repos/revoke` DELETE, `/repos/check` GET |
+| Passport | verify, score/:addr, signer |
+| Governance | vp/:addr, vp/available/:addr, vp/attestation, proposals/:id/proof/:addr, total-vp, delegations/:addr, received/:delegate, reputation-signed/:addr, vote-signature |
+| Delegation | vote-signature, confirm-vote, claim-signature, claimable/:user, undelegate-signature, global-power/:delegate, confirm-undelegate |
+| Delegation V2 | v2/store, v2/user/:addr, v2/received/:delegate, v2/revoke, v2/nonce/:addr, v2/opt-in/:addr, v2/stats, v2/eip712-config/:chainId, v2/delegates |
+| Delegate Scoring | score/:delegate, eligibility/:delegate, leaderboard, stats, run |
+| VP Refresh | stats, pending, config, check/:addr, process |
+| Treasury | history, rebalances, stats, vault-status, rebalance/*, redeem-check, redemption/:id, user-pending/:addr, pending-redemptions, redemption-watcher/* |
+| Auction | register, bid, :taskId/bids, :taskId/count, :taskId/my-bid/:worker, :taskId, select-winner, confirm-winner, :taskId/sync |
+| Profile | POST /, GET /:addr |
+| Whitelist | GET/POST /, GET/DELETE /:address |
+| Dispute | list, stats, :taskId |
+| Backup | create, status, restore |
+| Database | tables, truncate |
+| Slow Track | attestation, allocations/:addr, available/:addr, stats |
+| Analytics | overview, marketplace, governance, treasury, users, daily?days=30 |
+| Tasks | GET / (paginated), GET /counts, GET /:taskId |
+| Camelot LP | status, position/:tokenId, collect, collect/:tokenId |
+| GitHub | auth/start, auth/status, callback, auth/unlink, repos, repos/authorize, repos/revoke, repos/check |
 
 ## Backend Services
 
 | Service | Purpose |
 |---------|---------|
-| wsProvider.ts | Shared WebSocket provider for all event watchers with auto-reconnection |
-| governance.ts | VP queries (from `stakers`/`delegations` tables), reputation attestation |
-| delegation.ts | Allocations, delegated votes, claims, vote reductions |
-| delegationV2.ts | Off-chain EIP-712 signed delegations, store/query/revoke delegations, opt-in verification |
-| delegateScoring.ts | Win/loss tracking, eligibility gating |
-| vpRefresh.ts | Auto-refresh VP in database on reputation changes (VP stored off-chain in `stakers` table) |
-| stakerIndexer.ts | Watch `Deposited`/`Withdrawn`, maintain staker cache |
-| vpSnapshot.ts | Compute VP snapshots, build merkle trees, generate proofs |
-| snapshotWatcher.ts | Watch `ProposalCreated`, schedule/submit VP snapshots; Auto-finalize proposals at deadline |
+| wsProvider.ts | Shared WebSocket with auto-reconnect (5s→60s backoff) |
+| governance.ts | VP queries, reputation attestation |
+| delegation.ts / delegationV2.ts | Allocations, votes, claims; Off-chain EIP-712 |
+| delegateScoring.ts | Win/loss tracking, eligibility |
+| vpRefresh.ts | Auto-refresh VP on reputation changes |
+| stakerIndexer.ts | Deposited/Withdrawn → staker cache |
+| vpSnapshot.ts | VP snapshots, merkle trees, proofs |
+| snapshotWatcher.ts | ProposalCreated → VP snapshot; Auto-finalize at deadline |
 | lifi.ts | Swap quotes, diversification, testnet mock |
-| treasury.ts | Rebalance orchestration, vault status |
-| depositWatcher.ts | Watch `Deposited`, diversify |
-| redemptionWatcher.ts | Watch `RedemptionRequested`, liquidate, fulfill |
-| disputeWatcher.ts | Watch `TaskDisputed`/`DisputeResolved`, sync to DB |
-| delegateOptInWatcher.ts | Watch `DelegateOptInChanged`, sync missing stakers to DB (fixes delegates not showing in list) |
+| treasury.ts | Rebalance orchestration |
+| depositWatcher.ts | Deposited → diversify |
+| redemptionWatcher.ts | RedemptionRequested → liquidate → fulfill |
+| disputeWatcher.ts | TaskDisputed/DisputeResolved → DB |
+| delegateOptInWatcher.ts | DelegateOptInChanged → sync stakers |
 | auction.ts | Off-chain bids, winner selection |
-| dispute.ts | Dispute queries, on-chain event recording |
-| backup.ts | Database backup/restore, Pinata upload, Hot Swaps |
-| database.ts | Database admin operations, truncate all tables (excludes schema_migrations) |
-| allocations.ts | Slow Track VP allocation tracking, attestation signing |
-| slowTrackWatcher.ts | Watch `VoteCastSlow`/`ProposalFinalized`, sync allocations to DB |
-| analyticsWatcher.ts | Watch Marketplace/Governance/Treasury events, sync to analytics tables |
-| analytics.ts | Analytics query functions (overview, marketplace, governance, treasury, users, daily) |
-| tasks.ts | Paginated task queries from analytics_tasks table (getTaskList, getTaskById, getTaskCountByStatus) |
-| analyticsCron.ts | Daily rollup, hourly treasury snapshot, 15-min VP refresh |
-| camelotLP.ts | Collect trading fees from Camelot LP positions, send to Treasury |
+| backup.ts | pg_dump → Pinata Hot Swaps |
+| allocations.ts / slowTrackWatcher.ts | Slow Track VP allocation |
+| analyticsWatcher.ts / analytics.ts / analyticsCron.ts | Event sync, queries, daily/hourly rollups |
+| tasks.ts | Paginated task queries |
+| camelotLP.ts | LP fee collection → Treasury |
 
 ## Scheduled Jobs
 
-| Job | Schedule | Purpose |
-|-----|----------|---------|
-| NAV Snapshot | Daily 00:00 UTC | Prices/allocations |
-| Rebalance | 1st of month | Multi-swap via LiFi |
-| Delegate Scoring | Every 1h | Score proposals, free VP |
-| VP Refresh | Event-driven | ReputationChanged → refresh |
-| Staker Indexer | Event-driven | Deposited/Withdrawn → update staker cache |
-| Snapshot Watcher | Event-driven + 15m poll | ProposalCreated (Fast) → compute VP snapshot → submit merkle root; Auto-finalize both tracks at deadline; Auto-execute passed proposals after 24h grace period |
-| Staker Validation | Weekly Sun 03:00 UTC | Verify staker cache matches on-chain |
-| Deposit Watcher | Event-driven | Deposited → diversify |
-| Redemption Watcher | Event-driven | RedemptionRequested → liquidate → fulfill |
-| Dispute Watcher | Event-driven | TaskDisputed/DisputeResolved → sync to DB |
-| Delegate Opt-In Watcher | Event-driven | DelegateOptInChanged → sync missing stakers to DB |
-| Slow Track Watcher | Event-driven | VoteCastSlow → sync allocations, ProposalFinalized → cleanup |
-| Database Backup | Daily 02:00 UTC | pg_dump → Pinata Hot Swaps |
-| Analytics Watcher | Event-driven | TaskCreated/AuctionTaskCreated/DAOTaskCreated/StakeholderStaked/StakeholderUnstaked/TaskClaimed/TaskUnclaimed/AuctionWinnerSelected/TaskCompleted/TaskReadyForPayment/TaskDisputed/TaskCancelled/TaskClosed/VoteCast/Deposited → sync to analytics tables |
-| Analytics Daily Rollup | Daily 00:00 UTC | Aggregate daily metrics |
-| Analytics Treasury Snapshot | Hourly | Snapshot NAV and allocations |
-| Analytics VP Refresh | Every 15 min | Sync voting power to analytics_users |
-| Analytics Task Validation | Every 15 min | Re-sync active tasks from chain (drift correction) |
-| Camelot LP Fee Collection | Daily 06:00 UTC | Collect LP trading fees → Treasury |
+| Job | Schedule |
+|-----|----------|
+| NAV Snapshot | Daily 00:00 UTC |
+| Rebalance | 1st of month |
+| Delegate Scoring | Hourly |
+| Database Backup | Daily 02:00 UTC |
+| Analytics Daily Rollup | Daily 00:00 UTC |
+| Analytics Treasury Snapshot | Hourly |
+| Analytics VP Refresh | Every 15 min |
+| Task Validation | Every 15 min |
+| Staker Validation | Weekly Sun 03:00 UTC |
+| Camelot LP Fee Collection | Daily 06:00 UTC |
+| Event-driven | VP Refresh, Staker Indexer, Snapshot Watcher, Watchers (deposit, redemption, dispute, opt-in, slow-track, analytics) |
 
 ## Database Tables
 
 `profiles`, `nav_history`, `delegate_scores`, `scored_proposals`, `proposal_blocks`, `auction_tasks`, `auction_bids`, `disputes`, `backup_verification`, `delegations`, `vp_snapshots`, `vp_allocations`, `stakers`, `staker_validations`, `analytics_tasks`, `analytics_proposals`, `analytics_treasury`, `analytics_users`, `analytics_daily`, `github_links`, `authorized_repos`
 
-## Token Decimals
-
-| Token | Decimals |
-|-------|----------|
-| ROSE/vROSE/stakedRose | 18 |
-| VP | 9 |
-| USDC/NAV/XAUt | 6 |
-| tBTC | 18 |
-| Chainlink | 8 |
-
 ## Environment Variables
 
-| Location | Variables |
-|----------|-----------|
-| Root | `ARBITRUM_SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `DAO_TREASURY_ADDRESS`, `ARBISCAN_API_KEY`, `PASSPORT_SIGNER_ADDRESS` |
-| Frontend | `VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS`, `VITE_PINATA_JWT`, `VITE_PINATA_GATEWAY`, `VITE_PASSPORT_SIGNER_URL` |
-| Backend | `PORT`, `ALLOWED_ORIGINS`, `SIGNER_PRIVATE_KEY`, `VITE_GITCOIN_API_KEY/SCORER_ID`, `THRESHOLD_*`, `*_ADDRESS`, `RPC_URL`, `RPC_WS_URL` (WebSocket for events), `DATABASE_URL`, `DB_POOL_*`, `PINATA_GATEWAY` |
-| Watchers | `*_WATCHER_ENABLED`, `*_WATCHER_DEBOUNCE_MS`, `*_WATCHER_EXECUTE`, `*_WATCHER_SLIPPAGE_BPS`, `*_WATCHER_STARTUP_LOOKBACK` |
-| Delegation | `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED` |
-| VP Refresh | `VP_REFRESH_ENABLED`, `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10), `VP_REFRESH_EXECUTE` |
-| Dispute Watcher | `DISPUTE_WATCHER_ENABLED` (default: true), `DISPUTE_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
-| Delegate Opt-In Watcher | `DELEGATE_OPTIN_WATCHER_ENABLED` (default: true), `DELEGATE_OPTIN_WATCHER_STARTUP_LOOKBACK` (default: 10000 blocks) |
-| Staker Indexer | `STAKER_INDEXER_ENABLED` (true), `STAKER_INDEXER_STARTUP_LOOKBACK` (10000), `STAKER_VALIDATION_CRON` (weekly Sun 03:00 UTC) |
-| Snapshot Watcher | `SNAPSHOT_WATCHER_ENABLED` (true), `SNAPSHOT_WATCHER_STARTUP_LOOKBACK` (10000), `SNAPSHOT_WATCHER_COMPUTE_BUFFER` (300s), `SNAPSHOT_WATCHER_EXECUTE` (true) |
-| Slow Track Watcher | `SLOW_TRACK_WATCHER_ENABLED` (true), `SLOW_TRACK_WATCHER_STARTUP_LOOKBACK` (10000) |
-| Analytics Watcher | `ANALYTICS_WATCHER_ENABLED` (true), `ANALYTICS_WATCHER_STARTUP_LOOKBACK` (50000) |
-| Analytics Cron | `ANALYTICS_CRON_ENABLED` (true), `ANALYTICS_DAILY_ROLLUP_SCHEDULE` (`0 0 * * *`), `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE` (`0 * * * *`), `ANALYTICS_VP_REFRESH_SCHEDULE` (`*/15 * * * *`) |
-| Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
-| GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app), `IS_PRODUCTION` (true for prod; blocks DAO task PR merges on dev) |
-| Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
-| Rebalance | `REBALANCE_MAX_ROSE_PREMIUM_BPS` (1000 = 10%), `REBALANCE_MAX_ROSE_DISCOUNT_BPS` (1000 = 10%) |
+**Root:** `ARBITRUM_SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `DAO_TREASURY_ADDRESS`, `ARBISCAN_API_KEY`, `PASSPORT_SIGNER_ADDRESS`
 
-**Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
+**Frontend:** `VITE_MARKETPLACE/TOKEN/TREASURY/GOVERNANCE/VROSE_ADDRESS`, `VITE_PINATA_JWT`, `VITE_PINATA_GATEWAY`, `VITE_PASSPORT_SIGNER_URL`
 
-**GitHub OAuth Setup:** To enable user authentication for repository authorization:
-1. Go to GitHub > Settings > Developer Settings > GitHub Apps > Rose Protocol
-2. Under "General": Copy **Client ID** → `MERGEBOT_CLIENT_ID`, Generate **Client secret** → `MERGEBOT_CLIENT_SECRET`
-3. Under "Identifying and authorizing users": Add callback URL (e.g., `https://signer.rose-token.com/api/github/callback`)
+**Backend:** `PORT`, `ALLOWED_ORIGINS`, `SIGNER_PRIVATE_KEY`, `VITE_GITCOIN_API_KEY/SCORER_ID`, `THRESHOLD_*`, `*_ADDRESS`, `RPC_URL`, `RPC_WS_URL`, `DATABASE_URL`, `DB_POOL_*`, `PINATA_GATEWAY`
 
-## Pinata IPFS (Private Files)
+**Watchers (all have `*_ENABLED`, `*_STARTUP_LOOKBACK`):**
+- Deposit/Redemption: `*_DEBOUNCE_MS`, `*_EXECUTE`, `*_SLIPPAGE_BPS`
+- Dispute/Delegate Opt-In/Slow Track/Analytics: defaults 10000-50000 lookback
+- Snapshot: `COMPUTE_BUFFER` (300s), `EXECUTE`
+- Staker Indexer: `STAKER_VALIDATION_CRON`
 
-**Frontend SDK:** Uses official `pinata` package (npm). Singleton pattern with lazy initialization. All uploads are **private** by default.
+**Delegation:** `DELEGATE_SCORING_*`, `DELEGATE_MIN_*`, `DELEGATE_GATE_ON_SCORE`, `VP_FREEING_ENABLED`
 
-**Backend API:** Pinata V3 (`https://uploads.pinata.cloud/v3/files`) with JWT auth.
+**VP Refresh:** `VP_REFRESH_MIN_DIFFERENCE` (1e9), `VP_REFRESH_DEBOUNCE_MS` (30000), `VP_REFRESH_MAX_BATCH_SIZE` (10)
 
-**Groups:** Content is organized into Pinata groups for management:
-| Group | ID | Content |
-|-------|-----|---------|
-| Governance | `019b0af9-c866-7bc5-b659-8d6b70da8cd8` | Proposals |
-| Tasks | `019b0aec-a5a0-7338-be66-3d604b7ba713` | Task descriptions, Disputes |
-| Profiles | `019b0aec-c443-7ada-bcb7-5221e69121db` | Avatars |
-| Backups | `019b0aec-e295-7e9d-8ace-fb5cd077c919` | Database backups |
+**Analytics Cron:** `ANALYTICS_DAILY_ROLLUP_SCHEDULE`, `ANALYTICS_TREASURY_SNAPSHOT_SCHEDULE`, `ANALYTICS_VP_REFRESH_SCHEDULE`
 
-**Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud` (dedicated gateway for private file access)
+**Task Validation:** `TASK_VALIDATION_SCHEDULE`, `TASK_VALIDATION_BATCH_SIZE` (50)
 
-**Private File Downloads:** All uploads are private by default. SDK handles auth automatically. Without auth, returns 403 "The owner of this gateway does not have this content".
+**GitHub Bot:** `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64 PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID/SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER/NAME`, `IS_PRODUCTION`
 
-**Environment:**
-- Frontend: `VITE_PINATA_JWT` (required), `VITE_PINATA_GATEWAY` (optional, has default)
-- Backend: `PINATA_GATEWAY` (optional, has default)
+**Camelot LP:** `CAMELOT_POSITION_MANAGER`, `CAMELOT_LP_POSITION_IDS`, `CAMELOT_LP_CRON_SCHEDULE`
 
-## Database Backup (Pinata Hot Swaps)
+**Backup:** `BACKUP_ENABLED`, `BACKUP_CRON_SCHEDULE`, `BACKUP_ON_STARTUP`, `REACT_APP_PINATA_JWT`, `BACKUP_GROUP_ID`, `BACKUP_REFERENCE_CID`
 
-**Storage:** PostgreSQL backups in custom format (pg_dump -Fc, self-compressing) uploaded to Pinata IPFS as private files.
+**Rebalance:** `REBALANCE_MAX_ROSE_PREMIUM_BPS` (1000), `REBALANCE_MAX_ROSE_DISCOUNT_BPS` (1000)
 
-**Hot Swaps:** Uses Pinata's Hot Swaps plugin for mutable CID references. First backup creates a reference CID; subsequent backups update the swap mapping so the same reference CID always points to the latest backup.
+## Pinata IPFS
 
-**Reference CID:** Stored in `BACKUP_REFERENCE_CID` environment variable (GitHub secret). Set this after the first backup is created.
+**SDK:** Frontend uses `pinata` npm package. Backend uses Pinata V3 API. All uploads private by default.
 
-**Schedule:** Daily at 02:00 UTC (cron job) + manual trigger via admin panel.
+**Groups:** Governance `019b0af9-c866-7bc5-b659-8d6b70da8cd8`, Tasks `019b0aec-a5a0-7338-be66-3d604b7ba713`, Profiles `019b0aec-c443-7ada-bcb7-5221e69121db`, Backups `019b0aec-e295-7e9d-8ace-fb5cd077c919`
 
-**Commands:**
-- **Backup:** `pg_dump -Fc → upload to Pinata → Hot Swap update → verify`
-- **Restore:** `download from Pinata → pg_restore --clean --if-exists`
+**Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud`
 
-**Hot Swap Verification:** After every Hot Swap update, the system waits 2 seconds for propagation, then verifies the swap by:
-1. Fetching content from reference CID (should resolve via Hot Swap)
-2. Fetching content directly from the new backup CID
-3. Computing SHA-256 hashes and comparing (timing-safe)
-4. Throwing error on mismatch (triggers cron failure tracking)
-
-`BackupResult` now includes `swapVerified: boolean` field.
-
-**Endpoints:** `/api/backup/create` (POST), `/status` (GET), `/restore` (POST, requires confirmation)
-
-**Auth:** All endpoints require caller to be Treasury contract owner.
-
-**Environment:**
-| Variable | Description |
-|----------|-------------|
-| `BACKUP_ENABLED` | Enable backup system (default: true) |
-| `BACKUP_CRON_SCHEDULE` | Cron schedule (default: `0 2 * * *`) |
-| `BACKUP_ON_STARTUP` | Run backup on startup (default: false) |
-| `REACT_APP_PINATA_JWT` | Pinata V3 API JWT (existing secret, shared with frontend) |
-| `BACKUP_GROUP_ID` | Pinata Backups group ID (has default) |
-| `BACKUP_REFERENCE_CID` | Mutable reference CID for Hot Swaps (add after first backup) |
+**Backup:** pg_dump -Fc → Pinata → Hot Swap update → SHA-256 verify. Daily 02:00 UTC. Reference CID in `BACKUP_REFERENCE_CID`.
 
 ## Mainnet Addresses (Arbitrum One)
 
 | Asset | Address |
 |-------|---------|
 | USDC | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
-| TBTC | `0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40` |
+| tBTC | `0x6c84a8f1c29108F47a79964b5Fe888D4f4D0de40` |
 | XAUt | `0x40461291347e1ecbb09499f3371d3f17f10d7159` |
 | BTC/USD | `0x6ce185860a4963106506C203335A2910413708e9` |
 | XAU/USD | `0x1F954Dc24a49708C26E0C1777f16750B5C6d5a2c` |
 | LiFi | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Camelot PositionManager | `0x00c7f3082833e796A5b3e4Bd59f6642FF44DCD15` |
+| Camelot PM | `0x00c7f3082833e796A5b3e4Bd59f6642FF44DCD15` |
 
 ## Technical Stack
 
-Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5.0, 1 run + viaIR optimizer. Networks: Arbitrum Sepolia (421614), Arbitrum One (42161). Frontend: Vite 7.x + wagmi + viem + RainbowKit. Backend: Express + TypeScript + PostgreSQL + ethers.js.
+Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5.0, 1 run + viaIR. Networks: Arbitrum Sepolia (421614), Arbitrum One (42161). Frontend: Vite 7 + wagmi + viem + RainbowKit. Backend: Express + TypeScript + PostgreSQL + ethers.js.
 
-**WebSocket Events:** All 9 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. The analyticsWatcher uses WebSocket for all operations (including contract reads and `queryFilter` for startup catch-up) to prevent race conditions between event receipt and data reads. Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
+**WebSocket:** 9 watchers share `wsProvider.ts`. analyticsWatcher uses WS for all ops. Auto-reconnect 5s→60s, max 10 attempts.
 
-## Backend ABI Workflow
+## ABI Workflow
 
-**ABI Source:** Both frontend and backend use the same ABIs extracted from Hardhat artifacts via `scripts/update-abi.js`.
-
-**Generation:** Run `npm run update-abi` from root (compiles contracts first, then extracts ABIs to both directories):
-- Frontend: `frontend/src/contracts/*ABI.json`
-- Backend: `backend/signer/src/abis/*ABI.json`
-
-**Backend Usage:** Import from centralized helper `backend/signer/src/utils/contracts.ts`:
-```typescript
-import { RoseMarketplaceABI, RoseGovernanceABI, RoseTreasuryABI } from '../utils/contracts';
-// or use factory functions
-import { getMarketplaceContract, getGovernanceContract } from '../utils/contracts';
-```
-
-**CI/CD:** The `deploy-signer.yml` workflow runs `npm run update-abi` before Docker build, ensuring ABIs are generated fresh from compiled contracts. Akash provider selection uses whitelist (priority) → blacklist fallback. Whitelist: if non-empty, only whitelisted providers are used; if empty, blacklist filtering applies.
-
-**Local Development:** After contract changes, run `npm run update-abi` to regenerate ABIs for both frontend and backend.
-
-**Git Strategy:** Backend ABIs (`backend/signer/src/abis/*.json`) are in `.gitignore` - generated in CI only.
+`npm run update-abi` extracts from Hardhat artifacts to `frontend/src/contracts/` and `backend/signer/src/abis/`. Backend imports from `utils/contracts.ts`. Backend ABIs in `.gitignore`.
 
 ## Git Workflow
 
@@ -500,94 +274,31 @@ gh pr create --title "feat: ..." --body "..." && gh pr checks --watch
 
 Never push directly to main.
 
-## Pinned Contracts (CI/CD)
+## CI/CD Pipeline
 
-Skip contract deployment by setting all 7 GitHub **variables** (not secrets - addresses are public):
+**Job Order:** resolve-addresses → deploy-contracts → build-and-push-frontend + build-and-push-signer (parallel) → deploy-signer-akash → deploy-frontend-akash
 
-| Variable | Contract |
-|----------|----------|
-| `TOKEN_ADDRESS` | RoseToken |
-| `TREASURY_ADDRESS` | RoseTreasury |
-| `MARKETPLACE_ADDRESS` | RoseMarketplace |
-| `GOVERNANCE_ADDRESS` | RoseGovernance |
-| `REPUTATION_ADDRESS` | RoseReputation |
-| `VROSE_ADDRESS` | vROSE |
-| `USDC_ADDRESS` | Mock USDC |
+**Pinned Contracts:** Set all 7 GitHub **variables** to skip deployment: `TOKEN_ADDRESS`, `TREASURY_ADDRESS`, `MARKETPLACE_ADDRESS`, `GOVERNANCE_ADDRESS`, `REPUTATION_ADDRESS`, `VROSE_ADDRESS`, `USDC_ADDRESS`. All set → skip, any missing → full deploy.
 
-**Behavior:**
-- All 7 set → `deploy-contracts` job skipped, pinned addresses used
-- Any missing → Full deployment runs (fail-safe default)
-- Reputation seeding also skipped when pinned
+## Production (Mainnet)
 
-**Note:** Treasury stores LiFi, asset tokens, and price feeds internally. Pinning Treasury pins all related infrastructure.
+**Workflow:** `.github/workflows/prod-deploy.yml` (push to main or manual)
 
-## Production Deployment (Mainnet)
+**Domains:** `app.rose-token.com` (frontend), `signer.rose-token.com` (backend)
 
-**Workflow:** `.github/workflows/prod-deploy.yml`
-**Trigger:** Push to `main` branch OR manual `workflow_dispatch`
-**Network:** Arbitrum One (chainId 42161)
-
-**Domains:**
-| Service | Domain |
-|---------|--------|
-| Frontend | `app.rose-token.com` |
-| Backend | `signer.rose-token.com` |
-
-**Key Differences from Dev:**
 | Aspect | Dev | Prod |
 |--------|-----|------|
-| Deploy Script | `deploy.js` | `deploy-mainnet.js` |
-| Mocks | All mocks deployed | Real contracts only |
-| Tokens | MockERC20 | Real USDC, tBTC, XAUt |
-| Oracles | MockV3Aggregator | Real Chainlink feeds |
-| LiFi | MockLiFiDiamond | Real LiFi Diamond |
-| Seeding | Treasury + Reputation | None |
-| Slippage | 100% (disabled) | 1% default |
+| Script | deploy.js | deploy-mainnet.js |
+| Mocks | All | None (real USDC/tBTC/XAUt, Chainlink, LiFi) |
+| Seeding | Yes | None |
+| Slippage | 100% | 1% |
 
-**GitHub Environment:** `prod` (separate from `dev`)
+**Required Secrets:** `ARBITRUM_RPC_URL`, `ARBITRUM_RPC_WS_URL`, `PRIVATE_KEY`, `PASSPORT_SIGNER_ADDRESS`, `AKASH_DSEQ_*_PROD`, plus all dev secrets.
 
-**Required Secrets:**
-- `ARBITRUM_RPC_URL` - Mainnet HTTP RPC endpoint
-- `ARBITRUM_RPC_WS_URL` - Mainnet WebSocket RPC endpoint (for event watchers)
-- `PRIVATE_KEY` - Deployer private key (funded with ETH)
-- `PASSPORT_SIGNER_ADDRESS` - Backend signer wallet
-- `AKASH_DSEQ_FRONTEND_PROD` - Frontend deployment ID (after first deploy)
-- `AKASH_DSEQ_PROD` - Backend deployment ID (after first deploy)
-- All other secrets from dev (PINATA, GITCOIN, POSTGRES, MERGEBOT, etc.)
+## Frontend Build
 
-**Pinned Contracts:** Same pattern as dev - set all 7 variables to skip deployment.
-
-**Files:**
-- `scripts/deploy-mainnet.js` - Mainnet deploy script (no mocks)
-- `frontend/deploy-prod.yaml` - Akash SDL for app.rose-token.com
-- `backend/signer/deploy-prod.yaml` - Akash SDL for signer.rose-token.com
-
-## Frontend Build-Time Environment Variables
-
-All `VITE_*` environment variables are passed as Docker build args and baked into the bundle at build time. This ensures:
-- Fresh values on every deploy (no caching issues)
-- New Vite bundle hashes when config changes (forces browser cache invalidation)
-- No runtime env var injection needed (simpler, more reliable)
-
-**How it works:**
-1. CI/CD passes all `VITE_*` values as Docker `build-args`
-2. Dockerfile converts ARGs to ENV for Vite build
-3. `VITE_BUILD_HASH=${{ github.sha }}` forces new bundle filenames on every deploy
-4. Vite's `import.meta.env.VITE_*` inlines values at build time
-5. Container runs plain nginx (no entrypoint script needed)
-
-**Key files:**
-- `frontend/Dockerfile` - ARG/ENV declarations, build command
-- `frontend/vite.config.mjs` - `__BUILD_HASH__` injection for cache busting
-- `.github/workflows/dev-deploy.yml` - build-args in `build-and-push-frontend` job
-
-**Note:** Frontend env vars (API keys, etc.) are public by design - they're in the JS bundle sent to browsers. For truly sensitive keys, proxy through the backend.
+`VITE_*` vars passed as Docker build-args, baked at build time. `VITE_BUILD_HASH=${{ github.sha }}` forces cache invalidation.
 
 ## MockLiFi (Testnet)
 
-**Critical:** MockLiFiDiamond calculates swap output **before** transferring tokens. This is required because ROSE price depends on Treasury's ROSE balance (`circulatingSupply = totalSupply - treasuryBalance`). Transferring ROSE first would change the price and cause slippage failures.
-
-**Order in `_executeSwap()`:**
-1. Calculate output amount (preserves price state)
-2. Check slippage
-3. Transfer tokens in/out
+**Critical:** Calculates swap output **before** transferring tokens (preserves ROSE price state for slippage check).
