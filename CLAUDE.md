@@ -75,6 +75,13 @@ Web3 marketplace with task-value-based token distribution.
    - Once assets equalize, splits remaining shortfall equally among them
    - Example: BTC=$150k, GOLD=$50k, need $150k → sell $125k BTC, $25k GOLD → both end at $25k
 
+**ROSE Price Protection** (monthly rebalance):
+- Prevents buying ROSE at market prices > NAV (premium protection)
+- Prevents selling ROSE at market prices < NAV (discount protection)
+- Default threshold: 10% (1000 bps) in either direction
+- Config: `REBALANCE_MAX_ROSE_PREMIUM_BPS`, `REBALANCE_MAX_ROSE_DISCOUNT_BPS`
+- Skipped ROSE swaps don't fail entire rebalance (graceful degradation)
+
 ## Governance System (Two-Track)
 
 **VP:** `√(stakedRose) × reputation` where reputation = `(success-dispute)/success×100` using ^0.6 sublinear points
@@ -314,6 +321,7 @@ host    all  all  ::/0           reject
 | Task Validation | `TASK_VALIDATION_ENABLED` (true), `TASK_VALIDATION_SCHEDULE` (`*/15 * * * *`), `TASK_VALIDATION_BATCH_SIZE` (50) |
 | GitHub Bot | `MERGEBOT_APP_ID`, `MERGEBOT_PRIVATE_KEY` (base64-encoded PEM), `GITHUB_BOT_ENABLED`, `MERGEBOT_CLIENT_ID`, `MERGEBOT_CLIENT_SECRET`, `MERGEBOT_CALLBACK_URL`, `FRONTEND_URL`, `DAO_TASK_REPO_OWNER` (default: rose-token), `DAO_TASK_REPO_NAME` (default: app), `IS_PRODUCTION` (true for prod; blocks DAO task PR merges on dev) |
 | Camelot LP | `CAMELOT_LP_ENABLED` (true), `CAMELOT_POSITION_MANAGER` (default: Arbitrum One address), `CAMELOT_LP_POSITION_IDS` (comma-separated), `CAMELOT_LP_CRON_SCHEDULE` (`0 6 * * *`) |
+| Rebalance | `REBALANCE_MAX_ROSE_PREMIUM_BPS` (1000 = 10%), `REBALANCE_MAX_ROSE_DISCOUNT_BPS` (1000 = 10%) |
 
 **Note:** `MERGEBOT_PRIVATE_KEY` must be base64-encoded. Encode with: `cat private-key.pem | base64 -w 0`
 
