@@ -143,7 +143,7 @@ const CreateTaskForm = ({ onTaskCreated }) => {
           // Register auction with backend
           console.log('📝 Registering auction with backend...');
           try {
-            await registerAuction(Number(taskId), tokenAmount.toString());
+            await registerAuction(Number(taskId), tokenAmount.toString(), createTaskHash);
             console.log('✅ Auction registered with backend');
           } catch (regErr) {
             console.warn('⚠️ Failed to register auction with backend:', regErr);
