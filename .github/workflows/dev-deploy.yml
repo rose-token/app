@@ -275,13 +275,15 @@ jobs:
           echo "Image tags: ${{ steps.meta.outputs.tags }}"
           echo "Image digest: ${{ steps.build.outputs.digest }}"
 
-  # Job 3: Deploy frontend to Akash Network
+  # Job 6: Deploy frontend to Akash Network (after signer)
   deploy-frontend-akash:
-    needs: [resolve-addresses, deploy-contracts, build-and-push-frontend]
+    needs: [resolve-addresses, deploy-contracts, build-and-push-frontend, deploy-signer-akash]
     if: |
       always() && !cancelled() &&
       needs.resolve-addresses.result == 'success' &&
-      needs.build-and-push-frontend.result == 'success'
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped') &&
+      needs.build-and-push-frontend.result == 'success' &&
+      needs.deploy-signer-akash.result == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
@@ -599,10 +601,12 @@ jobs:
 
   # Job 5: Deploy signer to Akash Network
   deploy-signer-akash:
-    needs: [resolve-addresses, deploy-contracts, build-and-push-signer]
+    needs: [resolve-addresses, deploy-contracts, build-and-push-frontend, build-and-push-signer]
     if: |
       always() && !cancelled() &&
       needs.resolve-addresses.result == 'success' &&
+      (needs.deploy-contracts.result == 'success' || needs.deploy-contracts.result == 'skipped') &&
+      needs.build-and-push-frontend.result == 'success' &&
       needs.build-and-push-signer.result == 'success'
     runs-on: ubuntu-latest
     environment: dev

@@ -2,7 +2,7 @@
  * Backup Routes
  *
  * Admin-only endpoints for database backup and restore.
- * Uses Treasury.owner() check for authorization.
+ * Uses signature verification via adminAuth middleware.
  */
 
 import { Router, Request, Response } from 'express';
@@ -15,11 +15,12 @@ import {
   isBackupConfigured,
 } from '../services/backup';
 import { getWsProvider } from '../utils/wsProvider';
+import { createAdminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
 /**
- * Verify caller is Treasury contract owner
+ * Verify caller is Treasury contract owner (for GET endpoints only)
  */
 async function verifyOwner(callerAddress: string): Promise<{ isOwner: boolean; error?: string }> {
   try {
@@ -53,24 +54,11 @@ async function verifyOwner(callerAddress: string): Promise<{ isOwner: boolean; e
  * POST /api/backup/create
  * Trigger a manual database backup
  *
- * Body: { callerAddress: string }
+ * Body: { callerAddress: string, timestamp: number, signature: string }
  * Response: { success, cid, size, timestamp, swapUpdated, isFirstBackup }
  */
-router.post('/create', async (req: Request, res: Response) => {
+router.post('/create', createAdminAuth('backup-create'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress } = req.body;
-
-    if (!callerAddress) {
-      return res.status(400).json({ error: 'Missing required field: callerAddress' });
-    }
-
-    // Verify owner
-    const { isOwner, error } = await verifyOwner(callerAddress);
-    if (!isOwner) {
-      console.log('[Backup API] Unauthorized backup attempt:', { caller: callerAddress });
-      return res.status(403).json({ error: error || 'Unauthorized' });
-    }
-
     if (!isBackupConfigured()) {
       return res.status(500).json({
         error: 'Backup not configured',
@@ -78,7 +66,7 @@ router.post('/create', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('[Backup API] Manual backup triggered by owner:', callerAddress);
+    console.log('[Backup API] Manual backup triggered by owner:', req.verifiedOwner);
     const result = await createBackup();
 
     return res.json(result);
@@ -127,23 +115,12 @@ router.get('/status', async (req: Request, res: Response) => {
  * DANGER: This overwrites the entire database!
  * Requires explicit `confirmed: true` in request body.
  *
- * Body: { callerAddress: string, cid?: string, confirmed: boolean }
+ * Body: { callerAddress: string, timestamp: number, signature: string, cid?: string, confirmed: boolean }
  * Response: { success, message, cid }
  */
-router.post('/restore', async (req: Request, res: Response) => {
+router.post('/restore', createAdminAuth('backup-restore'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress, cid, confirmed } = req.body;
-
-    if (!callerAddress) {
-      return res.status(400).json({ error: 'Missing required field: callerAddress' });
-    }
-
-    // Verify owner
-    const { isOwner, error } = await verifyOwner(callerAddress);
-    if (!isOwner) {
-      console.log('[Backup API] Unauthorized restore attempt:', { caller: callerAddress });
-      return res.status(403).json({ error: error || 'Unauthorized' });
-    }
+    const { cid, confirmed } = req.body;
 
     // Require explicit confirmation
     if (confirmed !== true) {
@@ -160,7 +137,7 @@ router.post('/restore', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('[Backup API] Database restore triggered by owner:', callerAddress, 'CID:', cid || 'reference');
+    console.log('[Backup API] Database restore triggered by owner:', req.verifiedOwner, 'CID:', cid || 'reference');
     const result = await restoreBackup(cid, true);
 
     return res.json(result);

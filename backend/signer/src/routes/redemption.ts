@@ -8,6 +8,7 @@ import {
 } from '../services/redemptionWatcher';
 import { getWsProvider } from '../utils/wsProvider';
 import { RoseTreasuryABI } from '../utils/contracts';
+import { createSignerAuth } from '../middleware/signerAuth';
 
 const router = Router();
 
@@ -210,8 +211,10 @@ router.get('/redemption-watcher/stats', async (req: Request, res: Response) => {
 /**
  * POST /api/treasury/redemption-watcher/process
  * Force process all pending redemptions (admin)
+ *
+ * Requires signer authentication.
  */
-router.post('/redemption-watcher/process', async (req: Request, res: Response) => {
+router.post('/redemption-watcher/process', createSignerAuth('redemption-watcher-process'), async (req: Request, res: Response) => {
   try {
     console.log('[Redemption API] Manual processing triggered');
 

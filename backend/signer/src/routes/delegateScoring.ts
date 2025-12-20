@@ -12,6 +12,7 @@ import {
   getLastDelegateScoringResult,
   triggerDelegateScoring,
 } from '../cron/delegateScoring';
+import { createSignerAuth } from '../middleware/signerAuth';
 
 const router = Router();
 
@@ -182,8 +183,10 @@ router.get('/last', (_req: Request, res: Response) => {
 /**
  * POST /api/delegate-scoring/run
  * Manually trigger delegate scoring
+ *
+ * Requires signer authentication.
  */
-router.post('/run', async (_req: Request, res: Response) => {
+router.post('/run', createSignerAuth('delegate-scoring-run'), async (_req: Request, res: Response) => {
   try {
     const result = await triggerDelegateScoring();
 
@@ -206,8 +209,10 @@ router.post('/run', async (_req: Request, res: Response) => {
 /**
  * POST /api/delegate-scoring/score-proposal/:id
  * Manually score a specific proposal
+ *
+ * Requires signer authentication.
  */
-router.post('/score-proposal/:id', async (req: Request, res: Response) => {
+router.post('/score-proposal/:id', createSignerAuth('delegate-scoring-score-proposal'), async (req: Request, res: Response) => {
   try {
     const proposalId = parseInt(req.params.id);
 

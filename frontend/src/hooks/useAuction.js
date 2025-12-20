@@ -64,8 +64,9 @@ export const useAuction = () => {
    * Should be called by frontend after createAuctionTask tx confirms.
    * @param {number} taskId - Task ID
    * @param {string} maxBudget - Max budget in wei (string)
+   * @param {string} txHash - Transaction hash from createAuctionTask tx
    */
-  const registerAuction = useCallback(async (taskId, maxBudget) => {
+  const registerAuction = useCallback(async (taskId, maxBudget, txHash) => {
     setActionLoading(prev => ({ ...prev, registerAuction: true }));
     setError(null);
 
@@ -73,7 +74,7 @@ export const useAuction = () => {
       const response = await fetch(`${SIGNER_URL}/api/auction/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: Number(taskId), maxBudget }),
+        body: JSON.stringify({ taskId: Number(taskId), maxBudget, txHash }),
       });
 
       if (!response.ok) {
@@ -82,7 +83,7 @@ export const useAuction = () => {
       }
 
       const data = await response.json();
-      console.log(`Auction ${taskId} registered with max budget ${maxBudget}`);
+      console.log(`Auction ${taskId} registered with max budget ${maxBudget} (tx: ${txHash})`);
       return data;
     } catch (err) {
       console.error('Register auction error:', err);
@@ -329,9 +330,9 @@ export const useAuction = () => {
 
       console.log('Winner selected on-chain!');
 
-      // Step 3: Confirm with backend
+      // Step 3: Confirm with backend (passing txHash for verification)
       try {
-        await confirmWinner(taskId, worker, winningBid);
+        await confirmWinner(taskId, worker, winningBid, hash);
       } catch (confirmErr) {
         console.warn('Failed to confirm winner with backend:', confirmErr);
         // Non-fatal - tx succeeded on-chain
@@ -362,8 +363,9 @@ export const useAuction = () => {
    * @param {number} taskId - Task ID
    * @param {string} winner - Winner address
    * @param {string} winningBid - Winning bid in wei (string)
+   * @param {string} txHash - Transaction hash from selectAuctionWinner tx
    */
-  const confirmWinner = useCallback(async (taskId, winner, winningBid) => {
+  const confirmWinner = useCallback(async (taskId, winner, winningBid, txHash) => {
     try {
       const response = await fetch(`${SIGNER_URL}/api/auction/confirm-winner`, {
         method: 'POST',
@@ -372,6 +374,7 @@ export const useAuction = () => {
           taskId: Number(taskId),
           winner,
           winningBid,
+          txHash,
         }),
       });
 
@@ -380,7 +383,7 @@ export const useAuction = () => {
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
-      console.log(`Auction ${taskId} confirmed with winner ${winner}`);
+      console.log(`Auction ${taskId} confirmed with winner ${winner} (tx: ${txHash})`);
       return response.json();
     } catch (err) {
       console.error('Confirm winner error:', err);

@@ -9,11 +9,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { Github, Link2, Unlink, Plus, Trash2, ExternalLink } from 'lucide-react';
 import Spinner from '../ui/Spinner';
+import { useUserAuth } from '../../hooks/useUserAuth';
 
 const SIGNER_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3000';
 
 export default function GitHubIntegration() {
   const { address, isConnected } = useAccount();
+  const { userPost, userDelete } = useUserAuth();
   const [linked, setLinked] = useState(false);
   const [username, setUsername] = useState('');
   const [repos, setRepos] = useState([]);
@@ -71,7 +73,12 @@ export default function GitHubIntegration() {
   const unlinkAccount = async () => {
     if (!confirm('This will remove all authorized repos. Continue?')) return;
     try {
-      await fetch(`${SIGNER_URL}/api/github/auth/unlink?wallet=${address}`, { method: 'DELETE' });
+      const res = await userDelete('/api/github/auth/unlink', 'github-unlink');
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to unlink account');
+        return;
+      }
       setLinked(false);
       setUsername('');
       setRepos([]);
@@ -90,14 +97,9 @@ export default function GitHubIntegration() {
 
     setRepoLoading(true);
     try {
-      const res = await fetch(`${SIGNER_URL}/api/github/repos/authorize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet: address,
-          repoOwner: parts[0],
-          repoName: parts[1],
-        }),
+      const res = await userPost('/api/github/repos/authorize', 'github-repo-authorize', {
+        repoOwner: parts[0],
+        repoName: parts[1],
       });
 
       const data = await res.json();
@@ -117,11 +119,15 @@ export default function GitHubIntegration() {
 
   const revokeRepo = async (repoOwner, repoName) => {
     try {
-      await fetch(`${SIGNER_URL}/api/github/repos/revoke`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet: address, repoOwner, repoName }),
+      const res = await userDelete('/api/github/repos/revoke', 'github-repo-revoke', {
+        repoOwner,
+        repoName,
       });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to revoke repo');
+        return;
+      }
       fetchRepos();
     } catch (err) {
       setError('Failed to revoke repo');

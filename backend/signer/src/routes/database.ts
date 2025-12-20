@@ -2,7 +2,7 @@
  * Database Routes
  *
  * Admin-only endpoints for database management operations.
- * Uses Treasury.owner() check for authorization.
+ * Uses signature verification via adminAuth middleware.
  */
 
 import { Router, Request, Response } from 'express';
@@ -11,11 +11,12 @@ import { config } from '../config';
 import { truncateAllTables, getTruncatableTables } from '../services/database';
 import { createBackup, isBackupConfigured } from '../services/backup';
 import { getWsProvider } from '../utils/wsProvider';
+import { createAdminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
 /**
- * Verify caller is Treasury contract owner
+ * Verify caller is Treasury contract owner (for GET endpoints only)
  */
 async function verifyOwner(callerAddress: string): Promise<{ isOwner: boolean; error?: string }> {
   try {
@@ -85,23 +86,12 @@ router.get('/tables', async (req: Request, res: Response) => {
  * - Requires explicit `confirmed: true` in request body
  * - Excludes schema_migrations table
  *
- * Body: { callerAddress: string, confirmed: boolean }
+ * Body: { callerAddress: string, timestamp: number, signature: string, confirmed: boolean }
  * Response: { success, backup: { cid, size }, truncated: { tables, count } }
  */
-router.post('/truncate', async (req: Request, res: Response) => {
+router.post('/truncate', createAdminAuth('database-truncate'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress, confirmed } = req.body;
-
-    if (!callerAddress) {
-      return res.status(400).json({ error: 'Missing required field: callerAddress' });
-    }
-
-    // Verify owner
-    const { isOwner, error } = await verifyOwner(callerAddress);
-    if (!isOwner) {
-      console.log('[Database API] Unauthorized truncate attempt:', { caller: callerAddress });
-      return res.status(403).json({ error: error || 'Unauthorized' });
-    }
+    const { confirmed } = req.body;
 
     // Require explicit confirmation
     if (confirmed !== true) {
@@ -121,7 +111,7 @@ router.post('/truncate', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('[Database API] Truncate triggered by owner:', callerAddress);
+    console.log('[Database API] Truncate triggered by owner:', req.verifiedOwner);
 
     // Step 1: Create backup first (mandatory)
     console.log('[Database API] Creating backup before truncation...');

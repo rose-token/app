@@ -8,36 +8,36 @@ import {
   executeRebalance,
 } from '../services/treasury';
 import { config } from '../config';
-import { getWsProvider } from '../utils/wsProvider';
+import { createAdminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
-// Track used signatures to prevent replay attacks within the 5-minute window
-const usedSignatures = new Map<string, number>(); // signature -> timestamp used
+// Track used signatures for backend signer verification (separate from owner auth in middleware)
+const usedBackendSignatures = new Map<string, number>(); // signature -> timestamp used
 const SIGNATURE_TTL = 300; // 5 minutes
 
 // Clean up expired signatures periodically (every minute)
 setInterval(() => {
   const now = Math.floor(Date.now() / 1000);
-  for (const [sig, timestamp] of usedSignatures.entries()) {
+  for (const [sig, timestamp] of usedBackendSignatures.entries()) {
     if (now - timestamp > SIGNATURE_TTL) {
-      usedSignatures.delete(sig);
+      usedBackendSignatures.delete(sig);
     }
   }
 }, 60000);
 
 /**
- * Verify admin signature for rebalance authorization.
+ * Verify backend signer signature for rebalance authorization.
  * Signer signs: keccak256(abi.encodePacked(signerAddress, "rebalance", timestamp))
  *
  * The signature must be from the backend signer's private key.
  * Timestamp prevents replay attacks (must be within 5 minutes).
  * Each signature can only be used once (nonce-like protection).
  */
-function verifyRebalanceSignature(timestamp: number, signature: string): { valid: boolean; error?: string } {
+function verifyBackendSignerSignature(timestamp: number, signature: string): { valid: boolean; error?: string } {
   try {
     // Check if signature was already used (replay protection)
-    if (usedSignatures.has(signature)) {
+    if (usedBackendSignatures.has(signature)) {
       console.log('[Treasury API] Signature already used (replay attempt)');
       return { valid: false, error: 'Signature already used' };
     }
@@ -73,7 +73,7 @@ function verifyRebalanceSignature(timestamp: number, signature: string): { valid
     }
 
     // Mark signature as used (only after successful verification)
-    usedSignatures.set(signature, now);
+    usedBackendSignatures.set(signature, now);
     return { valid: true };
   } catch (error) {
     console.error('[Treasury API] Signature verification error:', error);
@@ -87,54 +87,18 @@ function verifyRebalanceSignature(timestamp: number, signature: string): { valid
  *
  * Security model:
  * - Frontend: Shows admin UI only to Treasury owner (via useIsAdmin hook)
- * - Backend: Verifies callerAddress matches Treasury.owner() to prevent unauthorized API calls
+ * - Backend: Verifies signature proves caller controls Treasury.owner() wallet
  * - Contract: Backend signer is set as 'rebalancer' role, allowing forceRebalance() execution
  *
- * The owner check here is a defense-in-depth measure. The true authorization is that
- * only the admin UI (visible to owner) should call this endpoint, and the backend
- * signer has rebalancer privileges on the contract.
+ * The signature verification ensures the caller cryptographically proves they control
+ * the owner wallet, not just that they know the owner's address.
  *
- * Body: { callerAddress: string }
+ * Body: { callerAddress: string, timestamp: number, signature: string }
  * Response: { success, txHash, swapsExecuted, swapDetails, totalHardAssets, rebalanceNeeded }
  */
-router.post('/rebalance/trigger', async (req: Request, res: Response) => {
+router.post('/rebalance/trigger', createAdminAuth('rebalance'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress } = req.body;
-
-    // Validate required field
-    if (!callerAddress) {
-      return res.status(400).json({
-        error: 'Missing required field: callerAddress',
-      });
-    }
-
-    // Verify caller is contract owner
-    const provider = getWsProvider();
-
-    const treasuryAddress = config.contracts?.treasury || process.env.TREASURY_ADDRESS;
-    if (!treasuryAddress) {
-      return res.status(500).json({ error: 'TREASURY_ADDRESS not configured' });
-    }
-
-    const treasury = new ethers.Contract(
-      treasuryAddress,
-      ['function owner() view returns (address)'],
-      provider
-    );
-
-    const ownerAddress = await treasury.owner();
-
-    if (callerAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
-      console.log('[Treasury API] Unauthorized rebalance attempt:', {
-        caller: callerAddress,
-        owner: ownerAddress,
-      });
-      return res.status(403).json({
-        error: 'Unauthorized: Only contract owner can trigger rebalance',
-      });
-    }
-
-    console.log('[Treasury API] Admin rebalance triggered by owner:', callerAddress);
+    console.log('[Treasury API] Admin rebalance triggered by verified owner:', req.verifiedOwner);
     const result = await executeRebalance();
 
     return res.json({
@@ -339,7 +303,7 @@ router.post('/rebalance/run', async (req: Request, res: Response) => {
     }
 
     // Verify signature
-    const verification = verifyRebalanceSignature(ts, signature);
+    const verification = verifyBackendSignerSignature(ts, signature);
     if (!verification.valid) {
       return res.status(403).json({ error: verification.error || 'Invalid or expired signature' });
     }

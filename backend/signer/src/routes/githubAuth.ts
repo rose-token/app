@@ -10,6 +10,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { config } from '../config';
 import crypto from 'crypto';
+import { createUserAuth } from '../middleware/userAuth';
 
 const router = Router();
 
@@ -185,20 +186,18 @@ router.get('/auth/status', async (req: Request, res: Response) => {
  *
  * Unlink GitHub account from wallet.
  * Also removes all authorized repos for this wallet.
+ *
+ * Requires signature verification to prove caller controls the wallet.
  */
-router.delete('/auth/unlink', async (req: Request, res: Response) => {
-  const wallet = req.query.wallet as string;
-
-  if (!wallet) {
-    return res.status(400).json({ error: 'Wallet required' });
-  }
+router.delete('/auth/unlink', createUserAuth('github-unlink'), async (req: Request, res: Response) => {
+  const wallet = req.verifiedUser!; // Cryptographically verified
 
   try {
     // Remove all authorized repos and the link
     await query('DELETE FROM authorized_repos WHERE LOWER(wallet_address) = LOWER($1)', [wallet]);
     await query('DELETE FROM github_links WHERE LOWER(wallet_address) = LOWER($1)', [wallet]);
 
-    console.log(`[GitHub Auth] Unlinked wallet ${wallet}`);
+    console.log(`[GitHub Auth] Unlinked wallet ${wallet} (verified)`);
     return res.json({ success: true });
   } catch (error) {
     console.error('[GitHub Auth] Unlink error:', error);

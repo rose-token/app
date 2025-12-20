@@ -1,11 +1,12 @@
 import { useAccount } from 'wagmi';
 import { useState, useCallback, useEffect } from 'react';
+import { useAdminAuth } from './useAdminAuth';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 /**
  * Hook to manage database truncation operations.
- * All operations require caller to be Treasury owner (verified by backend).
+ * All operations require caller to be Treasury owner (verified by signature).
  *
  * DANGER: This operation is destructive and deletes all data from the database
  * (except schema_migrations). A backup is created automatically before truncation.
@@ -14,6 +15,7 @@ const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:30
  */
 export const useTruncateDatabase = () => {
   const { address } = useAccount();
+  const { adminPost } = useAdminAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -70,15 +72,8 @@ export const useTruncateDatabase = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/database/truncate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          callerAddress: address,
-          confirmed: true, // Confirmation is handled by UI
-        }),
+      const response = await adminPost('/api/database/truncate', 'database-truncate', {
+        confirmed: true, // Confirmation is handled by UI
       });
 
       const data = await response.json();
@@ -96,7 +91,7 @@ export const useTruncateDatabase = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address]);
+  }, [address, adminPost]);
 
   const clearError = useCallback(() => {
     setError(null);

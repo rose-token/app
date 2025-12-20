@@ -7,6 +7,7 @@ import {
   forceProcessPending,
   getPendingUsers,
 } from '../services/vpRefresh';
+import { createSignerAuth } from '../middleware/signerAuth';
 
 const router = Router();
 
@@ -51,8 +52,10 @@ router.get('/pending', (_req: Request, res: Response) => {
 /**
  * POST /api/vp-refresh/check/:address
  * Manually check and refresh VP for a specific user
+ *
+ * Requires signer authentication.
  */
-router.post('/check/:address', async (req: Request, res: Response) => {
+router.post('/check/:address', createSignerAuth('vp-refresh-check'), async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
 
@@ -91,8 +94,10 @@ router.post('/check/:address', async (req: Request, res: Response) => {
 /**
  * POST /api/vp-refresh/process
  * Force process all pending users immediately
+ *
+ * Requires signer authentication.
  */
-router.post('/process', async (_req: Request, res: Response) => {
+router.post('/process', createSignerAuth('vp-refresh-process'), async (_req: Request, res: Response) => {
   try {
     if (!config.contracts.governance) {
       return res.status(500).json({ error: 'Governance contract not configured' });

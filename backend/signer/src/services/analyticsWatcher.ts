@@ -46,7 +46,6 @@ export interface AnalyticsWatcherStats {
 // State
 // ============================================================
 
-let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let governanceContract: ethers.Contract | null = null;
 let treasuryContract: ethers.Contract | null = null;
@@ -72,22 +71,17 @@ const stats: AnalyticsWatcherStats = {
 };
 
 // ============================================================
-// Provider & Contract Helpers
+// Contract Helpers
 // ============================================================
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
-}
-
+// Use WebSocket provider for all contract reads to ensure consistency with events
+// This prevents race conditions where HTTP provider might be behind WebSocket events
 function getMarketplaceContract(): ethers.Contract {
   if (!marketplaceContract) {
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace!,
       RoseMarketplaceABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return marketplaceContract;
@@ -98,7 +92,7 @@ function getGovernanceContract(): ethers.Contract {
     governanceContract = new ethers.Contract(
       config.contracts.governance!,
       RoseGovernanceABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return governanceContract;
@@ -109,7 +103,7 @@ function getTreasuryContract(): ethers.Contract {
     treasuryContract = new ethers.Contract(
       config.contracts.treasury!,
       RoseTreasuryABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return treasuryContract;
@@ -124,7 +118,7 @@ function extractLog(event: ethers.Log | ethers.ContractEventPayload): ethers.Log
 }
 
 async function getBlockTimestamp(blockNumber: number): Promise<Date> {
-  const block = await getProvider().getBlock(blockNumber);
+  const block = await getWsProvider().getBlock(blockNumber);
   return new Date((block?.timestamp || 0) * 1000);
 }
 
@@ -207,6 +201,75 @@ async function handleTaskCreated(
     const msg = error instanceof Error ? error.message : String(error);
     stats.lastError = msg;
     console.error(`[AnalyticsWatcher] TaskCreated error:`, error);
+  }
+}
+
+async function handleAuctionTaskCreated(
+  taskId: bigint,
+  customer: string,
+  maxBudget: bigint,
+  event: ethers.Log | ethers.ContractEventPayload
+): Promise<void> {
+  const log = extractLog(event);
+  const timestamp = await getBlockTimestamp(log.blockNumber);
+
+  console.log(`[AnalyticsWatcher] AuctionTaskCreated: taskId=${taskId}, customer=${customer}`);
+
+  try {
+    // Fetch full task data from contract
+    const marketplace = getMarketplaceContract();
+    const taskData = await marketplace.tasks(taskId);
+
+    const [
+      _customer, _worker, _stakeholder, _deposit, _stakeholderDeposit,
+      title, detailedDescriptionHash, _prUrl, _status, _customerApproval,
+      _stakeholderApproval, source, proposalId, _isAuction, winningBid
+    ] = taskData;
+
+    // EXPLICITLY set is_auction = true since this is an AuctionTaskCreated event
+    await query(`
+      INSERT INTO analytics_tasks (
+        task_id, customer, deposit, status, created_at, created_block, last_event_block,
+        title, detailed_description_hash, source, proposal_id, is_auction, winning_bid
+      )
+      VALUES ($1, $2, $3, 'Created', $4, $5, $5, $6, $7, $8, $9, true, $10)
+      ON CONFLICT (task_id) DO UPDATE SET
+        customer = EXCLUDED.customer,
+        deposit = EXCLUDED.deposit,
+        title = EXCLUDED.title,
+        detailed_description_hash = EXCLUDED.detailed_description_hash,
+        source = EXCLUDED.source,
+        proposal_id = EXCLUDED.proposal_id,
+        is_auction = true,
+        winning_bid = EXCLUDED.winning_bid,
+        last_event_block = GREATEST(analytics_tasks.last_event_block, EXCLUDED.last_event_block)
+    `, [
+      Number(taskId),
+      customer.toLowerCase(),
+      maxBudget.toString(),
+      timestamp.toISOString(),
+      log.blockNumber,
+      title || '',
+      detailedDescriptionHash || '',
+      Number(source),
+      proposalId ? Number(proposalId) : null,
+      winningBid.toString()
+    ]);
+
+    await ensureUser(customer, timestamp);
+    await query(`
+      UPDATE analytics_users SET
+        tasks_created = tasks_created + 1,
+        total_spent_wei = total_spent_wei + $2
+      WHERE address = $1
+    `, [customer.toLowerCase(), maxBudget.toString()]);
+
+    stats.tasksCreated++;
+    stats.lastEventBlock = log.blockNumber;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    stats.lastError = msg;
+    console.error(`[AnalyticsWatcher] AuctionTaskCreated error:`, error);
   }
 }
 
@@ -901,7 +964,7 @@ function setupMarketplaceListeners(): void {
   });
 
   wsMarketplace.on('AuctionTaskCreated', (taskId, customer, maxBudget, event) => {
-    handleTaskCreated(taskId, customer, maxBudget, event).catch(err => {
+    handleAuctionTaskCreated(taskId, customer, maxBudget, event).catch(err => {
       console.error('[AnalyticsWatcher] AuctionTaskCreated handler error:', err);
       stats.lastError = err instanceof Error ? err.message : String(err);
     });
@@ -1110,7 +1173,7 @@ async function catchUpEvents(fromBlock: number, toBlock: number): Promise<void> 
     for (const event of auctionTaskCreatedEvents) {
       if ('args' in event && event.args) {
         const [taskId, customer, maxBudget] = event.args as unknown as [bigint, string, bigint];
-        await handleTaskCreated(taskId, customer, maxBudget, event as ethers.EventLog);
+        await handleAuctionTaskCreated(taskId, customer, maxBudget, event as ethers.EventLog);
       }
     }
 
@@ -1329,7 +1392,7 @@ export async function startAnalyticsWatcher(): Promise<void> {
     const lookbackBlocks = config.analyticsWatcher?.startupBlockLookback ?? 50000;
     if (lookbackBlocks > 0) {
       console.log(`[AnalyticsWatcher] Catching up on last ${lookbackBlocks} blocks...`);
-      const currentBlock = await getProvider().getBlockNumber();
+      const currentBlock = await getWsProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
       await catchUpEvents(fromBlock, currentBlock);
     }

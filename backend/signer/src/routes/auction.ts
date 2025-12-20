@@ -31,6 +31,8 @@ import {
   ConfirmWinnerResponse,
   AuctionErrorResponse,
 } from '../types';
+import { createSignerAuth } from '../middleware/signerAuth';
+import { getHttpProvider, RoseMarketplaceABI } from '../utils/contracts';
 
 const router = Router();
 
@@ -39,14 +41,55 @@ function isValidAddress(address: string): boolean {
   return ethers.isAddress(address);
 }
 
+// Validate transaction hash format
+function isValidTxHash(txHash: string): boolean {
+  return /^0x[a-fA-F0-9]{64}$/.test(txHash);
+}
+
+// Fetch transaction receipt with retries (handles RPC lag)
+async function getReceiptWithRetry(
+  txHash: string,
+  maxRetries = 3
+): Promise<ethers.TransactionReceipt | null> {
+  const provider = getHttpProvider();
+  for (let i = 0; i < maxRetries; i++) {
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (receipt) return receipt;
+    if (i < maxRetries - 1) await new Promise((r) => setTimeout(r, 1000));
+  }
+  return null;
+}
+
+// Parse event from transaction receipt logs
+function parseEventFromReceipt(
+  receipt: ethers.TransactionReceipt,
+  eventName: string
+): ethers.LogDescription | null {
+  const iface = new ethers.Interface(RoseMarketplaceABI);
+  for (const log of receipt.logs) {
+    try {
+      const parsed = iface.parseLog({
+        topics: log.topics as string[],
+        data: log.data,
+      });
+      if (parsed && parsed.name === eventName) return parsed;
+    } catch {
+      // Skip logs that don't match the ABI
+    }
+  }
+  return null;
+}
+
 /**
  * POST /api/auction/register
  * Register an auction task after it's created on-chain.
- * Called by frontend after createAuctionTask tx confirms.
+ * Called by frontend after createAuctionTask transaction confirms.
+ *
+ * Verifies the transaction hash contains the AuctionTaskCreated event.
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { taskId, maxBudget } = req.body as RegisterAuctionTaskRequest;
+    const { taskId, maxBudget, txHash } = req.body as RegisterAuctionTaskRequest;
 
     // Validate taskId
     if (taskId === undefined || taskId <= 0) {
@@ -62,6 +105,42 @@ router.post('/register', async (req: Request, res: Response) => {
       } as AuctionErrorResponse);
     }
 
+    // Validate txHash
+    if (!txHash || !isValidTxHash(txHash)) {
+      return res.status(400).json({
+        error: 'Invalid or missing txHash',
+      } as AuctionErrorResponse);
+    }
+
+    // Fetch transaction receipt with retries
+    const receipt = await getReceiptWithRetry(txHash);
+    if (!receipt) {
+      return res.status(404).json({
+        error: 'Transaction not found. Please wait for confirmation.',
+      } as AuctionErrorResponse);
+    }
+
+    // Parse AuctionTaskCreated event
+    const event = parseEventFromReceipt(receipt, 'AuctionTaskCreated');
+    if (!event) {
+      return res.status(400).json({
+        error: 'AuctionTaskCreated event not found in transaction',
+      } as AuctionErrorResponse);
+    }
+
+    // Verify event data matches request
+    const [eventTaskId, eventCustomer, eventMaxBudget] = event.args;
+    if (Number(eventTaskId) !== taskId) {
+      return res.status(400).json({
+        error: 'taskId does not match transaction',
+      } as AuctionErrorResponse);
+    }
+    if (eventMaxBudget.toString() !== maxBudget) {
+      return res.status(400).json({
+        error: 'maxBudget does not match transaction',
+      } as AuctionErrorResponse);
+    }
+
     await registerAuctionTask(taskId, maxBudget);
 
     const response: RegisterAuctionTaskResponse = {
@@ -70,6 +149,7 @@ router.post('/register', async (req: Request, res: Response) => {
       maxBudget,
     };
 
+    console.log(`[Auction] Registered auction task ${taskId} from tx ${txHash} (customer: ${eventCustomer})`);
     return res.json(response);
   } catch (error) {
     console.error('Register auction error:', error);
@@ -332,11 +412,13 @@ router.post('/select-winner', async (req: Request, res: Response) => {
 /**
  * POST /api/auction/confirm-winner
  * Conclude auction after on-chain winner selection confirms.
- * Called by frontend after selectAuctionWinner tx confirms.
+ * Called by frontend after selectAuctionWinner transaction confirms.
+ *
+ * Verifies the transaction hash contains the AuctionWinnerSelected event.
  */
 router.post('/confirm-winner', async (req: Request, res: Response) => {
   try {
-    const { taskId, winner, winningBid } = req.body as ConfirmWinnerRequest;
+    const { taskId, winner, winningBid, txHash } = req.body as ConfirmWinnerRequest;
 
     // Validate taskId
     if (taskId === undefined || taskId <= 0) {
@@ -359,6 +441,47 @@ router.post('/confirm-winner', async (req: Request, res: Response) => {
       } as AuctionErrorResponse);
     }
 
+    // Validate txHash
+    if (!txHash || !isValidTxHash(txHash)) {
+      return res.status(400).json({
+        error: 'Invalid or missing txHash',
+      } as AuctionErrorResponse);
+    }
+
+    // Fetch transaction receipt with retries
+    const receipt = await getReceiptWithRetry(txHash);
+    if (!receipt) {
+      return res.status(404).json({
+        error: 'Transaction not found. Please wait for confirmation.',
+      } as AuctionErrorResponse);
+    }
+
+    // Parse AuctionWinnerSelected event
+    const event = parseEventFromReceipt(receipt, 'AuctionWinnerSelected');
+    if (!event) {
+      return res.status(400).json({
+        error: 'AuctionWinnerSelected event not found in transaction',
+      } as AuctionErrorResponse);
+    }
+
+    // Verify event data matches request
+    const [eventTaskId, eventWinner, eventWinningBid] = event.args;
+    if (Number(eventTaskId) !== taskId) {
+      return res.status(400).json({
+        error: 'taskId does not match transaction',
+      } as AuctionErrorResponse);
+    }
+    if (eventWinner.toLowerCase() !== winner.toLowerCase()) {
+      return res.status(400).json({
+        error: 'winner does not match transaction',
+      } as AuctionErrorResponse);
+    }
+    if (eventWinningBid.toString() !== winningBid) {
+      return res.status(400).json({
+        error: 'winningBid does not match transaction',
+      } as AuctionErrorResponse);
+    }
+
     await concludeAuction(taskId, winner, winningBid);
 
     const response: ConfirmWinnerResponse = {
@@ -366,6 +489,7 @@ router.post('/confirm-winner', async (req: Request, res: Response) => {
       taskId,
     };
 
+    console.log(`[Auction] Confirmed winner for task ${taskId} from tx ${txHash} (winner: ${winner})`);
     return res.json(response);
   } catch (error) {
     console.error('Confirm winner error:', error);
@@ -458,8 +582,10 @@ router.get('/:taskId/exists', async (req: Request, res: Response) => {
  * POST /api/auction/:taskId/sync
  * Sync auction state from on-chain to database.
  * Clears stale winner data if on-chain status is Open (e.g., after unclaim).
+ *
+ * Requires signer authentication.
  */
-router.post('/:taskId/sync', async (req: Request, res: Response) => {
+router.post('/:taskId/sync', createSignerAuth('auction-sync'), async (req: Request, res: Response) => {
   try {
     const taskId = parseInt(req.params.taskId);
 

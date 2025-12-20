@@ -435,6 +435,7 @@ export interface AuctionBidRow {
 export interface RegisterAuctionTaskRequest {
   taskId: number;
   maxBudget: string; // BigInt as string
+  txHash: string;    // Transaction hash for verification
 }
 
 export interface RegisterAuctionTaskResponse {
@@ -508,6 +509,7 @@ export interface ConfirmWinnerRequest {
   taskId: number;
   winner: string;
   winningBid: string;
+  txHash: string;    // Transaction hash for verification
 }
 
 export interface ConfirmWinnerResponse {
