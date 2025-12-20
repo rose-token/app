@@ -7,16 +7,10 @@
  */
 
 import { ethers } from 'ethers';
-import axios from 'axios';
 import { config } from '../config';
 import { approveAndMergePR, isGitHubConfigured, parsePrUrl } from './github';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 import { RoseMarketplaceABI } from '../utils/contracts';
-
-// IPFS Gateway for fetching task metadata (uses dedicated Pinata gateway for private files)
-const IPFS_GATEWAY = process.env.PINATA_GATEWAY
-  ? `${process.env.PINATA_GATEWAY}/ipfs/`
-  : 'https://coffee-glad-felidae-720.mypinata.cloud/ipfs/';
 
 // Types
 export interface TaskWatcherStats {
@@ -37,15 +31,7 @@ interface TaskData {
   detailedDescriptionHash: string;
   status: number;
   source: number;  // 0 = Customer, 1 = DAO
-}
-
-interface IpfsMetadata {
-  title?: string;
-  description?: string;
-  githubIntegration?: boolean;
-  prUrl?: string;
-  uploadedAt?: string;
-  version?: string;
+  githubIntegration: boolean;
 }
 
 // State
@@ -103,6 +89,7 @@ async function getTaskData(taskId: number): Promise<TaskData | null> {
       detailedDescriptionHash: task.detailedDescriptionHash,
       status: Number(task.status),
       source: Number(task.source),  // 0 = Customer, 1 = DAO
+      githubIntegration: task.githubIntegration,
     };
   } catch (error) {
     console.error(`[TaskWatcher] Failed to fetch task ${taskId}:`, error);
@@ -111,53 +98,23 @@ async function getTaskData(taskId: number): Promise<TaskData | null> {
 }
 
 /**
- * Fetch IPFS metadata to check if GitHub integration is enabled.
- */
-async function fetchIpfsMetadata(ipfsHash: string): Promise<IpfsMetadata | null> {
-  if (!ipfsHash || ipfsHash.length === 0) {
-    return null;
-  }
-
-  try {
-    const response = await axios.get(`${IPFS_GATEWAY}${ipfsHash}`, {
-      timeout: 10000,
-    });
-    return response.data as IpfsMetadata;
-  } catch (error) {
-    console.warn(`[TaskWatcher] Failed to fetch IPFS metadata ${ipfsHash}:`, error);
-    return null;
-  }
-}
-
-/**
  * Determine if GitHub integration should be used for this task.
- * Checks IPFS metadata for githubIntegration flag.
- * Falls back to checking if prUrl is a valid GitHub PR URL.
+ * Reads githubIntegration flag directly from on-chain task data.
  */
-async function shouldProcessGitHub(taskId: number, prUrl: string, ipfsHash: string): Promise<boolean> {
-  // First, check if prUrl is a valid GitHub PR URL
+function shouldProcessGitHub(taskId: number, prUrl: string, githubIntegration: boolean): boolean {
+  // Check githubIntegration flag from contract
+  if (!githubIntegration) {
+    console.log(`[TaskWatcher] Task ${taskId}: GitHub integration disabled, skipping`);
+    return false;
+  }
+
+  // Check if prUrl is a valid GitHub PR URL
   const parsed = parsePrUrl(prUrl);
   if (!parsed) {
     console.log(`[TaskWatcher] Task ${taskId}: prUrl is not a GitHub PR URL, skipping`);
     return false;
   }
 
-  // Try to fetch IPFS metadata to check githubIntegration flag
-  const metadata = await fetchIpfsMetadata(ipfsHash);
-
-  if (metadata) {
-    // If metadata exists and has explicit githubIntegration flag, use it
-    if (typeof metadata.githubIntegration === 'boolean') {
-      if (!metadata.githubIntegration) {
-        console.log(`[TaskWatcher] Task ${taskId}: GitHub integration disabled in metadata, skipping`);
-      }
-      return metadata.githubIntegration;
-    }
-  }
-
-  // Default: if prUrl is a valid GitHub PR URL, process it
-  // This handles legacy tasks created before the toggle was added
-  console.log(`[TaskWatcher] Task ${taskId}: No explicit githubIntegration flag, proceeding based on valid prUrl`);
   return true;
 }
 
@@ -203,7 +160,7 @@ async function handleTaskReadyForPayment(
     }
 
     // Check if we should process this task for GitHub integration
-    const shouldProcess = await shouldProcessGitHub(taskIdNum, task.prUrl, task.detailedDescriptionHash);
+    const shouldProcess = shouldProcessGitHub(taskIdNum, task.prUrl, task.githubIntegration);
     if (!shouldProcess) {
       return;
     }
@@ -398,7 +355,7 @@ export async function processTaskManually(taskId: number): Promise<{
     return { success: false, error: 'Task not found' };
   }
 
-  const shouldProcess = await shouldProcessGitHub(taskId, task.prUrl, task.detailedDescriptionHash);
+  const shouldProcess = shouldProcessGitHub(taskId, task.prUrl, task.githubIntegration);
   if (!shouldProcess) {
     return { success: false, error: 'GitHub integration not enabled for this task' };
   }
