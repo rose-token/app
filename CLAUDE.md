@@ -186,6 +186,27 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **Key difference from adminAuth:** User auth verifies caller controls claimed address (self-attestation), admin auth verifies caller is Treasury.owner().
 
+**Signer Endpoint Authentication:** Backend-only mutation endpoints require cryptographic proof from the backend signer (derived from `SIGNER_PRIVATE_KEY`):
+- **Middleware:** `backend/signer/src/middleware/signerAuth.ts` - centralized `createSignerAuth(action)` factory
+- **Utility:** `backend/signer/src/utils/signerRequest.ts` - for testing/debugging (optional)
+- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
+- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
+- **Verification:** Backend verifies signature recovers to backend signer address
+
+| Endpoint | Action String |
+|----------|---------------|
+| POST /api/delegate-scoring/run | `delegate-scoring-run` |
+| POST /api/delegate-scoring/score-proposal/:id | `delegate-scoring-score-proposal` |
+| POST /api/vp-refresh/process | `vp-refresh-process` |
+| POST /api/vp-refresh/check/:address | `vp-refresh-check` |
+| POST /api/treasury/redemption-watcher/process | `redemption-watcher-process` |
+| POST /api/github/retry/:taskId | `github-retry` |
+| POST /api/auction/register | `auction-register` |
+| POST /api/auction/confirm-winner | `auction-confirm-winner` |
+| POST /api/auction/:taskId/sync | `auction-sync` |
+
+**Key difference from adminAuth/userAuth:** Signer auth verifies caller is the backend signer (for internal operations). Cron jobs/watchers call service functions directly (in-process), so signerAuth protects against unauthorized external HTTP callers.
+
 ## PostgreSQL Security
 
 **Network Isolation:** PostgreSQL runs inside the backend container (not exposed externally). Only port 3000 (API) is exposed via Akash SDL. PostgreSQL binds to `localhost` only via `listen_addresses = 'localhost'` (defense-in-depth in both postgresql.conf and supervisord command).

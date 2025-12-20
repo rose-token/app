@@ -9,6 +9,7 @@ import { validatePrUrl, validatePrUrlWithAuth, getGitHubStatus, parsePrUrl } fro
 import { getTaskWatcherStats, processTaskManually } from '../services/taskWatcher';
 import { query } from '../db/pool';
 import { config } from '../config';
+import { createSignerAuth } from '../middleware/signerAuth';
 
 const router = Router();
 
@@ -171,8 +172,10 @@ router.get('/logs/:taskId', async (req: Request, res: Response) => {
  *
  * Manually retry GitHub merge for a task.
  * Useful for retrying failed merges.
+ *
+ * Requires signer authentication.
  */
-router.post('/retry/:taskId', async (req: Request, res: Response) => {
+router.post('/retry/:taskId', createSignerAuth('github-retry'), async (req: Request, res: Response) => {
   try {
     const taskId = parseInt(req.params.taskId);
     if (isNaN(taskId) || taskId <= 0) {

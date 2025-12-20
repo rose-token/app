@@ -31,6 +31,7 @@ import {
   ConfirmWinnerResponse,
   AuctionErrorResponse,
 } from '../types';
+import { createSignerAuth } from '../middleware/signerAuth';
 
 const router = Router();
 
@@ -42,9 +43,11 @@ function isValidAddress(address: string): boolean {
 /**
  * POST /api/auction/register
  * Register an auction task after it's created on-chain.
- * Called by frontend after createAuctionTask tx confirms.
+ * Called by watcher after AuctionTaskCreated event.
+ *
+ * Requires signer authentication.
  */
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', createSignerAuth('auction-register'), async (req: Request, res: Response) => {
   try {
     const { taskId, maxBudget } = req.body as RegisterAuctionTaskRequest;
 
@@ -332,9 +335,11 @@ router.post('/select-winner', async (req: Request, res: Response) => {
 /**
  * POST /api/auction/confirm-winner
  * Conclude auction after on-chain winner selection confirms.
- * Called by frontend after selectAuctionWinner tx confirms.
+ * Called by watcher after AuctionWinnerSelected event.
+ *
+ * Requires signer authentication.
  */
-router.post('/confirm-winner', async (req: Request, res: Response) => {
+router.post('/confirm-winner', createSignerAuth('auction-confirm-winner'), async (req: Request, res: Response) => {
   try {
     const { taskId, winner, winningBid } = req.body as ConfirmWinnerRequest;
 
@@ -458,8 +463,10 @@ router.get('/:taskId/exists', async (req: Request, res: Response) => {
  * POST /api/auction/:taskId/sync
  * Sync auction state from on-chain to database.
  * Clears stale winner data if on-chain status is Open (e.g., after unclaim).
+ *
+ * Requires signer authentication.
  */
-router.post('/:taskId/sync', async (req: Request, res: Response) => {
+router.post('/:taskId/sync', createSignerAuth('auction-sync'), async (req: Request, res: Response) => {
   try {
     const taskId = parseInt(req.params.taskId);
 
