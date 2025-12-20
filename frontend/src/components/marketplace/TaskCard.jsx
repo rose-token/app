@@ -14,6 +14,7 @@ import { useDispute } from '../../hooks/useDispute';
 import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrlWithBackend } from '../../constants/github';
 import Spinner from '../ui/Spinner';
 import { SkillBadgeList } from '../profile/SkillBadge';
+import { Github } from 'lucide-react';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {}, onRefetch }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -411,6 +412,23 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
             <p className="text-sm font-medium mt-1" style={{ color: 'var(--success)' }}>{formatTokens(task.winningBid)} ROSE</p>
           </div>
         )}
+        {/* GitHub Integration Status */}
+        <div>
+          <p style={labelStyle}>GitHub Integration</p>
+          <div className="flex items-center gap-2 mt-1">
+            <Github
+              className="w-4 h-4"
+              style={{ color: task.githubIntegration ? 'var(--rose-gold)' : 'var(--text-muted)' }}
+              title="When enabled, the Rose Protocol bot will automatically approve and merge the PR once both customer and stakeholder approve the task"
+            />
+            <span
+              className="text-sm font-medium"
+              style={{ color: task.githubIntegration ? 'var(--rose-gold)' : 'var(--text-muted)' }}
+            >
+              {task.githubIntegration ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Show worker's current bid for open auctions */}
