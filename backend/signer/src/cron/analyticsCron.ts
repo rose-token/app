@@ -323,8 +323,9 @@ async function executeTaskValidation(): Promise<void> {
       status: string;
       winning_bid: string;
       stakeholder_deposit: string;
+      is_auction: boolean;
     }>(`
-      SELECT task_id, title, customer, worker, stakeholder, status, winning_bid, stakeholder_deposit
+      SELECT task_id, title, customer, worker, stakeholder, status, winning_bid, stakeholder_deposit, is_auction
       FROM analytics_tasks
       WHERE status = ANY($1)
       ORDER BY task_id ASC
@@ -410,6 +411,14 @@ async function executeTaskValidation(): Promise<void> {
           driftedFields.push('stakeholder_deposit');
           updates.push(`stakeholder_deposit = $${paramIndex++}`);
           values.push(chainStakeholderDeposit);
+        }
+
+        // Compare is_auction
+        const chainIsAuction = Boolean(isAuction);
+        if (chainIsAuction !== dbTask.is_auction) {
+          driftedFields.push('is_auction');
+          updates.push(`is_auction = $${paramIndex++}`);
+          values.push(chainIsAuction);
         }
 
         // If any drift detected, update the row
