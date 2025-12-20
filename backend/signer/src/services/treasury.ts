@@ -67,6 +67,72 @@ function getTreasuryContract(signerOrProvider?: ethers.Signer | ethers.Provider)
 }
 
 /**
+ * Calculate implied market price from swap quote
+ * @param usdcAmount USDC amount (6 decimals)
+ * @param roseAmount ROSE amount (18 decimals)
+ * @returns Price in 6 decimals (USD per ROSE)
+ */
+function calculateImpliedRosePrice(usdcAmount: bigint, roseAmount: bigint): bigint {
+  if (roseAmount === 0n) return 0n;
+  // Price = USDC / ROSE, adjusted for decimals
+  // usdcAmount is 6 decimals, roseAmount is 18 decimals
+  // Result in 6 decimals: (usdcAmount * 1e18) / roseAmount
+  return (usdcAmount * 10n ** 18n) / roseAmount;
+}
+
+/**
+ * Validate ROSE trade price against NAV
+ * Prevents buying ROSE at excessive premium or selling at excessive discount
+ */
+async function validateRoseTradePrice(
+  direction: 'buy' | 'sell',
+  usdcAmount: bigint,
+  roseAmount: bigint
+): Promise<{
+  valid: boolean;
+  navPrice: bigint;
+  marketPrice: bigint;
+  deviationBps: number;
+  reason?: string;
+}> {
+  const treasury = getTreasuryContract();
+
+  // Get NAV price (6 decimals) via rosePrice() view function
+  const navPrice = await treasury.rosePrice();
+
+  // Calculate implied market price from quote (6 decimals)
+  const marketPrice = calculateImpliedRosePrice(usdcAmount, roseAmount);
+
+  if (direction === 'buy') {
+    // Buying ROSE: Check if market price is too high (premium)
+    const premiumBps = Number((marketPrice - navPrice) * 10000n / navPrice);
+    const maxPremiumBps = config.rebalance.maxRosePremiumBps;
+    const valid = premiumBps <= maxPremiumBps;
+
+    return {
+      valid,
+      navPrice,
+      marketPrice,
+      deviationBps: premiumBps,
+      reason: valid ? undefined : `Market premium ${premiumBps} bps exceeds max ${maxPremiumBps} bps`,
+    };
+  } else {
+    // Selling ROSE: Check if market price is too low (discount)
+    const discountBps = Number((navPrice - marketPrice) * 10000n / navPrice);
+    const maxDiscountBps = config.rebalance.maxRoseDiscountBps;
+    const valid = discountBps <= maxDiscountBps;
+
+    return {
+      valid,
+      navPrice,
+      marketPrice,
+      deviationBps: -discountBps,
+      reason: valid ? undefined : `Market discount ${discountBps} bps exceeds max ${maxDiscountBps} bps`,
+    };
+  }
+}
+
+/**
  * Get all asset breakdowns from the contract
  */
 export async function getAssetBreakdowns(): Promise<AssetBreakdown[]> {
@@ -294,6 +360,32 @@ export async function executeRebalance(): Promise<RebalanceResult> {
       console.log(
         `[Treasury] Quote received: min out = ${quote.minAmountOut.toString()}`
       );
+
+      // ROSE TRADE PROTECTION: Check price before executing
+      const isBuyingRose = swap.toAsset === 'ROSE';
+      const isSellingRose = swap.fromAsset === 'ROSE';
+
+      if (isBuyingRose || isSellingRose) {
+        const direction = isBuyingRose ? 'buy' : 'sell';
+        const usdcAmount = isBuyingRose ? swap.amountIn : quote.estimatedAmountOut;
+        const roseAmount = isBuyingRose ? quote.estimatedAmountOut : swap.amountIn;
+
+        const priceCheck = await validateRoseTradePrice(direction, usdcAmount, roseAmount);
+
+        console.log(`[Treasury] ROSE ${direction} price check:`);
+        console.log(`  NAV price: ${ethers.formatUnits(priceCheck.navPrice, 6)}`);
+        console.log(`  Market price: ${ethers.formatUnits(priceCheck.marketPrice, 6)}`);
+        console.log(
+          `  Deviation: ${priceCheck.deviationBps} bps ${priceCheck.deviationBps >= 0 ? '(premium)' : '(discount)'}`
+        );
+
+        if (!priceCheck.valid) {
+          console.warn(`[Treasury] ROSE ${direction} SKIPPED - ${priceCheck.reason}`);
+          continue; // Skip this swap, continue with others
+        }
+
+        console.log(`[Treasury] ROSE ${direction} price acceptable`);
+      }
 
       // Execute swap via contract's executeSwap function
       const txHash = await executeDiversificationSwap(

@@ -136,6 +136,16 @@ export const config = {
     startupBlockLookback: parseInt(process.env.REDEMPTION_WATCHER_STARTUP_LOOKBACK || '100'),
   },
 
+  // Rebalance configuration (ROSE price protection)
+  rebalance: {
+    // Maximum premium allowed when buying ROSE (basis points)
+    // 1000 = 10% premium allowed (won't buy above 110% of NAV)
+    maxRosePremiumBps: parseInt(process.env.REBALANCE_MAX_ROSE_PREMIUM_BPS || '1000'),
+    // Maximum discount allowed when selling ROSE (basis points)
+    // 1000 = 10% discount allowed (won't sell below 90% of NAV)
+    maxRoseDiscountBps: parseInt(process.env.REBALANCE_MAX_ROSE_DISCOUNT_BPS || '1000'),
+  },
+
   // Environment configuration
   // IMPORTANT: Set IS_PRODUCTION=true in prod to prevent dev signer from merging DAO PRs to prod repos
   isProduction: process.env.IS_PRODUCTION === 'true',
