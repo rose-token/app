@@ -96,7 +96,7 @@ Disputed → resolveDispute(workerPct 0-100) → Closed (split, no DAO mint)
 
 **GitHub Integration:** `githubIntegration` bool controls PR URL requirement. DAO tasks default `true`.
 
-**Repo Authorization:** OAuth link → Authorize repos → Bot only merges authorized. DAO tasks require configured repo (`DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME`).
+**Repo Authorization:** OAuth link → Authorize repos (admin access required) → Bot only merges authorized. DAO tasks require configured repo (`DAO_TASK_REPO_OWNER`/`DAO_TASK_REPO_NAME`).
 
 ## Security
 

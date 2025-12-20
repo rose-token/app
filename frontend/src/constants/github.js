@@ -8,8 +8,8 @@ export const GITHUB_INTEGRATION = {
   // Feature flag to show/hide the GitHub integration toggle
   ENABLED: true,
 
-  // Default state for the toggle (true = enabled by default)
-  DEFAULT_ENABLED: true,
+  // Default state for the toggle (false = disabled by default)
+  DEFAULT_ENABLED: false,
 
   // Regex to validate GitHub PR URLs
   PR_URL_REGEX: /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+\/?$/,
