@@ -171,6 +171,21 @@ ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` repl
 
 **GET endpoints unchanged:** Read-only admin endpoints (`/backup/status`, `/database/tables`, etc.) use simple address comparison (acceptable for non-mutations).
 
+**User Endpoint Authentication:** User-facing mutation endpoints require cryptographic proof of wallet ownership via signature verification (self-attestation):
+- **Middleware:** `backend/signer/src/middleware/userAuth.ts` - centralized `createUserAuth(action)` factory
+- **Frontend Hook:** `frontend/src/hooks/useUserAuth.js` - centralized `userPost`/`userDelete` helpers
+- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
+- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
+- **Verification:** Backend verifies signature recovers to `callerAddress` (self-attestation, not owner)
+
+| Endpoint | Action String |
+|----------|---------------|
+| DELETE /api/github/auth/unlink | `github-unlink` |
+| POST /api/github/repos/authorize | `github-repo-authorize` |
+| DELETE /api/github/repos/revoke | `github-repo-revoke` |
+
+**Key difference from adminAuth:** User auth verifies caller controls claimed address (self-attestation), admin auth verifies caller is Treasury.owner().
+
 ## PostgreSQL Security
 
 **Network Isolation:** PostgreSQL runs inside the backend container (not exposed externally). Only port 3000 (API) is exposed via Akash SDL. PostgreSQL binds to `localhost` only via `listen_addresses = 'localhost'` (defense-in-depth in both postgresql.conf and supervisord command).

@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { getOctokitForRepo } from '../services/github';
+import { createUserAuth } from '../middleware/userAuth';
 
 const router = Router();
 
@@ -44,12 +45,15 @@ router.get('/repos', async (req: Request, res: Response) => {
  *
  * Authorize a repo for auto-merge.
  * Verifies that the linked GitHub user has write access to the repo.
+ *
+ * Requires signature verification to prove caller controls the wallet.
  */
-router.post('/repos/authorize', async (req: Request, res: Response) => {
-  const { wallet, repoOwner, repoName } = req.body;
+router.post('/repos/authorize', createUserAuth('github-repo-authorize'), async (req: Request, res: Response) => {
+  const wallet = req.verifiedUser!; // Cryptographically verified
+  const { repoOwner, repoName } = req.body;
 
-  if (!wallet || !repoOwner || !repoName) {
-    return res.status(400).json({ error: 'wallet, repoOwner, and repoName required' });
+  if (!repoOwner || !repoName) {
+    return res.status(400).json({ error: 'repoOwner and repoName required' });
   }
 
   try {
@@ -119,12 +123,15 @@ router.post('/repos/authorize', async (req: Request, res: Response) => {
  * DELETE /api/github/repos/revoke
  *
  * Revoke authorization for a repo.
+ *
+ * Requires signature verification to prove caller controls the wallet.
  */
-router.delete('/repos/revoke', async (req: Request, res: Response) => {
-  const { wallet, repoOwner, repoName } = req.body;
+router.delete('/repos/revoke', createUserAuth('github-repo-revoke'), async (req: Request, res: Response) => {
+  const wallet = req.verifiedUser!; // Cryptographically verified
+  const { repoOwner, repoName } = req.body;
 
-  if (!wallet || !repoOwner || !repoName) {
-    return res.status(400).json({ error: 'wallet, repoOwner, and repoName required' });
+  if (!repoOwner || !repoName) {
+    return res.status(400).json({ error: 'repoOwner and repoName required' });
   }
 
   try {
