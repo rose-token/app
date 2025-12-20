@@ -7,16 +7,33 @@
  */
 
 import { ethers } from 'ethers';
-import axios from 'axios';
+import { PinataSDK } from 'pinata';
 import { config } from '../config';
 import { approveAndMergePR, isGitHubConfigured, parsePrUrl } from './github';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 import { RoseMarketplaceABI } from '../utils/contracts';
 
-// IPFS Gateway for fetching task metadata (uses dedicated Pinata gateway for private files)
-const IPFS_GATEWAY = process.env.PINATA_GATEWAY
-  ? `${process.env.PINATA_GATEWAY}/ipfs/`
-  : 'https://coffee-glad-felidae-720.mypinata.cloud/ipfs/';
+// Lazy-initialized Pinata SDK instance (shared pattern with backup.ts)
+let pinataInstance: PinataSDK | null = null;
+
+/**
+ * Get or create Pinata SDK instance for private IPFS file access.
+ */
+function getPinata(): PinataSDK | null {
+  if (!pinataInstance) {
+    const jwt = config.backup.pinataJwt;
+    if (!jwt) {
+      console.warn('[TaskWatcher] PINATA_JWT not configured, IPFS metadata fetch will fail');
+      return null;
+    }
+    const gateway = config.backup.pinataGateway || 'https://coffee-glad-felidae-720.mypinata.cloud';
+    pinataInstance = new PinataSDK({
+      pinataJwt: jwt,
+      pinataGateway: new URL(gateway).hostname,
+    });
+  }
+  return pinataInstance;
+}
 
 // Types
 export interface TaskWatcherStats {
@@ -112,16 +129,20 @@ async function getTaskData(taskId: number): Promise<TaskData | null> {
 
 /**
  * Fetch IPFS metadata to check if GitHub integration is enabled.
+ * Uses Pinata SDK for authenticated access to private files.
  */
 async function fetchIpfsMetadata(ipfsHash: string): Promise<IpfsMetadata | null> {
   if (!ipfsHash || ipfsHash.length === 0) {
     return null;
   }
 
+  const pinata = getPinata();
+  if (!pinata) {
+    return null;
+  }
+
   try {
-    const response = await axios.get(`${IPFS_GATEWAY}${ipfsHash}`, {
-      timeout: 10000,
-    });
+    const response = await pinata.gateways.private.get(ipfsHash);
     return response.data as IpfsMetadata;
   } catch (error) {
     console.warn(`[TaskWatcher] Failed to fetch IPFS metadata ${ipfsHash}:`, error);
