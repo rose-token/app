@@ -144,6 +144,33 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection, 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks).
 
+## PostgreSQL Security
+
+**Network Isolation:** PostgreSQL runs inside the backend container (not exposed externally). Only port 3000 (API) is exposed via Akash SDL. PostgreSQL binds to `localhost` only via `listen_addresses = 'localhost'` (defense-in-depth in both postgresql.conf and supervisord command).
+
+**Authentication:** `scram-sha-256` required for all connections (no `trust` auth). `POSTGRES_PASSWORD` environment variable is mandatory - container fails to start without it.
+
+**pg_hba.conf:**
+```
+local   all  all                 scram-sha-256
+host    all  all  127.0.0.1/32   scram-sha-256
+host    all  all  ::1/128        scram-sha-256
+host    all  all  0.0.0.0/0      reject
+host    all  all  ::/0           reject
+```
+
+**Hardening (postgresql.conf):**
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| `listen_addresses` | `localhost` | No external binding |
+| `max_connections` | `20` | Limit connections |
+| `password_encryption` | `scram-sha-256` | Strong password hashing |
+| `log_connections` | `on` | Security auditing |
+| `log_disconnections` | `on` | Security auditing |
+| `log_statement` | `ddl` | Track schema changes |
+
+**Migration:** Existing deployments with `trust` auth are auto-migrated to `scram-sha-256` on container restart. Backups of old configs are created with timestamps.
+
 ## Frontend
 
 **Stack:** React 18 + Vite + Wagmi/RainbowKit + TailwindCSS
