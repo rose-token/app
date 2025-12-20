@@ -10,7 +10,9 @@ A worker-focused decentralized marketplace with multi-asset treasury, two-track 
 
 **Dev App**: [dev.rose-token.com](https://dev.rose-token.com)
 
-**Demo App**: [demo-v3.rose-token.com](https://demo-v3.rose-token.com)
+**Demo App**: [demo-v3.rose-token.com](https://demo.rose-token.com)
+
+
 
 ## Overview
 
