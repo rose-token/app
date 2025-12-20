@@ -1,16 +1,18 @@
 import { useAccount } from 'wagmi';
 import { useState, useCallback, useEffect } from 'react';
+import { useAdminAuth } from './useAdminAuth';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 /**
  * Hook to manage Camelot LP fee collection operations.
- * All operations require caller to be Treasury owner (verified by backend).
+ * All operations require caller to be Treasury owner (verified by signature).
  *
  * @returns {Object} Camelot LP utilities
  */
 export const useCamelotLP = () => {
   const { address } = useAccount();
+  const { adminPost } = useAdminAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -91,15 +93,7 @@ export const useCamelotLP = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/camelot-lp/collect`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          callerAddress: address,
-        }),
-      });
+      const response = await adminPost('/api/camelot-lp/collect', 'camelot-collect');
 
       const data = await response.json();
 
@@ -116,7 +110,7 @@ export const useCamelotLP = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address]);
+  }, [address, adminPost]);
 
   /**
    * Collect fees from a specific LP position.
@@ -133,15 +127,7 @@ export const useCamelotLP = () => {
       setError(null);
 
       try {
-        const response = await fetch(`${API_URL}/api/camelot-lp/collect/${tokenId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            callerAddress: address,
-          }),
-        });
+        const response = await adminPost(`/api/camelot-lp/collect/${tokenId}`, 'camelot-collect');
 
         const data = await response.json();
 
@@ -159,7 +145,7 @@ export const useCamelotLP = () => {
         setIsLoading(false);
       }
     },
-    [address]
+    [address, adminPost]
   );
 
   const clearError = useCallback(() => {

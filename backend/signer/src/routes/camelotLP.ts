@@ -2,7 +2,7 @@
  * Camelot LP Fee Collection Routes
  *
  * Owner-only endpoints for managing LP fee collection.
- * Uses Treasury.owner() check for authorization.
+ * Uses signature verification via adminAuth middleware for mutations.
  */
 
 import { Router, Request, Response } from 'express';
@@ -16,11 +16,12 @@ import {
   isCamelotLPConfigured,
 } from '../services/camelotLP';
 import { getWsProvider } from '../utils/wsProvider';
+import { createAdminAuth } from '../middleware/adminAuth';
 
 const router = Router();
 
 /**
- * Verify caller is Treasury contract owner
+ * Verify caller is Treasury contract owner (for GET endpoints only)
  */
 async function verifyOwner(callerAddress: string): Promise<{ isOwner: boolean; error?: string }> {
   try {
@@ -123,24 +124,11 @@ router.get('/position/:tokenId', async (req: Request, res: Response) => {
  * POST /api/camelot-lp/collect
  * Collect fees from all configured positions
  *
- * Body: { callerAddress: string }
+ * Body: { callerAddress: string, timestamp: number, signature: string }
  * Response: { success, collected, skipped, errors, timestamp }
  */
-router.post('/collect', async (req: Request, res: Response) => {
+router.post('/collect', createAdminAuth('camelot-collect'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress } = req.body;
-
-    if (!callerAddress) {
-      return res.status(400).json({ error: 'Missing required field: callerAddress' });
-    }
-
-    // Verify owner
-    const { isOwner, error } = await verifyOwner(callerAddress);
-    if (!isOwner) {
-      console.log('[CamelotLP API] Unauthorized collect attempt:', { caller: callerAddress });
-      return res.status(403).json({ error: error || 'Unauthorized' });
-    }
-
     if (!isCamelotLPConfigured()) {
       return res.status(500).json({
         error: 'Camelot LP not configured',
@@ -148,7 +136,7 @@ router.post('/collect', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('[CamelotLP API] Manual collection triggered by owner:', callerAddress);
+    console.log('[CamelotLP API] Manual collection triggered by owner:', req.verifiedOwner);
     const result = await collectAllFees();
 
     return res.json(result);
@@ -163,27 +151,11 @@ router.post('/collect', async (req: Request, res: Response) => {
  * POST /api/camelot-lp/collect/:tokenId
  * Collect fees from a specific position
  *
- * Body: { callerAddress: string }
+ * Body: { callerAddress: string, timestamp: number, signature: string }
  * Response: { tokenId, amount0, amount1, txHash, recipient, ... }
  */
-router.post('/collect/:tokenId', async (req: Request, res: Response) => {
+router.post('/collect/:tokenId', createAdminAuth('camelot-collect'), async (req: Request, res: Response) => {
   try {
-    const { callerAddress } = req.body;
-
-    if (!callerAddress) {
-      return res.status(400).json({ error: 'Missing required field: callerAddress' });
-    }
-
-    // Verify owner
-    const { isOwner, error } = await verifyOwner(callerAddress);
-    if (!isOwner) {
-      console.log('[CamelotLP API] Unauthorized collect attempt:', {
-        caller: callerAddress,
-        tokenId: req.params.tokenId,
-      });
-      return res.status(403).json({ error: error || 'Unauthorized' });
-    }
-
     if (!config.contracts.treasury) {
       return res.status(500).json({
         error: 'Treasury not configured',
@@ -195,7 +167,7 @@ router.post('/collect/:tokenId', async (req: Request, res: Response) => {
       '[CamelotLP API] Manual collection for position',
       req.params.tokenId,
       'triggered by owner:',
-      callerAddress
+      req.verifiedOwner
     );
     const result = await collectFees(req.params.tokenId);
 

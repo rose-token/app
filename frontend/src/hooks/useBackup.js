@@ -1,16 +1,18 @@
 import { useAccount } from 'wagmi';
 import { useState, useCallback, useEffect } from 'react';
+import { useAdminAuth } from './useAdminAuth';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 /**
  * Hook to manage database backup and restore operations.
- * All operations require caller to be Treasury owner (verified by backend).
+ * All operations require caller to be Treasury owner (verified by signature).
  *
  * @returns {Object} Backup utilities
  */
 export const useBackup = () => {
   const { address } = useAccount();
+  const { adminPost } = useAdminAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -34,16 +36,7 @@ export const useBackup = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/backup/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          callerAddress: address,
-        }),
-      });
-
+      const response = await adminPost('/api/backup/create', 'backup-create');
       const data = await response.json();
 
       if (!response.ok) {
@@ -59,7 +52,7 @@ export const useBackup = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address]);
+  }, [address, adminPost]);
 
   /**
    * Get backup system status.
@@ -105,16 +98,9 @@ export const useBackup = () => {
       setError(null);
 
       try {
-        const response = await fetch(`${API_URL}/api/backup/restore`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            callerAddress: address,
-            cid: cid,
-            confirmed: true, // Confirmation is handled by UI
-          }),
+        const response = await adminPost('/api/backup/restore', 'backup-restore', {
+          cid: cid,
+          confirmed: true, // Confirmation is handled by UI
         });
 
         const data = await response.json();
@@ -133,7 +119,7 @@ export const useBackup = () => {
         setIsLoading(false);
       }
     },
-    [address]
+    [address, adminPost]
   );
 
   const clearError = useCallback(() => {

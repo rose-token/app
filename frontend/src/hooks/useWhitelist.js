@@ -1,17 +1,19 @@
 import { useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { reloadWhitelist } from '../services/whitelist';
+import { useAdminAuth } from './useAdminAuth';
 
 const API_URL = import.meta.env.VITE_PASSPORT_SIGNER_URL || 'http://localhost:3001';
 
 /**
  * Hook to manage whitelist entries via the backend API.
- * Provides CRUD operations with owner-only authorization for mutations.
+ * Provides CRUD operations with signature verification for mutations.
  *
  * @returns {Object} Whitelist utilities and state
  */
 export const useWhitelist = () => {
   const { address } = useAccount();
+  const { adminPost, adminDelete } = useAdminAuth();
   const [whitelist, setWhitelist] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -57,16 +59,9 @@ export const useWhitelist = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/whitelist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          callerAddress: address,
-          address: addr,
-          score: Number(score),
-        }),
+      const response = await adminPost('/api/whitelist', 'whitelist-add', {
+        address: addr,
+        score: Number(score),
       });
 
       const data = await response.json();
@@ -89,7 +84,7 @@ export const useWhitelist = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address, fetchWhitelist]);
+  }, [address, adminPost, fetchWhitelist]);
 
   /**
    * Remove an address from the whitelist
@@ -104,12 +99,7 @@ export const useWhitelist = () => {
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/whitelist/${addr}?callerAddress=${encodeURIComponent(address)}`,
-        {
-          method: 'DELETE',
-        }
-      );
+      const response = await adminDelete(`/api/whitelist/${addr}`, 'whitelist-remove');
 
       const data = await response.json();
 
@@ -131,7 +121,7 @@ export const useWhitelist = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address, fetchWhitelist]);
+  }, [address, adminDelete, fetchWhitelist]);
 
   /**
    * Clear any error state

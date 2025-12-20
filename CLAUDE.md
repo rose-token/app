@@ -149,7 +149,27 @@ Disputed → resolveDispute(workerPct) → Closed (split payment, no DAO mint)
 
 ## Security Patterns
 
-ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection (treasury rebalance endpoints), 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks), signed message authentication for admin endpoints (owner wallet or backend signer).
+ReentrancyGuard (all 5 contracts), CEI pattern, SafeERC20, `usedSignatures` replay protection (admin endpoints), 1h oracle staleness, 1% default slippage, same-block deposit/redeem protection (prevents flash loan attacks), signed message authentication for admin endpoints (owner wallet or backend signer).
+
+**Admin Endpoint Authentication:** All admin mutation endpoints require cryptographic proof of wallet ownership via signature verification:
+- **Middleware:** `backend/signer/src/middleware/adminAuth.ts` - centralized `createAdminAuth(action)` factory
+- **Frontend Hook:** `frontend/src/hooks/useAdminAuth.js` - centralized `adminPost`/`adminDelete` helpers
+- **Message Format:** `keccak256(abi.encodePacked(callerAddress, action, timestamp))`
+- **Replay Protection:** In-memory Map with 5-min TTL, signature can only be used once
+- **Verification:** Backend verifies signature recovers to `Treasury.owner()` address
+
+| Endpoint | Action String |
+|----------|---------------|
+| POST /api/treasury/rebalance/trigger | `rebalance` |
+| POST /api/backup/create | `backup-create` |
+| POST /api/backup/restore | `backup-restore` |
+| POST /api/database/truncate | `database-truncate` |
+| POST /api/whitelist | `whitelist-add` |
+| DELETE /api/whitelist/:address | `whitelist-remove` |
+| POST /api/camelot-lp/collect | `camelot-collect` |
+| POST /api/camelot-lp/collect/:tokenId | `camelot-collect` |
+
+**GET endpoints unchanged:** Read-only admin endpoints (`/backup/status`, `/database/tables`, etc.) use simple address comparison (acceptable for non-mutations).
 
 ## PostgreSQL Security
 
@@ -184,7 +204,7 @@ host    all  all  ::/0           reject
 
 **Routes:** `/` Task Table, `/create-task` Create Task, `/task/:id` Task Detail, `/vault` Treasury, `/governance` Proposals, `/governance/:id` Vote, `/delegates` Delegation, `/profile` User, `/admin` Admin (owner-only), `/admin/disputes` Dispute Resolution (owner-only), `/admin/analytics` Analytics Dashboard (owner-only)
 
-**Key Hooks:** useTasks (single task + action handlers), useTasksAPI (paginated task list from backend API, scales to 1000+ tasks), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache, returns tasksAsWorker/tasksAsStakeholder/tasksAsCustomer/tasksClaimed/disputesInitiated/totalEarned/reputationScore), useIsAdmin (Treasury owner check), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
+**Key Hooks:** useTasks (single task + action handlers), useTasksAPI (paginated task list from backend API, scales to 1000+ tasks), useTaskSkills (IPFS skill fetching + matching), useVaultData (45s refresh, includes `isPaused`), useGovernance (staking/VP), useProposals, useDelegation, useAuction, useReputation (5m cache, returns tasksAsWorker/tasksAsStakeholder/tasksAsCustomer/tasksClaimed/disputesInitiated/totalEarned/reputationScore), useIsAdmin (Treasury owner check), useAdminAuth (signed request helpers for admin endpoints - `adminPost`/`adminDelete`), useRebalance (trigger rebalance), useDispute (dispute actions + admin queries), useBackup (database backup/restore), usePause (pause/unpause Treasury), useTruncateDatabase (truncate all database tables), useWhitelist (whitelist management), useCamelotLP (LP fee collection), useIPFSImage (fetches private IPFS images with JWT auth, returns blob URLs - MUST be called before any conditional returns per React Rules of Hooks; never use `getGatewayUrl()` directly for images as browser `<img>` cannot include auth headers), useAnalytics (60s poll, overview/daily/marketplace/governance/treasury/users endpoints)
 
 **UserHistoricalStats:** Replaces TokenDistributionChart on TasksPage. Shows 7 stats in responsive grid (Completed/Validated/Created/In Progress/Disputed/Earned/Rep Score). Uses `useReputation` hook. Empty state shows "Complete your first task" CTA when all stats are zero.
 
