@@ -46,7 +46,6 @@ export interface AnalyticsWatcherStats {
 // State
 // ============================================================
 
-let provider: ethers.JsonRpcProvider | null = null;
 let marketplaceContract: ethers.Contract | null = null;
 let governanceContract: ethers.Contract | null = null;
 let treasuryContract: ethers.Contract | null = null;
@@ -72,22 +71,17 @@ const stats: AnalyticsWatcherStats = {
 };
 
 // ============================================================
-// Provider & Contract Helpers
+// Contract Helpers
 // ============================================================
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider(config.rpc.url);
-  }
-  return provider;
-}
-
+// Use WebSocket provider for all contract reads to ensure consistency with events
+// This prevents race conditions where HTTP provider might be behind WebSocket events
 function getMarketplaceContract(): ethers.Contract {
   if (!marketplaceContract) {
     marketplaceContract = new ethers.Contract(
       config.contracts.marketplace!,
       RoseMarketplaceABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return marketplaceContract;
@@ -98,7 +92,7 @@ function getGovernanceContract(): ethers.Contract {
     governanceContract = new ethers.Contract(
       config.contracts.governance!,
       RoseGovernanceABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return governanceContract;
@@ -109,7 +103,7 @@ function getTreasuryContract(): ethers.Contract {
     treasuryContract = new ethers.Contract(
       config.contracts.treasury!,
       RoseTreasuryABI,
-      getProvider()
+      getWsProvider()
     );
   }
   return treasuryContract;
@@ -124,7 +118,7 @@ function extractLog(event: ethers.Log | ethers.ContractEventPayload): ethers.Log
 }
 
 async function getBlockTimestamp(blockNumber: number): Promise<Date> {
-  const block = await getProvider().getBlock(blockNumber);
+  const block = await getWsProvider().getBlock(blockNumber);
   return new Date((block?.timestamp || 0) * 1000);
 }
 
@@ -1398,7 +1392,7 @@ export async function startAnalyticsWatcher(): Promise<void> {
     const lookbackBlocks = config.analyticsWatcher?.startupBlockLookback ?? 50000;
     if (lookbackBlocks > 0) {
       console.log(`[AnalyticsWatcher] Catching up on last ${lookbackBlocks} blocks...`);
-      const currentBlock = await getProvider().getBlockNumber();
+      const currentBlock = await getWsProvider().getBlockNumber();
       const fromBlock = Math.max(0, currentBlock - lookbackBlocks);
       await catchUpEvents(fromBlock, currentBlock);
     }

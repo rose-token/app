@@ -468,7 +468,7 @@ host    all  all  ::/0           reject
 
 Solidity 0.8.20, OpenZeppelin v5, Chainlink v1.5.0, 1 run + viaIR optimizer. Networks: Arbitrum Sepolia (421614), Arbitrum One (42161). Frontend: Vite 7.x + wagmi + viem + RainbowKit. Backend: Express + TypeScript + PostgreSQL + ethers.js.
 
-**WebSocket Events:** All 9 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. HTTP provider is kept for `queryFilter` operations (startup catch-up). Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
+**WebSocket Events:** All 9 watchers use a shared WebSocket provider (`wsProvider.ts`) for real-time event listening via `eth_subscribe`. The analyticsWatcher uses WebSocket for all operations (including contract reads and `queryFilter` for startup catch-up) to prevent race conditions between event receipt and data reads. Auto-reconnection with exponential backoff (5s→60s, max 10 attempts). Default WebSocket URL: `wss://arb-sepolia.g.alchemy.com/v2/***`.
 
 ## Backend ABI Workflow
 
