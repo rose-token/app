@@ -28,6 +28,12 @@ Rose Protocol is a Web3 cooperative platform that connects customers with worker
 
 This software is provided as-is, without warranty of any kind. ROSE is a governance and utility token for the Rose Protocol marketplace. Nothing in this repository constitutes financial advice, investment advice, or an offer of securities. The protocol's treasury operations are software mechanisms for managing protocol-owned assets and do not represent any guarantee of value or returns. Users are solely responsible for understanding and complying with applicable laws in their jurisdiction. Use at your own risk. This is Beta software. Unaudited. Deposit only what you can afford to lose. Treasury assets may fluctuate in value. Subject to available liquidity.
 
+## License & IP
+
+This project is licensed under the [Peer Production License (PPL)](LICENSE). Commercial use is restricted to worker-owned cooperatives and non-profits. No extraction nor profit-seeking structures may use this code.
+
+The core tri-role mechanism (customer, worker, stakeholder) is protected by a provisional patent pending. The code is open for cooperatives to learn from, fork, and build on. Non-cooperative commercial use is not permitted.
+
 ## Quick Start
 
 ```bash
