@@ -8,7 +8,7 @@ import { useAccount, useReadContract, useReadContracts, useWriteContract, usePub
 import { formatUnits, parseUnits } from 'viem';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS, ProposalStatus, Track } from '../constants/contracts';
-import { uploadProposalToIPFS, fetchProposalFromIPFS, isCID } from '../utils/ipfs/pinataService';
+import { uploadProposalToIPFS, fetchProposalFromIPFS } from '../utils/ipfs/pinataService';
 import { usePassportVerify } from './usePassportVerify';
 import { GAS_SETTINGS } from '../constants/gas';
 
@@ -203,10 +203,10 @@ export const useProposals = (options = {}) => {
             const timeRemaining = endsAt - now;
             const isExpired = timeRemaining <= 0;
 
-            // Fetch description and skills from IPFS if it's a hash (supports both CIDv0 'Qm' and CIDv1 'bafy' formats)
+            // Fetch description and skills from IPFS
             let description = '';
             let skills = [];
-            if (descriptionHash && isCID(descriptionHash)) {
+            if (descriptionHash) {
               try {
                 const ipfsData = await fetchProposalFromIPFS(descriptionHash);
                 description = ipfsData?.description || ipfsData || '';
@@ -215,8 +215,6 @@ export const useProposals = (options = {}) => {
                 console.warn('Failed to fetch IPFS description:', e);
                 description = descriptionHash;
               }
-            } else {
-              description = descriptionHash || '';
             }
 
             return {

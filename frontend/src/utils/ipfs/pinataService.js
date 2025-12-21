@@ -127,14 +127,6 @@ export const fetchCommentFromIPFS = async (cid) => {
   }
 };
 
-export const isCID = (str) => {
-  if (typeof str !== 'string') return false;
-  // CIDv0: starts with Qm, 46 chars
-  // CIDv1: starts with bafy, variable length (typically 59+ chars)
-  return (str.startsWith('Qm') && str.length >= 46) ||
-         (str.startsWith('bafy') && str.length >= 50);
-};
-
 export const uploadProposalToIPFS = async (proposalData) => {
   try {
     const data = {
