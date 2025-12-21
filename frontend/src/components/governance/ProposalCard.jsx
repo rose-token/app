@@ -26,7 +26,7 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
     votingEndsAt,
     hasVoted,
     userVote,
-    totalAllocated,
+    totalVotes,
   } = proposal;
 
   // Format time remaining
@@ -144,7 +144,7 @@ const ProposalCard = React.memo(({ proposal, showActions = false }) => {
       </div>
 
       {/* Quorum Progress */}
-      <QuorumBar totalAllocated={totalAllocated} compact />
+      <QuorumBar track={track} totalVotes={totalVotes} compact />
 
       {/* User's Vote Status */}
       {hasVoted && userVote && (

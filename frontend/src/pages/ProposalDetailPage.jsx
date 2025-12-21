@@ -261,7 +261,7 @@ const ProposalDetailPage = () => {
             </div>
 
             {/* Quorum */}
-            <QuorumBar proposalId={proposal.id} totalAllocated={proposal.totalAllocated} />
+            <QuorumBar track={proposal.track} totalVotes={proposal.totalVotes} />
           </div>
 
           {/* Task Link (if executed) */}
