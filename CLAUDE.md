@@ -73,7 +73,7 @@ Web3 marketplace with task-value-based token distribution.
 **Fast Track:** Proposal → 1d delay → Backend submits merkle root → Voting with proofs → Auto-finalize
 **Slow Track:** Proposal (Active immediately) → Backend attestations → Voting → Backend finalizes with snapshot
 
-**Off-Chain Delegation:** EIP-712 signed, stored in DB. Requires `setDelegateOptIn(true)`. Fields: `vpAmount` (0=full), `nonce`, `expiry`, `signature`.
+**Off-Chain Delegation:** EIP-712 signed, stored in DB. Requires `setDelegateOptIn(true)`. Fields: `vpAmount` (0=full), `nonce`, `expiry`, `signature`. Delegates can vote with received VP: `/vp/available` returns `ownVP + receivedVP` breakdown. Fast Track uses merkle proof `effectiveVP`, Slow Track uses backend-calculated total.
 
 **Lifecycle:** Active → Passed/Failed. Auto-execute after 24h grace (creates DAO task). Max 3 quorum extensions, 4 edits. Rewards: DAO 2%, Yay 2%, Proposer 1%.
 
