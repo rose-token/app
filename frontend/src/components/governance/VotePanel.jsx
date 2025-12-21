@@ -40,15 +40,18 @@ const VotePanel = ({
   } = useGovernance();
 
   // Slow Track VP budget (with caching)
+  // Backend calculates totalVP including received delegations
   const {
     availableVP: slowTrackAvailableVP,
     allocatedVP: slowTrackAllocatedVP,
     totalVP: slowTrackTotalVP,
+    ownVP: slowTrackOwnVP,
+    receivedVP: slowTrackReceivedVP,
     isLoading: slowTrackLoading,
     error: slowTrackError,
     clearCache: clearSlowTrackCache,
   } = useAvailableVP({
-    enabled: track === Track.Slow && !!account && !!votingPower,
+    enabled: track === Track.Slow && !!account,
     refetchOnVote: true,
     staleTime: 5000,
   });
@@ -68,9 +71,11 @@ const VotePanel = ({
     castDelegatedVote,
   } = useDelegation();
 
-  // Get per-proposal available delegated power (accounts for already-used VP)
+  // Get per-proposal delegation data (accounts for already-used VP)
+  // For Fast Track: baseVP = own VP, availableDelegatedPower = received VP
   const {
     availableDelegatedPower,
+    baseVP: fastTrackBaseVP,
     refetchAvailablePower,
   } = useDelegationForProposal(proposalId);
 
@@ -83,25 +88,35 @@ const VotePanel = ({
   const ownVotingPower = parseFloat(votingPower || '0');
   const receivedVP = parseFloat(availableDelegatedPower || '0');
 
-  // Calculate total available voting power
+  // Calculate total available voting power with VP breakdown
   // Two-Track model: Fast Track uses abundant VP, Slow Track uses budget from useAvailableVP
   const totalAvailable = useMemo(() => {
-    let ownVP;
+    let ownVP, delegatedVP;
+
     if (track === Track.Slow) {
-      // Slow Track: Use available VP from budget hook
-      ownVP = parseFloat(slowTrackAvailableVP || '0');
+      // Slow Track: Backend provides breakdown (ownVP + receivedVP)
+      // For Slow Track, show the raw values (not adjusted for allocations)
+      // since the budget display section shows the full breakdown
+      const slowOwnVP = parseFloat(slowTrackOwnVP || '0');
+      const slowReceivedVP = parseFloat(slowTrackReceivedVP || '0');
+
+      // Use the actual own/received values for display
+      // The "Available to allocate" in budget section shows the limit
+      ownVP = slowOwnVP;
+      delegatedVP = slowReceivedVP;
     } else {
-      // Fast Track: Use full available VP (abundant model)
-      ownVP = availableOwnVP;
+      // Fast Track: Use baseVP from merkle proof (own VP) + received VP
+      // Merkle proof effectiveVP = baseVP - delegatedOut + delegatedIn
+      ownVP = parseFloat(fastTrackBaseVP || availableOwnVP || '0');
+      delegatedVP = receivedVP;
     }
-    // Received VP (as delegate) is always available per-proposal
-    const delegatedVP = receivedVP;
+
     return {
       ownVP,
       delegatedVP,
       totalVP: ownVP + delegatedVP,
     };
-  }, [track, availableOwnVP, slowTrackAvailableVP, receivedVP]);
+  }, [track, availableOwnVP, slowTrackOwnVP, slowTrackReceivedVP, fastTrackBaseVP, receivedVP]);
 
   // Calculate how input VP splits between own and delegated
   const amountSplit = useMemo(() => {
@@ -506,15 +521,27 @@ const VotePanel = ({
             <p className="text-xs" style={{ color: 'var(--error)' }}>{slowTrackError}</p>
           ) : (
             <div className="text-xs space-y-1">
+              {/* VP Breakdown: Own + Received */}
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-muted)' }}>Total VP:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Your VP:</span>
+                <span>{formatVotePower(parseFloat(slowTrackOwnVP || '0'))} VP</span>
+              </div>
+              {parseFloat(slowTrackReceivedVP || '0') > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>Received (as delegate):</span>
+                  <span className="text-green-500">+{formatVotePower(parseFloat(slowTrackReceivedVP))} VP</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold pt-1 border-t" style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                <span>Total VP:</span>
                 <span>{formatVotePower(parseFloat(slowTrackTotalVP))} VP</span>
               </div>
-              <div className="flex justify-between">
+              {/* Allocation status */}
+              <div className="flex justify-between mt-2">
                 <span style={{ color: 'var(--text-muted)' }}>Already allocated:</span>
                 <span>{formatVotePower(parseFloat(slowTrackAllocatedVP))} VP</span>
               </div>
-              <div className="flex justify-between font-semibold pt-1 border-t" style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+              <div className="flex justify-between font-semibold">
                 <span>Available to allocate:</span>
                 <span style={{ color: 'var(--warning)' }}>
                   {formatVotePower(parseFloat(slowTrackAvailableVP))} VP

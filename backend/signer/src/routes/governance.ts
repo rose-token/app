@@ -41,39 +41,42 @@ const THRESHOLD_VOTE = config.thresholds.vote;
  * Get user's available VP for Slow Track voting.
  * Alias for /api/slow-track/available/:address
  *
- * Query params:
- *   - totalVP: User's total VP (required, as string)
+ * Backend calculates total VP including received delegations.
  *
  * Response:
  *   - user: Checksummed address
- *   - totalVP: User's total VP (as string)
+ *   - ownVP: User's own VP from staking (as string)
+ *   - receivedVP: VP delegated to user by others (as string)
+ *   - totalVP: ownVP + receivedVP (as string)
  *   - allocatedVP: VP already allocated to proposals (as string)
  *   - availableVP: VP available for new votes (as string)
  */
 router.get('/vp/available/:address', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
-    const { totalVP } = req.query;
 
     if (!ethers.isAddress(address)) {
       return res.status(400).json({ error: 'Invalid address' } as ErrorResponse);
     }
 
-    if (!totalVP || typeof totalVP !== 'string') {
-      return res.status(400).json({ error: 'totalVP query parameter required' } as ErrorResponse);
-    }
+    // Fetch user's own VP from stakers table
+    const vpData = await governanceService.getUserVP(address);
+    const ownVP = BigInt(vpData.votingPower);
 
-    let totalVPBigInt: bigint;
-    try {
-      totalVPBigInt = BigInt(totalVP);
-    } catch {
-      return res.status(400).json({ error: 'Invalid totalVP value' } as ErrorResponse);
-    }
+    // Fetch VP delegated to this user from delegations table
+    const receivedVPStr = await governanceService.getTotalReceivedVP(address);
+    const receivedVP = BigInt(receivedVPStr);
 
-    const result = await getAvailableVP(address, totalVPBigInt);
+    // Calculate total VP = own + received
+    const totalVP = ownVP + receivedVP;
+
+    // Get available VP (subtracts allocations from total)
+    const result = await getAvailableVP(address, totalVP);
 
     return res.json({
       user: ethers.getAddress(address),
+      ownVP: ownVP.toString(),
+      receivedVP: receivedVP.toString(),
       totalVP: result.totalVP.toString(),
       allocatedVP: result.allocatedVP.toString(),
       availableVP: result.availableVP.toString(),
@@ -95,12 +98,14 @@ router.get('/vp/available/:address', async (req: Request, res: Response) => {
  * Get signed attestation for voteSlow() contract call.
  * Alias for /api/slow-track/attestation
  *
+ * Backend calculates total VP including received delegations.
+ *
  * Request body:
  *   - user: Voter address
  *   - proposalId: Proposal to vote on
  *   - support: true for For, false for Against
  *   - vpAmount: Amount of VP to allocate (as string)
- *   - totalVP: User's total VP (as string)
+ *   - totalVP: (optional) User's total VP - if not provided, backend calculates
  *
  * Response:
  *   - user: Checksummed voter address
@@ -133,23 +138,33 @@ router.post('/vp/attestation', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vpAmount (must be string)' } as ErrorResponse);
     }
 
-    if (!totalVP || typeof totalVP !== 'string') {
-      return res.status(400).json({ error: 'Invalid totalVP (must be string)' } as ErrorResponse);
-    }
-
-    // Parse BigInt values
+    // Parse vpAmount
     let vpAmountBigInt: bigint;
-    let totalVPBigInt: bigint;
-
     try {
       vpAmountBigInt = BigInt(vpAmount);
-      totalVPBigInt = BigInt(totalVP);
     } catch {
-      return res.status(400).json({ error: 'Invalid numeric values' } as ErrorResponse);
+      return res.status(400).json({ error: 'Invalid vpAmount value' } as ErrorResponse);
     }
 
     if (vpAmountBigInt <= 0n) {
       return res.status(400).json({ error: 'vpAmount must be positive' } as ErrorResponse);
+    }
+
+    // Calculate total VP: use provided value or fetch from backend
+    let totalVPBigInt: bigint;
+    if (totalVP && typeof totalVP === 'string') {
+      try {
+        totalVPBigInt = BigInt(totalVP);
+      } catch {
+        return res.status(400).json({ error: 'Invalid totalVP value' } as ErrorResponse);
+      }
+    } else {
+      // Backend calculates total VP including received delegations
+      const vpData = await governanceService.getUserVP(user);
+      const ownVP = BigInt(vpData.votingPower);
+      const receivedVPStr = await governanceService.getTotalReceivedVP(user);
+      const receivedVP = BigInt(receivedVPStr);
+      totalVPBigInt = ownVP + receivedVP;
     }
 
     // Get attestation

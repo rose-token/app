@@ -4,15 +4,17 @@
  * Slow Track uses "scarce VP" - users have a budget they must allocate across proposals.
  * This hook fetches the user's current allocations and available VP.
  *
+ * Backend calculates total VP including received delegations (VP delegated to user by others).
+ *
  * Features:
  * - Timestamp-based caching to prevent over-fetching
  * - Event-driven refetch after voting
  * - Manual clearCache for forced refresh
+ * - Returns ownVP and receivedVP breakdown for display
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount, useWatchContractEvent } from 'wagmi';
-import useGovernance from './useGovernance';
 import RoseGovernanceABI from '../contracts/RoseGovernanceABI.json';
 import { CONTRACTS } from '../constants/contracts';
 
@@ -40,9 +42,12 @@ export const useAvailableVP = (options = {}) => {
   } = options;
 
   const { address: account } = useAccount();
-  const { votingPower } = useGovernance();
 
   const [data, setData] = useState({
+    ownVP: '0',
+    ownVPRaw: '0',
+    receivedVP: '0',
+    receivedVPRaw: '0',
     totalVP: '0',
     totalVPRaw: '0',
     allocatedVP: '0',
@@ -56,22 +61,16 @@ export const useAvailableVP = (options = {}) => {
 
   // Cache tracking
   const lastFetched = useRef(null);
-  const lastVotingPower = useRef(null);
   const fetchInProgress = useRef(false);
   const debounceTimeout = useRef(null);
 
   /**
    * Fetch available VP from backend
+   * Backend calculates total VP including received delegations
    * @param {boolean} bypassCache - Skip cache check
    */
   const fetchAvailableVP = useCallback(async (bypassCache = false) => {
-    if (!account || !votingPower) return;
-
-    // Invalidate cache if votingPower changed (e.g., from initial '0' to real value)
-    if (lastVotingPower.current !== votingPower) {
-      lastFetched.current = null;
-      lastVotingPower.current = votingPower;
-    }
+    if (!account) return;
 
     // Skip if data is fresh and not bypassing cache (inline check to avoid dependency issues)
     const isFresh = lastFetched.current && (Date.now() - lastFetched.current) < staleTime;
@@ -87,11 +86,9 @@ export const useAvailableVP = (options = {}) => {
     setError(null);
 
     try {
-      // Convert votingPower to wei (9 decimals)
-      const totalVPWei = Math.floor(parseFloat(votingPower || '0') * 1e9).toString();
-
+      // Backend calculates totalVP = ownVP + receivedVP
       const response = await fetch(
-        `${SIGNER_URL}/api/governance/vp/available/${account}?totalVP=${totalVPWei}`
+        `${SIGNER_URL}/api/governance/vp/available/${account}`
       );
 
       if (!response.ok) {
@@ -102,6 +99,10 @@ export const useAvailableVP = (options = {}) => {
 
       // Format values for display (VP uses 9 decimals)
       setData({
+        ownVP: (Number(result.ownVP) / 1e9).toFixed(2),
+        ownVPRaw: result.ownVP,
+        receivedVP: (Number(result.receivedVP) / 1e9).toFixed(2),
+        receivedVPRaw: result.receivedVP,
         totalVP: (Number(result.totalVP) / 1e9).toFixed(2),
         totalVPRaw: result.totalVP,
         allocatedVP: (Number(result.allocatedVP) / 1e9).toFixed(2),
@@ -128,7 +129,7 @@ export const useAvailableVP = (options = {}) => {
       setIsLoading(false);
       fetchInProgress.current = false;
     }
-  }, [account, votingPower, staleTime]);
+  }, [account, staleTime]);
 
   /**
    * Clear cache and force fresh fetch
@@ -154,10 +155,10 @@ export const useAvailableVP = (options = {}) => {
   // Initial fetch
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (enabled && account && votingPower) {
+    if (enabled && account) {
       fetchAvailableVP();
     }
-  }, [enabled, account, votingPower]); // fetchAvailableVP excluded to prevent infinite loop
+  }, [enabled, account]); // fetchAvailableVP excluded to prevent infinite loop
 
   // Auto-refresh interval
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,7 +204,11 @@ export const useAvailableVP = (options = {}) => {
   const dataIsFresh = lastFetched.current && (Date.now() - lastFetched.current) < staleTime;
 
   return {
-    // Data
+    // Data - VP breakdown
+    ownVP: data.ownVP,
+    ownVPRaw: data.ownVPRaw,
+    receivedVP: data.receivedVP,
+    receivedVPRaw: data.receivedVPRaw,
     totalVP: data.totalVP,
     totalVPRaw: data.totalVPRaw,
     allocatedVP: data.allocatedVP,

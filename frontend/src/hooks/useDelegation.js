@@ -748,13 +748,19 @@ export const useDelegation = () => {
 /**
  * Hook for proposal-specific delegation data
  * Returns available delegated power for a specific proposal (from merkle tree)
+ *
+ * Calculates received VP: effectiveVP - baseVP + delegatedOut
+ * Where effectiveVP = baseVP - delegatedOut + delegatedIn
+ * So receivedVP = delegatedIn (VP delegated to this user by others)
+ *
  * @param {number} proposalId - Proposal ID
  * @returns {Object} Proposal-specific delegation state
  */
 export const useDelegationForProposal = (proposalId) => {
   const { address: account, isConnected } = useAccount();
 
-  const [availablePower, setAvailablePower] = useState('0');
+  const [receivedPower, setReceivedPower] = useState('0');
+  const [ownPower, setOwnPower] = useState('0');
   const [proofData, setProofData] = useState(null);
 
   // Fetch merkle proof and effective VP from backend
@@ -766,16 +772,32 @@ export const useDelegationForProposal = (proposalId) => {
       if (res.ok) {
         const data = await res.json();
         setProofData(data);
-        // Effective VP is the VP after delegations applied (from merkle tree)
-        setAvailablePower(formatUnits(BigInt(data.effectiveVP || '0'), 9));
+
+        // Parse values from merkle proof data
+        const effectiveVP = BigInt(data.effectiveVP || '0');
+        const baseVP = BigInt(data.baseVP || '0');
+        const delegatedOut = BigInt(data.delegatedAmount || '0');
+
+        // Calculate received VP (what others delegated TO this user)
+        // effectiveVP = baseVP - delegatedOut + delegatedIn
+        // Therefore: delegatedIn = effectiveVP - baseVP + delegatedOut
+        // Note: delegatedIn can be positive even when effectiveVP < baseVP
+        // Example: baseVP=1000, delegatedOut=800, delegatedIn=100 => effectiveVP=300
+        const delegatedIn = effectiveVP - baseVP + delegatedOut;
+        const receivedVP = delegatedIn >= 0n ? delegatedIn : 0n;
+
+        setReceivedPower(formatUnits(receivedVP, 9));
+        setOwnPower(formatUnits(baseVP, 9));
       } else {
         // User not in snapshot or no snapshot yet
-        setAvailablePower('0');
+        setReceivedPower('0');
+        setOwnPower('0');
         setProofData(null);
       }
     } catch (err) {
       console.error('Failed to fetch proof data:', err);
-      setAvailablePower('0');
+      setReceivedPower('0');
+      setOwnPower('0');
       setProofData(null);
     }
   }, [account, proposalId]);
@@ -786,10 +808,17 @@ export const useDelegationForProposal = (proposalId) => {
   }, [fetchProofData]);
 
   return {
-    availableDelegatedPower: availablePower,
-    availableDelegatedPowerRaw: parseUnits(availablePower || '0', 9),
+    // Received VP (VP delegated to this user by others)
+    availableDelegatedPower: receivedPower,
+    availableDelegatedPowerRaw: parseUnits(receivedPower || '0', 9),
+    // Own VP (baseVP from merkle proof) for Fast Track breakdown
+    baseVP: ownPower,
+    baseVPRaw: parseUnits(ownPower || '0', 9),
+    // Proof data for voting
     proofData,
     hasMerkleProof: !!proofData?.proof?.length,
+    refetchAvailablePower: fetchProofData,
+    // Keep refetch as alias for backward compatibility
     refetch: fetchProofData,
   };
 };
