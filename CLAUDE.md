@@ -127,6 +127,8 @@ Localhost-only binding, `scram-sha-256` required, `POSTGRES_PASSWORD` mandatory.
 
 **Key Hooks:** `useTasks` (single+actions), `useTasksAPI` (paginated), `useTaskSkills` (IPFS+matching), `useVaultData` (45s), `useGovernance`, `useProposals`, `useDelegation`, `useAuction`, `useReputation` (5m cache), `useIsAdmin`, `useAdminAuth`, `useRebalance`, `useDispute`, `useBackup`, `usePause`, `useTruncateDatabase`, `useWhitelist`, `useCamelotLP`, `useIPFSImage` (private IPFS with JWT, returns blob URLs), `useAnalytics` (60s poll)
 
+**VP Precision:** `useAvailableVP` returns both display values (`ownVP`, `receivedVP`) and raw values (`ownVPRaw`, `receivedVPRaw`). Use raw values for calculations to avoid rounding errors; display values use `.toFixed(2)` and will cause precision loss if used in API requests.
+
 **Task Table:** Backend pagination via `/api/tasks` (20/page, from `analytics_tasks`). Hides Closed/Disputed by default. Skills matching with gold star icon.
 
 **Passport:** Thresholds: CREATE/STAKE/CLAIM/DEPOSIT/REDEEM=20, PROPOSE=25. Site-wide gate (score>=20), `/help` bypasses. Whitelisted addresses bypass.

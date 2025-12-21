@@ -43,10 +43,13 @@ const VotePanel = ({
   // Backend calculates totalVP including received delegations
   const {
     availableVP: slowTrackAvailableVP,
+    availableVPRaw: slowTrackAvailableVPRaw,
     allocatedVP: slowTrackAllocatedVP,
     totalVP: slowTrackTotalVP,
     ownVP: slowTrackOwnVP,
+    ownVPRaw: slowTrackOwnVPRaw,
     receivedVP: slowTrackReceivedVP,
+    receivedVPRaw: slowTrackReceivedVPRaw,
     isLoading: slowTrackLoading,
     error: slowTrackError,
     clearCache: clearSlowTrackCache,
@@ -95,12 +98,12 @@ const VotePanel = ({
 
     if (track === Track.Slow) {
       // Slow Track: Backend provides breakdown (ownVP + receivedVP)
-      // For Slow Track, show the raw values (not adjusted for allocations)
-      // since the budget display section shows the full breakdown
-      const slowOwnVP = parseFloat(slowTrackOwnVP || '0');
-      const slowReceivedVP = parseFloat(slowTrackReceivedVP || '0');
+      // Use raw values (wei) and convert to numbers with full precision to avoid rounding errors
+      // The rounded display values (slowTrackOwnVP) are only for display
+      const slowOwnVP = Number(slowTrackOwnVPRaw || '0') / 1e9;
+      const slowReceivedVP = Number(slowTrackReceivedVPRaw || '0') / 1e9;
 
-      // Use the actual own/received values for display
+      // Use the actual own/received values for calculations
       // The "Available to allocate" in budget section shows the limit
       ownVP = slowOwnVP;
       delegatedVP = slowReceivedVP;
@@ -116,7 +119,7 @@ const VotePanel = ({
       delegatedVP,
       totalVP: ownVP + delegatedVP,
     };
-  }, [track, availableOwnVP, slowTrackOwnVP, slowTrackReceivedVP, fastTrackBaseVP, receivedVP]);
+  }, [track, availableOwnVP, slowTrackOwnVPRaw, slowTrackReceivedVPRaw, fastTrackBaseVP, receivedVP]);
 
   // Calculate how input VP splits between own and delegated
   const amountSplit = useMemo(() => {
@@ -217,7 +220,13 @@ const VotePanel = ({
   };
 
   const handleMax = () => {
-    setAmount(totalAvailable.totalVP.toFixed(2));
+    if (track === Track.Slow) {
+      // Use raw available VP value for precise amount (avoids rounding errors)
+      const availableRaw = Number(slowTrackAvailableVPRaw || '0') / 1e9;
+      setAmount(availableRaw.toString());
+    } else {
+      setAmount(totalAvailable.totalVP.toString());
+    }
   };
 
   // Handle adding more to existing vote
