@@ -328,7 +328,8 @@ export function calculateDiversificationSwaps(
 
 /**
  * Simple ratio-based diversification for first deposit or excess funds
- * Splits between BTC and GOLD only (not USDC, not ROSE)
+ * Splits between BTC, GOLD, and keeps USDC buffer proportionally
+ * (matches Solidity _diversifyByRatio behavior)
  */
 function diversifyByRatio(
   amount: bigint,
@@ -338,12 +339,16 @@ function diversifyByRatio(
 
   const allocBTC = targetAllocations.get('BTC') ?? 0;
   const allocGOLD = targetAllocations.get('GOLD') ?? 0;
-  const rwaTotal = allocBTC + allocGOLD;
+  const allocUSDC = targetAllocations.get('STABLE') ?? 0;
+  
+  // Include USDC in the denominator so we keep proportional buffer
+  const hardAllocTotal = allocBTC + allocGOLD + allocUSDC;
 
-  if (rwaTotal === 0) return swaps;
+  if (hardAllocTotal === 0) return swaps;
 
-  const toBTC = (amount * BigInt(allocBTC)) / BigInt(rwaTotal);
-  const toGOLD = amount - toBTC; // Give remainder to GOLD to avoid dust
+  const toBTC = (amount * BigInt(allocBTC)) / BigInt(hardAllocTotal);
+  const toGOLD = (amount * BigInt(allocGOLD)) / BigInt(hardAllocTotal);
+  // Rest stays as USDC buffer (not swapped)
 
   if (toBTC > 0n) swaps.push({ assetKey: 'BTC', usdcAmount: toBTC });
   if (toGOLD > 0n) swaps.push({ assetKey: 'GOLD', usdcAmount: toGOLD });
