@@ -45,6 +45,7 @@ const VotePanel = ({
     availableVPRaw: slowTrackAvailableVPRaw,
     allocatedVP: slowTrackAllocatedVP,
     totalVP: slowTrackTotalVP,
+    totalVPRaw: slowTrackTotalVPRaw,
     ownVP: slowTrackOwnVP,
     ownVPRaw: slowTrackOwnVPRaw,
     receivedVP: slowTrackReceivedVP,
@@ -175,7 +176,7 @@ const VotePanel = ({
             proposalId,
             amountSplit.totalVP.toString(),
             support,
-            votingPower // Pass totalVP for budget calculation
+            (Number(slowTrackTotalVPRaw || '0') / 1e9).toString() // Total VP including delegations
           );
         } else if (onVoteCombined && (amountSplit.ownVP > 0 || amountSplit.delegatedVP > 0)) {
           // Fallback to combined vote
