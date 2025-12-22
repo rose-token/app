@@ -173,7 +173,7 @@ const VotePanel = ({
         if (onVoteSlow) {
           await onVoteSlow(
             proposalId,
-            amountSplit.ownVP.toString(),
+            amountSplit.totalVP.toString(),
             support,
             votingPower // Pass totalVP for budget calculation
           );
@@ -190,9 +190,13 @@ const VotePanel = ({
         }
       }
 
-      // Refetch available delegated power after successful vote
-      if (refetchAvailablePower) {
+      // Refresh VP data after successful vote
+      if (track === Track.Fast && refetchAvailablePower) {
+        // Fast Track: Refresh merkle proof data
         await refetchAvailablePower();
+      } else if (track === Track.Slow && clearSlowTrackCache) {
+        // Slow Track: Clear VP budget cache to refresh available VP
+        clearSlowTrackCache();
       }
 
       setAmount('');
@@ -240,9 +244,13 @@ const VotePanel = ({
         );
       }
 
-      // Refetch available delegated power after successful vote
-      if (refetchAvailablePower) {
+      // Refresh VP data after successful vote
+      if (track === Track.Fast && refetchAvailablePower) {
+        // Fast Track: Refresh merkle proof data
         await refetchAvailablePower();
+      } else if (track === Track.Slow && clearSlowTrackCache) {
+        // Slow Track: Clear VP budget cache to refresh available VP
+        clearSlowTrackCache();
       }
 
       setAmount('');
