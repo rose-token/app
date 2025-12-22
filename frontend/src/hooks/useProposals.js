@@ -344,105 +344,6 @@ export const useProposals = (options = {}) => {
   }, [account]);
 
   /**
-   * Vote on a proposal with VP (requires passport signature + reputation attestation)
-   * VP-centric model: vote with VP, not ROSE amounts
-   * @param {number} proposalId - Proposal ID
-   * @param {string} vpAmount - Amount of VP to vote with
-   * @param {boolean} support - true for Yay, false for Nay
-   */
-  const vote = useCallback(async (proposalId, vpAmount, support) => {
-    if (!isConnected || !CONTRACTS.GOVERNANCE) {
-      throw new Error('Not connected');
-    }
-
-    setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: true }));
-    setError(null);
-
-    try {
-      const vpWei = parseUnits(vpAmount, 18);
-
-      console.log(`Requesting vote signature for ${vpAmount} VP on proposal ${proposalId}...`);
-
-      // Get passport signature from backend
-      const response = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          voter: account,
-          proposalId: Number(proposalId),
-          vpAmount: vpWei.toString(),
-          support,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        if (errorData.error?.includes('Insufficient passport score')) {
-          throw new Error(`Passport score too low (${errorData.score}/${errorData.threshold} required)`);
-        }
-        throw new Error(errorData.error || `Backend error: ${response.status}`);
-      }
-
-      const signatureData = await response.json();
-      console.log('Got vote signature from backend');
-
-      // Fetch reputation attestation from backend
-      console.log('Fetching reputation attestation...');
-      const repAttestation = await fetchReputationAttestation();
-      console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
-
-      console.log(`Voting ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP on proposal ${proposalId}...`);
-      const hash = await writeContractAsync({
-        address: CONTRACTS.GOVERNANCE,
-        abi: RoseGovernanceABI,
-        functionName: 'vote',
-        args: [
-          BigInt(proposalId),
-          BigInt(signatureData.vpAmount),
-          support,
-          BigInt(signatureData.expiry),
-          signatureData.signature,
-          BigInt(repAttestation.reputation),
-          BigInt(repAttestation.expiry),
-          repAttestation.signature,
-        ],
-        ...GAS_SETTINGS,
-      });
-
-      await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-
-      console.log('Vote cast successfully!');
-      await refetchProposals();
-      await refetchVotes();
-      return { success: true, hash };
-    } catch (err) {
-      console.error('Vote error:', err);
-      const message = err.message.includes('User rejected')
-        ? 'Transaction rejected'
-        : err.message.includes('CannotVoteOnOwnProposal')
-        ? 'You cannot vote on your own proposal'
-        : err.message.includes('IneligibleToVote')
-        ? 'You are not eligible to vote (check reputation requirements)'
-        : err.message.includes('ProposalNotActive')
-        ? 'Proposal is no longer active'
-        : err.message.includes('VPLockedToAnotherProposal')
-        ? 'Your VP is locked to another proposal'
-        : err.message.includes('InsufficientAvailableVP')
-        ? 'Insufficient available VP'
-        : err.message.includes('Passport score too low')
-        ? err.message
-        : 'Failed to cast vote';
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(prev => ({ ...prev, [`vote-${proposalId}`]: false }));
-    }
-  }, [isConnected, account, writeContractAsync, publicClient, refetchProposals, refetchVotes, fetchReputationAttestation]);
-
-  /**
    * Vote on a Fast Track proposal (uses merkle proof for VP verification)
    * @param {number} proposalId - Proposal ID
    * @param {string} vpAmount - Amount of VP to vote with
@@ -672,13 +573,15 @@ export const useProposals = (options = {}) => {
   /**
    * Combined vote using both own VP and delegated VP
    * Auto-splits: uses own VP first, then delegated VP
+   * Track-aware: uses voteSlow for Slow Track, voteFast for Fast Track
    * @param {number} proposalId - Proposal ID
    * @param {string} totalVP - Total VP to vote with
    * @param {boolean} support - true for Yay, false for Nay
    * @param {string} ownAvailable - Available own VP
    * @param {string} delegatedAvailable - Available delegated VP for this proposal
+   * @param {number} track - Track type (Track.Fast or Track.Slow)
    */
-  const voteCombined = useCallback(async (proposalId, totalVP, support, ownAvailable, delegatedAvailable) => {
+  const voteCombined = useCallback(async (proposalId, totalVP, support, ownAvailable, delegatedAvailable, track = Track.Slow) => {
     // Prevent concurrent voting (nonce conflict prevention)
     if (voteCombinedInProgress.current) {
       throw new Error('Vote transaction already in progress');
@@ -715,52 +618,113 @@ export const useProposals = (options = {}) => {
         }
       }
 
-      // Vote with own VP if any (requires passport signature + reputation attestation)
+      // Vote with own VP if any (track-specific: voteSlow or voteFast)
       if (ownToUse > 0n) {
-        console.log(`Requesting vote signature for ${formatUnits(ownToUse, 9)} own VP...`);
+        let ownHash;
 
-        // Get passport signature from backend
-        const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            voter: account,
-            proposalId: Number(proposalId),
-            vpAmount: ownToUse.toString(),
-            support,
-          }),
-        });
+        if (track === Track.Slow) {
+          // Slow Track: Use attestation-based voting
+          console.log(`Fetching Slow Track attestation for ${formatUnits(ownToUse, 9)} own VP...`);
 
-        if (!voteResponse.ok) {
-          const errorData = await voteResponse.json().catch(() => ({}));
-          throw new Error(errorData.error || `Backend error: ${voteResponse.status}`);
+          const totalVPWei = parseUnits(ownAvailable.toString(), 9);
+          const attestResponse = await fetch(`${SIGNER_URL}/api/governance/vp/attestation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user: account,
+              proposalId: Number(proposalId),
+              support,
+              vpAmount: ownToUse.toString(),
+              totalVP: totalVPWei.toString(),
+            }),
+          });
+
+          if (!attestResponse.ok) {
+            const errorData = await attestResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to get attestation');
+          }
+
+          const attestation = await attestResponse.json();
+          console.log('Got Slow Track attestation from backend');
+
+          // Fetch reputation attestation
+          const repAttestation = await fetchReputationAttestation();
+          console.log('Reputation:', repAttestation.reputation);
+
+          console.log(`Voting Slow Track with ${formatUnits(ownToUse, 9)} own VP...`);
+          ownHash = await writeContractAsync({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'voteSlow',
+            args: [
+              BigInt(proposalId),
+              support,
+              BigInt(attestation.vpAmount),
+              BigInt(attestation.availableVP),
+              BigInt(attestation.nonce),
+              BigInt(attestation.expiry),
+              attestation.signature,
+              BigInt(repAttestation.reputation),
+              BigInt(repAttestation.expiry),
+              repAttestation.signature,
+            ],
+            ...GAS_SETTINGS,
+          });
+        } else {
+          // Fast Track: Use merkle proof-based voting
+          console.log(`Fetching merkle proof for ${formatUnits(ownToUse, 9)} own VP...`);
+
+          const proofResponse = await fetch(`${SIGNER_URL}/api/governance/proposals/${proposalId}/proof/${account}`);
+          if (!proofResponse.ok) {
+            const errorData = await proofResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to fetch merkle proof');
+          }
+          const proofData = await proofResponse.json();
+          console.log('Got merkle proof from backend');
+
+          // Get passport signature
+          const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              voter: account,
+              proposalId: Number(proposalId),
+              vpAmount: ownToUse.toString(),
+              support,
+            }),
+          });
+
+          if (!voteResponse.ok) {
+            const errorData = await voteResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || `Backend error: ${voteResponse.status}`);
+          }
+
+          const voteSignatureData = await voteResponse.json();
+          console.log('Got vote signature from backend');
+
+          // Fetch reputation attestation
+          const repAttestation = await fetchReputationAttestation();
+          console.log('Reputation:', repAttestation.reputation);
+
+          console.log(`Voting Fast Track with ${formatUnits(ownToUse, 9)} own VP...`);
+          ownHash = await writeContractAsync({
+            address: CONTRACTS.GOVERNANCE,
+            abi: RoseGovernanceABI,
+            functionName: 'voteFast',
+            args: [
+              BigInt(proposalId),
+              support,
+              ownToUse,
+              proofData.proof,
+              BigInt(voteSignatureData.expiry),
+              voteSignatureData.signature,
+              BigInt(repAttestation.reputation),
+              BigInt(repAttestation.expiry),
+              repAttestation.signature,
+            ],
+            ...GAS_SETTINGS,
+          });
         }
-
-        const voteSignatureData = await voteResponse.json();
-        console.log('Got vote signature from backend');
-
-        // Fetch reputation attestation from backend
-        console.log('Fetching reputation attestation...');
-        const repAttestation = await fetchReputationAttestation();
-        console.log('Reputation:', repAttestation.reputation, 'Expiry:', repAttestation.expiry);
-
-        console.log(`Voting with ${formatUnits(ownToUse, 9)} own VP...`);
-        const ownHash = await writeContractAsync({
-          address: CONTRACTS.GOVERNANCE,
-          abi: RoseGovernanceABI,
-          functionName: 'vote',
-          args: [
-            BigInt(proposalId),
-            BigInt(voteSignatureData.vpAmount),
-            support,
-            BigInt(voteSignatureData.expiry),
-            voteSignatureData.signature,
-            BigInt(repAttestation.reputation),
-            BigInt(repAttestation.expiry),
-            repAttestation.signature,
-          ],
-          ...GAS_SETTINGS,
-        });
 
         await publicClient.waitForTransactionReceipt({
           hash: ownHash,
@@ -1179,7 +1143,6 @@ export const useProposals = (options = {}) => {
     actionLoading,
     setError,
     // Actions
-    vote,
     voteFast,
     voteSlow,
     voteCombined,

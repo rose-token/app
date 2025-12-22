@@ -25,7 +25,6 @@ const VotePanel = ({
   isProposer,
   isActive,
   isPending = false, // Fast Track only - waiting for VP snapshot
-  onVote,
   onVoteFast,
   onVoteSlow,
   onVoteCombined,
@@ -168,9 +167,6 @@ const VotePanel = ({
         // Fast Track: Use merkle proof voting
         if (onVoteFast) {
           await onVoteFast(proposalId, amountSplit.ownVP.toString(), support);
-        } else if (onVote) {
-          // Fallback to legacy vote
-          await onVote(proposalId, amountSplit.ownVP.toString(), support);
         }
       } else {
         // Slow Track: Use attestation voting with VP budget
@@ -188,11 +184,9 @@ const VotePanel = ({
             amountSplit.totalVP.toString(),
             support,
             totalAvailable.ownVP.toString(),
-            totalAvailable.delegatedVP.toString()
+            totalAvailable.delegatedVP.toString(),
+            track
           );
-        } else if (onVote && amountSplit.ownVP > 0) {
-          // Fallback to legacy vote
-          await onVote(proposalId, amountSplit.ownVP.toString(), support);
         }
       }
 
@@ -241,10 +235,9 @@ const VotePanel = ({
           amountSplit.totalVP.toString(),
           existingVoteDirection,
           totalAvailable.ownVP.toString(),
-          totalAvailable.delegatedVP.toString()
+          totalAvailable.delegatedVP.toString(),
+          track
         );
-      } else if (onVote && amountSplit.ownVP > 0) {
-        await onVote(proposalId, amountSplit.ownVP.toString(), existingVoteDirection);
       }
 
       // Refetch available delegated power after successful vote
