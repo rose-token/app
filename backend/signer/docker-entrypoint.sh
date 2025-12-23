@@ -73,8 +73,17 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
         exit 1
     fi
 
+    # Create temporary password file for initdb
+    PWFILE=$(mktemp)
+    echo "$POSTGRES_PASSWORD" > "$PWFILE"
+    chmod 600 "$PWFILE"
+    chown postgres:postgres "$PWFILE"
+
     # Initialize with scram-sha-256 password encryption
-    su postgres -c "initdb -D $PGDATA --auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    su postgres -c "initdb -D $PGDATA --auth-host=scram-sha-256 --auth-local=scram-sha-256 --pwfile=$PWFILE"
+
+    # Clean up password file
+    rm -f "$PWFILE"
 
     # Write secure pg_hba.conf
     write_secure_pg_hba
