@@ -384,7 +384,7 @@ jobs:
 
           # Provider whitelist - preferred providers (takes priority over blacklist)
           PROVIDER_WHITELIST=(
-            "akash1u5cdg7k3gl43mukca4aeultuz8x2j68mgwn28e"  # provider.d3akash.cloud
+            "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk" 
           )
 
           # Provider blacklist - unreliable providers
@@ -755,7 +755,7 @@ jobs:
 
           # Provider whitelist - preferred providers (takes priority over blacklist)
           PROVIDER_WHITELIST=(
-            "akash1u5cdg7k3gl43mukca4aeultuz8x2j68mgwn28e"  # provider.d3akash.cloud
+            "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk"  
           )
 
           # Provider blacklist - unreliable providers
