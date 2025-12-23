@@ -375,7 +375,6 @@ jobs:
           PROVIDER_WHITELIST=(
             "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk" 
             "akash175llqyjvxfle9qwt740vm46772dzaznpzgm576"
-            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"
           )
 
           # Provider blacklist - unreliable providers
@@ -749,7 +748,6 @@ jobs:
           PROVIDER_WHITELIST=(
             "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk"
             "akash175llqyjvxfle9qwt740vm46772dzaznpzgm576"
-            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"
           )
 
           # Provider blacklist - unreliable providers
