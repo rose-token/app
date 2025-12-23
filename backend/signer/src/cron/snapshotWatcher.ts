@@ -164,7 +164,7 @@ async function processSnapshot(proposalId: number): Promise<void> {
     const proposal: ProposalData = await governance.proposals(proposalId);
 
     // Verify proposal is still pending
-    if (proposal.status !== ProposalStatus.Pending) {
+    if (Number(proposal.status) !== ProposalStatus.Pending) {
       console.log(`[SnapshotWatcher] Proposal ${proposalId} is no longer pending (status: ${proposal.status}), skipping`);
       return;
     }
@@ -290,7 +290,7 @@ async function catchUpPendingProposals(): Promise<void> {
     try {
       const proposal: ProposalData = await governance.proposals(proposalId);
 
-      if (proposal.status === ProposalStatus.Pending) {
+      if (Number(proposal.status) === ProposalStatus.Pending) {
         console.log(`[SnapshotWatcher] Found pending proposal ${proposalId}, scheduling snapshot`);
         scheduleSnapshot(proposalId, Number(proposal.votingStartsAt));
       }
@@ -461,7 +461,7 @@ async function getProposalsPastDeadline(): Promise<ProposalToFinalize[]> {
       const proposal: ProposalData = await governance.proposals(i);
 
       // Only Active proposals that have ended
-      if (proposal.status === ProposalStatus.Active && Number(proposal.votingEndsAt) < now) {
+      if (Number(proposal.status) === ProposalStatus.Active && Number(proposal.votingEndsAt) < now) {
         proposals.push({
           id: i,
           track: proposal.track as Track,
@@ -618,7 +618,7 @@ async function getProposalsToExecute(): Promise<ProposalToExecute[]> {
       const proposal: ProposalData = await governance.proposals(i);
 
       // Only Passed proposals (status = 2) that have waited 24h
-      if (proposal.status === ProposalStatus.Passed) {
+      if (Number(proposal.status) === ProposalStatus.Passed) {
         const graceEndTime = Number(proposal.votingEndsAt) + EXECUTION_GRACE_PERIOD_SECONDS;
         if (graceEndTime < now) {
           proposals.push({

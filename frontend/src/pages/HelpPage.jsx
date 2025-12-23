@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { uploadCommentToIPFS, fetchCommentFromIPFS, isCID } from '../utils/ipfs/pinataService';
+import { uploadCommentToIPFS, fetchCommentFromIPFS } from '../utils/ipfs/pinataService';
 
 const HelpPage = () => {
   const [expandedSections, setExpandedSections] = useState({
@@ -125,12 +125,7 @@ const HelpPage = () => {
       setBugError('');
       setBugSuccess('');
       setLookupReport(null);
-      
-      if (!isCID(lookupCid)) {
-        setBugError('Invalid CID format. Please enter a valid IPFS Content Identifier.');
-        return;
-      }
-      
+
       const reportData = await fetchCommentFromIPFS(lookupCid);
       
       const parsedData = typeof reportData === 'string' 

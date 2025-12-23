@@ -25,7 +25,6 @@ const VotePanel = ({
   isProposer,
   isActive,
   isPending = false, // Fast Track only - waiting for VP snapshot
-  onVote,
   onVoteFast,
   onVoteSlow,
   onVoteCombined,
@@ -40,15 +39,22 @@ const VotePanel = ({
   } = useGovernance();
 
   // Slow Track VP budget (with caching)
+  // Backend calculates totalVP including received delegations
   const {
     availableVP: slowTrackAvailableVP,
+    availableVPRaw: slowTrackAvailableVPRaw,
     allocatedVP: slowTrackAllocatedVP,
     totalVP: slowTrackTotalVP,
+    totalVPRaw: slowTrackTotalVPRaw,
+    ownVP: slowTrackOwnVP,
+    ownVPRaw: slowTrackOwnVPRaw,
+    receivedVP: slowTrackReceivedVP,
+    receivedVPRaw: slowTrackReceivedVPRaw,
     isLoading: slowTrackLoading,
     error: slowTrackError,
     clearCache: clearSlowTrackCache,
   } = useAvailableVP({
-    enabled: track === Track.Slow && !!account && !!votingPower,
+    enabled: track === Track.Slow && !!account,
     refetchOnVote: true,
     staleTime: 5000,
   });
@@ -68,9 +74,11 @@ const VotePanel = ({
     castDelegatedVote,
   } = useDelegation();
 
-  // Get per-proposal available delegated power (accounts for already-used VP)
+  // Get per-proposal delegation data (accounts for already-used VP)
+  // For Fast Track: baseVP = own VP, availableDelegatedPower = received VP
   const {
     availableDelegatedPower,
+    baseVP: fastTrackBaseVP,
     refetchAvailablePower,
   } = useDelegationForProposal(proposalId);
 
@@ -83,25 +91,35 @@ const VotePanel = ({
   const ownVotingPower = parseFloat(votingPower || '0');
   const receivedVP = parseFloat(availableDelegatedPower || '0');
 
-  // Calculate total available voting power
+  // Calculate total available voting power with VP breakdown
   // Two-Track model: Fast Track uses abundant VP, Slow Track uses budget from useAvailableVP
   const totalAvailable = useMemo(() => {
-    let ownVP;
+    let ownVP, delegatedVP;
+
     if (track === Track.Slow) {
-      // Slow Track: Use available VP from budget hook
-      ownVP = parseFloat(slowTrackAvailableVP || '0');
+      // Slow Track: Backend provides breakdown (ownVP + receivedVP)
+      // Use raw values (wei) and convert to numbers with full precision to avoid rounding errors
+      // The rounded display values (slowTrackOwnVP) are only for display
+      const slowOwnVP = Number(slowTrackOwnVPRaw || '0') / 1e9;
+      const slowReceivedVP = Number(slowTrackReceivedVPRaw || '0') / 1e9;
+
+      // Use the actual own/received values for calculations
+      // The "Available to allocate" in budget section shows the limit
+      ownVP = slowOwnVP;
+      delegatedVP = slowReceivedVP;
     } else {
-      // Fast Track: Use full available VP (abundant model)
-      ownVP = availableOwnVP;
+      // Fast Track: Use baseVP from merkle proof (own VP) + received VP
+      // Merkle proof effectiveVP = baseVP - delegatedOut + delegatedIn
+      ownVP = parseFloat(fastTrackBaseVP || availableOwnVP || '0');
+      delegatedVP = receivedVP;
     }
-    // Received VP (as delegate) is always available per-proposal
-    const delegatedVP = receivedVP;
+
     return {
       ownVP,
       delegatedVP,
       totalVP: ownVP + delegatedVP,
     };
-  }, [track, availableOwnVP, slowTrackAvailableVP, receivedVP]);
+  }, [track, availableOwnVP, slowTrackOwnVPRaw, slowTrackReceivedVPRaw, fastTrackBaseVP, receivedVP]);
 
   // Calculate how input VP splits between own and delegated
   const amountSplit = useMemo(() => {
@@ -150,18 +168,15 @@ const VotePanel = ({
         // Fast Track: Use merkle proof voting
         if (onVoteFast) {
           await onVoteFast(proposalId, amountSplit.ownVP.toString(), support);
-        } else if (onVote) {
-          // Fallback to legacy vote
-          await onVote(proposalId, amountSplit.ownVP.toString(), support);
         }
       } else {
         // Slow Track: Use attestation voting with VP budget
         if (onVoteSlow) {
           await onVoteSlow(
             proposalId,
-            amountSplit.ownVP.toString(),
+            amountSplit.totalVP.toString(),
             support,
-            votingPower // Pass totalVP for budget calculation
+            (Number(slowTrackTotalVPRaw || '0') / 1e9).toString() // Total VP including delegations
           );
         } else if (onVoteCombined && (amountSplit.ownVP > 0 || amountSplit.delegatedVP > 0)) {
           // Fallback to combined vote
@@ -170,17 +185,19 @@ const VotePanel = ({
             amountSplit.totalVP.toString(),
             support,
             totalAvailable.ownVP.toString(),
-            totalAvailable.delegatedVP.toString()
+            totalAvailable.delegatedVP.toString(),
+            track
           );
-        } else if (onVote && amountSplit.ownVP > 0) {
-          // Fallback to legacy vote
-          await onVote(proposalId, amountSplit.ownVP.toString(), support);
         }
       }
 
-      // Refetch available delegated power after successful vote
-      if (refetchAvailablePower) {
+      // Refresh VP data after successful vote
+      if (track === Track.Fast && refetchAvailablePower) {
+        // Fast Track: Refresh merkle proof data
         await refetchAvailablePower();
+      } else if (track === Track.Slow && clearSlowTrackCache) {
+        // Slow Track: Clear VP budget cache to refresh available VP
+        clearSlowTrackCache();
       }
 
       setAmount('');
@@ -202,7 +219,13 @@ const VotePanel = ({
   };
 
   const handleMax = () => {
-    setAmount(totalAvailable.totalVP.toFixed(2));
+    if (track === Track.Slow) {
+      // Use raw available VP value for precise amount (avoids rounding errors)
+      const availableRaw = Number(slowTrackAvailableVPRaw || '0') / 1e9;
+      setAmount(availableRaw.toString());
+    } else {
+      setAmount(totalAvailable.totalVP.toString());
+    }
   };
 
   // Handle adding more to existing vote
@@ -217,15 +240,18 @@ const VotePanel = ({
           amountSplit.totalVP.toString(),
           existingVoteDirection,
           totalAvailable.ownVP.toString(),
-          totalAvailable.delegatedVP.toString()
+          totalAvailable.delegatedVP.toString(),
+          track
         );
-      } else if (onVote && amountSplit.ownVP > 0) {
-        await onVote(proposalId, amountSplit.ownVP.toString(), existingVoteDirection);
       }
 
-      // Refetch available delegated power after successful vote
-      if (refetchAvailablePower) {
+      // Refresh VP data after successful vote
+      if (track === Track.Fast && refetchAvailablePower) {
+        // Fast Track: Refresh merkle proof data
         await refetchAvailablePower();
+      } else if (track === Track.Slow && clearSlowTrackCache) {
+        // Slow Track: Clear VP budget cache to refresh available VP
+        clearSlowTrackCache();
       }
 
       setAmount('');
@@ -506,15 +532,27 @@ const VotePanel = ({
             <p className="text-xs" style={{ color: 'var(--error)' }}>{slowTrackError}</p>
           ) : (
             <div className="text-xs space-y-1">
+              {/* VP Breakdown: Own + Received */}
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-muted)' }}>Total VP:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Your VP:</span>
+                <span>{formatVotePower(parseFloat(slowTrackOwnVP || '0'))} VP</span>
+              </div>
+              {parseFloat(slowTrackReceivedVP || '0') > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-muted)' }}>Received (as delegate):</span>
+                  <span className="text-green-500">+{formatVotePower(parseFloat(slowTrackReceivedVP))} VP</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold pt-1 border-t" style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                <span>Total VP:</span>
                 <span>{formatVotePower(parseFloat(slowTrackTotalVP))} VP</span>
               </div>
-              <div className="flex justify-between">
+              {/* Allocation status */}
+              <div className="flex justify-between mt-2">
                 <span style={{ color: 'var(--text-muted)' }}>Already allocated:</span>
                 <span>{formatVotePower(parseFloat(slowTrackAllocatedVP))} VP</span>
               </div>
-              <div className="flex justify-between font-semibold pt-1 border-t" style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+              <div className="flex justify-between font-semibold">
                 <span>Available to allocate:</span>
                 <span style={{ color: 'var(--warning)' }}>
                   {formatVotePower(parseFloat(slowTrackAvailableVP))} VP

@@ -33,7 +33,6 @@ const ProposalDetailPage = () => {
     isLoading,
     error,
     actionLoading,
-    vote,
     voteFast,
     voteSlow,
     voteCombined,
@@ -261,7 +260,7 @@ const ProposalDetailPage = () => {
             </div>
 
             {/* Quorum */}
-            <QuorumBar proposalId={proposal.id} totalAllocated={proposal.totalAllocated} />
+            <QuorumBar track={proposal.track} totalVotes={proposal.totalVotes} />
           </div>
 
           {/* Task Link (if executed) */}
@@ -294,7 +293,6 @@ const ProposalDetailPage = () => {
             isProposer={proposal.isProposer}
             isActive={isActive}
             isPending={isPending}
-            onVote={vote}
             onVoteFast={voteFast}
             onVoteSlow={voteSlow}
             onVoteCombined={voteCombined}

@@ -786,7 +786,9 @@ export interface MerkleProofErrorResponse {
 // Available VP response for Slow Track voting
 export interface VPAvailableResponse {
   user: string;
-  totalVP: string;
+  ownVP: string;        // User's own VP from staking
+  receivedVP: string;   // VP delegated to user by others
+  totalVP: string;      // ownVP + receivedVP
   allocatedVP: string;
   availableVP: string;
   allocations: Array<{
@@ -803,7 +805,7 @@ export interface VPAttestationRequest {
   proposalId: number;
   support: boolean;
   vpAmount: string;
-  totalVP: string;
+  totalVP?: string;  // Optional - backend calculates if not provided
 }
 
 // Attestation response for Slow Track voting

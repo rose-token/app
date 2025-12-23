@@ -384,7 +384,7 @@ jobs:
 
           # Provider whitelist - preferred providers (takes priority over blacklist)
           PROVIDER_WHITELIST=(
-            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"  # provider.europlots.com
+            "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk" 
           )
 
           # Provider blacklist - unreliable providers
@@ -755,7 +755,7 @@ jobs:
 
           # Provider whitelist - preferred providers (takes priority over blacklist)
           PROVIDER_WHITELIST=(
-            "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc"  # provider.europlots.com
+            "akash15tl6v6gd0nte0syyxnv57zmmspgju4c3xfmdhk"  
           )
 
           # Provider blacklist - unreliable providers

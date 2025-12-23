@@ -1,33 +1,36 @@
 /**
  * QuorumBar - Visual progress indicator for proposal quorum
- * Shows participation count vs required 33% quorum
+ * Shows participation (VP votes) vs required quorum threshold
+ *
+ * Quorum thresholds are track-specific:
+ * - Fast Track: 10% of total system VP
+ * - Slow Track: 25% of total system VP
  */
 
 import React from 'react';
-import { useReadContract } from 'wagmi';
-import { formatUnits } from 'viem';
-import RoseGovernanceABI from '../../contracts/RoseGovernanceABI.json';
-import { CONTRACTS, GOVERNANCE_CONSTANTS } from '../../constants/contracts';
+import { TRACK_CONSTANTS, Track } from '../../constants/contracts';
+import useGovernance from '../../hooks/useGovernance';
 
-const QuorumBar = ({ proposalId, totalAllocated, compact = false }) => {
-  // Get total staked ROSE for calculating quorum
-  const { data: totalStaked } = useReadContract({
-    address: CONTRACTS.GOVERNANCE,
-    abi: RoseGovernanceABI,
-    functionName: 'totalStakedRose',
-    query: {
-      enabled: !!CONTRACTS.GOVERNANCE,
-    },
-  });
+const QuorumBar = ({ track, totalVotes, compact = false }) => {
+  // Get total system VP from backend (includes all stakers)
+  const { totalSystemVP } = useGovernance();
 
-  // Calculate quorum requirement (33% of total staked)
-  const totalStakedNumber = totalStaked ? parseFloat(formatUnits(totalStaked, 18)) : 0;
-  const quorumRequired = totalStakedNumber * (GOVERNANCE_CONSTANTS.QUORUM_THRESHOLD / 10000);
-  const totalAllocatedNumber = parseFloat(totalAllocated || '0');
+  // Get track-specific quorum threshold
+  const quorumBps = TRACK_CONSTANTS[track ?? Track.Slow]?.QUORUM_BPS ?? 2500;
+  const quorumPercent = quorumBps / 100; // 25 for Slow, 10 for Fast
+
+  // Calculate total system VP number
+  const totalSystemVPNumber = parseFloat(totalSystemVP || '0');
+
+  // Calculate quorum requirement (% of total system VP)
+  const quorumRequired = totalSystemVPNumber * (quorumBps / 10000);
+
+  // Total votes cast on proposal (yay + nay)
+  const totalVotesNumber = parseFloat(totalVotes || '0');
 
   // Calculate progress percentage
-  const progress = quorumRequired > 0 ? Math.min((totalAllocatedNumber / quorumRequired) * 100, 100) : 0;
-  const quorumMet = totalAllocatedNumber >= quorumRequired;
+  const progress = quorumRequired > 0 ? Math.min((totalVotesNumber / quorumRequired) * 100, 100) : 0;
+  const quorumMet = totalVotesNumber >= quorumRequired;
 
   if (compact) {
     return (
@@ -78,10 +81,10 @@ const QuorumBar = ({ proposalId, totalAllocated, compact = false }) => {
 
       <div className="flex justify-between text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
         <span>
-          {totalAllocatedNumber.toLocaleString(undefined, { maximumFractionDigits: 0 })} ROSE allocated
+          {totalVotesNumber.toLocaleString(undefined, { maximumFractionDigits: 2 })} VP voted
         </span>
         <span>
-          {quorumRequired.toLocaleString(undefined, { maximumFractionDigits: 0 })} required (33%)
+          {quorumRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })} required ({quorumPercent}%)
         </span>
       </div>
     </div>

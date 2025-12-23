@@ -73,7 +73,7 @@ Web3 marketplace with task-value-based token distribution.
 **Fast Track:** Proposal → 1d delay → Backend submits merkle root → Voting with proofs → Auto-finalize
 **Slow Track:** Proposal (Active immediately) → Backend attestations → Voting → Backend finalizes with snapshot
 
-**Off-Chain Delegation:** EIP-712 signed, stored in DB. Requires `setDelegateOptIn(true)`. Fields: `vpAmount` (0=full), `nonce`, `expiry`, `signature`.
+**Off-Chain Delegation:** EIP-712 signed, stored in DB. Requires `setDelegateOptIn(true)`. Fields: `vpAmount` (0=full), `nonce`, `expiry`, `signature`. Delegates can vote with received VP: `/vp/available` returns `ownVP + receivedVP` breakdown. Fast Track uses merkle proof `effectiveVP`, Slow Track uses backend-calculated total.
 
 **Lifecycle:** Active → Passed/Failed. Auto-execute after 24h grace (creates DAO task). Max 3 quorum extensions, 4 edits. Rewards: DAO 2%, Yay 2%, Proposer 1%.
 
@@ -126,6 +126,8 @@ Localhost-only binding, `scram-sha-256` required, `POSTGRES_PASSWORD` mandatory.
 **Routes:** `/` Tasks, `/create-task`, `/task/:id`, `/vault`, `/governance`, `/governance/:id`, `/delegates`, `/profile`, `/admin` (owner), `/admin/disputes`, `/admin/analytics`
 
 **Key Hooks:** `useTasks` (single+actions), `useTasksAPI` (paginated), `useTaskSkills` (IPFS+matching), `useVaultData` (45s), `useGovernance`, `useProposals`, `useDelegation`, `useAuction`, `useReputation` (5m cache), `useIsAdmin`, `useAdminAuth`, `useRebalance`, `useDispute`, `useBackup`, `usePause`, `useTruncateDatabase`, `useWhitelist`, `useCamelotLP`, `useIPFSImage` (private IPFS with JWT, returns blob URLs), `useAnalytics` (60s poll)
+
+**VP Precision:** `useAvailableVP` returns both display values (`ownVP`, `receivedVP`) and raw values (`ownVPRaw`, `receivedVPRaw`). Use raw values for calculations to avoid rounding errors; display values use `.toFixed(2)` and will cause precision loss if used in API requests.
 
 **Task Table:** Backend pagination via `/api/tasks` (20/page, from `analytics_tasks`). Hides Closed/Disputed by default. Skills matching with gold star icon.
 
