@@ -358,9 +358,9 @@ export const useProposals = (options = {}) => {
     setError(null);
 
     try {
-      const vpWei = parseUnits(vpAmount.toString(), 9);
-
       // Fetch merkle proof from backend
+      // The proof contains effectiveVP which we MUST use for voting
+      // (merkle tree commits to this exact value per address)
       console.log(`Fetching merkle proof for proposal ${proposalId}...`);
       const proofResponse = await fetch(`${SIGNER_URL}/api/governance/proposals/${proposalId}/proof/${account}`);
 
@@ -375,7 +375,15 @@ export const useProposals = (options = {}) => {
       const proofData = await proofResponse.json();
       console.log('Got merkle proof from backend');
 
-      // Get passport signature from backend
+      // CRITICAL: Use effectiveVP from merkle proof, not user input
+      // The merkle tree contains (address, effectiveVP) pairs - must match exactly
+      const effectiveVP = proofData.effectiveVP;
+      if (!effectiveVP || BigInt(effectiveVP) === 0n) {
+        throw new Error('No voting power in snapshot');
+      }
+      console.log(`Using effectiveVP from snapshot: ${effectiveVP} (${Number(effectiveVP) / 1e9} VP)`);
+
+      // Get passport signature from backend using effectiveVP (not user input)
       console.log(`Requesting passport signature for Fast Track vote...`);
       const voteResponse = await fetch(`${SIGNER_URL}/api/governance/vote-signature`, {
         method: 'POST',
@@ -383,7 +391,7 @@ export const useProposals = (options = {}) => {
         body: JSON.stringify({
           voter: account,
           proposalId: Number(proposalId),
-          vpAmount: vpWei.toString(),
+          vpAmount: effectiveVP, // Use merkle proof VP, not user input
           support,
         }),
       });
@@ -400,7 +408,8 @@ export const useProposals = (options = {}) => {
       const repAttestation = await fetchReputationAttestation();
       console.log('Reputation:', repAttestation.reputation);
 
-      console.log(`Voting Fast Track ${support ? 'Yay' : 'Nay'} with ${vpAmount} VP...`);
+      const effectiveVPBigInt = BigInt(effectiveVP);
+      console.log(`Voting Fast Track ${support ? 'Yay' : 'Nay'} with ${Number(effectiveVPBigInt) / 1e9} VP...`);
       const hash = await writeContractAsync({
         address: CONTRACTS.GOVERNANCE,
         abi: RoseGovernanceABI,
@@ -408,7 +417,7 @@ export const useProposals = (options = {}) => {
         args: [
           BigInt(proposalId),
           support,
-          vpWei,
+          effectiveVPBigInt, // Use merkle proof VP
           proofData.proof,
           BigInt(signatureData.expiry),
           signatureData.signature,
@@ -419,10 +428,15 @@ export const useProposals = (options = {}) => {
         ...GAS_SETTINGS,
       });
 
-      await publicClient.waitForTransactionReceipt({
+      const receipt = await publicClient.waitForTransactionReceipt({
         hash,
         confirmations: 1,
       });
+
+      // Check if transaction actually succeeded
+      if (receipt.status !== 'success') {
+        throw new Error('Transaction reverted on-chain');
+      }
 
       console.log('Fast Track vote cast successfully!');
       await refetchProposals();
