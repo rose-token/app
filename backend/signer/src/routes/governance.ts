@@ -383,8 +383,8 @@ router.post('/vote-signature', async (req: Request, res: Response) => {
 
     // Message hash must match contract's expectation
     const messageHash = ethers.solidityPackedKeccak256(
-      ['string', 'address', 'uint256', 'uint256', 'bool', 'uint256'],
-      ['vote', voter, proposalId, vpAmount, support, expiry]
+      ['string', 'address', 'uint256', 'bool', 'uint256', 'uint256'],
+      ['voteFast', voter, proposalId, support, vpAmount, expiry]
     );
 
     const signature = await wallet.signMessage(ethers.getBytes(messageHash));

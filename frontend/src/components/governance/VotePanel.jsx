@@ -92,34 +92,32 @@ const VotePanel = ({
   const receivedVP = parseFloat(availableDelegatedPower || '0');
 
   // Calculate total available voting power with VP breakdown
-  // Two-Track model: Fast Track uses abundant VP, Slow Track uses budget from useAvailableVP
+  // Two-Track model: Fast Track uses effectiveVP from merkle snapshot, Slow Track uses budget
   const totalAvailable = useMemo(() => {
-    let ownVP, delegatedVP;
-
     if (track === Track.Slow) {
       // Slow Track: Backend provides breakdown (ownVP + receivedVP)
       // Use raw values (wei) and convert to numbers with full precision to avoid rounding errors
-      // The rounded display values (slowTrackOwnVP) are only for display
       const slowOwnVP = Number(slowTrackOwnVPRaw || '0') / 1e9;
       const slowReceivedVP = Number(slowTrackReceivedVPRaw || '0') / 1e9;
 
-      // Use the actual own/received values for calculations
-      // The "Available to allocate" in budget section shows the limit
-      ownVP = slowOwnVP;
-      delegatedVP = slowReceivedVP;
+      return {
+        ownVP: slowOwnVP,
+        delegatedVP: slowReceivedVP,
+        totalVP: slowOwnVP + slowReceivedVP,
+      };
     } else {
-      // Fast Track: Use baseVP from merkle proof (own VP) + received VP
-      // Merkle proof effectiveVP = baseVP - delegatedOut + delegatedIn
-      ownVP = parseFloat(fastTrackBaseVP || availableOwnVP || '0');
-      delegatedVP = receivedVP;
-    }
+      // Fast Track: Use effectiveVP from merkle snapshot directly
+      // effectiveVP already includes delegation effects (baseVP - delegatedOut + delegatedIn)
+      // No need to split - merkle tree commits to this exact value
+      const effectiveVP = parseFloat(snapshotVP || '0');
 
-    return {
-      ownVP,
-      delegatedVP,
-      totalVP: ownVP + delegatedVP,
-    };
-  }, [track, availableOwnVP, slowTrackOwnVPRaw, slowTrackReceivedVPRaw, fastTrackBaseVP, receivedVP]);
+      return {
+        ownVP: effectiveVP, // Show as single combined value
+        delegatedVP: 0,     // Already included in effectiveVP
+        totalVP: effectiveVP,
+      };
+    }
+  }, [track, slowTrackOwnVPRaw, slowTrackReceivedVPRaw, snapshotVP]);
 
   // Calculate how input VP splits between own and delegated
   const amountSplit = useMemo(() => {
@@ -224,7 +222,8 @@ const VotePanel = ({
       const availableRaw = Number(slowTrackAvailableVPRaw || '0') / 1e9;
       setAmount(availableRaw.toString());
     } else {
-      setAmount(totalAvailable.totalVP.toString());
+      // Fast Track: Must use effectiveVP from snapshot (merkle tree commits to this value)
+      setAmount(snapshotVP || '0');
     }
   };
 
@@ -566,24 +565,35 @@ const VotePanel = ({
       {/* Available Power Summary */}
       <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
         <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>
-          {track === Track.Fast ? 'Available Voting Power' : 'Your Voting Power'}
+          {track === Track.Fast ? 'Snapshot Voting Power' : 'Your Voting Power'}
         </p>
-        {totalAvailable.ownVP > 0 && (
-          <div className="flex justify-between text-sm">
-            <span style={{ color: 'var(--text-muted)' }}>Your VP:</span>
-            <span>{formatVotePower(totalAvailable.ownVP)} VP</span>
+        {track === Track.Fast ? (
+          // Fast Track: Show single effectiveVP (includes delegation effects from snapshot)
+          <div className="flex justify-between font-semibold text-sm">
+            <span>Your VP at Snapshot:</span>
+            <span>{formatVotePower(totalAvailable.totalVP)} VP</span>
           </div>
+        ) : (
+          // Slow Track: Show breakdown
+          <>
+            {totalAvailable.ownVP > 0 && (
+              <div className="flex justify-between text-sm">
+                <span style={{ color: 'var(--text-muted)' }}>Your VP:</span>
+                <span>{formatVotePower(totalAvailable.ownVP)} VP</span>
+              </div>
+            )}
+            {totalAvailable.delegatedVP > 0 && (
+              <div className="flex justify-between text-sm">
+                <span style={{ color: 'var(--text-muted)' }}>Received (as delegate):</span>
+                <span>{formatVotePower(totalAvailable.delegatedVP)} VP</span>
+              </div>
+            )}
+            <div className="flex justify-between font-semibold text-sm mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
+              <span>Total VP:</span>
+              <span>{formatVotePower(totalAvailable.totalVP)} VP</span>
+            </div>
+          </>
         )}
-        {totalAvailable.delegatedVP > 0 && (
-          <div className="flex justify-between text-sm">
-            <span style={{ color: 'var(--text-muted)' }}>Received (as delegate):</span>
-            <span>{formatVotePower(totalAvailable.delegatedVP)} VP</span>
-          </div>
-        )}
-        <div className="flex justify-between font-semibold text-sm mt-1 pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
-          <span>Total VP:</span>
-          <span>{formatVotePower(totalAvailable.totalVP)} VP</span>
-        </div>
       </div>
 
       {/* Amount Input */}
