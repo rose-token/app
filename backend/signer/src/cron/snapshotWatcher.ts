@@ -350,6 +350,10 @@ export async function startSnapshotWatcher(): Promise<void> {
     // Register reconnect handler to re-setup listeners on WebSocket reconnection
     reconnectHandler = () => {
       console.log('[SnapshotWatcher] Reconnecting event listeners...');
+      // Clear cached contracts to avoid stale provider references
+      governanceContract = null;
+      wsContract = null;
+      wallet = null;
       setupEventListeners();
     };
     onReconnect(reconnectHandler);
