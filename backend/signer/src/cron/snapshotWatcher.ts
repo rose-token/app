@@ -458,18 +458,25 @@ async function getProposalsPastDeadline(): Promise<ProposalToFinalize[]> {
 
   // Get proposal count
   const proposalCount = await governance.proposalCounter();
+  console.log(`[SnapshotWatcher] Checking ${proposalCount} proposals, now=${now}`);
 
   // Check each proposal
   for (let i = 1; i <= Number(proposalCount); i++) {
     try {
       const proposal: ProposalData = await governance.proposals(i);
+      const status = Number(proposal.status);
+      const votingEndsAt = Number(proposal.votingEndsAt);
+      const track = Number(proposal.track);
+
+      // Log proposal state for debugging
+      console.log(`[SnapshotWatcher] Proposal ${i}: status=${status}, track=${track}, votingEndsAt=${votingEndsAt}, expired=${votingEndsAt < now}`);
 
       // Only Active proposals that have ended
-      if (Number(proposal.status) === ProposalStatus.Active && Number(proposal.votingEndsAt) < now) {
+      if (status === ProposalStatus.Active && votingEndsAt < now) {
         proposals.push({
           id: i,
-          track: proposal.track as Track,
-          votingEndsAt: Number(proposal.votingEndsAt),
+          track: track as Track,
+          votingEndsAt: votingEndsAt,
         });
       }
     } catch (error) {
