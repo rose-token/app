@@ -760,13 +760,14 @@ async function handleProposalFinalized(
   const log = extractLog(event);
   const timestamp = await getBlockTimestamp(log.blockNumber);
 
-  // Status mapping: 0=Pending, 1=Active, 2=Cancelled, 3=Passed, 4=Failed
+  // Status mapping from contract: 0=Pending, 1=Active, 2=Passed, 3=Failed, 4=Executed, 5=Cancelled
   const statusMap: Record<number, string> = {
     0: 'Pending',
     1: 'Active',
-    2: 'Cancelled',
-    3: 'Passed',
-    4: 'Failed',
+    2: 'Passed',
+    3: 'Failed',
+    4: 'Executed',
+    5: 'Cancelled',
   };
 
   console.log(`[AnalyticsWatcher] ProposalFinalized: id=${proposalId}, status=${statusMap[status] || 'Unknown'}`);

@@ -11,11 +11,12 @@ const DEFAULT_DEPLOYMENT_BLOCK = 0;
 
 // Proposal statuses from contract
 enum ProposalStatus {
-  Active = 0,
-  Passed = 1,
-  Failed = 2,
-  Executed = 3,
-  Cancelled = 4,
+  Pending = 0,
+  Active = 1,
+  Passed = 2,
+  Failed = 3,
+  Executed = 4,
+  Cancelled = 5,
 }
 
 let governanceContract: ethers.Contract | null = null;
