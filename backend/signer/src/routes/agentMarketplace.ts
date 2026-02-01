@@ -67,17 +67,77 @@ const MARKETPLACE_UNCLAIM_TASK_ABI = [
   'function unclaimTask(uint256 taskId)',
 ];
 
+const MARKETPLACE_STAKEHOLDER_STAKE_ABI = [
+  'function stakeholderStake(uint256 taskId, uint256 tokenAmount, uint256 expiry, bytes signature)',
+];
+
+const MARKETPLACE_UNSTAKE_STAKEHOLDER_ABI = [
+  'function unstakeStakeholder(uint256 taskId)',
+];
+
+const MARKETPLACE_SELECT_AUCTION_WINNER_ABI = [
+  'function selectAuctionWinner(uint256 taskId, address worker, uint256 winningBid, uint256 expiry, bytes signature)',
+];
+
+const MARKETPLACE_APPROVE_CUSTOMER_ABI = [
+  'function approveCompletionByCustomer(uint256 taskId)',
+];
+
+const MARKETPLACE_APPROVE_STAKEHOLDER_ABI = [
+  'function approveCompletionByStakeholder(uint256 taskId)',
+];
+
+const MARKETPLACE_DISPUTE_CUSTOMER_ABI = [
+  'function disputeTaskAsCustomer(uint256 taskId, string reasonHash)',
+];
+
+const MARKETPLACE_DISPUTE_WORKER_ABI = [
+  'function disputeTaskAsWorker(uint256 taskId, string reasonHash)',
+];
+
+const VROSE_ABI = [
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function balanceOf(address account) view returns (uint256)',
+];
+
 // ============================================================
 // Token address cache
 // ============================================================
 
 let roseTokenAddress: string | null = null;
+let vRoseTokenAddress: string | null = null;
 
 async function getRoseTokenAddress(): Promise<string> {
   if (roseTokenAddress) return roseTokenAddress;
   const marketplace = getMarketplaceContract(getHttpProvider());
   roseTokenAddress = await marketplace.roseToken() as string;
   return roseTokenAddress;
+}
+
+async function getVRoseTokenAddress(): Promise<string> {
+  if (vRoseTokenAddress) return vRoseTokenAddress;
+  const marketplace = getMarketplaceContract(getHttpProvider());
+  vRoseTokenAddress = await marketplace.vRoseToken() as string;
+  return vRoseTokenAddress;
+}
+
+/**
+ * Sign selectAuctionWinner approval.
+ * Message: keccak256(abi.encodePacked(customer, "selectWinner", taskId, worker, winningBid, expiry))
+ */
+async function signSelectWinnerApproval(
+  customer: string,
+  taskId: number,
+  worker: string,
+  winningBid: bigint,
+  expiry: number
+): Promise<string> {
+  const wallet = new ethers.Wallet(config.signer.privateKey);
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['address', 'string', 'uint256', 'address', 'uint256', 'uint256'],
+    [customer, 'selectWinner', taskId, worker, winningBid, expiry]
+  );
+  return wallet.signMessage(ethers.getBytes(messageHash));
 }
 
 // ============================================================
@@ -605,6 +665,465 @@ router.post('/marketplace/tasks/:id/unclaim', async (req: Request, res: Response
   } catch (error) {
     console.error('[AgentMarketplace] Unclaim task error:', error);
     return res.status(500).json({ error: 'Failed to generate unclaim parameters' });
+  }
+});
+
+// ============================================================
+// STAKEHOLDER STAKING
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/stake
+ * Stake as stakeholder (10% vROSE collateral). Returns calldata + signature.
+ */
+router.post('/marketplace/tasks/:id/stake', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    // Verify task state
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (Number(task.status) !== 1) { // 1 = StakeholderRequired
+      return res.status(400).json({
+        error: `Task is not awaiting stakeholder (current status: ${TaskStatusNames[Number(task.status)] || task.status})`,
+      });
+    }
+    if (task.customer.toLowerCase() === agentAddress.toLowerCase()) {
+      return res.status(400).json({ error: 'Customer cannot be stakeholder for their own task' });
+    }
+
+    // Calculate required 10% deposit
+    const requiredDeposit = BigInt(task.deposit) / 10n;
+    const vRoseToken = await getVRoseTokenAddress();
+
+    // Sign passport approval
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+    const signature = await signApproval(agentAddress, 'stake', expiry);
+
+    // Encode calldata: approve vROSE + stakeholderStake
+    const vRoseIface = new ethers.Interface(VROSE_ABI);
+    const approveCalldata = vRoseIface.encodeFunctionData('approve', [
+      marketplaceAddress,
+      requiredDeposit,
+    ]);
+
+    const stakeIface = new ethers.Interface(MARKETPLACE_STAKEHOLDER_STAKE_ABI);
+    const stakeCalldata = stakeIface.encodeFunctionData('stakeholderStake', [
+      taskId,
+      requiredDeposit,
+      expiry,
+      signature,
+    ]);
+
+    console.log(`[AgentMarketplace] Stake on task ${taskId} by ${agentAddress}: ${ethers.formatUnits(requiredDeposit, 18)} vROSE`);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      title: task.title,
+      taskDeposit: task.deposit.toString(),
+      taskDepositFormatted: ethers.formatUnits(task.deposit, 18),
+      requiredStake: requiredDeposit.toString(),
+      requiredStakeFormatted: ethers.formatUnits(requiredDeposit, 18),
+      approval: { expiry, signature },
+      transactions: [
+        {
+          step: 1,
+          description: 'Approve vROSE spending by Marketplace contract',
+          to: vRoseToken,
+          calldata: approveCalldata,
+          function: 'approve(address,uint256)',
+          args: [marketplaceAddress, requiredDeposit.toString()],
+        },
+        {
+          step: 2,
+          description: `Stake ${ethers.formatUnits(requiredDeposit, 18)} vROSE as stakeholder for task #${taskId}`,
+          to: marketplaceAddress,
+          calldata: stakeCalldata,
+          function: 'stakeholderStake(uint256,uint256,uint256,bytes)',
+          args: [taskId, requiredDeposit.toString(), expiry, signature],
+        },
+      ],
+      castCommands: {
+        approve: `cast send ${vRoseToken} "approve(address,uint256)" ${marketplaceAddress} ${requiredDeposit} --rpc-url ${config.rpc.url}`,
+        stake: `cast send ${marketplaceAddress} "stakeholderStake(uint256,uint256,uint256,bytes)" ${taskId} ${requiredDeposit} ${expiry} ${signature} --rpc-url ${config.rpc.url}`,
+      },
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Stake error:', error);
+    return res.status(500).json({ error: 'Failed to generate stake parameters' });
+  }
+});
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/unstake
+ * Unstake as stakeholder (before worker claims). Returns calldata.
+ */
+router.post('/marketplace/tasks/:id/unstake', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (task.stakeholder.toLowerCase() !== agentAddress.toLowerCase()) {
+      return res.status(403).json({ error: 'Only the stakeholder can unstake' });
+    }
+    if (Number(task.status) !== 0) { // Open
+      return res.status(400).json({
+        error: `Task must be Open to unstake (current: ${TaskStatusNames[Number(task.status)] || task.status})`,
+      });
+    }
+
+    const iface = new ethers.Interface(MARKETPLACE_UNSTAKE_STAKEHOLDER_ABI);
+    const calldata = iface.encodeFunctionData('unstakeStakeholder', [taskId]);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      refund: {
+        amount: task.stakeholderDeposit.toString(),
+        amountFormatted: ethers.formatUnits(task.stakeholderDeposit, 18),
+        token: 'vROSE',
+      },
+      transaction: {
+        description: `Unstake from task #${taskId} (returns vROSE)`,
+        to: marketplaceAddress,
+        calldata,
+        function: 'unstakeStakeholder(uint256)',
+        args: [taskId],
+      },
+      castCommand: `cast send ${marketplaceAddress} "unstakeStakeholder(uint256)" ${taskId} --rpc-url ${config.rpc.url}`,
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Unstake error:', error);
+    return res.status(500).json({ error: 'Failed to generate unstake parameters' });
+  }
+});
+
+// ============================================================
+// AUCTION: SELECT WINNER
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/select-winner
+ * Customer selects winning bidder for an auction task. Returns calldata + signature.
+ *
+ * Body:
+ * - worker: Address of the winning bidder
+ * - winningBid: Winning bid amount in ROSE (string, e.g. "50")
+ */
+router.post('/marketplace/tasks/:id/select-winner', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const { worker, winningBid } = req.body;
+
+    if (!worker || typeof worker !== 'string' || !ethers.isAddress(worker)) {
+      return res.status(400).json({ error: 'worker is required (valid Ethereum address)' });
+    }
+    if (!winningBid || typeof winningBid !== 'string') {
+      return res.status(400).json({ error: 'winningBid is required (string, e.g. "50" for 50 ROSE)' });
+    }
+
+    const bidAmountWei = parseRoseAmount(winningBid);
+    if (!bidAmountWei) {
+      return res.status(400).json({ error: 'Invalid winningBid — must be a positive number' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    // Verify task state
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (task.customer.toLowerCase() !== agentAddress.toLowerCase()) {
+      return res.status(403).json({ error: 'Only the customer can select auction winner' });
+    }
+    if (!task.isAuction) {
+      return res.status(400).json({ error: 'This is not an auction task' });
+    }
+    if (Number(task.status) !== 0) { // Open
+      return res.status(400).json({
+        error: `Task must be Open to select winner (current: ${TaskStatusNames[Number(task.status)] || task.status})`,
+      });
+    }
+    if (bidAmountWei > BigInt(task.deposit)) {
+      return res.status(400).json({ error: 'Winning bid cannot exceed max budget (deposit)' });
+    }
+
+    // Sign selectWinner approval (custom signature format)
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+    const signature = await signSelectWinnerApproval(
+      agentAddress, taskId, worker, bidAmountWei, expiry
+    );
+
+    // Encode calldata
+    const iface = new ethers.Interface(MARKETPLACE_SELECT_AUCTION_WINNER_ABI);
+    const calldata = iface.encodeFunctionData('selectAuctionWinner', [
+      taskId, worker, bidAmountWei, expiry, signature,
+    ]);
+
+    // Calculate surplus refund
+    const surplus = BigInt(task.deposit) - bidAmountWei;
+
+    console.log(`[AgentMarketplace] Select winner for task ${taskId}: worker=${worker}, bid=${winningBid} ROSE`);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      worker,
+      winningBid,
+      winningBidWei: bidAmountWei.toString(),
+      maxBudget: task.deposit.toString(),
+      maxBudgetFormatted: ethers.formatUnits(task.deposit, 18),
+      surplus: {
+        amount: surplus.toString(),
+        amountFormatted: ethers.formatUnits(surplus, 18),
+        note: 'Surplus split: half refunded to customer, half captured as spread to treasury',
+      },
+      approval: { expiry, signature },
+      transaction: {
+        description: `Select ${worker} as winner of auction task #${taskId} at ${winningBid} ROSE`,
+        to: marketplaceAddress,
+        calldata,
+        function: 'selectAuctionWinner(uint256,address,uint256,uint256,bytes)',
+        args: [taskId, worker, bidAmountWei.toString(), expiry, signature],
+      },
+      castCommand: `cast send ${marketplaceAddress} "selectAuctionWinner(uint256,address,uint256,uint256,bytes)" ${taskId} ${worker} ${bidAmountWei} ${expiry} ${signature} --rpc-url ${config.rpc.url}`,
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Select winner error:', error);
+    return res.status(500).json({ error: 'Failed to generate select winner parameters' });
+  }
+});
+
+// ============================================================
+// APPROVALS
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/approve
+ * Approve completed work (as customer or stakeholder). Returns calldata.
+ * Automatically detects role based on the authenticated agent's wallet.
+ */
+router.post('/marketplace/tasks/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (Number(task.status) !== 3) { // 3 = Completed
+      return res.status(400).json({
+        error: `Task must be Completed to approve (current: ${TaskStatusNames[Number(task.status)] || task.status})`,
+      });
+    }
+
+    const isCustomer = task.customer.toLowerCase() === agentAddress.toLowerCase();
+    const isStakeholder = task.stakeholder.toLowerCase() === agentAddress.toLowerCase();
+
+    if (!isCustomer && !isStakeholder) {
+      return res.status(403).json({ error: 'Only the customer or stakeholder can approve' });
+    }
+
+    let calldata: string;
+    let role: string;
+    let functionSig: string;
+
+    if (isCustomer) {
+      if (task.customerApproval) {
+        return res.status(400).json({ error: 'Customer has already approved' });
+      }
+      const iface = new ethers.Interface(MARKETPLACE_APPROVE_CUSTOMER_ABI);
+      calldata = iface.encodeFunctionData('approveCompletionByCustomer', [taskId]);
+      role = 'customer';
+      functionSig = 'approveCompletionByCustomer(uint256)';
+    } else {
+      if (task.stakeholderApproval) {
+        return res.status(400).json({ error: 'Stakeholder has already approved' });
+      }
+      const iface = new ethers.Interface(MARKETPLACE_APPROVE_STAKEHOLDER_ABI);
+      calldata = iface.encodeFunctionData('approveCompletionByStakeholder', [taskId]);
+      role = 'stakeholder';
+      functionSig = 'approveCompletionByStakeholder(uint256)';
+    }
+
+    const otherApproved = isCustomer ? task.stakeholderApproval : task.customerApproval;
+
+    console.log(`[AgentMarketplace] Approve task ${taskId} as ${role} by ${agentAddress}`);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      role,
+      otherPartyApproved: otherApproved,
+      willTriggerPayment: otherApproved,
+      note: otherApproved
+        ? 'Both approvals will be met — task moves to ApprovedPendingPayment'
+        : `Waiting for ${isCustomer ? 'stakeholder' : 'customer'} approval`,
+      transaction: {
+        description: `Approve task #${taskId} completion as ${role}`,
+        to: marketplaceAddress,
+        calldata,
+        function: functionSig,
+        args: [taskId],
+      },
+      castCommand: `cast send ${marketplaceAddress} "${functionSig}" ${taskId} --rpc-url ${config.rpc.url}`,
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Approve error:', error);
+    return res.status(500).json({ error: 'Failed to generate approve parameters' });
+  }
+});
+
+// ============================================================
+// DISPUTES
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/dispute
+ * Raise a dispute on a task. Returns calldata.
+ * Customer can dispute InProgress tasks; worker can dispute Completed tasks.
+ *
+ * Body:
+ * - reasonHash: IPFS hash of dispute reason (string)
+ */
+router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const { reasonHash } = req.body;
+    if (!reasonHash || typeof reasonHash !== 'string') {
+      return res.status(400).json({ error: 'reasonHash is required (IPFS hash string)' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (task.disputeInitiator !== ethers.ZeroAddress) {
+      return res.status(400).json({ error: 'Dispute already raised on this task' });
+    }
+
+    const isCustomer = task.customer.toLowerCase() === agentAddress.toLowerCase();
+    const isWorker = task.worker.toLowerCase() === agentAddress.toLowerCase();
+    const status = Number(task.status);
+
+    let calldata: string;
+    let role: string;
+    let functionSig: string;
+
+    if (isCustomer && status === 2) { // InProgress
+      const iface = new ethers.Interface(MARKETPLACE_DISPUTE_CUSTOMER_ABI);
+      calldata = iface.encodeFunctionData('disputeTaskAsCustomer', [taskId, reasonHash]);
+      role = 'customer';
+      functionSig = 'disputeTaskAsCustomer(uint256,string)';
+    } else if (isWorker && status === 3) { // Completed
+      const iface = new ethers.Interface(MARKETPLACE_DISPUTE_WORKER_ABI);
+      calldata = iface.encodeFunctionData('disputeTaskAsWorker', [taskId, reasonHash]);
+      role = 'worker';
+      functionSig = 'disputeTaskAsWorker(uint256,string)';
+    } else if (isCustomer && status !== 2) {
+      return res.status(400).json({ error: 'Customer can only dispute InProgress tasks' });
+    } else if (isWorker && status !== 3) {
+      return res.status(400).json({ error: 'Worker can only dispute Completed tasks (when approvals withheld)' });
+    } else {
+      return res.status(403).json({ error: 'Only the customer or worker can raise a dispute' });
+    }
+
+    console.log(`[AgentMarketplace] Dispute task ${taskId} as ${role} by ${agentAddress}`);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      role,
+      reasonHash,
+      transaction: {
+        description: `Raise dispute on task #${taskId} as ${role}`,
+        to: marketplaceAddress,
+        calldata,
+        function: functionSig,
+        args: [taskId, reasonHash],
+      },
+      castCommand: `cast send ${marketplaceAddress} "${functionSig}" ${taskId} "${reasonHash}" --rpc-url ${config.rpc.url}`,
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Dispute error:', error);
+    return res.status(500).json({ error: 'Failed to generate dispute parameters' });
   }
 });
 
