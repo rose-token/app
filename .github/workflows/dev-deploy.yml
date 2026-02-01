@@ -223,7 +223,7 @@ jobs:
       packages: write
 
     outputs:
-      image_tag: ${{ github.sha }}
+      image_tag: ${{ github.event.pull_request.head.sha || github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
@@ -249,7 +249,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
           tags: |
             type=ref,event=pr
-            type=sha,prefix=
+            type=raw,value=sha-${{ github.event.pull_request.head.sha && format('{0}', github.event.pull_request.head.sha) || github.sha }},prefix=
             type=raw,value=dev-latest,enable=true
 
       - name: Build and push Docker image
@@ -262,7 +262,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           build-args: |
-            VITE_BUILD_HASH=${{ github.sha }}
+            VITE_BUILD_HASH=${{ github.event.pull_request.head.sha || github.sha }}
             VITE_TOKEN_ADDRESS=${{ needs.deploy-contracts.outputs.token_address || needs.resolve-addresses.outputs.token_address }}
             VITE_TREASURY_ADDRESS=${{ needs.deploy-contracts.outputs.treasury_address || needs.resolve-addresses.outputs.treasury_address }}
             VITE_MARKETPLACE_ADDRESS=${{ needs.deploy-contracts.outputs.marketplace_address || needs.resolve-addresses.outputs.marketplace_address }}
@@ -275,7 +275,7 @@ jobs:
             VITE_GITCOIN_API_KEY=${{ secrets.VITE_GITCOIN_API_KEY }}
             VITE_PINATA_GATEWAY=${{ secrets.REACT_APP_PINATA_GATEWAY }}
             VITE_PINATA_JWT=${{ secrets.REACT_APP_PINATA_JWT }}
-            VITE_BUILD_VERSION=${{ github.sha }}
+            VITE_BUILD_VERSION=${{ github.event.pull_request.head.sha || github.sha }}
             VITE_CHAIN_ID=421614
             VITE_RPC_WS_URL=wss://arb-sepolia.g.alchemy.com/v2/4ZaJ9-kd_vP5HWvCYJlPn
 
@@ -556,7 +556,7 @@ jobs:
       packages: write
 
     outputs:
-      image_tag: ${{ github.sha }}
+      image_tag: ${{ github.event.pull_request.head.sha || github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
@@ -594,7 +594,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}
           tags: |
             type=ref,event=pr
-            type=sha,prefix=
+            type=raw,value=sha-${{ github.event.pull_request.head.sha && format('{0}', github.event.pull_request.head.sha) || github.sha }},prefix=
             type=raw,value=dev-latest,enable=true
 
       - name: Build and push Docker image
