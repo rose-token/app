@@ -63,3 +63,33 @@ export function isIPFSConfigured(): boolean {
 export function getIPFSUrl(cid: string): string {
   return `${PINATA_GATEWAY}/ipfs/${cid}`;
 }
+
+/**
+ * Fetch content from IPFS by CID. Returns the text content or null on failure.
+ * Handles both raw text and JSON-wrapped content (from our uploadToIPFS format).
+ */
+export async function fetchFromIPFS(cid: string): Promise<string | null> {
+  if (!cid || cid.length < 10) return null;
+  
+  try {
+    const url = getIPFSUrl(cid);
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return null;
+    
+    const text = await response.text();
+    
+    // Try to parse as JSON (our upload format wraps content in { content, timestamp })
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.content && typeof parsed.content === 'string') {
+        return parsed.content;
+      }
+    } catch {
+      // Not JSON — return raw text
+    }
+    
+    return text;
+  } catch {
+    return null;
+  }
+}
