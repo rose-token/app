@@ -23,7 +23,7 @@ import { agentAuth } from '../middleware/agentAuth';
 import { signApproval } from '../services/signer';
 import { config } from '../config';
 import { getMarketplaceContract, getTreasuryContract, getHttpProvider } from '../utils/contracts';
-import { getBidsForTask } from '../services/auction';
+import { getBidsForTask, getWorkerBid, getBidCount } from '../services/auction';
 
 const router = Router();
 
@@ -172,6 +172,144 @@ const TaskStatusNames: Record<number, string> = {
   5: 'ApprovedPendingPayment',
   6: 'Disputed',
 };
+
+// ============================================================
+// AUCTION BIDS — READ
+// ============================================================
+
+/**
+ * GET /api/agent/marketplace/tasks/:id/bids
+ * Get all bids on an auction task. Only the task customer can see full bid details.
+ * Workers can see their own bid via /my-bid.
+ *
+ * Returns bids sorted by amount (lowest first) with display bid (midpoint) calculations.
+ */
+router.get('/marketplace/tasks/:id/bids', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+
+    // Verify task exists and caller is customer
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (!task.isAuction) {
+      return res.status(400).json({ error: 'This is not an auction task — no bids to view' });
+    }
+    if (task.customer.toLowerCase() !== agentAddress.toLowerCase()) {
+      return res.status(403).json({ error: 'Only the task customer can view all bids' });
+    }
+
+    const bidsResponse = await getBidsForTask(taskId);
+
+    return res.json({
+      success: true,
+      taskId,
+      maxBudget: bidsResponse.maxBudget,
+      maxBudgetFormatted: ethers.formatUnits(BigInt(bidsResponse.maxBudget), 18),
+      bidCount: bidsResponse.bidCount,
+      bids: bidsResponse.bids.map((b) => ({
+        worker: b.worker,
+        bidAmount: b.bidAmount,
+        bidAmountFormatted: ethers.formatUnits(BigInt(b.bidAmount), 18),
+        displayBid: b.displayBid,
+        displayBidFormatted: ethers.formatUnits(BigInt(b.displayBid), 18),
+        message: b.message,
+        createdAt: b.createdAt,
+        updatedAt: b.updatedAt,
+      })),
+    });
+  } catch (error: any) {
+    console.error('[AgentMarketplace] Get bids error:', error);
+    if (error.message?.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Failed to fetch bids' });
+  }
+});
+
+/**
+ * GET /api/agent/marketplace/tasks/:id/my-bid
+ * Get the authenticated agent's own bid on an auction task.
+ */
+router.get('/marketplace/tasks/:id/my-bid', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const bidResponse = await getWorkerBid(taskId, agentAddress);
+
+    if (!bidResponse.hasBid) {
+      return res.json({
+        success: true,
+        taskId,
+        hasBid: false,
+        bid: null,
+      });
+    }
+
+    const bid = bidResponse.bid!;
+    return res.json({
+      success: true,
+      taskId,
+      hasBid: true,
+      bid: {
+        worker: bid.worker,
+        bidAmount: bid.bidAmount,
+        bidAmountFormatted: ethers.formatUnits(BigInt(bid.bidAmount), 18),
+        displayBid: bid.displayBid,
+        displayBidFormatted: ethers.formatUnits(BigInt(bid.displayBid), 18),
+        message: bid.message,
+        createdAt: bid.createdAt,
+        updatedAt: bid.updatedAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('[AgentMarketplace] Get my bid error:', error);
+    if (error.message?.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Failed to fetch bid' });
+  }
+});
+
+/**
+ * GET /api/agent/marketplace/tasks/:id/bid-count
+ * Get the number of bids on an auction task (public to all agents).
+ */
+router.get('/marketplace/tasks/:id/bid-count', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const countResponse = await getBidCount(taskId);
+
+    return res.json({
+      success: true,
+      taskId,
+      bidCount: countResponse.bidCount,
+    });
+  } catch (error: any) {
+    console.error('[AgentMarketplace] Get bid count error:', error);
+    if (error.message?.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Failed to fetch bid count' });
+  }
+});
 
 // ============================================================
 // TASK CREATION
