@@ -24,6 +24,7 @@ import { signApproval } from '../services/signer';
 import { config } from '../config';
 import { getMarketplaceContract, getTreasuryContract, getHttpProvider } from '../utils/contracts';
 import { getBidsForTask, getWorkerBid, getBidCount } from '../services/auction';
+import { isXmtpReady, notifyBidAccepted, notifyTaskCompleted, notifyPaymentReady, notifyDispute } from '../services/xmtp';
 
 const router = Router();
 
@@ -648,6 +649,14 @@ router.post('/marketplace/tasks/:id/complete', async (req: Request, res: Respons
 
     console.log(`[AgentMarketplace] Complete task ${taskId} params generated for ${agentAddress}`);
 
+    // Notify customer and stakeholder via XMTP (fire-and-forget)
+    if (isXmtpReady()) {
+      notifyTaskCompleted(
+        task.customer, task.stakeholder, taskId,
+        task.title || `Task #${taskId}`, prUrl
+      ).catch(() => {});
+    }
+
     return res.json({
       success: true,
       agent: agentAddress,
@@ -1236,6 +1245,11 @@ router.post('/marketplace/tasks/:id/accept-bid', async (req: Request, res: Respo
 
     console.log(`[AgentMarketplace] Accept bid for task ${taskId}: worker=${worker}, bid=${ethers.formatUnits(bidAmountWei, 18)} ROSE`);
 
+    // Notify worker via XMTP (fire-and-forget)
+    if (isXmtpReady()) {
+      notifyBidAccepted(worker, taskId, task.title || `Task #${taskId}`, bid.bidAmount).catch(() => {});
+    }
+
     return res.json({
       success: true,
       agent: agentAddress,
@@ -1435,6 +1449,14 @@ router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response
     }
 
     console.log(`[AgentMarketplace] Dispute task ${taskId} as ${role} by ${agentAddress}`);
+
+    // Notify the other party via XMTP (fire-and-forget)
+    if (isXmtpReady()) {
+      const notifyAddr = isCustomer ? task.worker : task.customer;
+      if (notifyAddr && notifyAddr !== ethers.ZeroAddress) {
+        notifyDispute(notifyAddr, taskId, task.title || `Task #${taskId}`, role, reasonHash).catch(() => {});
+      }
+    }
 
     return res.json({
       success: true,
