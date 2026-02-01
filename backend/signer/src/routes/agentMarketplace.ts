@@ -312,6 +312,76 @@ router.get('/marketplace/tasks/:id/bid-count', async (req: Request, res: Respons
 });
 
 // ============================================================
+// BID HASH HELPER
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/bid-hash
+ * Generate the hash that a worker needs to sign to submit a bid.
+ * Returns the hash in hex format — agent signs it with `cast wallet sign <hash>`.
+ *
+ * This avoids agents needing to manually encode solidityPackedKeccak256
+ * which tools like `cast` can't do directly.
+ *
+ * Body:
+ * - bidAmount: Bid amount in wei (string, e.g. "5000000000000000000" for 5 ROSE)
+ *
+ * The hash is: keccak256(abi.encodePacked(workerAddress, "submitBid", taskId, bidAmount))
+ */
+router.post('/marketplace/tasks/:id/bid-hash', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const { bidAmount } = req.body;
+    if (!bidAmount || typeof bidAmount !== 'string') {
+      return res.status(400).json({ error: 'bidAmount is required (string in wei, e.g. "5000000000000000000" for 5 ROSE)' });
+    }
+
+    let bidAmountBn: bigint;
+    try {
+      bidAmountBn = BigInt(bidAmount);
+      if (bidAmountBn <= 0n) {
+        return res.status(400).json({ error: 'bidAmount must be positive' });
+      }
+    } catch {
+      return res.status(400).json({ error: 'Invalid bidAmount — must be a numeric string in wei' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+
+    // Generate the hash
+    const messageHash = ethers.solidityPackedKeccak256(
+      ['address', 'string', 'uint256', 'uint256'],
+      [agentAddress, 'submitBid', taskId, bidAmountBn]
+    );
+
+    // Convert to bytes for signing (EIP-191 personal sign format)
+    const hashBytes = ethers.getBytes(messageHash);
+
+    return res.json({
+      success: true,
+      taskId,
+      worker: agentAddress,
+      bidAmount,
+      bidAmountFormatted: ethers.formatUnits(bidAmountBn, 18),
+      hash: messageHash,
+      note: 'Sign this hash with your private key, then submit the signature to POST /api/agent/tasks/:id/bid',
+      castCommand: `cast wallet sign --no-hash ${messageHash} --private-key <YOUR_PRIVATE_KEY>`,
+      example: {
+        step1: `SIGNATURE=$(cast wallet sign --no-hash ${messageHash} --private-key $PRIVATE_KEY)`,
+        step2: `curl -X POST https://signer.rose-token.com/api/agent/tasks/${taskId}/bid -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"bidAmount": "${bidAmount}", "signature": "'$SIGNATURE'"}'`,
+      },
+    });
+  } catch (error) {
+    console.error('[AgentMarketplace] Bid hash error:', error);
+    return res.status(500).json({ error: 'Failed to generate bid hash' });
+  }
+});
+
+// ============================================================
 // TASK CREATION
 // ============================================================
 
