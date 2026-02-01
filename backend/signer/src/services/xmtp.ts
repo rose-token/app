@@ -11,12 +11,12 @@
  * and provides methods to send DMs and check reachability.
  *
  * Requires:
- *   - XMTP_ENABLED=true in env
+ *   - XMTP is enabled by default (set XMTP_ENABLED=false to disable)
  *   - The signer wallet private key (reused from config.signer.privateKey)
  *   - XMTP_DB_ENCRYPTION_KEY in env (32 bytes hex) — or auto-generated on first run
  */
 
-import { Client, type Signer, type Identifier, IdentifierKind } from '@xmtp/node-sdk';
+import { Client, type Signer, type Identifier, IdentifierKind, getInboxIdForIdentifier } from '@xmtp/node-sdk';
 import { getRandomValues } from 'node:crypto';
 import { ethers } from 'ethers';
 import { config } from '../config';
@@ -93,8 +93,8 @@ function getDbEncryptionKey(): Uint8Array {
 export async function initXmtp(): Promise<void> {
   if (xmtpClient || isInitializing) return;
 
-  if (process.env.XMTP_ENABLED !== 'true') {
-    console.log('[XMTP] Disabled (set XMTP_ENABLED=true to enable)');
+  if (process.env.XMTP_ENABLED === 'false') {
+    console.log('[XMTP] Disabled (XMTP_ENABLED=false)');
     return;
   }
 
@@ -138,7 +138,7 @@ export function isXmtpReady(): boolean {
  */
 export function getXmtpStatus(): { enabled: boolean; ready: boolean; error: string | null; inboxId?: string } {
   return {
-    enabled: process.env.XMTP_ENABLED === 'true',
+    enabled: process.env.XMTP_ENABLED !== 'false',
     ready: xmtpClient !== null,
     error: initError,
     inboxId: xmtpClient?.inboxId,
@@ -179,10 +179,16 @@ export async function sendDm(toAddress: string, message: string): Promise<XmtpSe
       };
     }
 
-    // Create or get existing DM conversation
-    const conversation = await xmtpClient.conversations.createDm(
-      { identifier: toAddress, identifierKind: IdentifierKind.Ethereum }
-    );
+    // Resolve address → inbox ID, then create or get existing DM conversation
+    const identifier: Identifier = { identifier: toAddress, identifierKind: IdentifierKind.Ethereum };
+    const inboxId = await getInboxIdForIdentifier(identifier);
+    if (!inboxId) {
+      return {
+        success: false,
+        error: `Could not resolve inbox ID for ${toAddress}`,
+      };
+    }
+    const conversation = await xmtpClient.conversations.createDm(inboxId);
 
     // Send the message
     const messageId = await conversation.sendText(message);
@@ -226,9 +232,9 @@ export async function checkReachability(addresses: string[]): Promise<XmtpReacha
   }
 
   try {
-    const identifiers = addresses.map((addr) => ({
+    const identifiers: Identifier[] = addresses.map((addr) => ({
       identifier: addr,
-      identifierKind: IdentifierKind.Ethereum as const,
+      identifierKind: IdentifierKind.Ethereum,
     }));
 
     const canMessageMap = await xmtpClient.canMessage(identifiers);
@@ -240,6 +246,121 @@ export async function checkReachability(addresses: string[]): Promise<XmtpReacha
   } catch (error: any) {
     console.error('[XMTP] Reachability check failed:', error.message);
     return addresses.map((addr) => ({ address: addr, reachable: false }));
+  }
+}
+
+// ============================================================
+// Inbox / Message Retrieval
+// ============================================================
+
+export interface XmtpConversationSummary {
+  conversationId: string;
+  peerAddress: string;
+  peerInboxId: string;
+  lastMessage?: {
+    id: string;
+    content: string;
+    senderInboxId: string;
+    sentAt: string;
+  };
+}
+
+export interface XmtpInboxMessage {
+  id: string;
+  conversationId: string;
+  senderInboxId: string;
+  content: unknown;
+  contentType: string;
+  sentAt: string;
+}
+
+/**
+ * List all DM conversations with their last message.
+ * Syncs from network first to get latest state.
+ */
+export async function listConversations(): Promise<XmtpConversationSummary[]> {
+  if (!xmtpClient) {
+    return [];
+  }
+
+  try {
+    // Sync latest from network
+    await xmtpClient.conversations.sync();
+
+    const dms = xmtpClient.conversations.listDms();
+    const results: XmtpConversationSummary[] = [];
+
+    for (const dm of dms) {
+      await dm.sync();
+      const last = await dm.lastMessage();
+      const members = await dm.members();
+      const peer = members.find((m) => m.inboxId !== xmtpClient!.inboxId);
+
+      results.push({
+        conversationId: dm.id,
+        peerAddress: peer?.accountIdentifiers?.[0]?.identifier ?? 'unknown',
+        peerInboxId: peer?.inboxId ?? 'unknown',
+        lastMessage: last
+          ? {
+              id: last.id,
+              content: typeof last.content === 'string' ? last.content : JSON.stringify(last.content),
+              senderInboxId: last.senderInboxId,
+              sentAt: last.sentAt.toISOString(),
+            }
+          : undefined,
+      });
+    }
+
+    return results;
+  } catch (error: any) {
+    console.error('[XMTP] Failed to list conversations:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get messages from a specific conversation.
+ * @param conversationId - The conversation ID
+ * @param limit - Max messages to return (default 50)
+ * @param afterNs - Only return messages after this timestamp (nanoseconds)
+ */
+export async function getMessages(
+  conversationId: string,
+  limit = 50,
+  afterNs?: bigint
+): Promise<XmtpInboxMessage[]> {
+  if (!xmtpClient) {
+    return [];
+  }
+
+  try {
+    const conversation = await xmtpClient.conversations.getConversationById(conversationId);
+    if (!conversation) {
+      return [];
+    }
+
+    await conversation.sync();
+
+    const options: any = { limit };
+    if (afterNs) {
+      options.sentAfterNs = afterNs;
+    }
+
+    const messages = await conversation.messages(options);
+
+    return messages
+      .filter((m) => m.kind === 1) // application messages only (not membership changes)
+      .map((m) => ({
+        id: m.id,
+        conversationId: m.conversationId,
+        senderInboxId: m.senderInboxId,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        contentType: `${m.contentType.authorityId}/${m.contentType.typeId}`,
+        sentAt: m.sentAt.toISOString(),
+      }));
+  } catch (error: any) {
+    console.error(`[XMTP] Failed to get messages for ${conversationId}:`, error.message);
+    return [];
   }
 }
 

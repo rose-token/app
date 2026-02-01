@@ -19,6 +19,8 @@ import {
   checkReachability,
   getXmtpStatus,
   isXmtpReady,
+  listConversations,
+  getMessages,
 } from '../services/xmtp';
 
 const router = Router();
@@ -119,6 +121,117 @@ router.post('/xmtp/can-message', async (req: Request, res: Response) => {
   return res.json({
     success: true,
     results,
+  });
+});
+
+/**
+ * GET /api/agent/xmtp/conversations
+ * List all DM conversations with their last message.
+ * Returns conversation summaries including peer address and latest message preview.
+ */
+router.get('/xmtp/conversations', async (_req: Request, res: Response) => {
+  if (!isXmtpReady()) {
+    return res.status(503).json({ error: 'XMTP service is not available' });
+  }
+
+  const conversations = await listConversations();
+
+  return res.json({
+    success: true,
+    conversations,
+    count: conversations.length,
+  });
+});
+
+/**
+ * GET /api/agent/xmtp/messages/:conversationId
+ * Get messages from a specific conversation.
+ *
+ * Query params:
+ * - limit: Max messages to return (default 50, max 200)
+ * - after: ISO timestamp — only return messages after this time
+ */
+router.get('/xmtp/messages/:conversationId', async (req: Request, res: Response) => {
+  if (!isXmtpReady()) {
+    return res.status(503).json({ error: 'XMTP service is not available' });
+  }
+
+  const { conversationId } = req.params;
+  let limit = parseInt(req.query.limit as string) || 50;
+  if (limit > 200) limit = 200;
+
+  let afterNs: bigint | undefined;
+  if (req.query.after) {
+    const afterDate = new Date(req.query.after as string);
+    if (isNaN(afterDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid after timestamp (use ISO 8601)' });
+    }
+    afterNs = BigInt(afterDate.getTime()) * 1_000_000n; // ms → ns
+  }
+
+  const messages = await getMessages(conversationId, limit, afterNs);
+
+  return res.json({
+    success: true,
+    conversationId,
+    messages,
+    count: messages.length,
+  });
+});
+
+/**
+ * GET /api/agent/xmtp/messages
+ * Get messages across all conversations (inbox view).
+ * Returns recent messages from all DMs, sorted by time.
+ *
+ * Query params:
+ * - limit: Max messages per conversation (default 10, max 50)
+ * - after: ISO timestamp — only return messages after this time
+ */
+router.get('/xmtp/messages', async (req: Request, res: Response) => {
+  if (!isXmtpReady()) {
+    return res.status(503).json({ error: 'XMTP service is not available' });
+  }
+
+  let limit = parseInt(req.query.limit as string) || 10;
+  if (limit > 50) limit = 50;
+
+  let afterNs: bigint | undefined;
+  if (req.query.after) {
+    const afterDate = new Date(req.query.after as string);
+    if (isNaN(afterDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid after timestamp (use ISO 8601)' });
+    }
+    afterNs = BigInt(afterDate.getTime()) * 1_000_000n;
+  }
+
+  const conversations = await listConversations();
+  const allMessages: Array<{
+    conversationId: string;
+    peerAddress: string;
+    message: any;
+  }> = [];
+
+  for (const conv of conversations) {
+    const messages = await getMessages(conv.conversationId, limit, afterNs);
+    for (const msg of messages) {
+      allMessages.push({
+        conversationId: conv.conversationId,
+        peerAddress: conv.peerAddress,
+        message: msg,
+      });
+    }
+  }
+
+  // Sort by sentAt descending
+  allMessages.sort((a, b) =>
+    new Date(b.message.sentAt).getTime() - new Date(a.message.sentAt).getTime()
+  );
+
+  return res.json({
+    success: true,
+    messages: allMessages,
+    count: allMessages.length,
   });
 });
 
