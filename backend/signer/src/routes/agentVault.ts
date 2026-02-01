@@ -100,6 +100,12 @@ function parseRoseAmount(amount: string): bigint | null {
   }
 }
 
+// Upper-bound limits to reject absurdly large amounts
+// 1 billion USDC (6 decimals) = 1e15 smallest units
+const MAX_USDC_AMOUNT = ethers.parseUnits('1000000000', 6);
+// 1 billion ROSE (18 decimals) = 1e27 smallest units
+const MAX_ROSE_AMOUNT = ethers.parseUnits('1000000000', 18);
+
 // ============================================================
 // Routes
 // ============================================================
@@ -126,6 +132,9 @@ router.post('/vault/deposit', async (req: Request, res: Response) => {
     const usdcAmountWei = parseUsdcAmount(amount);
     if (!usdcAmountWei) {
       return res.status(400).json({ error: 'Invalid amount — must be a positive number' });
+    }
+    if (usdcAmountWei > MAX_USDC_AMOUNT) {
+      return res.status(400).json({ error: 'Amount exceeds maximum allowed (1 billion USDC)' });
     }
 
     const agentAddress = req.agent!.walletAddress;
@@ -232,6 +241,9 @@ router.post('/vault/redeem', async (req: Request, res: Response) => {
     const roseAmountWei = parseRoseAmount(amount);
     if (!roseAmountWei) {
       return res.status(400).json({ error: 'Invalid amount — must be a positive number' });
+    }
+    if (roseAmountWei > MAX_ROSE_AMOUNT) {
+      return res.status(400).json({ error: 'Amount exceeds maximum allowed (1 billion ROSE)' });
     }
 
     const agentAddress = req.agent!.walletAddress;

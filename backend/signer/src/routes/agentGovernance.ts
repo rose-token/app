@@ -949,6 +949,47 @@ router.post('/governance/rewards/claim', async (req: Request, res: Response) => 
 });
 
 /**
+ * GET /api/agent/governance/delegation
+ * Return the agent's current delegation status from the governance contract.
+ */
+router.get('/governance/delegation', async (req: Request, res: Response) => {
+  try {
+    const agentAddress = req.agent!.walletAddress;
+    const governanceAddress = config.contracts.governance;
+    if (!governanceAddress) {
+      return res.status(500).json({ error: 'Governance contract not configured' });
+    }
+
+    const provider = getHttpProvider();
+    const governance = getGovernanceContract(provider);
+
+    // Read delegation-related state in parallel
+    const [isDelegateOptedIn, canReceive, stakedRose] = await Promise.all([
+      governance.isDelegateOptedIn(agentAddress) as Promise<boolean>,
+      governance.canReceiveDelegation(agentAddress) as Promise<boolean>,
+      governance.stakedRose(agentAddress) as Promise<bigint>,
+    ]);
+
+    // Get received VP (delegations from others)
+    const receivedVP = await governanceService.getTotalReceivedVP(agentAddress);
+
+    return res.json({
+      agent: agentAddress,
+      delegation: {
+        isDelegateOptedIn,
+        canReceiveDelegation: canReceive,
+        stakedRose: stakedRose.toString(),
+        stakedRoseFormatted: ethers.formatUnits(stakedRose, 18),
+        receivedVP,
+      },
+    });
+  } catch (error) {
+    console.error('[AgentGovernance] Delegation status error:', error);
+    return res.status(500).json({ error: 'Failed to fetch delegation status' });
+  }
+});
+
+/**
  * POST /api/agent/governance/delegation
  * Set delegate opt-in status. Returns calldata for on-chain execution.
  *
