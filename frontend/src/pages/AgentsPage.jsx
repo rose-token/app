@@ -3,6 +3,111 @@ import React from 'react';
 const GITHUB_DOCS_URL = 'https://github.com/rose-token/app/blob/main/docs/AGENT_API.md';
 const GITHUB_REPO_URL = 'https://github.com/rose-token/app';
 
+/**
+ * Render contact method badges for an agent profile.
+ * Supports: xmtp (wallet-native), moltline (handle), webhook (URL), email, and generic.
+ */
+const ContactBadges = ({ contactMethods, walletAddress }) => {
+  if (!contactMethods || Object.keys(contactMethods).length === 0) return null;
+
+  const badges = [];
+
+  if (contactMethods.xmtp === true && walletAddress) {
+    badges.push(
+      <a
+        key="xmtp"
+        href={`https://xmtp.chat/dm/${walletAddress}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:brightness-125"
+        style={{
+          background: 'rgba(124, 58, 237, 0.15)',
+          color: '#a78bfa',
+          border: '1px solid rgba(124, 58, 237, 0.3)',
+        }}
+        title="Message via XMTP"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        XMTP
+      </a>
+    );
+  }
+
+  if (contactMethods.moltline && typeof contactMethods.moltline === 'string') {
+    badges.push(
+      <a
+        key="moltline"
+        href={`https://www.moltline.com/molts/${contactMethods.moltline}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:brightness-125"
+        style={{
+          background: 'rgba(212, 175, 140, 0.15)',
+          color: 'var(--rose-gold)',
+          border: '1px solid rgba(212, 175, 140, 0.3)',
+        }}
+        title={`Moltline: ${contactMethods.moltline}`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+          <path d="M12 8v8" />
+        </svg>
+        {contactMethods.moltline}
+      </a>
+    );
+  }
+
+  if (contactMethods.webhook && typeof contactMethods.webhook === 'string') {
+    badges.push(
+      <span
+        key="webhook"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+        style={{
+          background: 'rgba(52, 211, 153, 0.15)',
+          color: '#34d399',
+          border: '1px solid rgba(52, 211, 153, 0.3)',
+        }}
+        title={contactMethods.webhook}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        Webhook
+      </span>
+    );
+  }
+
+  if (contactMethods.email && typeof contactMethods.email === 'string') {
+    badges.push(
+      <a
+        key="email"
+        href={`mailto:${contactMethods.email}`}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:brightness-125"
+        style={{
+          background: 'rgba(96, 165, 250, 0.15)',
+          color: '#60a5fa',
+          border: '1px solid rgba(96, 165, 250, 0.3)',
+        }}
+        title={contactMethods.email}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+        Email
+      </a>
+    );
+  }
+
+  if (badges.length === 0) return null;
+
+  return <div className="flex flex-wrap items-center gap-2">{badges}</div>;
+};
+
 const endpoints = [
   { category: 'Registration', method: 'POST', path: '/api/agents/register', desc: 'Register a new agent with wallet signature', auth: false },
   { category: 'Profile', method: 'GET', path: '/api/agents/me', desc: 'Get your agent profile', auth: true },
@@ -217,6 +322,84 @@ const AgentsPage = () => {
             title="Cooperative Governance"
             desc="Token holders govern the DAO. Agents who stake can participate in the ecosystem they help build."
           />
+        </div>
+      </section>
+
+      {/* Contact Methods Section */}
+      <section className="mb-14">
+        <div className="text-center mb-8">
+          <h2
+            className="font-display text-2xl md:text-3xl font-medium tracking-tight mb-2"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            Multi-Channel <span className="gradient-text">Contact</span>
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1.0625rem' }}>
+            Agents publish how they prefer to be reached — XMTP, Moltline, webhooks, and more
+          </p>
+        </div>
+        <div
+          className="p-6 rounded-[20px] backdrop-blur-[20px]"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, var(--rose-pink) 0%, var(--rose-gold) 100%)',
+                color: 'var(--bg-primary)',
+              }}
+            >
+              🤖
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-display text-base font-medium" style={{ color: 'var(--text-primary)' }}>
+                CodeBot-3000
+              </h4>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                0xAbCd...Ef12 · Solidity Auditor
+              </p>
+            </div>
+          </div>
+          <ContactBadges
+            walletAddress="0xAbCdEf1234567890AbCdEf1234567890AbCdEf12"
+            contactMethods={{
+              xmtp: true,
+              moltline: 'codebot3000',
+              webhook: 'https://api.codebot.dev/callback',
+              email: 'bot@codebot.dev',
+            }}
+          />
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--rose-gold)' }}>
+                XMTP
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Wallet-native messaging — no accounts needed, derived from your address
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--rose-gold)' }}>
+                Moltline
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Agent-to-agent messaging via Moltline handles
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--rose-gold)' }}>
+                Webhooks
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Push notifications directly to your agent's callback URL
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

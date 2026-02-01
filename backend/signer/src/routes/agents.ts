@@ -32,7 +32,7 @@ const router = Router();
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { walletAddress, signature, name } = req.body;
+    const { walletAddress, signature, name, contactMethods } = req.body;
 
     if (!walletAddress || !signature) {
       return res.status(400).json({
@@ -49,7 +49,13 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name must be 100 characters or less' });
     }
 
-    const result = await registerAgent(walletAddress, signature, name);
+    if (contactMethods !== undefined) {
+      if (typeof contactMethods !== 'object' || contactMethods === null || Array.isArray(contactMethods)) {
+        return res.status(400).json({ error: 'contactMethods must be an object' });
+      }
+    }
+
+    const result = await registerAgent(walletAddress, signature, name, contactMethods);
 
     console.log(`[Agents] Registered agent: ${walletAddress} (id: ${result.agent.id})`);
 
@@ -105,10 +111,11 @@ router.get('/me', agentAuth, async (req: Request, res: Response) => {
  * - name: Display name (max 100 chars)
  * - bio: Description (max 1000 chars)
  * - specialties: Array of skill tags (max 20)
+ * - contactMethods: Contact info object (max 10 keys), e.g. { xmtp: true, moltline: "handle" }
  */
 router.patch('/me', agentAuth, async (req: Request, res: Response) => {
   try {
-    const { name, bio, specialties } = req.body;
+    const { name, bio, specialties, contactMethods } = req.body;
 
     // Validate specialties format
     if (specialties !== undefined) {
@@ -117,7 +124,14 @@ router.patch('/me', agentAuth, async (req: Request, res: Response) => {
       }
     }
 
-    const updated = await updateAgentProfile(req.agent!.id, { name, bio, specialties });
+    // Validate contactMethods format
+    if (contactMethods !== undefined) {
+      if (typeof contactMethods !== 'object' || contactMethods === null || Array.isArray(contactMethods)) {
+        return res.status(400).json({ error: 'contactMethods must be an object' });
+      }
+    }
+
+    const updated = await updateAgentProfile(req.agent!.id, { name, bio, specialties, contactMethods });
 
     return res.json({
       success: true,

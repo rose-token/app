@@ -21,6 +21,7 @@ export interface AgentProfile {
   bio: string | null;
   specialties: string[];
   agentType: string;
+  contactMethods: Record<string, unknown>;
   stakeAmount: string;
   reputationScore: number;
   tasksCompleted: number;
@@ -36,6 +37,7 @@ export interface AgentPublicProfile {
   bio: string | null;
   specialties: string[];
   agentType: string;
+  contactMethods: Record<string, unknown>;
   reputationScore: number;
   tasksCompleted: number;
   tasksPosted: number;
@@ -91,6 +93,7 @@ function rowToProfile(row: {
   bio: string | null;
   specialties: string[] | null;
   agent_type: string;
+  contact_methods: Record<string, unknown> | null;
   stake_amount: string;
   reputation_score: number;
   tasks_completed: number;
@@ -106,6 +109,7 @@ function rowToProfile(row: {
     bio: row.bio,
     specialties: row.specialties || [],
     agentType: row.agent_type,
+    contactMethods: row.contact_methods || {},
     stakeAmount: row.stake_amount,
     reputationScore: row.reputation_score,
     tasksCompleted: row.tasks_completed,
@@ -125,6 +129,7 @@ function rowToPublicProfile(row: {
   bio: string | null;
   specialties: string[] | null;
   agent_type: string;
+  contact_methods: Record<string, unknown> | null;
   reputation_score: number;
   tasks_completed: number;
   tasks_posted: number;
@@ -136,6 +141,7 @@ function rowToPublicProfile(row: {
     bio: row.bio,
     specialties: row.specialties || [],
     agentType: row.agent_type,
+    contactMethods: row.contact_methods || {},
     reputationScore: row.reputation_score,
     tasksCompleted: row.tasks_completed,
     tasksPosted: row.tasks_posted,
@@ -155,7 +161,8 @@ function rowToPublicProfile(row: {
 export async function registerAgent(
   walletAddress: string,
   signature: string,
-  name?: string
+  name?: string,
+  contactMethods?: Record<string, unknown>
 ): Promise<{ apiKey: string; agent: AgentProfile }> {
   // Validate address format
   if (!ethers.isAddress(walletAddress)) {
@@ -189,6 +196,16 @@ export async function registerAgent(
   const apiKey = generateApiKey();
   const apiKeyHash = hashApiKey(apiKey);
 
+  // Validate contact methods if provided
+  if (contactMethods !== undefined) {
+    if (typeof contactMethods !== 'object' || contactMethods === null || Array.isArray(contactMethods)) {
+      throw new Error('contactMethods must be an object');
+    }
+    if (Object.keys(contactMethods).length > 10) {
+      throw new Error('contactMethods can have at most 10 keys');
+    }
+  }
+
   // Insert agent record
   const result = await query<{
     id: number;
@@ -197,6 +214,7 @@ export async function registerAgent(
     bio: string | null;
     specialties: string[] | null;
     agent_type: string;
+    contact_methods: Record<string, unknown> | null;
     stake_amount: string;
     reputation_score: number;
     tasks_completed: number;
@@ -205,12 +223,13 @@ export async function registerAgent(
     created_at: string;
     updated_at: string;
   }>(
-    `INSERT INTO agents (wallet_address, api_key_hash, name)
-     VALUES ($1, $2, $3)
+    `INSERT INTO agents (wallet_address, api_key_hash, name, contact_methods)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, wallet_address, name, bio, specialties, agent_type,
-               stake_amount::text, reputation_score, tasks_completed,
-               tasks_posted, is_active, created_at::text, updated_at::text`,
-    [walletAddress.toLowerCase(), apiKeyHash, name || null]
+               contact_methods, stake_amount::text, reputation_score,
+               tasks_completed, tasks_posted, is_active,
+               created_at::text, updated_at::text`,
+    [walletAddress.toLowerCase(), apiKeyHash, name || null, JSON.stringify(contactMethods || {})]
   );
 
   return {
@@ -230,6 +249,7 @@ export async function getAgentById(agentId: number): Promise<AgentProfile | null
     bio: string | null;
     specialties: string[] | null;
     agent_type: string;
+    contact_methods: Record<string, unknown> | null;
     stake_amount: string;
     reputation_score: number;
     tasks_completed: number;
@@ -239,8 +259,9 @@ export async function getAgentById(agentId: number): Promise<AgentProfile | null
     updated_at: string;
   }>(
     `SELECT id, wallet_address, name, bio, specialties, agent_type,
-            stake_amount::text, reputation_score, tasks_completed,
-            tasks_posted, is_active, created_at::text, updated_at::text
+            contact_methods, stake_amount::text, reputation_score,
+            tasks_completed, tasks_posted, is_active,
+            created_at::text, updated_at::text
      FROM agents WHERE id = $1`,
     [agentId]
   );
@@ -263,14 +284,15 @@ export async function getAgentByAddress(walletAddress: string): Promise<AgentPub
     bio: string | null;
     specialties: string[] | null;
     agent_type: string;
+    contact_methods: Record<string, unknown> | null;
     reputation_score: number;
     tasks_completed: number;
     tasks_posted: number;
     created_at: string;
   }>(
     `SELECT wallet_address, name, bio, specialties, agent_type,
-            reputation_score, tasks_completed, tasks_posted,
-            created_at::text
+            contact_methods, reputation_score, tasks_completed,
+            tasks_posted, created_at::text
      FROM agents WHERE wallet_address = $1 AND is_active = true`,
     [walletAddress.toLowerCase()]
   );
@@ -284,7 +306,7 @@ export async function getAgentByAddress(walletAddress: string): Promise<AgentPub
  */
 export async function updateAgentProfile(
   agentId: number,
-  updates: { name?: string; bio?: string; specialties?: string[] }
+  updates: { name?: string; bio?: string; specialties?: string[]; contactMethods?: Record<string, unknown> }
 ): Promise<AgentProfile> {
   // Build dynamic UPDATE query
   const setClauses: string[] = [];
@@ -315,6 +337,17 @@ export async function updateAgentProfile(
     values.push(updates.specialties);
   }
 
+  if (updates.contactMethods !== undefined) {
+    if (typeof updates.contactMethods !== 'object' || updates.contactMethods === null || Array.isArray(updates.contactMethods)) {
+      throw new Error('contactMethods must be an object');
+    }
+    if (Object.keys(updates.contactMethods).length > 10) {
+      throw new Error('contactMethods can have at most 10 keys');
+    }
+    setClauses.push(`contact_methods = $${paramIndex++}`);
+    values.push(JSON.stringify(updates.contactMethods));
+  }
+
   if (setClauses.length === 0) {
     throw new Error('No valid fields to update');
   }
@@ -329,6 +362,7 @@ export async function updateAgentProfile(
     bio: string | null;
     specialties: string[] | null;
     agent_type: string;
+    contact_methods: Record<string, unknown> | null;
     stake_amount: string;
     reputation_score: number;
     tasks_completed: number;
@@ -340,8 +374,9 @@ export async function updateAgentProfile(
     `UPDATE agents SET ${setClauses.join(', ')}
      WHERE id = $${paramIndex}
      RETURNING id, wallet_address, name, bio, specialties, agent_type,
-               stake_amount::text, reputation_score, tasks_completed,
-               tasks_posted, is_active, created_at::text, updated_at::text`,
+               contact_methods, stake_amount::text, reputation_score,
+               tasks_completed, tasks_posted, is_active,
+               created_at::text, updated_at::text`,
     values
   );
 
@@ -395,14 +430,15 @@ export async function listAgents(params: AgentListParams): Promise<AgentListResp
     bio: string | null;
     specialties: string[] | null;
     agent_type: string;
+    contact_methods: Record<string, unknown> | null;
     reputation_score: number;
     tasks_completed: number;
     tasks_posted: number;
     created_at: string;
   }>(
     `SELECT wallet_address, name, bio, specialties, agent_type,
-            reputation_score, tasks_completed, tasks_posted,
-            created_at::text
+            contact_methods, reputation_score, tasks_completed,
+            tasks_posted, created_at::text
      FROM agents ${whereClause}
      ORDER BY reputation_score DESC, created_at ASC
      LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
