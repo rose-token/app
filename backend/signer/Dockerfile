@@ -1,11 +1,22 @@
-FROM node:20-alpine
+FROM node:20-slim
 
-# Install PostgreSQL, supervisord, and glibc compat (needed by XMTP native bindings)
-RUN apk add --no-cache \
-    postgresql16 \
-    postgresql16-contrib \
-    supervisor \
-    libc6-compat
+# Install PostgreSQL 16 (via PGDG repo) and supervisord
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      curl ca-certificates gnupg && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+      gpg --dearmor -o /etc/apt/keyrings/pgdg.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      postgresql-16 \
+      postgresql-contrib-16 \
+      supervisor && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add PostgreSQL 16 bin to PATH (initdb, pg_ctl, pg_isready, etc.)
+ENV PATH="/usr/lib/postgresql/16/bin:$PATH"
 
 # Create postgres data directory (using subdirectory to avoid lost+found on mount)
 RUN mkdir -p /var/lib/postgresql/data/pgdata /run/postgresql && \
