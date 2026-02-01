@@ -2,7 +2,7 @@ name: Dev Environment Deployment
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       deploy:
@@ -27,6 +27,10 @@ env:
 jobs:
   # Job 0: Check if contracts are pinned (all 7 address variables set)
   resolve-addresses:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      contains(github.event.pull_request.labels.*.name, 'safe-to-deploy')
     runs-on: ubuntu-latest
     environment: dev
     outputs:
