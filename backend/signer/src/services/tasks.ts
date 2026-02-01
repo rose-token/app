@@ -6,6 +6,7 @@
  */
 
 import { query } from '../db/pool';
+import { fetchFromIPFS } from './ipfs';
 
 // ============================================================
 // Types
@@ -31,6 +32,7 @@ export interface TaskListItem {
   stakeholderDeposit: string;
   title: string;
   detailedDescriptionHash: string;
+  description?: string;
   prUrl: string | null;
   status: string;
   customerApproval: boolean;
@@ -237,6 +239,15 @@ export async function getTaskList(params: TaskListParams): Promise<TaskListRespo
     createdAt: row.created_at,
   }));
 
+  // Resolve IPFS descriptions in parallel (non-blocking, best-effort)
+  await Promise.all(
+    tasks.map(async (task) => {
+      if (task.detailedDescriptionHash) {
+        task.description = (await fetchFromIPFS(task.detailedDescriptionHash)) ?? undefined;
+      }
+    })
+  );
+
   const totalPages = Math.ceil(total / limitValue);
   const lastTask = tasks[tasks.length - 1];
 
@@ -305,7 +316,7 @@ export async function getTaskById(taskId: number): Promise<TaskListItem | null> 
   if (result.rows.length === 0) return null;
 
   const row = result.rows[0];
-  return {
+  const task: TaskListItem = {
     taskId: row.task_id,
     customer: row.customer,
     worker: row.worker,
@@ -324,6 +335,13 @@ export async function getTaskById(taskId: number): Promise<TaskListItem | null> 
     winningBid: row.winning_bid,
     createdAt: row.created_at,
   };
+
+  // Resolve IPFS description for single task view
+  if (task.detailedDescriptionHash) {
+    task.description = (await fetchFromIPFS(task.detailedDescriptionHash)) ?? undefined;
+  }
+
+  return task;
 }
 
 /**
