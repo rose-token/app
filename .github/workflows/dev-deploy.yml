@@ -249,7 +249,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
           tags: |
             type=ref,event=pr
-            type=raw,value=sha-${{ github.event.pull_request.head.sha && format('{0}', github.event.pull_request.head.sha) || github.sha }},prefix=
+            type=sha,prefix=
             type=raw,value=dev-latest,enable=true
 
       - name: Build and push Docker image
@@ -308,10 +308,10 @@ jobs:
           AKASH_DSEQ: ${{ secrets.AKASH_DSEQ_FRONTEND }}
           IMAGE_TAG: ${{ needs.build-and-push-frontend.outputs.image_tag }}
         run: |
-          # Update image in SDL (use short SHA to match docker/metadata-action output)
-          # Note: All VITE_* env vars are baked into the image at build time
-          SHORT_SHA="${IMAGE_TAG:0:7}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${SHORT_SHA}"
+          # Update image in SDL — use dev-latest tag (always points to latest build)
+          # SHA-based tags don't work reliably with fork PRs (pull_request_target
+          # sets GITHUB_SHA to the base branch, not the PR head)
+          IMAGE="${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:dev-latest"
           sed -i "s|image:.*rose-frontend.*|image: ${IMAGE}|g" frontend/deploy.yaml
 
           echo "Updated SDL:"
@@ -594,7 +594,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}
           tags: |
             type=ref,event=pr
-            type=raw,value=sha-${{ github.event.pull_request.head.sha && format('{0}', github.event.pull_request.head.sha) || github.sha }},prefix=
+            type=sha,prefix=
             type=raw,value=dev-latest,enable=true
 
       - name: Build and push Docker image
@@ -654,9 +654,10 @@ jobs:
           VITE_CHAIN_ID: "421614"
           IS_PRODUCTION: "false"
         run: |
-          # Update image in SDL (use short SHA to match docker/metadata-action output)
-          SHORT_SHA="${IMAGE_TAG:0:7}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}:${SHORT_SHA}"
+          # Update image in SDL — use dev-latest tag (always points to latest build)
+          # SHA-based tags don't work reliably with fork PRs (pull_request_target
+          # sets GITHUB_SHA to the base branch, not the PR head)
+          IMAGE="${{ env.REGISTRY }}/${{ env.SIGNER_IMAGE_NAME }}:dev-latest"
           sed -i "s|image:.*passport-signer.*|image: ${IMAGE}|g" backend/signer/deploy.yaml
 
           # Substitute secrets into SDL
