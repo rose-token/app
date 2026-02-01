@@ -349,13 +349,15 @@ export async function getMessages(
     const messages = await conversation.messages(options);
 
     return messages
-      .filter((m) => m.kind === 1) // application messages only (not membership changes)
+      .filter((m) => String(m.kind) === '1') // application messages only (not membership changes)
       .map((m) => ({
         id: m.id,
         conversationId: m.conversationId,
         senderInboxId: m.senderInboxId,
         content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-        contentType: `${m.contentType.authorityId}/${m.contentType.typeId}`,
+        contentType: m.contentType
+          ? `${m.contentType.authorityId}/${m.contentType.typeId}`
+          : 'unknown',
         sentAt: m.sentAt.toISOString(),
       }));
   } catch (error: any) {

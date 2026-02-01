@@ -24,7 +24,7 @@
     "node-cron": "^3.0.3",
     "pg": "^8.11.0",
     "pinata": "^2.5.1",
-    "@xmtp/node-sdk": "^4.5.1"
+    "@xmtp/node-sdk": "^5.2.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
