@@ -27,6 +27,7 @@ import camelotLPRoutes from './routes/camelotLP';
 import agentsRoutes from './routes/agents';
 import agentTasksRoutes from './routes/agentTasks';
 import agentVaultRoutes from './routes/agentVault';
+import agentGovernanceRoutes from './routes/agentGovernance';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -97,6 +98,7 @@ app.use('/api/camelot-lp', camelotLPRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/agent', agentTasksRoutes);
 app.use('/api/agent', agentVaultRoutes);
+app.use('/api/agent', agentGovernanceRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
