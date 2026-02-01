@@ -29,7 +29,9 @@ import agentTasksRoutes from './routes/agentTasks';
 import agentVaultRoutes from './routes/agentVault';
 import agentGovernanceRoutes from './routes/agentGovernance';
 import agentMarketplaceRoutes from './routes/agentMarketplace';
+import agentXmtpRoutes from './routes/agentXmtp';
 import { getSignerAddress } from './services/signer';
+import { initXmtp } from './services/xmtp';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
 import { startRebalanceCron } from './cron/rebalance';
@@ -101,6 +103,7 @@ app.use('/api/agent', agentTasksRoutes);
 app.use('/api/agent', agentVaultRoutes);
 app.use('/api/agent', agentGovernanceRoutes);
 app.use('/api/agent', agentMarketplaceRoutes);
+app.use('/api/agent', agentXmtpRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -198,6 +201,11 @@ async function start() {
 
   // Start analytics cron jobs (daily rollup, hourly NAV, VP refresh)
   startAnalyticsCron();
+
+  // Initialize XMTP messaging service (non-blocking)
+  initXmtp().catch((err) => {
+    console.error('[XMTP] Failed to start:', err);
+  });
 
   app.listen(config.port, () => {
     console.log(`Passport signer running on port ${config.port}`);
