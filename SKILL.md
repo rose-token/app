@@ -536,7 +536,7 @@ cast send $TREASURY "deposit(uint256,uint256,bytes)" $USDC_AMOUNT $EXPIRY $SIGNA
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-**Redeem flow (ROSE → USDC, 1 transaction):**
+**Redeem flow (ROSE → USDC, 2 transactions):**
 ```bash
 # 1. Get redeem parameters (includes USDC preview)
 REDEEM=$(curl -s -X POST https://signer.rose-token.com/api/agent/vault/redeem \
@@ -544,7 +544,11 @@ REDEEM=$(curl -s -X POST https://signer.rose-token.com/api/agent/vault/redeem \
   -H "Content-Type: application/json" \
   -d '{"amount": "100"}')
 
-# 2. Execute redeem (from castCommands.redeem in response)
+# 2. Execute approve ROSE (from castCommands.approve in response)
+cast send $ROSE_TOKEN "approve(address,uint256)" $TREASURY $ROSE_AMOUNT \
+  --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+
+# 3. Execute redeem (from castCommands.redeem in response)
 cast send $TREASURY "redeem(uint256,uint256,bytes)" $ROSE_AMOUNT $EXPIRY $SIGNATURE \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```

@@ -221,11 +221,12 @@ router.post('/vault/deposit', async (req: Request, res: Response) => {
  * POST /api/agent/vault/redeem
  * Generate parameters for redeeming ROSE → USDC via Treasury.
  *
- * The agent executes one on-chain transaction:
- *   1. redeem(roseAmount, expiry, signature) on the Treasury contract
+ * The agent executes two on-chain transactions:
+ *   1. approve(treasury, roseAmount) on the ROSE token
+ *   2. redeem(roseAmount, expiry, signature) on the Treasury contract
  *
- * Note: No approval needed — the Treasury burns ROSE directly from the sender
- * via IRoseToken.burn(msg.sender, amount).
+ * Approval is required because Treasury.redeem() calls RoseToken.burn(msg.sender, amount)
+ * where the Treasury is the caller — the burn function checks allowance[user][treasury].
  *
  * Body:
  * - amount: ROSE amount as string (e.g. "100" for 100 ROSE)
@@ -253,6 +254,8 @@ router.post('/vault/redeem', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Treasury contract not configured' });
     }
 
+    const { roseToken } = await getTokenAddresses();
+
     // Get preview: how much USDC the agent will receive
     const provider = getHttpProvider();
     const treasury = getTreasuryContract(provider);
@@ -262,8 +265,14 @@ router.post('/vault/redeem', async (req: Request, res: Response) => {
     const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
     const signature = await signApproval(agentAddress, 'redeem', expiry);
 
-    // Encode calldata
+    // Encode calldata for both transactions
+    const erc20Iface = new ethers.Interface(ERC20_ABI);
     const treasuryIface = new ethers.Interface(TREASURY_REDEEM_ABI);
+
+    const approveCalldata = erc20Iface.encodeFunctionData('approve', [
+      treasuryAddress,
+      roseAmountWei,
+    ]);
     const redeemCalldata = treasuryIface.encodeFunctionData('redeem', [
       roseAmountWei,
       expiry,
@@ -292,6 +301,14 @@ router.post('/vault/redeem', async (req: Request, res: Response) => {
       transactions: [
         {
           step: 1,
+          description: 'Approve ROSE spending by Treasury contract',
+          to: roseToken,
+          calldata: approveCalldata,
+          function: 'approve(address,uint256)',
+          args: [treasuryAddress, roseAmountWei.toString()],
+        },
+        {
+          step: 2,
           description: 'Redeem ROSE for USDC at current NAV (Treasury burns ROSE, sends USDC)',
           to: treasuryAddress,
           calldata: redeemCalldata,
@@ -300,6 +317,7 @@ router.post('/vault/redeem', async (req: Request, res: Response) => {
         },
       ],
       castCommands: {
+        approve: `cast send ${roseToken} "approve(address,uint256)" ${treasuryAddress} ${roseAmountWei} --rpc-url ${config.rpc.url}`,
         redeem: `cast send ${treasuryAddress} "redeem(uint256,uint256,bytes)" ${roseAmountWei} ${expiry} ${signature} --rpc-url ${config.rpc.url}`,
       },
     });
