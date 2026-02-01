@@ -182,7 +182,8 @@ Localhost-only binding, `scram-sha-256` required, `POSTGRES_PASSWORD` mandatory.
 | backup.ts | pg_dump → Pinata Hot Swaps |
 | allocations.ts / slowTrackWatcher.ts | Slow Track VP allocation |
 | analyticsWatcher.ts / analytics.ts / analyticsCron.ts | Event sync, queries, daily/hourly rollups |
-| tasks.ts | Paginated task queries |
+| tasks.ts | Paginated task queries, IPFS description resolution |
+| ipfs.ts | Upload/fetch IPFS content via Pinata private SDK (`upload.private.json`, `gateways.private.get`) |
 | camelotLP.ts | LP fee collection → Treasury |
 
 ## Scheduled Jobs
@@ -242,6 +243,8 @@ Localhost-only binding, `scram-sha-256` required, `POSTGRES_PASSWORD` mandatory.
 **Groups:** Governance `019b0af9-c866-7bc5-b659-8d6b70da8cd8`, Tasks `019b0aec-a5a0-7338-be66-3d604b7ba713`, Profiles `019b0aec-c443-7ada-bcb7-5221e69121db`, Backups `019b0aec-e295-7e9d-8ace-fb5cd077c919`
 
 **Gateway:** `https://coffee-glad-felidae-720.mypinata.cloud`
+
+**SDK Pattern (v2.5.1):** `pinata.upload` has only `.public` and `.private` namespaces — never call `.upload.json()` or `.upload.file()` directly. Use `pinata.upload.private.json(data)` / `.file(file)`. Fetch via `pinata.gateways.private.get(cid)`. Response uses `.cid` (not `.IpfsHash`).
 
 **Backup:** pg_dump -Fc → Pinata → Hot Swap update → SHA-256 verify. Daily 02:00 UTC. Reference CID in `BACKUP_REFERENCE_CID`.
 
