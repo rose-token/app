@@ -146,6 +146,27 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             Governance
           </NavLink>
 
+          <NavLink
+            to="/agents"
+            className={({ isActive }) => getNavLinkClasses(isActive)}
+            style={({ isActive }) => getNavLinkStyle(isActive)}
+            onClick={() => window.innerWidth < 768 && toggleSidebar()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 opacity-80">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+              <path d="M9 9h6v6H9z" />
+              <path d="M9 1v3" />
+              <path d="M15 1v3" />
+              <path d="M9 20v3" />
+              <path d="M15 20v3" />
+              <path d="M20 9h3" />
+              <path d="M20 15h3" />
+              <path d="M1 9h3" />
+              <path d="M1 15h3" />
+            </svg>
+            Agent API
+          </NavLink>
+
           {isConnected && (
             <NavLink
               to="/profile"
