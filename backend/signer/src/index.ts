@@ -24,6 +24,8 @@ import slowTrackRoutes from './routes/slowTrack';
 import analyticsRoutes from './routes/analytics';
 import tasksRoutes from './routes/tasks';
 import camelotLPRoutes from './routes/camelotLP';
+import agentsRoutes from './routes/agents';
+import agentTasksRoutes from './routes/agentTasks';
 import { getSignerAddress } from './services/signer';
 import { runMigrations } from './db/migrate';
 import { waitForDatabase } from './db/pool';
@@ -91,6 +93,8 @@ app.use('/api/slow-track', slowTrackRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/camelot-lp', camelotLPRoutes);
+app.use('/api/agents', agentsRoutes);
+app.use('/api/agent', agentTasksRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

@@ -12,6 +12,7 @@ import ProposalDetailPage from './pages/ProposalDetailPage';
 import ProposalCreatePage from './pages/ProposalCreatePage';
 import DelegatesPage from './pages/DelegatesPage';
 import MyVotesPage from './pages/MyVotesPage';
+import AgentsPage from './pages/AgentsPage';
 import AdminPage from './pages/AdminPage';
 import AdminDisputesPage from './pages/AdminDisputesPage';
 import AdminAnalyticsPage from './pages/AdminAnalyticsPage';
@@ -75,6 +76,7 @@ function App() {
                         <Route path="/admin" element={<AdminPage />} />
                         <Route path="/admin/disputes" element={<AdminDisputesPage />} />
                         <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+                        <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/help" element={<HelpPage />} />
                       </Routes>
                     </ProtectedRoutes>
