@@ -1,10 +1,11 @@
 FROM node:20-alpine
 
-# Install PostgreSQL and supervisord
+# Install PostgreSQL, supervisord, and glibc compat (needed by XMTP native bindings)
 RUN apk add --no-cache \
     postgresql16 \
     postgresql16-contrib \
-    supervisor
+    supervisor \
+    libc6-compat
 
 # Create postgres data directory (using subdirectory to avoid lost+found on mount)
 RUN mkdir -p /var/lib/postgresql/data/pgdata /run/postgresql && \
