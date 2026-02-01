@@ -23,6 +23,7 @@ import {
   getHttpProvider,
 } from '../utils/contracts';
 import governanceService from '../services/governance';
+import { uploadToIPFS, isIPFSConfigured } from '../services/ipfs';
 import { getStoredMerkleProof } from '../services/vpSnapshot';
 import {
   getAvailableVP,
@@ -492,22 +493,39 @@ router.get('/governance/rewards', async (req: Request, res: Response) => {
  * Body:
  * - track: "Fast" or "Slow" (or 0/1)
  * - title: Proposal title
- * - descriptionHash: IPFS hash of description
+ * - description: Proposal description text (auto-uploaded to IPFS via Pinata)
+ * - descriptionHash: IPFS hash of description (optional override if you already uploaded)
  * - treasuryAmount: ROSE amount requested (string, e.g. "100")
  * - deadline: Task deadline (unix timestamp)
  * - deliverables: Expected deliverables string
+ * 
+ * Provide either `description` (recommended) or `descriptionHash`.
  */
 router.post('/governance/proposals', async (req: Request, res: Response) => {
   try {
-    const { track, title, descriptionHash, treasuryAmount, deadline, deliverables } =
+    const { track, title, description, descriptionHash: providedHash, treasuryAmount, deadline, deliverables } =
       req.body;
 
     // Validate inputs
     if (title === undefined || typeof title !== 'string' || title.length === 0) {
       return res.status(400).json({ error: 'title is required (non-empty string)' });
     }
-    if (!descriptionHash || typeof descriptionHash !== 'string') {
-      return res.status(400).json({ error: 'descriptionHash is required (string)' });
+
+    // Resolve description hash: auto-upload or use provided
+    let descriptionHash: string;
+    if (providedHash && typeof providedHash === 'string') {
+      descriptionHash = providedHash;
+    } else if (description && typeof description === 'string') {
+      if (!isIPFSConfigured()) {
+        return res.status(500).json({ error: 'IPFS (Pinata) not configured — provide descriptionHash directly' });
+      }
+      try {
+        descriptionHash = await uploadToIPFS(description, `proposal-${title.slice(0, 50)}`);
+      } catch (err: any) {
+        return res.status(500).json({ error: `Failed to upload description to IPFS: ${err.message}` });
+      }
+    } else {
+      return res.status(400).json({ error: 'Either description (text) or descriptionHash (IPFS hash) is required' });
     }
     if (!treasuryAmount || typeof treasuryAmount !== 'string') {
       return res

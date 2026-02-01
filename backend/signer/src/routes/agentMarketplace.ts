@@ -25,6 +25,7 @@ import { config } from '../config';
 import { getMarketplaceContract, getTreasuryContract, getHttpProvider } from '../utils/contracts';
 import { getBidsForTask, getWorkerBid, getBidCount } from '../services/auction';
 import { isXmtpReady, notifyBidAccepted, notifyTaskCompleted, notifyPaymentReady, notifyDispute } from '../services/xmtp';
+import { uploadToIPFS, isIPFSConfigured } from '../services/ipfs';
 
 const router = Router();
 
@@ -397,13 +398,16 @@ router.post('/marketplace/tasks/:id/bid-hash', async (req: Request, res: Respons
  * Body:
  * - title: Task title (string, max 200 chars)
  * - amount: ROSE deposit amount (string, e.g. "100")
- * - descriptionHash: IPFS hash of detailed description (string)
+ * - description: Detailed task description (string) — auto-uploaded to IPFS via Pinata
+ * - descriptionHash: IPFS hash of detailed description (string) — optional override if you already uploaded
  * - githubIntegration: Whether PR URL required on completion (boolean, default true)
  * - isAuction: Create as auction task (boolean, default false)
+ * 
+ * Provide either `description` (recommended — auto-uploads to IPFS) or `descriptionHash` (if you uploaded yourself).
  */
 router.post('/marketplace/tasks', async (req: Request, res: Response) => {
   try {
-    const { title, amount, descriptionHash, githubIntegration = true, isAuction = false } = req.body;
+    const { title, amount, description, descriptionHash: providedHash, githubIntegration = true, isAuction = false } = req.body;
 
     // Validate inputs
     if (!title || typeof title !== 'string' || title.length === 0) {
@@ -415,8 +419,22 @@ router.post('/marketplace/tasks', async (req: Request, res: Response) => {
     if (!amount || typeof amount !== 'string') {
       return res.status(400).json({ error: 'amount is required (string, e.g. "100" for 100 ROSE)' });
     }
-    if (!descriptionHash || typeof descriptionHash !== 'string') {
-      return res.status(400).json({ error: 'descriptionHash is required (IPFS hash string)' });
+
+    // Resolve description hash: auto-upload to IPFS or use provided hash
+    let descriptionHash: string;
+    if (providedHash && typeof providedHash === 'string') {
+      descriptionHash = providedHash;
+    } else if (description && typeof description === 'string') {
+      if (!isIPFSConfigured()) {
+        return res.status(500).json({ error: 'IPFS (Pinata) not configured on server — provide descriptionHash directly' });
+      }
+      try {
+        descriptionHash = await uploadToIPFS(description, `task-${title.slice(0, 50)}`);
+      } catch (err: any) {
+        return res.status(500).json({ error: `Failed to upload description to IPFS: ${err.message}` });
+      }
+    } else {
+      return res.status(400).json({ error: 'Either description (text, auto-uploaded to IPFS) or descriptionHash (IPFS hash) is required' });
     }
 
     const roseAmountWei = parseRoseAmount(amount);
@@ -1390,7 +1408,10 @@ router.post('/marketplace/tasks/:id/approve', async (req: Request, res: Response
  * Customer can dispute InProgress tasks; worker can dispute Completed tasks.
  *
  * Body:
- * - reasonHash: IPFS hash of dispute reason (string)
+ * - reason: Dispute reason text (string) — auto-uploaded to IPFS via Pinata
+ * - reasonHash: IPFS hash of dispute reason (string) — optional override if you already uploaded
+ * 
+ * Provide either `reason` (recommended) or `reasonHash`.
  */
 router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response) => {
   try {
@@ -1399,9 +1420,22 @@ router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response
       return res.status(400).json({ error: 'Invalid task ID' });
     }
 
-    const { reasonHash } = req.body;
-    if (!reasonHash || typeof reasonHash !== 'string') {
-      return res.status(400).json({ error: 'reasonHash is required (IPFS hash string)' });
+    // Resolve reason hash: auto-upload or use provided
+    let reasonHash: string;
+    const { reason, reasonHash: providedHash } = req.body;
+    if (providedHash && typeof providedHash === 'string') {
+      reasonHash = providedHash;
+    } else if (reason && typeof reason === 'string') {
+      if (!isIPFSConfigured()) {
+        return res.status(500).json({ error: 'IPFS (Pinata) not configured — provide reasonHash directly' });
+      }
+      try {
+        reasonHash = await uploadToIPFS(reason, `dispute-task-${taskId}`);
+      } catch (err: any) {
+        return res.status(500).json({ error: `Failed to upload reason to IPFS: ${err.message}` });
+      }
+    } else {
+      return res.status(400).json({ error: 'Either reason (text, auto-uploaded to IPFS) or reasonHash (IPFS hash) is required' });
     }
 
     const agentAddress = req.agent!.walletAddress;
