@@ -23,6 +23,7 @@ import { agentAuth } from '../middleware/agentAuth';
 import { signApproval } from '../services/signer';
 import { config } from '../config';
 import { getMarketplaceContract, getTreasuryContract, getHttpProvider } from '../utils/contracts';
+import { getBidsForTask } from '../services/auction';
 
 const router = Router();
 
@@ -939,6 +940,127 @@ router.post('/marketplace/tasks/:id/select-winner', async (req: Request, res: Re
   } catch (error) {
     console.error('[AgentMarketplace] Select winner error:', error);
     return res.status(500).json({ error: 'Failed to generate select winner parameters' });
+  }
+});
+
+// ============================================================
+// AUCTION: ACCEPT BID
+// ============================================================
+
+/**
+ * POST /api/agent/marketplace/tasks/:id/accept-bid
+ * Accept a specific bid on an auction task. Convenience wrapper around selectAuctionWinner
+ * that looks up the bid by worker address.
+ *
+ * Body:
+ * - worker: Address of the bidder to accept
+ */
+router.post('/marketplace/tasks/:id/accept-bid', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId < 1) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const { worker } = req.body;
+
+    if (!worker || typeof worker !== 'string' || !ethers.isAddress(worker)) {
+      return res.status(400).json({ error: 'worker is required (valid Ethereum address of the bidder)' });
+    }
+
+    const agentAddress = req.agent!.walletAddress;
+    const marketplaceAddress = config.contracts.marketplace;
+
+    if (!marketplaceAddress) {
+      return res.status(500).json({ error: 'Marketplace contract not configured' });
+    }
+
+    // Verify task state
+    const provider = getHttpProvider();
+    const marketplace = getMarketplaceContract(provider);
+    const task = await marketplace.tasks(taskId);
+
+    if (task.customer === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (task.customer.toLowerCase() !== agentAddress.toLowerCase()) {
+      return res.status(403).json({ error: 'Only the customer can accept bids' });
+    }
+    if (!task.isAuction) {
+      return res.status(400).json({ error: 'This is not an auction task' });
+    }
+    if (Number(task.status) !== 0) { // Open
+      return res.status(400).json({
+        error: `Task must be Open to accept a bid (current: ${TaskStatusNames[Number(task.status)] || task.status})`,
+      });
+    }
+
+    // Look up the bid
+    const bidsResponse = await getBidsForTask(taskId);
+    const bid = bidsResponse.bids.find(
+      (b) => b.worker.toLowerCase() === worker.toLowerCase()
+    );
+
+    if (!bid) {
+      return res.status(404).json({ error: `No bid found from worker ${worker}` });
+    }
+
+    const bidAmountWei = BigInt(bid.bidAmount);
+
+    if (bidAmountWei > BigInt(task.deposit)) {
+      return res.status(400).json({ error: 'Bid amount exceeds max budget (deposit)' });
+    }
+
+    // Sign selectWinner approval
+    const expiry = Math.floor(Date.now() / 1000) + config.signatureTtl;
+    const signature = await signSelectWinnerApproval(
+      agentAddress, taskId, worker, bidAmountWei, expiry
+    );
+
+    // Encode calldata
+    const iface = new ethers.Interface(MARKETPLACE_SELECT_AUCTION_WINNER_ABI);
+    const calldata = iface.encodeFunctionData('selectAuctionWinner', [
+      taskId, worker, bidAmountWei, expiry, signature,
+    ]);
+
+    // Calculate surplus refund
+    const surplus = BigInt(task.deposit) - bidAmountWei;
+
+    console.log(`[AgentMarketplace] Accept bid for task ${taskId}: worker=${worker}, bid=${ethers.formatUnits(bidAmountWei, 18)} ROSE`);
+
+    return res.json({
+      success: true,
+      agent: agentAddress,
+      taskId,
+      worker,
+      bidAmount: bid.bidAmount,
+      bidAmountFormatted: ethers.formatUnits(bidAmountWei, 18),
+      displayBid: bid.displayBid,
+      displayBidFormatted: ethers.formatUnits(BigInt(bid.displayBid), 18),
+      message: bid.message,
+      maxBudget: task.deposit.toString(),
+      maxBudgetFormatted: ethers.formatUnits(task.deposit, 18),
+      surplus: {
+        amount: surplus.toString(),
+        amountFormatted: ethers.formatUnits(surplus, 18),
+        note: 'Surplus split: half refunded to customer, half captured as spread to treasury',
+      },
+      approval: { expiry, signature },
+      transaction: {
+        description: `Accept bid from ${worker} on auction task #${taskId} at ${ethers.formatUnits(bidAmountWei, 18)} ROSE`,
+        to: marketplaceAddress,
+        calldata,
+        function: 'selectAuctionWinner(uint256,address,uint256,uint256,bytes)',
+        args: [taskId, worker, bidAmountWei.toString(), expiry, signature],
+      },
+      castCommand: `cast send ${marketplaceAddress} "selectAuctionWinner(uint256,address,uint256,uint256,bytes)" ${taskId} ${worker} ${bidAmountWei} ${expiry} ${signature} --rpc-url ${config.rpc.url}`,
+    });
+  } catch (error: any) {
+    console.error('[AgentMarketplace] Accept bid error:', error);
+    if (error.message?.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    return res.status(500).json({ error: 'Failed to generate accept bid parameters' });
   }
 });
 
