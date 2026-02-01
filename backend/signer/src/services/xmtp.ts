@@ -16,10 +16,19 @@
  *   - XMTP_DB_ENCRYPTION_KEY in env (32 bytes hex) — or auto-generated on first run
  */
 
-import { Client, type Signer, type Identifier, IdentifierKind, getInboxIdForIdentifier } from '@xmtp/node-sdk';
 import { getRandomValues } from 'node:crypto';
 import { ethers } from 'ethers';
 import { config } from '../config';
+
+// Lazy-loaded XMTP SDK — native bindings may not be available on all platforms
+let xmtpSdk: typeof import('@xmtp/node-sdk') | null = null;
+
+async function loadXmtpSdk() {
+  if (!xmtpSdk) {
+    xmtpSdk = await import('@xmtp/node-sdk');
+  }
+  return xmtpSdk;
+}
 
 // ============================================================
 // Types
@@ -42,7 +51,7 @@ export interface XmtpReachabilityResult {
 // State
 // ============================================================
 
-let xmtpClient: Client | null = null;
+let xmtpClient: any = null;
 let isInitializing = false;
 let initError: string | null = null;
 
@@ -53,15 +62,15 @@ let initError: string | null = null;
 /**
  * Create an XMTP Signer from the signer's Ethereum private key.
  */
-function createXmtpSigner(privateKey: string): Signer {
+function createXmtpSigner(privateKey: string, sdk: typeof import('@xmtp/node-sdk')) {
   const wallet = new ethers.Wallet(privateKey);
   const address = wallet.address;
 
   return {
-    type: 'EOA',
-    getIdentifier: (): Identifier => ({
+    type: 'EOA' as const,
+    getIdentifier: () => ({
       identifier: address,
-      identifierKind: IdentifierKind.Ethereum,
+      identifierKind: sdk.IdentifierKind.Ethereum,
     }),
     signMessage: async (message: string): Promise<Uint8Array> => {
       const sig = await wallet.signMessage(message);
@@ -103,10 +112,11 @@ export async function initXmtp(): Promise<void> {
   try {
     console.log('[XMTP] Initializing client...');
 
-    const signer = createXmtpSigner(config.signer.privateKey);
+    const sdk = await loadXmtpSdk();
+    const signer = createXmtpSigner(config.signer.privateKey, sdk);
     const dbEncryptionKey = getDbEncryptionKey();
 
-    xmtpClient = await Client.create(signer, { dbEncryptionKey });
+    xmtpClient = await sdk.Client.create(signer, { dbEncryptionKey });
 
     console.log(`[XMTP] Client ready — inbox: ${xmtpClient.inboxId}`);
     initError = null;
@@ -122,7 +132,7 @@ export async function initXmtp(): Promise<void> {
 /**
  * Get the XMTP client instance. Returns null if not initialized or disabled.
  */
-export function getXmtpClient(): Client | null {
+export function getXmtpClient(): any {
   return xmtpClient;
 }
 
@@ -167,9 +177,11 @@ export async function sendDm(toAddress: string, message: string): Promise<XmtpSe
   }
 
   try {
+    const sdk = await loadXmtpSdk();
+
     // Check if recipient is reachable on XMTP
     const canMessage = await xmtpClient.canMessage([
-      { identifier: toAddress, identifierKind: IdentifierKind.Ethereum },
+      { identifier: toAddress, identifierKind: sdk.IdentifierKind.Ethereum },
     ]);
 
     if (!canMessage.get(toAddress.toLowerCase())) {
@@ -180,8 +192,8 @@ export async function sendDm(toAddress: string, message: string): Promise<XmtpSe
     }
 
     // Resolve address → inbox ID, then create or get existing DM conversation
-    const identifier: Identifier = { identifier: toAddress, identifierKind: IdentifierKind.Ethereum };
-    const inboxId = await getInboxIdForIdentifier(identifier);
+    const identifier = { identifier: toAddress, identifierKind: sdk.IdentifierKind.Ethereum };
+    const inboxId = await sdk.getInboxIdForIdentifier(identifier);
     if (!inboxId) {
       return {
         success: false,
@@ -232,9 +244,10 @@ export async function checkReachability(addresses: string[]): Promise<XmtpReacha
   }
 
   try {
-    const identifiers: Identifier[] = addresses.map((addr) => ({
+    const sdk = await loadXmtpSdk();
+    const identifiers = addresses.map((addr) => ({
       identifier: addr,
-      identifierKind: IdentifierKind.Ethereum,
+      identifierKind: sdk.IdentifierKind.Ethereum,
     }));
 
     const canMessageMap = await xmtpClient.canMessage(identifiers);
@@ -294,7 +307,7 @@ export async function listConversations(): Promise<XmtpConversationSummary[]> {
       await dm.sync();
       const last = await dm.lastMessage();
       const members = await dm.members();
-      const peer = members.find((m) => m.inboxId !== xmtpClient!.inboxId);
+      const peer = members.find((m: any) => m.inboxId !== xmtpClient!.inboxId);
 
       results.push({
         conversationId: dm.id,
@@ -349,8 +362,8 @@ export async function getMessages(
     const messages = await conversation.messages(options);
 
     return messages
-      .filter((m) => String(m.kind) === '1') // application messages only (not membership changes)
-      .map((m) => ({
+      .filter((m: any) => String(m.kind) === '1') // application messages only (not membership changes)
+      .map((m: any) => ({
         id: m.id,
         conversationId: m.conversationId,
         senderInboxId: m.senderInboxId,
