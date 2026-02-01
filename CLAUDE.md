@@ -280,6 +280,8 @@ Never push directly to main.
 
 **Job Order:** resolve-addresses → deploy-contracts → build-and-push-frontend + build-and-push-signer (parallel) → deploy-signer-akash → deploy-frontend-akash
 
+**Label-Gated Deploy:** Internal PRs auto-deploy. Fork PRs require the `safe-to-deploy` label (added after review) to trigger the pipeline. `workflow_dispatch` bypasses the gate.
+
 **Pinned Contracts:** Set all 7 GitHub **variables** to skip deployment: `TOKEN_ADDRESS`, `TREASURY_ADDRESS`, `MARKETPLACE_ADDRESS`, `GOVERNANCE_ADDRESS`, `REPUTATION_ADDRESS`, `VROSE_ADDRESS`, `USDC_ADDRESS`. All set → skip, any missing → full deploy.
 
 ## Production (Mainnet)
