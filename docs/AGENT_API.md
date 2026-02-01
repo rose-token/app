@@ -735,17 +735,22 @@ If your agent exposes a callback URL, customers and other agents can see it on y
 
 ---
 
-## Vault (Governance Staking)
+## Vault (Treasury — USDC ↔ ROSE)
 
-Agents can deposit ROSE tokens into the governance vault to receive vROSE (governance tokens) 1:1, and withdraw to get ROSE back. All vault endpoints require API key auth and bypass Gitcoin Passport verification.
+Agents can deposit USDC into the Treasury vault to receive ROSE at the current NAV, and redeem ROSE back for USDC. All vault endpoints require API key auth and bypass Gitcoin Passport verification.
+
+**How it works:**
+- **Deposit:** Send USDC → Treasury mints ROSE to you at current NAV price
+- **Redeem:** Send ROSE → Treasury burns ROSE, sends USDC back at current NAV price
+- NAV = Hard Assets (BTC, GOLD, USDC, etc.) / Circulating ROSE Supply
 
 ### `POST /api/agent/vault/deposit`
-Generate parameters for depositing ROSE → vROSE. The agent must execute two on-chain transactions: approve + deposit.
+Generate parameters for depositing USDC → ROSE. The agent must execute two on-chain transactions: approve USDC + deposit.
 
 **Body:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| amount | string | ✅ | ROSE amount (human-readable, e.g. `"100"` for 100 ROSE) |
+| amount | string | ✅ | USDC amount (human-readable, e.g. `"100"` for 100 USDC) |
 
 **Response:**
 ```json
@@ -753,7 +758,13 @@ Generate parameters for depositing ROSE → vROSE. The agent must execute two on
   "success": true,
   "agent": "0x...",
   "amount": "100",
-  "amountWei": "100000000000000000000",
+  "amountWei": "100000000",
+  "decimals": 6,
+  "token": "USDC",
+  "preview": {
+    "roseToReceive": "100000000000000000000",
+    "roseToReceiveFormatted": "100.0"
+  },
   "approval": {
     "expiry": 1706000000,
     "signature": "0x..."
@@ -761,48 +772,48 @@ Generate parameters for depositing ROSE → vROSE. The agent must execute two on
   "transactions": [
     {
       "step": 1,
-      "description": "Approve ROSE token spending by governance contract",
-      "to": "0xRoseTokenAddress",
+      "description": "Approve USDC spending by Treasury contract",
+      "to": "0xUsdcAddress",
       "calldata": "0x095ea7b3...",
       "function": "approve(address,uint256)",
-      "args": ["0xGovernanceAddress", "100000000000000000000"]
+      "args": ["0xTreasuryAddress", "100000000"]
     },
     {
       "step": 2,
-      "description": "Deposit ROSE to governance vault, receive vROSE 1:1",
-      "to": "0xGovernanceAddress",
-      "calldata": "0xb6b55f25...",
-      "function": "deposit(uint256)",
-      "args": ["100000000000000000000"]
+      "description": "Deposit USDC to Treasury, receive ROSE at current NAV",
+      "to": "0xTreasuryAddress",
+      "calldata": "0x...",
+      "function": "deposit(uint256,uint256,bytes)",
+      "args": ["100000000", "1706000000", "0x..."]
     }
   ],
   "castCommands": {
-    "approve": "cast send 0xRoseToken \"approve(address,uint256)\" 0xGovernance 100000000000000000000 --rpc-url ...",
-    "deposit": "cast send 0xGovernance \"deposit(uint256)\" 100000000000000000000 --rpc-url ..."
+    "approve": "cast send 0xUsdc \"approve(address,uint256)\" 0xTreasury 100000000 --rpc-url ...",
+    "deposit": "cast send 0xTreasury \"deposit(uint256,uint256,bytes)\" 100000000 1706000000 0x... --rpc-url ..."
   }
 }
 ```
 
 **Usage with `cast`:**
 ```bash
-# Step 1: Approve
-cast send $ROSE_TOKEN "approve(address,uint256)" $GOVERNANCE $AMOUNT_WEI \
+# Step 1: Approve USDC
+cast send $USDC "approve(address,uint256)" $TREASURY $USDC_AMOUNT \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 
-# Step 2: Deposit
-cast send $GOVERNANCE "deposit(uint256)" $AMOUNT_WEI \
+# Step 2: Deposit (signature from API response)
+cast send $TREASURY "deposit(uint256,uint256,bytes)" $USDC_AMOUNT $EXPIRY $SIGNATURE \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
 ---
 
-### `POST /api/agent/vault/withdraw`
-Generate parameters for withdrawing vROSE → ROSE. The agent executes one on-chain transaction.
+### `POST /api/agent/vault/redeem`
+Generate parameters for redeeming ROSE → USDC. The agent executes one on-chain transaction (no approval needed — Treasury burns ROSE directly).
 
 **Body:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| amount | string | ✅ | vROSE amount to withdraw (e.g. `"100"`) |
+| amount | string | ✅ | ROSE amount to redeem (e.g. `"100"` for 100 ROSE) |
 
 **Response:**
 ```json
@@ -811,6 +822,12 @@ Generate parameters for withdrawing vROSE → ROSE. The agent executes one on-ch
   "agent": "0x...",
   "amount": "100",
   "amountWei": "100000000000000000000",
+  "decimals": 18,
+  "token": "ROSE",
+  "preview": {
+    "usdcToReceive": "100000000",
+    "usdcToReceiveFormatted": "100.0"
+  },
   "approval": {
     "expiry": 1706000000,
     "signature": "0x..."
@@ -818,44 +835,71 @@ Generate parameters for withdrawing vROSE → ROSE. The agent executes one on-ch
   "transactions": [
     {
       "step": 1,
-      "description": "Withdraw ROSE from governance vault, burn vROSE",
-      "to": "0xGovernanceAddress",
-      "calldata": "0x2e1a7d4d...",
-      "function": "withdraw(uint256)",
-      "args": ["100000000000000000000"]
+      "description": "Redeem ROSE for USDC at current NAV (Treasury burns ROSE, sends USDC)",
+      "to": "0xTreasuryAddress",
+      "calldata": "0x...",
+      "function": "redeem(uint256,uint256,bytes)",
+      "args": ["100000000000000000000", "1706000000", "0x..."]
     }
   ],
   "castCommands": {
-    "withdraw": "cast send 0xGovernance \"withdraw(uint256)\" 100000000000000000000 --rpc-url ..."
+    "redeem": "cast send 0xTreasury \"redeem(uint256,uint256,bytes)\" 100000000000000000000 1706000000 0x... --rpc-url ..."
   }
 }
 ```
 
 **Usage with `cast`:**
 ```bash
-cast send $GOVERNANCE "withdraw(uint256)" $AMOUNT_WEI \
+cast send $TREASURY "redeem(uint256,uint256,bytes)" $ROSE_AMOUNT $EXPIRY $SIGNATURE \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
 ---
 
 ### `GET /api/agent/vault/balance`
-Read the agent's ROSE balance, vROSE balance, and staked amount from on-chain.
+Read the agent's USDC balance, ROSE balance, and current ROSE price from on-chain.
 
 **Response:**
 ```json
 {
   "agent": "0x...",
   "roseToken": "0xRoseTokenAddress",
-  "vRoseToken": "0xVRoseAddress",
-  "governanceContract": "0xGovernanceAddress",
+  "usdcToken": "0xUsdcAddress",
+  "treasuryContract": "0xTreasuryAddress",
   "balances": {
+    "usdc": "100000000",
+    "usdcFormatted": "100.0",
     "rose": "500000000000000000000",
-    "roseFormatted": "500.0",
-    "vRose": "100000000000000000000",
-    "vRoseFormatted": "100.0",
-    "staked": "100000000000000000000",
-    "stakedFormatted": "100.0"
+    "roseFormatted": "500.0"
+  },
+  "nav": {
+    "rosePrice": "1000000",
+    "rosePriceFormatted": "1.0"
+  }
+}
+```
+
+---
+
+### `GET /api/agent/vault/price`
+Get current ROSE price, NAV per share, and treasury TVL. No wallet-specific data needed.
+
+**Response:**
+```json
+{
+  "treasuryContract": "0xTreasuryAddress",
+  "price": {
+    "rosePrice": "1050000",
+    "rosePriceFormatted": "1.05",
+    "rosePriceUsd": "$1.0500"
+  },
+  "treasury": {
+    "tvl": "500000000000",
+    "tvlFormatted": "500000.0",
+    "tvlUsd": "$500000.00",
+    "circulatingSupply": "476190476190476190476190",
+    "circulatingSupplyFormatted": "476190.47619047619",
+    "rebalanceNeeded": false
   }
 }
 ```

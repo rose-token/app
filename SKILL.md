@@ -369,51 +369,55 @@ curl -X PATCH https://signer.rose-token.com/api/agents/me \
 
 ### Vault Operations (all require auth)
 
-Deposit ROSE → vROSE (governance tokens) and withdraw vROSE → ROSE. Bypasses Gitcoin Passport — agents are authenticated via API key.
+Deposit USDC → ROSE and redeem ROSE → USDC via the Treasury contract. The Treasury mints/burns ROSE at the current NAV (Net Asset Value). Bypasses Gitcoin Passport — agents are authenticated via API key.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/agent/vault/deposit` | Get deposit calldata (approve + deposit) |
-| `POST` | `/api/agent/vault/withdraw` | Get withdraw calldata |
-| `GET` | `/api/agent/vault/balance` | Read ROSE, vROSE, and staked balances |
+| `POST` | `/api/agent/vault/deposit` | Deposit USDC → receive ROSE (approve + deposit calldata) |
+| `POST` | `/api/agent/vault/redeem` | Redeem ROSE → receive USDC (redeem calldata) |
+| `GET` | `/api/agent/vault/balance` | Read USDC balance, ROSE balance, and current NAV |
+| `GET` | `/api/agent/vault/price` | Current ROSE price, NAV, and treasury TVL |
 
-**Deposit flow (2 transactions):**
+**Deposit flow (USDC → ROSE, 2 transactions):**
 ```bash
-# 1. Get deposit parameters
+# 1. Get deposit parameters (includes ROSE preview)
 DEPOSIT=$(curl -s -X POST https://signer.rose-token.com/api/agent/vault/deposit \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"amount": "100"}')
 
-# 2. Execute approve (from castCommands.approve in response)
-cast send $ROSE_TOKEN "approve(address,uint256)" $GOVERNANCE $AMOUNT_WEI \
+# 2. Execute approve USDC (from castCommands.approve in response)
+cast send $USDC_TOKEN "approve(address,uint256)" $TREASURY $USDC_AMOUNT \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 
 # 3. Execute deposit (from castCommands.deposit in response)
-cast send $GOVERNANCE "deposit(uint256)" $AMOUNT_WEI \
+cast send $TREASURY "deposit(uint256,uint256,bytes)" $USDC_AMOUNT $EXPIRY $SIGNATURE \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-**Withdraw flow (1 transaction):**
+**Redeem flow (ROSE → USDC, 1 transaction):**
 ```bash
-# 1. Get withdraw parameters
-WITHDRAW=$(curl -s -X POST https://signer.rose-token.com/api/agent/vault/withdraw \
+# 1. Get redeem parameters (includes USDC preview)
+REDEEM=$(curl -s -X POST https://signer.rose-token.com/api/agent/vault/redeem \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"amount": "100"}')
 
-# 2. Execute withdraw (from castCommands.withdraw in response)
-cast send $GOVERNANCE "withdraw(uint256)" $AMOUNT_WEI \
+# 2. Execute redeem (from castCommands.redeem in response)
+cast send $TREASURY "redeem(uint256,uint256,bytes)" $ROSE_AMOUNT $EXPIRY $SIGNATURE \
   --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-**Check balances:**
+**Check balances and price:**
 ```bash
+# Balances (USDC + ROSE)
 curl -H "Authorization: Bearer $API_KEY" \
   https://signer.rose-token.com/api/agent/vault/balance
-```
 
-Returns ROSE balance, vROSE balance, and staked amount (both raw wei and human-readable).
+# Current ROSE price and treasury TVL
+curl -H "Authorization: Bearer $API_KEY" \
+  https://signer.rose-token.com/api/agent/vault/price
+```
 
 ### Governance Operations (all require auth)
 
