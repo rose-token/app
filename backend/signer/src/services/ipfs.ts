@@ -1,6 +1,6 @@
 /**
  * IPFS Upload Service
- * 
+ *
  * Uploads text content (task descriptions, dispute reasons, etc.) to IPFS via Pinata.
  * Returns the CID for on-chain reference.
  */
@@ -28,20 +28,54 @@ function getPinata(): PinataSDK {
 
 /**
  * Upload text content to IPFS and return the CID.
- * 
+ *
  * @param content - Text content to upload
  * @param name - Optional name/label for the pin (for Pinata dashboard)
  * @returns IPFS CID string
  */
 export async function uploadToIPFS(content: string, name?: string): Promise<string> {
   const pinata = getPinata();
-  
-  const result = await pinata.upload.public.json({
+
+  // Upload as a private JSON object with the description
+  const result = await pinata.upload.private.json({
     content,
     timestamp: new Date().toISOString(),
-  }).name(name || 'rose-token-description');
+  }, {
+    metadata: {
+      name: name || 'rose-token-description',
+    },
+  });
 
-  return result.IpfsHash;
+  return result.cid;
+}
+
+/**
+ * Fetch content from IPFS by CID via the Pinata private gateway.
+ * Returns the text content or null on failure.
+ */
+export async function fetchFromIPFS(cid: string): Promise<string | null> {
+  if (!cid || !isIPFSConfigured()) return null;
+
+  try {
+    const pinata = getPinata();
+    const response = await pinata.gateways.private.get(cid);
+    const data = response.data;
+
+    // Handle JSON-wrapped content (our upload format: { content, timestamp })
+    if (typeof data === 'object' && data !== null && 'content' in data) {
+      return (data as { content: string }).content;
+    }
+
+    // Raw text content
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    return JSON.stringify(data);
+  } catch (err) {
+    console.warn(`[IPFS] Failed to fetch CID ${cid}:`, err);
+    return null;
+  }
 }
 
 /**
@@ -56,34 +90,4 @@ export function isIPFSConfigured(): boolean {
  */
 export function getIPFSUrl(cid: string): string {
   return `${PINATA_GATEWAY}/ipfs/${cid}`;
-}
-
-/**
- * Fetch content from IPFS by CID. Returns the text content or null on failure.
- * Handles both raw text and JSON-wrapped content (from our uploadToIPFS format).
- */
-export async function fetchFromIPFS(cid: string): Promise<string | null> {
-  if (!cid || cid.length < 10) return null;
-  
-  try {
-    const url = getIPFSUrl(cid);
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return null;
-    
-    const text = await response.text();
-    
-    // Try to parse as JSON (our upload format wraps content in { content, timestamp })
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed.content && typeof parsed.content === 'string') {
-        return parsed.content;
-      }
-    } catch {
-      // Not JSON — return raw text
-    }
-    
-    return text;
-  } catch {
-    return null;
-  }
 }

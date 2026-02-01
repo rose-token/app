@@ -239,11 +239,11 @@ export async function getTaskList(params: TaskListParams): Promise<TaskListRespo
     createdAt: row.created_at,
   }));
 
-  // Resolve IPFS descriptions in parallel (best-effort, don't block on failures)
+  // Resolve IPFS descriptions in parallel (non-blocking, best-effort)
   await Promise.all(
     tasks.map(async (task) => {
       if (task.detailedDescriptionHash) {
-        task.description = await fetchFromIPFS(task.detailedDescriptionHash) || undefined;
+        task.description = (await fetchFromIPFS(task.detailedDescriptionHash)) ?? undefined;
       }
     })
   );
@@ -336,9 +336,9 @@ export async function getTaskById(taskId: number): Promise<TaskListItem | null> 
     createdAt: row.created_at,
   };
 
-  // Resolve IPFS description
+  // Resolve IPFS description for single task view
   if (task.detailedDescriptionHash) {
-    task.description = await fetchFromIPFS(task.detailedDescriptionHash) || undefined;
+    task.description = (await fetchFromIPFS(task.detailedDescriptionHash)) ?? undefined;
   }
 
   return task;
