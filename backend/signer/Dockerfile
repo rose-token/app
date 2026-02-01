@@ -15,12 +15,12 @@ WORKDIR /app
 
 # Copy and build node app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 COPY src/config/whitelist.json ./dist/config/whitelist.json
 COPY migrations ./migrations
