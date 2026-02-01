@@ -311,7 +311,7 @@ export async function listConversations(): Promise<XmtpConversationSummary[]> {
 
       results.push({
         conversationId: dm.id,
-        peerAddress: peer?.accountIdentifiers?.[0]?.identifier ?? 'unknown',
+        peerAddress: peer?.accountIdentifier?.identifier ?? peer?.accountIdentifiers?.[0]?.identifier ?? 'unknown',
         peerInboxId: peer?.inboxId ?? 'unknown',
         lastMessage: last
           ? {
@@ -362,7 +362,7 @@ export async function getMessages(
     const messages = await conversation.messages(options);
 
     return messages
-      .filter((m: any) => String(m.kind) === '1') // application messages only (not membership changes)
+      .filter((m: any) => String(m.kind) === '0') // application messages only (0=Application, 1=MembershipChange)
       .map((m: any) => ({
         id: m.id,
         conversationId: m.conversationId,
