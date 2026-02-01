@@ -36,15 +36,16 @@ function getPinata(): PinataSDK {
 export async function uploadToIPFS(content: string, name?: string): Promise<string> {
   const pinata = getPinata();
   
-  // Upload as a JSON object with the description
-  const result = await pinata.upload.json({
+  // Create a JSON blob with the description content
+  const payload = JSON.stringify({
     content,
     timestamp: new Date().toISOString(),
-  }, {
-    metadata: {
-      name: name || 'rose-token-description',
-    },
   });
+  
+  const filename = `${name || 'rose-token-description'}-${Date.now()}.json`;
+  const file = new File([payload], filename, { type: 'application/json' });
+  
+  const result = await pinata.upload.file(file);
 
   return result.IpfsHash;
 }
