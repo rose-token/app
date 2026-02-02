@@ -43,6 +43,10 @@ services:
       - FRONTEND_URL=https://rose-token.com
       - CAMELOT_LP_POSITION_IDS=${CAMELOT_LP_POSITION_IDS}
       - IS_PRODUCTION=${IS_PRODUCTION}
+      - BASE_GATEWAY_ADDRESS=${BASE_GATEWAY_ADDRESS}
+      - BASE_RPC_URL=${BASE_RPC_URL}
+      - BASE_WS_URL=${BASE_WS_URL}
+      - BASE_GATEWAY_ENABLED=${BASE_GATEWAY_ENABLED}
     params:
       storage:
         data:
