@@ -1,0 +1,17 @@
+{
+  "name": "rose-base-gateway",
+  "version": "1.0.0",
+  "description": "Base-side gateway for Rose Protocol — CCTP bridge to Arbitrum treasury",
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy:base": "hardhat run scripts/deploy-base-gateway.js --network base",
+    "deploy:local": "hardhat run scripts/deploy-base-gateway.js --network hardhat",
+    "test": "hardhat test"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.19.0"
+  }
+}

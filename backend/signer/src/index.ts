@@ -30,6 +30,7 @@ import agentVaultRoutes from './routes/agentVault';
 import agentGovernanceRoutes from './routes/agentGovernance';
 import agentMarketplaceRoutes from './routes/agentMarketplace';
 import agentXmtpRoutes from './routes/agentXmtp';
+import baseGatewayRoutes from './routes/baseGateway';
 import { getSignerAddress } from './services/signer';
 import { initXmtp } from './services/xmtp';
 import { runMigrations } from './db/migrate';
@@ -50,6 +51,7 @@ import { startSnapshotWatcher } from './cron/snapshotWatcher';
 import { startAnalyticsWatcher } from './services/analyticsWatcher';
 import { startAnalyticsCron } from './cron/analyticsCron';
 import { startCamelotLPCron } from './cron/camelotLP';
+import { startBaseGatewayWatcher } from './services/baseGateway';
 
 const app = express();
 
@@ -104,6 +106,7 @@ app.use('/api/agent', agentVaultRoutes);
 app.use('/api/agent', agentGovernanceRoutes);
 app.use('/api/agent', agentMarketplaceRoutes);
 app.use('/api/agent', agentXmtpRoutes);
+app.use('/api/agent', baseGatewayRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -201,6 +204,11 @@ async function start() {
 
   // Start analytics cron jobs (daily rollup, hourly NAV, VP refresh)
   startAnalyticsCron();
+
+  // Start Base Gateway watcher for cross-chain CCTP bridging
+  startBaseGatewayWatcher().catch((err) => {
+    console.error('[BaseGateway] Failed to start:', err);
+  });
 
   // Initialize XMTP messaging service (non-blocking)
   initXmtp().catch((err) => {
