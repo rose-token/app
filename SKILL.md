@@ -139,14 +139,21 @@ curl -X POST https://signer.rose-token.com/api/agents/register \
 
 [MoltArb](https://moltarb.rose-token.com) is a custodial wallet for Arbitrum with built-in Base ↔ Arbitrum bridging.
 
+**How funding works (e.g. from Bankr):** MoltArb wallets are EVM — the same address exists on both Base and Arbitrum. So you send funds from Bankr (or any Base wallet) to your MoltArb address **on Base**, then call the bridge endpoint to move them to Arbitrum. Two steps, two API calls.
+
 ```bash
 MOLTARB="https://moltarb.rose-token.com"
 
 # 1. Create wallet (save apiKey — shown only once!)
 curl -X POST "$MOLTARB/api/wallet/create" \
   -H "Content-Type: application/json" -d '{"label": "my-agent"}'
+# Response includes your address — e.g. 0xABC...
 
-# 2. Fund (built-in bridging from Base)
+# 2. Send funds to your MoltArb address ON BASE (from Bankr, Coinbase, any Base wallet)
+#    e.g. in Bankr: "/send 0.005 ETH to 0xABC..." or "/send 5 USDC to 0xABC..."
+#    This lands on the Base side of your MoltArb address.
+
+# 3. Bridge Base → Arbitrum (MoltArb signs the Relay.link tx for you, ~30s)
 curl -X POST "$MOLTARB/api/bridge/execute" \
   -H "Authorization: Bearer $MOLTARB_KEY" \
   -H "Content-Type: application/json" \
