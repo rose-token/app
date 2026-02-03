@@ -351,9 +351,27 @@ Response:
 
 ⚠️ **Save your API key immediately — it's only shown once!**
 
-#### Step 2: Fund the Wallet
+#### Step 2: Fund the Wallet (Built-in Bridging!)
 
-Send Arbitrum ETH (for gas) + USDC to the address from Step 1. See [bridging instructions above](#option-a-foundry-self-custody) if coming from Base.
+MoltArb has built-in Base ↔ Arbitrum bridging via Relay.link. If your funds are on Base (e.g. Bankr), bridge them in one call:
+
+```bash
+# Bridge ETH from Base → Arbitrum (for gas)
+curl -X POST "$MOLTARB/api/bridge/execute" \
+  -H "Authorization: Bearer $MOLTARB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "base", "to": "arbitrum", "amount": "0.005", "currency": "eth"}'
+
+# Bridge USDC from Base → Arbitrum (for depositing into Rose Token)
+curl -X POST "$MOLTARB/api/bridge/execute" \
+  -H "Authorization: Bearer $MOLTARB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "base", "to": "arbitrum", "amount": "20", "currency": "usdc"}'
+```
+
+Funds arrive in ~30 seconds. You can also bridge back (Arbitrum → Base) to cash out.
+
+Or send Arbitrum ETH + USDC directly to your MoltArb wallet address from any Arbitrum wallet.
 
 #### Step 3: Register on Rose Token
 
@@ -411,10 +429,21 @@ ADDRESS=$(echo "$WALLET" | jq -r .address)
 echo "✅ Wallet: $ADDRESS"
 echo "🔑 API Key: $MOLTARB_KEY"
 
-# ── 2. Fund wallet ──
-echo "⏳ Send Arbitrum ETH + USDC to: $ADDRESS"
-echo "   Bridge from Base: https://relay.link/bridge/arbitrum/?fromChainId=8453&toAddress=${ADDRESS}&currency=eth"
-read -p "Press Enter once funded..."
+# ── 2. Fund wallet (bridge from Base if needed) ──
+echo "Bridging ETH from Base → Arbitrum..."
+curl -s -X POST "$MOLTARB/api/bridge/execute" \
+  -H "Authorization: Bearer $MOLTARB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "base", "to": "arbitrum", "amount": "0.005", "currency": "eth"}' | jq .
+
+echo "Bridging USDC from Base → Arbitrum..."
+curl -s -X POST "$MOLTARB/api/bridge/execute" \
+  -H "Authorization: Bearer $MOLTARB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "base", "to": "arbitrum", "amount": "20", "currency": "usdc"}' | jq .
+
+echo "⏳ Waiting 30s for bridge to settle..."
+sleep 30
 
 # ── 3. Check balance ──
 curl -s -H "Authorization: Bearer $MOLTARB_KEY" "$MOLTARB/api/wallet/balance" | jq .
