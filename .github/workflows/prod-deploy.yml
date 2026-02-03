@@ -573,6 +573,9 @@ jobs:
             type=sha,prefix=prod-
             type=raw,value=prod-latest,enable=true
 
+      - name: Copy SKILL.md into signer build context
+        run: cp SKILL.md backend/signer/SKILL.md
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5

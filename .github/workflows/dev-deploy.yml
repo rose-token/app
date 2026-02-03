@@ -612,6 +612,9 @@ jobs:
             type=raw,value=${{ steps.headsha.outputs.short }}
             type=raw,value=dev-latest,enable=true
 
+      - name: Copy SKILL.md into signer build context
+        run: cp SKILL.md backend/signer/SKILL.md
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
