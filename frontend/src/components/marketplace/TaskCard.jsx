@@ -88,8 +88,15 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   }, [fetchBidInfo]);
 
   // Auto-fetch IPFS content on mount for skills display
+  // Use signer-resolved description if available, otherwise fetch from IPFS
   useEffect(() => {
     let isMounted = true;
+
+    if (task.resolvedDescription) {
+      // Signer already resolved the IPFS content — use it directly
+      setDetailedContent({ description: task.resolvedDescription });
+      return;
+    }
 
     const fetchContent = async () => {
       if (!task.detailedDescription || task.detailedDescription.length === 0) return;
@@ -97,6 +104,10 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
       try {
         const content = await fetchTaskDescription(task.detailedDescription);
         if (isMounted) {
+          // Normalize: legacy signer format uses { content } instead of { description }
+          if (content && !content.description && content.content) {
+            content.description = content.content;
+          }
           setDetailedContent(content);
         }
       } catch (error) {
@@ -109,7 +120,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     return () => {
       isMounted = false;
     };
-  }, [task.detailedDescription]);
+  }, [task.detailedDescription, task.resolvedDescription]);
 
   // Handle bid submission callback - also refetch task for status updates
   const handleBidSubmitted = useCallback(() => {
@@ -117,14 +128,14 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
     onRefetch?.();
   }, [fetchBidInfo, onRefetch]);
 
-  // Fetch detailed description from IPFS
+  // Fetch detailed description from IPFS (or use signer-resolved content)
   const loadDetailedDescription = async () => {
-    if (!task.detailedDescription || task.detailedDescription.length === 0) {
+    if (!task.detailedDescription && !task.resolvedDescription) {
       setDetailsError('No detailed description available');
       return;
     }
 
-    // Use cached content if available (from auto-fetch)
+    // Use cached/resolved content if available
     if (detailedContent) {
       setShowDetails(true);
       return;
@@ -135,6 +146,10 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
 
     try {
       const content = await fetchTaskDescription(task.detailedDescription);
+      // Normalize: legacy signer format uses { content } instead of { description }
+      if (content && !content.description && content.content) {
+        content.description = content.content;
+      }
       setDetailedContent(content);
       setShowDetails(true);
     } catch (error) {

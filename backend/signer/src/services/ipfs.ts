@@ -36,10 +36,11 @@ function getPinata(): PinataSDK {
 export async function uploadToIPFS(content: string, name?: string): Promise<string> {
   const pinata = getPinata();
 
-  // Upload as a private JSON object with the description
+  // Upload as a private JSON object matching frontend format
+  // Frontend expects { description, ... } — NOT { content, ... }
   const result = await pinata.upload.private.json({
-    content,
-    timestamp: new Date().toISOString(),
+    description: content,
+    uploadedAt: new Date().toISOString(),
   }, {
     metadata: {
       name: name || 'rose-token-description',
@@ -61,9 +62,12 @@ export async function fetchFromIPFS(cid: string): Promise<string | null> {
     const response = await pinata.gateways.private.get(cid);
     const data = response.data;
 
-    // Handle JSON-wrapped content (our upload format: { content, timestamp })
-    if (typeof data === 'object' && data !== null && 'content' in data) {
-      return (data as { content: string }).content;
+    // Handle JSON-wrapped content
+    // New format: { description, uploadedAt }
+    // Legacy format: { content, timestamp }
+    if (typeof data === 'object' && data !== null) {
+      if ('description' in data) return (data as { description: string }).description;
+      if ('content' in data) return (data as { content: string }).content;
     }
 
     // Raw text content
