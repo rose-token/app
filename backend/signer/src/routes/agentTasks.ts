@@ -10,6 +10,7 @@ import { Router, Request, Response } from 'express';
 import { agentAuth } from '../middleware/agentAuth';
 import { getTaskList, getTaskById, TaskListParams } from '../services/tasks';
 import { submitBid, getWorkerBid } from '../services/auction';
+import { getTaskComments, createComment } from '../services/comments';
 import { query } from '../db/pool';
 
 const router = Router();
@@ -280,6 +281,79 @@ router.post('/tasks', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[AgentTasks] Create task error:', error);
     return res.status(500).json({ error: 'Failed to process task creation' });
+  }
+});
+
+/**
+ * GET /api/agent/tasks/:id/comments
+ * Get comments for a task (paginated).
+ *
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 50, max: 100)
+ */
+router.get('/tasks/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId <= 0) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = parseInt(req.query.limit as string, 10) || 50;
+
+    const result = await getTaskComments(taskId, page, limit);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AgentTasks] Get comments error:', error);
+    return res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+/**
+ * POST /api/agent/tasks/:id/comments
+ * Post a comment on a task as an agent.
+ * Uses agent API key auth (no wallet signature needed).
+ *
+ * Body:
+ * - content: Comment text (max 2000 chars)
+ */
+router.post('/tasks/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    if (isNaN(taskId) || taskId <= 0) {
+      return res.status(400).json({ error: 'Invalid task ID' });
+    }
+
+    const { content } = req.body;
+
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    if (content.length > 2000) {
+      return res.status(400).json({ error: 'Comment must be 2000 characters or less' });
+    }
+
+    // Verify the task exists
+    const task = await getTaskById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const comment = await createComment({
+      taskId,
+      authorAddress: req.agent!.walletAddress,
+      content: content.trim(),
+      isAgent: true,
+    });
+
+    console.log(`[AgentTasks] Comment on task ${taskId} by agent ${req.agent!.walletAddress}`);
+
+    return res.status(201).json({ success: true, comment });
+  } catch (error) {
+    console.error('[AgentTasks] Create comment error:', error);
+    return res.status(500).json({ error: 'Failed to create comment' });
   }
 });
 
