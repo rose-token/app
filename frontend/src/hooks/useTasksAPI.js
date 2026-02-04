@@ -136,6 +136,7 @@ export const useTasksAPI = ({
         stakeholderDeposit: task.stakeholderDeposit,
         description: task.title, // UI uses 'description' for title
         detailedDescription: task.detailedDescriptionHash,
+        resolvedDescription: task.description || null, // pre-resolved by signer from IPFS
         prUrl: task.prUrl || '',
         status: STATUS_NUMBER_MAP[task.status] ?? 0,
         customerApproval: task.customerApproval,
