@@ -14,6 +14,7 @@ import { useDispute } from '../../hooks/useDispute';
 import { GITHUB_INTEGRATION, validatePrUrl as validatePrUrlFormat, validatePrUrlWithBackend } from '../../constants/github';
 import Spinner from '../ui/Spinner';
 import { SkillBadgeList } from '../profile/SkillBadge';
+import TaskComments from './TaskComments';
 
 const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPayment, onStake, onUnstake, onCancel, loadingStates = {}, onRefetch }) => {
   const { address: account, isConnected, chain } = useAccount();
@@ -776,6 +777,9 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
           <ProgressTracker task={task} />
         </div>
       )}
+
+      {/* Task Comments */}
+      <TaskComments taskId={task.id} />
 
       {/* PR URL Modal */}
       {showPrUrlModal && (
