@@ -248,7 +248,7 @@ const TaskCard = ({ task, onClaim, onUnclaim, onComplete, onApprove, onAcceptPay
   const isApprovingStakeholder = loadingStates.approveStakeholder?.[task.id] || false;
   const isAcceptingPayment = loadingStates.acceptPayment?.[task.id] || false;
   const isCancelling = loadingStates.cancel?.[task.id] || false;
-  const isDisputing = disputeLoading.disputeAsCustomer || disputeLoading.disputeAsWorker;
+  const isDisputing = disputeLoading.disputeAsCustomer || disputeLoading.disputeAsWorker || disputeLoading.disputeAsStakeholder;
 
   // Status badge styling
   const getStatusBadgeStyle = (status) => {

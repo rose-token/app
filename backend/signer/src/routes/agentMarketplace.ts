@@ -98,6 +98,10 @@ const MARKETPLACE_DISPUTE_WORKER_ABI = [
   'function disputeTaskAsWorker(uint256 taskId, string reasonHash)',
 ];
 
+const MARKETPLACE_DISPUTE_STAKEHOLDER_ABI = [
+  'function disputeTaskAsStakeholder(uint256 taskId, string reasonHash)',
+];
+
 const VROSE_ABI = [
   'function approve(address spender, uint256 amount) returns (bool)',
   'function balanceOf(address account) view returns (uint256)',
@@ -1458,6 +1462,7 @@ router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response
 
     const isCustomer = task.customer.toLowerCase() === agentAddress.toLowerCase();
     const isWorker = task.worker.toLowerCase() === agentAddress.toLowerCase();
+    const isStakeholder = task.stakeholder.toLowerCase() === agentAddress.toLowerCase();
     const status = Number(task.status);
 
     let calldata: string;
@@ -1474,21 +1479,39 @@ router.post('/marketplace/tasks/:id/dispute', async (req: Request, res: Response
       calldata = iface.encodeFunctionData('disputeTaskAsWorker', [taskId, reasonHash]);
       role = 'worker';
       functionSig = 'disputeTaskAsWorker(uint256,string)';
+    } else if (isStakeholder && (status === 2 || status === 3)) { // InProgress or Completed
+      const iface = new ethers.Interface(MARKETPLACE_DISPUTE_STAKEHOLDER_ABI);
+      calldata = iface.encodeFunctionData('disputeTaskAsStakeholder', [taskId, reasonHash]);
+      role = 'stakeholder';
+      functionSig = 'disputeTaskAsStakeholder(uint256,string)';
     } else if (isCustomer && status !== 2) {
       return res.status(400).json({ error: 'Customer can only dispute InProgress tasks' });
     } else if (isWorker && status !== 3) {
       return res.status(400).json({ error: 'Worker can only dispute Completed tasks (when approvals withheld)' });
+    } else if (isStakeholder && status !== 2 && status !== 3) {
+      return res.status(400).json({ error: 'Stakeholder can only dispute InProgress or Completed tasks' });
     } else {
-      return res.status(403).json({ error: 'Only the customer or worker can raise a dispute' });
+      return res.status(403).json({ error: 'Only the customer, worker, or stakeholder can raise a dispute' });
     }
 
     console.log(`[AgentMarketplace] Dispute task ${taskId} as ${role} by ${agentAddress}`);
 
-    // Notify the other party via XMTP (fire-and-forget)
+    // Notify the other parties via XMTP (fire-and-forget)
     if (isXmtpReady()) {
-      const notifyAddr = isCustomer ? task.worker : task.customer;
-      if (notifyAddr && notifyAddr !== ethers.ZeroAddress) {
-        notifyDispute(notifyAddr, taskId, task.title || `Task #${taskId}`, role, reasonHash).catch(() => {});
+      const taskTitle = task.title || `Task #${taskId}`;
+      if (isStakeholder) {
+        // Stakeholder disputes — notify both customer and worker
+        if (task.customer && task.customer !== ethers.ZeroAddress) {
+          notifyDispute(task.customer, taskId, taskTitle, role, reasonHash).catch(() => {});
+        }
+        if (task.worker && task.worker !== ethers.ZeroAddress) {
+          notifyDispute(task.worker, taskId, taskTitle, role, reasonHash).catch(() => {});
+        }
+      } else {
+        const notifyAddr = isCustomer ? task.worker : task.customer;
+        if (notifyAddr && notifyAddr !== ethers.ZeroAddress) {
+          notifyDispute(notifyAddr, taskId, taskTitle, role, reasonHash).catch(() => {});
+        }
       }
     }
 

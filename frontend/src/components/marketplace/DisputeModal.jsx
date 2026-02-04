@@ -22,12 +22,13 @@ const DisputeModal = ({
   const {
     disputeAsCustomer,
     disputeAsWorker,
+    disputeAsStakeholder,
     actionLoading,
     error: hookError,
     clearError,
   } = useDispute();
 
-  const isSubmitting = actionLoading.disputeAsCustomer || actionLoading.disputeAsWorker || isUploading;
+  const isSubmitting = actionLoading.disputeAsCustomer || actionLoading.disputeAsWorker || actionLoading.disputeAsStakeholder || isUploading;
 
   // Reset form on open
   useEffect(() => {
@@ -75,8 +76,10 @@ const DisputeModal = ({
       // Step 2: Submit dispute on-chain
       if (role === 'customer') {
         await disputeAsCustomer(taskId, reasonHash);
-      } else {
+      } else if (role === 'worker') {
         await disputeAsWorker(taskId, reasonHash);
+      } else if (role === 'stakeholder') {
+        await disputeAsStakeholder(taskId, reasonHash);
       }
 
       onDisputeRaised?.();
@@ -158,7 +161,9 @@ const DisputeModal = ({
         <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
           {role === 'customer'
             ? 'As the customer, you can dispute this task if the work is not meeting expectations or there are issues with delivery.'
-            : 'As the worker, you can dispute this task if payment approval is being unreasonably withheld or there are issues with the task terms.'}
+            : role === 'worker'
+            ? 'As the worker, you can dispute this task if payment approval is being unreasonably withheld or there are issues with the task terms.'
+            : 'As the stakeholder, you can dispute this task if the submitted work is fraudulent, doesn\'t meet requirements, or there are issues that need admin review.'}
         </p>
 
         <form onSubmit={handleSubmit}>

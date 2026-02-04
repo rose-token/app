@@ -96,8 +96,60 @@ function getDbEncryptionKey(): Uint8Array {
 }
 
 /**
+ * Revoke all existing XMTP installations for our inbox.
+ * This clears stale installations from previous container restarts
+ * so we don't hit the 10/10 installation limit.
+ */
+async function revokeStaleInstallations(
+  sdk: typeof import('@xmtp/node-sdk'),
+  signer: ReturnType<typeof createXmtpSigner>
+): Promise<void> {
+  try {
+    const identifier = signer.getIdentifier();
+
+    // Resolve our inbox ID without creating a client
+    const inboxId = await sdk.getInboxIdForIdentifier(identifier);
+    if (!inboxId) {
+      console.log('[XMTP] No existing inbox found — first time setup, skipping revoke');
+      return;
+    }
+
+    // Fetch current inbox state to get all installation IDs
+    const inboxStates = await sdk.Client.fetchInboxStates([inboxId]);
+    if (!inboxStates || inboxStates.length === 0) {
+      console.log('[XMTP] No inbox state found, skipping revoke');
+      return;
+    }
+
+    const state = inboxStates[0];
+    const installations = state.installations || [];
+
+    if (installations.length === 0) {
+      console.log('[XMTP] No existing installations to revoke');
+      return;
+    }
+
+    console.log(`[XMTP] Found ${installations.length} existing installation(s) — revoking all for fresh start`);
+
+    // Collect all installation IDs
+    const installationIds: Uint8Array[] = installations.map((inst: any) => inst.id);
+
+    // Revoke all installations using the static method (no client needed)
+    await sdk.Client.revokeInstallations(signer, inboxId, installationIds);
+
+    console.log(`[XMTP] Revoked ${installationIds.length} installation(s) successfully`);
+  } catch (error: any) {
+    // Non-fatal: if revoke fails, Client.create might still work
+    console.warn('[XMTP] Failed to revoke stale installations:', error.message);
+  }
+}
+
+/**
  * Initialize the XMTP client. Called once at startup if XMTP_ENABLED=true.
  * Safe to call multiple times — subsequent calls are no-ops.
+ *
+ * On each startup, revokes all existing installations first to avoid
+ * hitting the 10/10 installation limit on ephemeral containers.
  */
 export async function initXmtp(): Promise<void> {
   if (xmtpClient || isInitializing) return;
@@ -115,6 +167,11 @@ export async function initXmtp(): Promise<void> {
     const sdk = await loadXmtpSdk();
     const signer = createXmtpSigner(config.signer.privateKey, sdk);
     const dbEncryptionKey = getDbEncryptionKey();
+
+    // Revoke all existing installations before creating a new one.
+    // Each container restart generates a fresh DB, so old installations
+    // are stale and just waste slots (max 10).
+    await revokeStaleInstallations(sdk, signer);
 
     xmtpClient = await sdk.Client.create(signer, { dbEncryptionKey });
 
