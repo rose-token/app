@@ -33,6 +33,7 @@ export const useDispute = () => {
   const [actionLoading, setActionLoading] = useState({
     disputeAsCustomer: false,
     disputeAsWorker: false,
+    disputeAsStakeholder: false,
     resolveDispute: false,
   });
 
@@ -121,6 +122,50 @@ export const useDispute = () => {
       throw new Error(message);
     } finally {
       setActionLoading(prev => ({ ...prev, disputeAsWorker: false }));
+    }
+  }, [isConnected, account, writeContractAsync, publicClient]);
+
+  /**
+   * Raise a dispute as the stakeholder (requires InProgress or Completed status).
+   * @param {number} taskId - Task ID
+   * @param {string} reasonHash - IPFS hash of dispute reason
+   * @returns {Promise<{success, hash}>}
+   */
+  const disputeAsStakeholder = useCallback(async (taskId, reasonHash) => {
+    if (!isConnected || !account) {
+      throw new Error('Wallet not connected');
+    }
+    if (!CONTRACTS.MARKETPLACE) {
+      throw new Error('Marketplace contract not configured');
+    }
+
+    setActionLoading(prev => ({ ...prev, disputeAsStakeholder: true }));
+    setError(null);
+
+    try {
+      console.log(`Disputing task ${taskId} as stakeholder...`);
+      const hash = await writeContractAsync({
+        address: CONTRACTS.MARKETPLACE,
+        abi: RoseMarketplaceABI,
+        functionName: 'disputeTaskAsStakeholder',
+        args: [BigInt(taskId), reasonHash],
+        ...GAS_SETTINGS,
+      });
+
+      await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+
+      console.log('Dispute raised successfully!');
+      return { success: true, hash };
+    } catch (err) {
+      console.error('Dispute as stakeholder error:', err);
+      const message = parseDisputeError(err);
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, disputeAsStakeholder: false }));
     }
   }, [isConnected, account, writeContractAsync, publicClient]);
 
@@ -259,6 +304,7 @@ export const useDispute = () => {
     const address = userAddress.toLowerCase();
     const isCustomer = task.customer?.toLowerCase() === address;
     const isWorker = task.worker?.toLowerCase() === address;
+    const isStakeholder = task.stakeholder?.toLowerCase() === address;
     const status = parseInt(task.status);
 
     // Customer can dispute InProgress tasks
@@ -269,6 +315,11 @@ export const useDispute = () => {
     // Worker can dispute Completed tasks
     if (isWorker && status === TaskStatus.Completed) {
       return { canDispute: true, role: 'worker', reason: null };
+    }
+
+    // Stakeholder can dispute InProgress or Completed tasks
+    if (isStakeholder && (status === TaskStatus.InProgress || status === TaskStatus.Completed)) {
+      return { canDispute: true, role: 'stakeholder', reason: null };
     }
 
     // Determine reason for inability to dispute
@@ -284,8 +335,14 @@ export const useDispute = () => {
       }
     }
 
-    if (!isCustomer && !isWorker) {
-      return { canDispute: false, role: null, reason: 'Only customer or worker can dispute' };
+    if (isStakeholder) {
+      if (status !== TaskStatus.InProgress && status !== TaskStatus.Completed) {
+        return { canDispute: false, role: 'stakeholder', reason: 'Task must be In Progress or Completed to dispute' };
+      }
+    }
+
+    if (!isCustomer && !isWorker && !isStakeholder) {
+      return { canDispute: false, role: null, reason: 'Only customer, worker, or stakeholder can dispute' };
     }
 
     return { canDispute: false, role: null, reason: 'Cannot dispute this task' };
@@ -308,6 +365,7 @@ export const useDispute = () => {
     // Actions
     disputeAsCustomer,
     disputeAsWorker,
+    disputeAsStakeholder,
     resolveDispute,
     getDisputeInfo,
     listDisputes,
@@ -331,6 +389,9 @@ function parseDisputeError(err) {
   }
   if (message.includes('NotWorker')) {
     return 'Only the task worker can perform this action';
+  }
+  if (message.includes('NotDisputeParticipant')) {
+    return 'Only a dispute participant (customer, worker, or stakeholder) can perform this action';
   }
   if (message.includes('NotInDisputableStatus')) {
     return 'Task is not in a status that allows disputes';

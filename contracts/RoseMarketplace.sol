@@ -813,6 +813,33 @@ contract RoseMarketplace is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Stakeholder raises a dispute on a task.
+     * Can be called when task status is InProgress or Completed.
+     * @param _taskId ID of the task to dispute
+     * @param _reasonHash IPFS hash containing dispute reason
+     */
+    function disputeTaskAsStakeholder(
+        uint256 _taskId,
+        string calldata _reasonHash
+    ) external nonReentrant {
+        Task storage t = tasks[_taskId];
+
+        // Validations - only stakeholder can call this
+        if (t.stakeholder != msg.sender) revert NotDisputeParticipant();
+        if (t.status != TaskStatus.InProgress && t.status != TaskStatus.Completed) revert NotInDisputableStatus();
+        if (t.disputeInitiator != address(0)) revert DisputeAlreadyRaised();
+        require(bytes(_reasonHash).length > 0, "Reason hash cannot be empty");
+
+        // Record dispute
+        t.disputeInitiator = msg.sender;
+        t.disputedAt = block.timestamp;
+        t.disputeReasonHash = _reasonHash;
+        t.status = TaskStatus.Disputed;
+
+        emit TaskDisputed(_taskId, msg.sender, _reasonHash, block.timestamp);
+    }
+
+    /**
      * @dev Owner resolves a disputed task.
      * Distributes funds based on resolution: workerPct determines worker share.
      * No DAO mint for disputed tasks. Stakeholder always gets vROSE back.
