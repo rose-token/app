@@ -17,6 +17,7 @@ import { config } from '../config';
 import { query } from '../db/pool';
 import { getWsProvider, onReconnect, removeReconnectCallback } from '../utils/wsProvider';
 import { RoseMarketplaceABI, RoseGovernanceABI, RoseTreasuryABI } from '../utils/contracts';
+import { registerAuctionTask } from './auction';
 
 // ============================================================
 // Types
@@ -263,6 +264,18 @@ async function handleAuctionTaskCreated(
         total_spent_wei = total_spent_wei + $2
       WHERE address = $1
     `, [customer.toLowerCase(), maxBudget.toString()]);
+
+    // Auto-register in off-chain auction bidding system
+    // This ensures auctions created via agent API or direct contract calls
+    // are also available for bidding (not just frontend-created ones)
+    try {
+      await registerAuctionTask(Number(taskId), maxBudget.toString());
+      console.log(`[AnalyticsWatcher] Auto-registered auction task ${taskId} for bidding`);
+    } catch (auctionErr) {
+      // Don't fail the whole handler if auction registration fails
+      // (e.g. if already registered via frontend)
+      console.warn(`[AnalyticsWatcher] Auction registration for task ${taskId} failed (may already exist):`, auctionErr);
+    }
 
     stats.tasksCreated++;
     stats.lastEventBlock = log.blockNumber;
