@@ -36,6 +36,7 @@ RUN npm install --only=production && npm cache clean --force
 
 COPY src/config/whitelist.json ./dist/config/whitelist.json
 COPY migrations ./migrations
+COPY SKILL.md /app/SKILL.md
 
 # Copy supervisord config and scripts
 COPY supervisord.conf /etc/supervisord.conf

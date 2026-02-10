@@ -31,6 +31,7 @@ import agentVaultRoutes from './routes/agentVault';
 import agentGovernanceRoutes from './routes/agentGovernance';
 import agentMarketplaceRoutes from './routes/agentMarketplace';
 import agentXmtpRoutes from './routes/agentXmtp';
+import { skillRouter } from './routes/skill';
 import { getSignerAddress } from './services/signer';
 import { initXmtp } from './services/xmtp';
 import { runMigrations } from './db/migrate';
@@ -106,6 +107,7 @@ app.use('/api/agent', agentVaultRoutes);
 app.use('/api/agent', agentGovernanceRoutes);
 app.use('/api/agent', agentMarketplaceRoutes);
 app.use('/api/agent', agentXmtpRoutes);
+app.use('/skill', skillRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
